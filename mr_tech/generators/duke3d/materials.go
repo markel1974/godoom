@@ -23,8 +23,16 @@ func ConfigureWallMaterial(mat *config.Material, wall *lumps.Wall) {
 	if mat == nil || wall == nil {
 		return
 	}
+	ConfigureWallMaterialWithTile(mat, wall, int(wall.PicNum))
+}
+
+// ConfigureWallMaterialWithTile assigns physical properties to a wall material using a specific tile ID and CStat flags.
+func ConfigureWallMaterialWithTile(mat *config.Material, wall *lumps.Wall, tilePic int) {
+	if mat == nil || wall == nil {
+		return
+	}
 	isTranslucent := wall.IsTranslucent()
-	spec, shine, dScale, dFactor := HeuristicMaterialProperties(int(wall.PicNum), false, isTranslucent)
+	spec, shine, dScale, dFactor := HeuristicMaterialProperties(tilePic, false, isTranslucent)
 	mat.SpecularBoost = spec
 	mat.Shininess = shine
 	mat.DetailScale = dScale

@@ -267,13 +267,31 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 						}
 						// Masked / grating wall / one-way
 						if wall.IsMasked() || wall.IsOneWay() {
-							tilePic := int(wall.OverPicNum)
-							if wall.IsOneWay() || tilePic < 0 {
-								tilePic = int(wall.PicNum)
+							// If both sides of a 2-sided portal are masked, only generate middle material once
+							// to avoid generating two overlapping, horizontally shifted / z-fighting quads.
+							isDuplicated := false
+							partnerWall := w.level.GetWall(int(wall.NextWall))
+							if wall.IsMasked() && !wall.IsOneWay() && partnerWall != nil {
+								if partnerWall.IsMasked() && !partnerWall.IsOneWay() {
+									if wall.OverPicNum <= 0 && partnerWall.OverPicNum > 0 {
+										isDuplicated = true
+									} else if partnerWall.OverPicNum <= 0 && wall.OverPicNum > 0 {
+										isDuplicated = false
+									} else if wIdx > int(wall.NextWall) {
+										isDuplicated = true
+									}
+								}
 							}
-							frames := w.textures.GetTileFrames(tilePic)
-							cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
-							ConfigureWallMaterial(cSeg.Middle, &wall)
+
+							if !isDuplicated {
+								tilePic := int(wall.OverPicNum)
+								if wall.IsOneWay() || tilePic < 0 {
+									tilePic = int(wall.PicNum)
+								}
+								frames := w.textures.GetTileFrames(tilePic)
+								cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
+								ConfigureWallMaterialWithTile(cSeg.Middle, &wall, tilePic)
+							}
 						}
 					}
 				}

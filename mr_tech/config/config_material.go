@@ -12,13 +12,14 @@ const (
 	MaterialKindSky
 	MaterialKindLiquid
 	MaterialKindLiquidImpenetrable
+	MaterialKindLatest
 )
 
 const (
 	BlendModeOpaque = iota
 	BlendModeAdditive
 	BlendModeLiquid
-	BlendModeLates
+	BlendModeLatest
 )
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.

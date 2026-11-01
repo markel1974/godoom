@@ -52,7 +52,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		cSkyV:            0.0,
 		cal:              cal,
 		visibleVol:       NewVisibleVols(8192),
-		modes:            make([]*DrawCommands, config.BlendModeLates),
+		modes:            make([]*DrawCommands, config.BlendModeLatest),
 		occlusion:        NewOcclusionHW(ctx, 4096),
 		//occBuffer:      NewOcclusionSW(640, 480),
 	}

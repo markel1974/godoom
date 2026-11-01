@@ -432,6 +432,13 @@ func (bld *Builder) configureMaterial(mat *config.Material, texName string) {
 	mat.Shininess = shine
 	mat.DetailScale = dScale
 	mat.DetailFactor = dFactor
+
+	// Liquids: highly reflective, fluid mirror surface without rock/metal grain
+	//if strings.Contains(texName, "NUKAGE") || strings.Contains(texName, "SLIME") ||
+	//	strings.Contains(texName, "LAVA") || strings.Contains(texName, "BLOOD") ||
+	//	strings.Contains(texName, "FWATER") || strings.Contains(texName, "WATER") {
+	//	mat.SetKind(config.MaterialKindLiquidImpenetrable)
+	//}
 }
 
 // configureThingMaterial assigns physically differentiated specular and shininess properties for game entities/sprites.

@@ -100,22 +100,13 @@ func NewConfigMaterial(name string, textures []string, kind MaterialKind) *Mater
 		Name:       name,
 		Id:         utils.NextUUId(),
 		Textures:   textures,
-		Kind:       kind,
 		DepthWrite: true, // Default to true for opaque materials
 		CullMode:   CullFront,
 		BlendMode:  BlendModeOpaque,
 		IsSolid:    true,
 		Liquid:     nil,
 	}
-	if kind == MaterialKindLiquid || kind == MaterialKindLiquidImpenetrable {
-		m.BlendMode = BlendModeLiquid
-		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
-		m.IsSolid = false
-		m.Liquid = NewLiquid(LiquidTypeWater)
-		if kind == MaterialKindLiquidImpenetrable {
-			m.IsSolid = true
-		}
-	}
+	m.SetKind(kind)
 	m.SpecularBoost = 0.1
 	m.Shininess = 40.0
 	m.DetailScale = 1.0
@@ -125,7 +116,21 @@ func NewConfigMaterial(name string, textures []string, kind MaterialKind) *Mater
 	return m
 }
 
-// HashKey computes a unique, deterministic hash string for a Material instance based on its properties and frames.
+// SetKind sets the material's kind and updates related properties like blend mode, depth write, solidity, and liquid type.
+func (m *Material) SetKind(kind MaterialKind) {
+	m.Kind = kind
+	if m.Kind == MaterialKindLiquid || m.Kind == MaterialKindLiquidImpenetrable {
+		m.BlendMode = BlendModeLiquid
+		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
+		m.Liquid = NewLiquid(LiquidTypeWater)
+		m.IsSolid = false
+		if kind == MaterialKindLiquidImpenetrable {
+			m.IsSolid = true
+		}
+	}
+}
+
+// HashKey generates a unique key for the Material instance based on its Id field.
 func (m *Material) HashKey() string {
 	return m.Id
 }

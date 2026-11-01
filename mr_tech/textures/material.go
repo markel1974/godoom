@@ -33,7 +33,6 @@ type Material struct {
 	cloudParms      []string
 	fogGen          []string
 	isLightning     bool
-	isSky           bool
 	isBacksided     bool
 	specularBoost   float64
 	shininess       float64
@@ -62,6 +61,8 @@ type Material struct {
 	clampV bool
 	// Pipeline Flags
 	vertexLitGeneric bool
+
+	isSolid bool
 	// _tickInterval defines the number of ticks required to form one logical interval for animation or updates.
 	tickInterval uint64
 }
@@ -81,6 +82,7 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		scaleV:       1.0,
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
 		tickInterval: 32,
+		isSolid:      true,
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -227,9 +229,6 @@ func (m *Material) GetBlendMode() int {
 // IsLightning returns whether this is a lightning material.
 func (m *Material) IsLightning() bool { return m.isLightning }
 
-// IsSky returns whether this material represents the sky.
-func (m *Material) IsSky() bool { return m.isSky }
-
 // IsBacksided returns whether this material is backsided.
 func (m *Material) IsBacksided() bool { return m.isBacksided }
 
@@ -350,9 +349,6 @@ func (m *Material) SetFogGen(fogGen []string) { m.fogGen = fogGen }
 // SetLightning sets whether this is a lightning material.
 func (m *Material) SetLightning(isLightning bool) { m.isLightning = isLightning }
 
-// SetSky sets whether this material represents the sky.
-func (m *Material) SetSky(isSky bool) { m.isSky = isSky }
-
 // SetBacksided sets whether this material is backsided.
 func (m *Material) SetBacksided(isBacksided bool) { m.isBacksided = isBacksided }
 
@@ -418,3 +414,13 @@ func (m *Material) SetClampV(clampV bool) { m.clampV = clampV }
 
 // SetVertexLitGeneric sets whether the material uses VertexLitGeneric shading.
 func (m *Material) SetVertexLitGeneric(vertexLitGeneric bool) { m.vertexLitGeneric = vertexLitGeneric }
+
+// SetIsSolid sets the solid state of the material based on the given boolean value.
+func (m *Material) SetIsSolid(s bool) {
+	m.isSolid = s
+}
+
+// IsSolid returns true if the material is solid, otherwise false.
+func (m *Material) IsSolid() bool {
+	return m.isSolid
+}

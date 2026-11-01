@@ -151,8 +151,8 @@ func (bld *Builder) Build(fs common.IResources, wadFile string, levelNumber int)
 
 // buildSector creates and configures a Sector with specified properties such as light levels, textures, and geometry.
 func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic string, floorY float64, ceilPic string, ceilY float64, texHandler *Textures, edges []Edge) *config.Sector {
-	ceilingType := config.MaterialKindLoop
-	floorType := config.MaterialKindLoop
+	ceilingType := config.MaterialKindSolid
+	floorType := config.MaterialKindSolid
 	light, kind, falloff, r, g, b := bld.heuristicLight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
 
 	//if v, ok := bld.heuristicMaterial(floorPic); ok {
@@ -190,9 +190,9 @@ func (bld *Builder) buildSegment(sectorId string, e Edge, texHandler *Textures) 
 	middleT := texHandler.TextureCreateAnimation(e.SideDef.MiddleTexture)
 	upperT := texHandler.TextureCreateAnimation(e.SideDef.UpperTexture)
 	lowerT := texHandler.TextureCreateAnimation(e.SideDef.LowerTexture)
-	seg.Middle = config.NewConfigMaterial("seg.Middle", middleT, config.MaterialKindLoop)
-	seg.Upper = config.NewConfigMaterial("seg.Upper", upperT, config.MaterialKindLoop)
-	seg.Lower = config.NewConfigMaterial("seg.Lower", lowerT, config.MaterialKindLoop)
+	seg.Middle = config.NewConfigMaterial("seg.Middle", middleT, config.MaterialKindSolid)
+	seg.Upper = config.NewConfigMaterial("seg.Upper", upperT, config.MaterialKindSolid)
+	seg.Lower = config.NewConfigMaterial("seg.Lower", lowerT, config.MaterialKindSolid)
 	bld.configureMaterial(seg.Middle, e.SideDef.MiddleTexture)
 	bld.configureMaterial(seg.Upper, e.SideDef.UpperTexture)
 	bld.configureMaterial(seg.Lower, e.SideDef.LowerTexture)
@@ -250,7 +250,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 		}
 		actionFrames := angleAnim[0]
 		latestFrame := actionFrames[len(actionFrames)-1]
-		mat := config.NewConfigMaterial("anim.dead", []string{latestFrame}, config.MaterialKindLoop)
+		mat := config.NewConfigMaterial("anim.dead", []string{latestFrame}, config.MaterialKindSolid)
 		bld.configureThingMaterial(mat, sd.Sprite)
 		_ = ms.Add(mat)
 	} else {
@@ -260,7 +260,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 				continue
 			}
 			actionFrames := angleAnim[0]
-			mat := config.NewConfigMaterial("anim", actionFrames, config.MaterialKindLoop)
+			mat := config.NewConfigMaterial("anim", actionFrames, config.MaterialKindSolid)
 			bld.configureThingMaterial(mat, sd.Sprite)
 			animId := ms.Add(mat)
 			//TODO PATCH

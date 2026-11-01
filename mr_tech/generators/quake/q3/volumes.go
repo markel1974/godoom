@@ -30,7 +30,7 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, e
 	chunks := make(map[string]*config.Volume)
 	vIdx := strconv.Itoa(mIdx)
 	for _, v := range faces {
-		animKind := config.MaterialKindLoop
+		animKind := config.MaterialKindSolid
 		texNameLC := strings.ToLower(v.TexName)
 		if v.Info.IsSky() {
 			animKind = config.MaterialKindSky

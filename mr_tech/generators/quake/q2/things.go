@@ -91,7 +91,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		return nil, fmt.Errorf("failed to load skin %s: %s", fileName, err.Error())
 	}
 
-	anim := config.NewConfigMaterial("thing", []string{materialName}, config.MaterialKindLoop)
+	anim := config.NewConfigMaterial("thing", []string{materialName}, config.MaterialKindSolid)
 	ConfigureThingMaterial(anim, classname)
 
 	cModel := config.NewModel3DEntry(int(md2.Header.NumFrames), md2.Frames.FrameNames)

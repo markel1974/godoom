@@ -45,7 +45,9 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	}
 	material = textures.NewMaterial(ca.Name, r.handler.GetFrames(ca.Frames), int(ca.Kind))
 	material.SetUV(ca.U, ca.V)
+	material.SetShader(ca.Shader)
 	material.SetBlendMode(ca.BlendMode)
+	material.SetIsSolid(ca.IsSolid)
 	material.SetCullMode(ca.CullMode)
 	material.SetDepthWrite(ca.DepthWrite)
 	material.SetAlphaTest(ca.AlphaTest)
@@ -62,7 +64,6 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	material.SetCloudParms(ca.CloudParms)
 	material.SetFogGen(ca.FogGen)
 	material.SetLightning(ca.IsLightning)
-	material.SetSky(ca.IsSky)
 	material.SetBacksided(ca.IsBacksided)
 	material.SetSpecularBoost(ca.SpecularBoost)
 	material.SetShininess(ca.Shininess)

@@ -7,17 +7,18 @@ import (
 type MaterialKind int
 
 const (
+	MaterialKindNone MaterialKind = iota
+	MaterialKindSolid
+	MaterialKindSky
+	MaterialKindLiquid
+	MaterialKindLiquidImpenetrable
+)
+
+const (
 	BlendModeOpaque = iota
 	BlendModeAdditive
 	BlendModeLiquid
 	BlendModeLates
-)
-
-const (
-	MaterialKindNone MaterialKind = iota
-	MaterialKindLoop
-	MaterialKindSky
-	MaterialKindLiquid
 )
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.
@@ -29,14 +30,14 @@ const (
 
 // Material represents animation properties including a sequence of frames, the type of animation, and the shader.
 type Material struct {
-	Id        string `json:"id"`
-	BlendMode int    `json:"blendMode"`
-	Name      string `json:"name"`
-	//Shader    string       `json:"shader"`
-	Frames []string     `json:"frames"`
-	Kind   MaterialKind `json:"kind"`
-	U      float64      `json:"u"`
-	V      float64      `json:"v"`
+	Id        string       `json:"id"`
+	BlendMode int          `json:"blendMode"`
+	Name      string       `json:"name"`
+	Shader    string       `json:"shader"`
+	Frames    []string     `json:"frames"`
+	Kind      MaterialKind `json:"kind"`
+	U         float64      `json:"u"`
+	V         float64      `json:"v"`
 	// Universal Modern Rendering Properties
 	CullMode   int     `json:"cullMode"`
 	DepthWrite bool    `json:"depthWrite"`
@@ -85,10 +86,10 @@ type Material struct {
 	CloudParms     []string        `json:"cloudParms"`
 	FogGen         []string        `json:"fogGen"`
 	IsLightning    bool            `json:"isLightning"`
-	IsSky          bool            `json:"isSky"`
 	IsBacksided    bool            `json:"isBacksided"`
 	SpecularBoost  float64         `json:"specularBoost"`
 	Shininess      float64         `json:"shininess"`
+	IsSolid        bool            `json:"isSolid"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
@@ -101,10 +102,16 @@ func NewConfigMaterial(name string, frames []string, kind MaterialKind) *Materia
 		DepthWrite: true, // Default to true for opaque materials
 		CullMode:   CullFront,
 		BlendMode:  BlendModeOpaque,
+		IsSolid:    true,
 	}
 	if kind == MaterialKindLiquid {
 		m.BlendMode = BlendModeLiquid
-		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco!
+		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
+		m.IsSolid = false
+	} else if kind == MaterialKindLiquidImpenetrable {
+		m.BlendMode = BlendModeLiquid
+		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
+		m.IsSolid = true
 	}
 	m.SpecularBoost = 0.1
 	m.Shininess = 40.0

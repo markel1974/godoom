@@ -162,7 +162,7 @@ var _q2DictBModel = map[string]string{
 
 // TextInfo2ToMaterialKind converts a TexInfo2 object into a corresponding MaterialKind based on surface attributes.
 func TextInfo2ToMaterialKind(info lumps.TexInfo2) config.MaterialKind {
-	animKind := config.MaterialKindLoop
+	animKind := config.MaterialKindSolid
 	if info.IsSky() {
 		animKind = config.MaterialKindSky
 	} else if info.IsWarp() {

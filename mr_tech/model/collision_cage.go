@@ -465,7 +465,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		lFace := faces.lFace
 
 		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
-		if mat := rFace.GetMaterial(); mat != nil && mat.GetKind() == int(config.MaterialKindLiquid) {
+		if mat := rFace.GetMaterial(); mat != nil && !mat.IsSolid() {
 			//fmt.Println("Liquid material detected")
 			continue
 		}

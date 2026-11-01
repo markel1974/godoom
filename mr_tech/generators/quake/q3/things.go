@@ -112,7 +112,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 	for _, bspFace := range rawFaces {
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
-		animKind := config.MaterialKindLoop
+		animKind := config.MaterialKindSolid
 		if bspFace.Info.IsSky() {
 			animKind = config.MaterialKindSky
 		}
@@ -461,7 +461,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 			}
 		}
 		if len(shaderName) > 0 {
-			animKind := config.MaterialKindLoop
+			animKind := config.MaterialKindSolid
 			texNameLC := strings.ToLower(shaderName)
 			if t.shaders.IsLiquid(texNameLC) {
 				animKind = config.MaterialKindLiquid

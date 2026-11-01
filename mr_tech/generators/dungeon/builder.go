@@ -134,8 +134,8 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 
 	floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 	ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-	sector.Floor = config.NewConfigMaterial("floorT", floorT, config.MaterialKindLoop)
-	sector.Ceil = config.NewConfigMaterial("ceilT", ceilT, config.MaterialKindLoop)
+	sector.Floor = config.NewConfigMaterial("floorT", floorT, config.MaterialKindSolid)
+	sector.Ceil = config.NewConfigMaterial("ceilT", ceilT, config.MaterialKindSolid)
 	b.randomizeMaterial(sector.Floor)
 	b.randomizeMaterial(sector.Ceil)
 	sector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, scaleTex, scaleTex)
@@ -157,9 +157,9 @@ func (b *Builder) createCube(x float64, y float64, max float64, floor float64, c
 		upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 		lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
 		middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-		seg.Upper = config.NewConfigMaterial("upperT", upperT, config.MaterialKindLoop)
-		seg.Lower = config.NewConfigMaterial("lowerT", lowerT, config.MaterialKindLoop)
-		seg.Middle = config.NewConfigMaterial("middleT", middleT, config.MaterialKindLoop)
+		seg.Upper = config.NewConfigMaterial("upperT", upperT, config.MaterialKindSolid)
+		seg.Lower = config.NewConfigMaterial("lowerT", lowerT, config.MaterialKindSolid)
+		seg.Middle = config.NewConfigMaterial("middleT", middleT, config.MaterialKindSolid)
 		b.randomizeMaterial(seg.Upper)
 		b.randomizeMaterial(seg.Lower)
 		b.randomizeMaterial(seg.Middle)
@@ -274,8 +274,8 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 
 			floorT := []string{_availableFloor[random(0, len(_availableFloor)-1)]}
 			ceilT := []string{_availableCeil[random(0, len(_availableCeil)-1)]}
-			sector.Floor = config.NewConfigMaterial("floorT", floorT, config.MaterialKindLoop)
-			sector.Ceil = config.NewConfigMaterial("ceilT", ceilT, config.MaterialKindLoop)
+			sector.Floor = config.NewConfigMaterial("floorT", floorT, config.MaterialKindSolid)
+			sector.Ceil = config.NewConfigMaterial("ceilT", ceilT, config.MaterialKindSolid)
 			b.randomizeMaterial(sector.Floor)
 			b.randomizeMaterial(sector.Ceil)
 
@@ -329,14 +329,14 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 
 				if kind == config.SegmentWall {
 					middleT := []string{_availableWall[random(0, len(_availableWall)-1)]}
-					seg.Middle = config.NewConfigMaterial("middleT", middleT, config.MaterialKindLoop)
+					seg.Middle = config.NewConfigMaterial("middleT", middleT, config.MaterialKindSolid)
 					b.randomizeMaterial(seg.Middle)
 					seg.UVAlign = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)
 				} else {
 					upperT := []string{_availableUpper[random(0, len(_availableUpper)-1)]}
 					lowerT := []string{_availableLower[random(0, len(_availableLower)-1)]}
-					seg.Upper = config.NewConfigMaterial("upperT", upperT, config.MaterialKindLoop)
-					seg.Lower = config.NewConfigMaterial("lowerT", lowerT, config.MaterialKindLoop)
+					seg.Upper = config.NewConfigMaterial("upperT", upperT, config.MaterialKindSolid)
+					seg.Lower = config.NewConfigMaterial("lowerT", lowerT, config.MaterialKindSolid)
 					b.randomizeMaterial(seg.Upper)
 					b.randomizeMaterial(seg.Lower)
 					seg.UVAlignUpper = config.NewUVAlignVertical(false, false, false, panning, wallLen, scaleTex)

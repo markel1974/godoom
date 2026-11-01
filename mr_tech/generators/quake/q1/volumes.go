@@ -30,7 +30,7 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 	var res []*config.Volume
 
 	for _, v := range faces {
-		animKind := config.MaterialKindLoop
+		animKind := config.MaterialKindSolid
 		velX, velY := 0.0, 0.0
 		if v.IsSky {
 			animKind = config.MaterialKindSky

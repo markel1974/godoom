@@ -80,7 +80,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if sector.FloorTexture >= 0 {
 			texName := level.GetTexture(sector.FloorTexture)
 			names, _ := b.archive.AddTexture(texName)
-			animKind := config.MaterialKindLoop
+			animKind := config.MaterialKindSolid
 			isLiquid := b.isLiquid(texName) || sector.IsWater()
 			if isLiquid {
 				animKind = config.MaterialKindLiquid
@@ -94,7 +94,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 		if sector.CeilingTexture >= 0 {
 			texName := level.GetTexture(sector.CeilingTexture)
 			names, _ := b.archive.AddTexture(texName)
-			animKind := config.MaterialKindLoop
+			animKind := config.MaterialKindSolid
 			isSky := sector.IsSky()
 			isLiquid := b.isLiquid(texName)
 			if isSky {
@@ -143,7 +143,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						texName := level.GetTexture(texIdx)
 						names, _ := b.archive.AddTexture(texName)
 						cSeg.Kind = config.SegmentWall
-						animKind := config.MaterialKindLoop
+						animKind := config.MaterialKindSolid
 						isLiquid := b.isLiquid(texName)
 						if isLiquid {
 							animKind = config.MaterialKindLiquid
@@ -199,7 +199,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if validTexture(topTexIdx) {
 						texName := level.GetTexture(topTexIdx)
 						names, _ := b.archive.AddTexture(texName)
-						animKind := config.MaterialKindLoop
+						animKind := config.MaterialKindSolid
 						isLiquid := b.isLiquid(texName)
 						if isLiquid {
 							animKind = config.MaterialKindLiquid
@@ -215,7 +215,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 					if validTexture(botTexIdx) {
 						texName := level.GetTexture(botTexIdx)
 						names, _ := b.archive.AddTexture(texName)
-						animKind := config.MaterialKindLoop
+						animKind := config.MaterialKindSolid
 						isLiquid := b.isLiquid(texName)
 						if isLiquid {
 							animKind = config.MaterialKindLiquid
@@ -229,7 +229,7 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						if validTexture(wall.MidTexture) {
 							texName := level.GetTexture(wall.MidTexture)
 							names, _ := b.archive.AddTexture(texName)
-							animKind := config.MaterialKindLoop
+							animKind := config.MaterialKindSolid
 							isLiquid := b.isLiquid(texName)
 							if isLiquid {
 								animKind = config.MaterialKindLiquid

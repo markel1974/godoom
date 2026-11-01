@@ -112,7 +112,7 @@ func (s *Shaders) MaterialBind(texName string, material *config.Material) {
 	material.CloudParms = s.GetCloudParms(texNameLC)
 	material.FogGen = s.GetFogGen(texNameLC)
 	material.IsLightning = s.IsLightning(texNameLC)
-	material.IsSky = s.IsSky(texNameLC)
+	//material.IsSky = s.IsSky(texNameLC)
 	material.IsBacksided = s.IsBacksided(texNameLC)
 
 	// Direct parsing of shader stages for DetailMap, DetailScale, ClampU/V, EnvMap

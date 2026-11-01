@@ -81,7 +81,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 	if err = th.texManager.RegisterPixelsPalette(skinName, int(md1.Header.SkinWidth), int(md1.Header.SkinHeight), skin.Data, th.palette, false, 255, false); err != nil {
 		return nil, fmt.Errorf("Warning: texture %s error: %s\n", skinName, err.Error())
 	}
-	anim := config.NewConfigMaterial("thing", []string{skinName}, config.MaterialKindLoop)
+	anim := config.NewConfigMaterial("thing", []string{skinName}, config.MaterialKindSolid)
 	ConfigureThingMaterial(anim, classname)
 
 	cModel := config.NewModel3DEntry(int(md1.Header.NumFrames), md1.FrameNames)
@@ -122,7 +122,7 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	for _, bspFace := range rawFaces {
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
-		animKind := config.MaterialKindLoop
+		animKind := config.MaterialKindSolid
 		velX, velY := 0.0, 0.0
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky
@@ -206,7 +206,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	for _, bspFace := range rawFaces {
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
-		animKind := config.MaterialKindLoop
+		animKind := config.MaterialKindSolid
 		velX, velY := 0.0, 0.0
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky

@@ -113,7 +113,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		cSector.CeilY = ceilY
 
 		// Floor material
-		floorKind := config.MaterialKindLoop
+		floorKind := config.MaterialKindSolid
 		var floorFrames []string
 		if sec.IsSkyFloor() {
 			floorKind = config.MaterialKindSky
@@ -125,7 +125,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 		ConfigureMaterial(cSector.Floor, int(sec.FloorPicNum), sec.IsSkyFloor())
 
 		// Ceiling material
-		ceilKind := config.MaterialKindLoop
+		ceilKind := config.MaterialKindSolid
 		var ceilFrames []string
 		if sec.IsSkyCeiling() {
 			ceilKind = config.MaterialKindSky
@@ -257,7 +257,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 					// 1-sided solid wall
 					cSeg.Kind = config.SegmentWall
 					frames := w.textures.GetTileFrames(int(wall.PicNum))
-					cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
+					cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindSolid)
 					ConfigureWallMaterial(cSeg.Middle, &wall)
 					refZ := ceilY
 					if wall.IsBottomAligned() {
@@ -291,7 +291,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 								cSeg.Upper = config.NewConfigMaterial("sky", nil, config.MaterialKindSky)
 							} else {
 								frames := w.textures.GetTileFrames(int(wall.PicNum))
-								cSeg.Upper = config.NewConfigMaterial("cSeg.Upper", frames, config.MaterialKindLoop)
+								cSeg.Upper = config.NewConfigMaterial("cSeg.Upper", frames, config.MaterialKindSolid)
 								ConfigureWallMaterial(cSeg.Upper, &wall)
 							}
 						}
@@ -301,7 +301,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 								cSeg.Lower = config.NewConfigMaterial("sky", nil, config.MaterialKindSky)
 							} else {
 								frames := w.textures.GetTileFrames(int(wall.PicNum))
-								cSeg.Lower = config.NewConfigMaterial("cSeg.Lower", frames, config.MaterialKindLoop)
+								cSeg.Lower = config.NewConfigMaterial("cSeg.Lower", frames, config.MaterialKindSolid)
 								ConfigureWallMaterial(cSeg.Lower, &wall)
 							}
 						}
@@ -325,7 +325,7 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 									tilePic = int(wall.PicNum)
 								}
 								frames := w.textures.GetTileFrames(tilePic)
-								cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindLoop)
+								cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", frames, config.MaterialKindSolid)
 								ConfigureWallMaterialWithTile(cSeg.Middle, &wall, tilePic)
 							}
 						}
@@ -430,7 +430,7 @@ func (w *World) buildSprites() []*config.Volume {
 			}
 			frames := w.textures.GetTileFrames(int(sp.PicNum))
 			wallId := fmt.Sprintf("sp_wall_%d", spIdx)
-			mat := config.NewConfigMaterial(wallId, frames, config.MaterialKindLoop)
+			mat := config.NewConfigMaterial(wallId, frames, config.MaterialKindSolid)
 			mat.ClampU = true
 			mat.ClampV = true
 			ConfigureSpriteMaterial(mat, sp)
@@ -498,7 +498,7 @@ func (w *World) buildSprites() []*config.Volume {
 
 			frames := w.textures.GetTileFrames(int(sp.PicNum))
 			floorId := fmt.Sprintf("sp_floor_%d", spIdx)
-			mat := config.NewConfigMaterial(floorId, frames, config.MaterialKindLoop)
+			mat := config.NewConfigMaterial(floorId, frames, config.MaterialKindSolid)
 			mat.ClampU = true
 			mat.ClampV = true
 			ConfigureSpriteMaterial(mat, sp)

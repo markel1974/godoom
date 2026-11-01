@@ -43,11 +43,12 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	if ok {
 		return material
 	}
-	material = textures.NewMaterial(ca.Name, r.handler.GetFrames(ca.Frames), int(ca.Kind))
+	material = textures.NewMaterial(ca.Name, r.handler.GetFrames(ca.Textures), int(ca.Kind))
 	material.SetUV(ca.U, ca.V)
 	material.SetShader(ca.Shader)
 	material.SetBlendMode(ca.BlendMode)
 	material.SetIsSolid(ca.IsSolid)
+	//material.SetLiquidType(ca.Liquid.Type)
 	material.SetCullMode(ca.CullMode)
 	material.SetDepthWrite(ca.DepthWrite)
 	material.SetAlphaTest(ca.AlphaTest)

@@ -4,21 +4,10 @@ import (
 	"math"
 	"unsafe"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
-)
-
-// LiquidType represents the type of liquid medium being rendered by the Liquid shader.
-type LiquidType int32
-
-const (
-	LiquidTypeWater LiquidType = 0 // Acqua limpida e trasparente (default)
-	LiquidTypeSea   LiquidType = 1 // Mare oceanico (con onde ampie e schiuma su creste e riva)
-	LiquidTypeLava  LiquidType = 2 // Lava incandescente opaca con vene di magma
-	LiquidTypeSlime LiquidType = 3 // Slime / Nukage acido radioattivo torbido
-	LiquidTypeBlood LiquidType = 4 // Sangue denso e viscoso
-	LiquidTypeFog   LiquidType = 5 // Nebbia volumetrica atmosferica
 )
 
 // ShaderLiquidLoc represents an enumerator for shader uniform locations specific to the Liquid shader system.
@@ -57,24 +46,24 @@ type Liquid struct {
 	main       *Main
 	post       *Post
 	metrics    *metrics.Map
-	liquidType LiquidType
+	liquidType config.LiquidType
 }
 
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
 func NewLiquid() *Liquid {
 	return &Liquid{
 		prg:        0,
-		liquidType: LiquidTypeWater,
+		liquidType: config.LiquidTypeWater,
 	}
 }
 
 // SetLiquidType sets the active liquid rendering type (Water, Sea, Lava, Slime, Blood, Fog).
-func (s *Liquid) SetLiquidType(t LiquidType) {
+func (s *Liquid) SetLiquidType(t config.LiquidType) {
 	s.liquidType = t
 }
 
 // GetLiquidType returns the currently set liquid type.
-func (s *Liquid) GetLiquidType() LiquidType {
+func (s *Liquid) GetLiquidType() config.LiquidType {
 	return s.liquidType
 }
 

@@ -37,7 +37,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 		if view == nil {
 			panic(fmt.Sprintf("view is nil for viewIdx %d", viewIdx))
 		}
-		if len(view.Frames) == 0 {
+		if len(view.Textures) == 0 {
 			panic(fmt.Sprintf("view Frames is empty for viewIdx %d", viewIdx))
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", cfg.Id, viewIdx)

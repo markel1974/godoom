@@ -35,7 +35,7 @@ type Material struct {
 	BlendMode int          `json:"blendMode"`
 	Name      string       `json:"name"`
 	Shader    string       `json:"shader"`
-	Frames    []string     `json:"frames"`
+	Textures  []string     `json:"textures"`
 	Kind      MaterialKind `json:"kind"`
 	U         float64      `json:"u"`
 	V         float64      `json:"v"`
@@ -91,28 +91,30 @@ type Material struct {
 	SpecularBoost  float64         `json:"specularBoost"`
 	Shininess      float64         `json:"shininess"`
 	IsSolid        bool            `json:"isSolid"`
+	Liquid         *Liquid         `json:"liquid"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
-func NewConfigMaterial(name string, frames []string, kind MaterialKind) *Material {
+func NewConfigMaterial(name string, textures []string, kind MaterialKind) *Material {
 	m := &Material{
 		Name:       name,
 		Id:         utils.NextUUId(),
-		Frames:     frames,
+		Textures:   textures,
 		Kind:       kind,
 		DepthWrite: true, // Default to true for opaque materials
 		CullMode:   CullFront,
 		BlendMode:  BlendModeOpaque,
 		IsSolid:    true,
+		Liquid:     nil,
 	}
-	if kind == MaterialKindLiquid {
+	if kind == MaterialKindLiquid || kind == MaterialKindLiquidImpenetrable {
 		m.BlendMode = BlendModeLiquid
 		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
 		m.IsSolid = false
-	} else if kind == MaterialKindLiquidImpenetrable {
-		m.BlendMode = BlendModeLiquid
-		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
-		m.IsSolid = true
+		m.Liquid = NewLiquid(LiquidTypeWater)
+		if kind == MaterialKindLiquidImpenetrable {
+			m.IsSolid = true
+		}
 	}
 	m.SpecularBoost = 0.1
 	m.Shininess = 40.0

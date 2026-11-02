@@ -1,5 +1,6 @@
 package config
 
+/*
 type LiquidType int
 
 const (
@@ -21,3 +22,6 @@ func NewLiquid(kind LiquidType) *Liquid {
 		Type: kind,
 	}
 }
+
+
+*/

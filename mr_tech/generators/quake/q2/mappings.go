@@ -166,7 +166,7 @@ func TextInfo2ToMaterialKind(info lumps.TexInfo2) config.MaterialKind {
 	if info.IsSky() {
 		animKind = config.MaterialKindSky
 	} else if info.IsWarp() {
-		animKind = config.MaterialKindLiquid
+		animKind = config.MaterialKindWater
 	}
 	return animKind
 }

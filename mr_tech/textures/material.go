@@ -2,6 +2,7 @@ package textures
 
 import (
 	"fmt"
+	"math"
 )
 
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
@@ -12,7 +13,6 @@ type Material struct {
 	frames          []*Texture
 	totalFrames     uint64
 	kind            int
-	liquidType      int
 	u               float64
 	v               float64
 	clampAnim       bool
@@ -63,7 +63,9 @@ type Material struct {
 	// Pipeline Flags
 	vertexLitGeneric bool
 
-	isSolid bool
+	isSolid   bool
+	amplitude float64
+	packed    float32
 	// _tickInterval defines the number of ticks required to form one logical interval for animation or updates.
 	tickInterval uint64
 }
@@ -84,6 +86,7 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
 		tickInterval: 32,
 		isSolid:      true,
+		amplitude:    0.0,
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -96,6 +99,7 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 	if a.totalFrames == 1 {
 		a.frame = frames[0]
 	}
+	a.updatePacked()
 	return a
 }
 
@@ -105,16 +109,6 @@ func (m *Material) GetName() string { return m.name }
 // GetKind returns the type of the animation as an integer value.
 func (m *Material) GetKind() int {
 	return m.kind
-}
-
-// SetLiquidType sets the liquid rendering type for the Material.
-func (m *Material) SetLiquidType(t int) {
-	m.liquidType = t
-}
-
-// GetLiquidType returns the liquid rendering type for the Material.
-func (m *Material) GetLiquidType() int {
-	return m.liquidType
 }
 
 // GetU returns the horizontal scroll offset of the material.
@@ -235,6 +229,11 @@ func (m *Material) IsVertexLitGeneric() bool { return m.vertexLitGeneric }
 // GetBlendMode returns the current blend mode identifier as an integer.
 func (m *Material) GetBlendMode() int {
 	return m.blendMode
+}
+
+// GetAmplitude returns the amplitude value of the Material instance.
+func (m *Material) GetAmplitude() float64 {
+	return m.amplitude
 }
 
 // IsLightning returns whether this is a lightning material.
@@ -429,9 +428,40 @@ func (m *Material) SetVertexLitGeneric(vertexLitGeneric bool) { m.vertexLitGener
 // SetIsSolid sets the solid state of the material based on the given boolean value.
 func (m *Material) SetIsSolid(s bool) {
 	m.isSolid = s
+	m.updatePacked()
+}
+
+// SetAmplitude sets the amplitude value for the material.
+// It updates the internal amplitude field with the provided value.
+func (m *Material) SetAmplitude(a float64) {
+	m.amplitude = a
+	m.updatePacked()
+}
+
+// SetKind sets the material kind and updates the packed representation.
+func (m *Material) SetKind(k int) {
+	m.kind = k
+	m.updatePacked()
+}
+
+// GetPacked returns the precalculated packed material representation as float32.
+func (m *Material) GetPacked() float32 {
+	return m.packed
 }
 
 // IsSolid returns true if the material is solid, otherwise false.
 func (m *Material) IsSolid() bool {
 	return m.isSolid
+}
+
+// updatePacked recalculates and updates the packed field based on the material's properties: isSolid, amplitude, and kind.
+func (m *Material) updatePacked() {
+	isSolid := uint32(1)
+	if !m.isSolid {
+		isSolid = 0
+	}
+	amplitude := uint32(m.amplitude)
+	unk2 := uint32(0)
+	raw := uint32(m.kind) | (isSolid << 8) | (amplitude << 16) | (unk2 << 24)
+	m.packed = math.Float32frombits(raw)
 }

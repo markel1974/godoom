@@ -22,21 +22,21 @@ uniform float u_far;
 uniform mat4 u_view;
 uniform vec3 u_lightDir;
 
-const int LIQUID_WATER = 0; // Acqua limpida
-const int LIQUID_SEA   = 1; // Mare con onde ampie e schiuma su creste e riva
-const int LIQUID_LAVA  = 2; // Lava incandescente opaca con vene di magma
-const int LIQUID_SLIME = 3; // Slime / Nukage acido radioattivo
-const int LIQUID_BLOOD = 4; // Sangue rosso denso
-const int LIQUID_FOG   = 5; // Nebbia volumetrica atmosferica
+const uint LIQUID_WATER = 2u; // Acqua limpida
+const uint LIQUID_SEA   = 3u; // Mare con onde ampie e schiuma su creste e riva
+const uint LIQUID_LAVA  = 4u; // Lava incandescente opaca con vene di magma
+const uint LIQUID_SLIME = 5u; // Slime / Nukage acido radioattivo
+const uint LIQUID_BLOOD = 6u; // Sangue rosso denso
+const uint LIQUID_FOG   = 7u; // Nebbia volumetrica atmosferica
 
 
 // TODO FROM CONFIG
 // Water Colors (Lush Caribbean turquoise to deep sapphire blue)
-const vec3 waterColorShallow = vec3(0.05, 0.45, 0.62);
-const vec3 waterColorDeep    = vec3(0.015, 0.18, 0.32);
+const vec3 waterColorShallow = vec3(0.10, 0.62, 0.82);
+const vec3 waterColorDeep    = vec3(0.03, 0.30, 0.52);
 // Environment reflection (Lush sky & ambient sheen)
-const vec3 envHorizon    = vec3(0.30, 0.52, 0.72);
-const vec3 envZenith     = vec3(0.12, 0.26, 0.48);
+const vec3 envHorizon    = vec3(0.42, 0.68, 0.88);
+const vec3 envZenith     = vec3(0.18, 0.38, 0.65);
 
 
 
@@ -104,10 +104,10 @@ vec3 refraction(float depthDiff, vec2 distortion, vec2 distortedUV) {
     return vec3(rCh * 0.45 + diffusedRefraction.r * 0.55, diffusedRefraction.g, bCh * 0.45 + diffusedRefraction.b * 0.55);
 }
 
-void renderFog(bool isImpenetrable) {
+void renderFog(bool isSolid) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     vec3 fogBase = (length(texColor) > 0.04) ? texColor : vec3(0.72, 0.76, 0.82);
-    if (isImpenetrable) {
+    if (isSolid) {
         FragColor = vec4(fogBase, 1.0);
         BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
@@ -127,7 +127,7 @@ void renderFog(bool isImpenetrable) {
     BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 
-void renderLava(bool isImpenetrable) {
+void renderLava(bool isSolid) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     float t = u_time;
     vec2 wPos = WorldPos.xz;
@@ -147,7 +147,7 @@ void renderLava(bool isImpenetrable) {
     float sampleDepthRaw = texture(u_depthTex, screenUV).r;
     float sampleZN = sampleDepthRaw * 2.0 - 1.0;
     float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    if (!isImpenetrable && sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1) {
+    if (!isSolid && sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1) {
         float depthDiff = max(sampleDepth - waterDepth, 0.0);
         const float LAVA_RIM = 5.0;
         if (depthDiff < LAVA_RIM) {
@@ -163,7 +163,7 @@ void renderLava(bool isImpenetrable) {
     BrightColor = vec4(bloomLava, 1.0);
 }
 
-void renderSlime(bool isImpenetrable) {
+void renderSlime(bool isSolid) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
     float waterDepth = abs(ViewPos.z);
@@ -176,18 +176,37 @@ void renderSlime(bool isImpenetrable) {
     float ripNoise = fbm(p * 0.6 + vec2(t * 0.03, -t * 0.025));
     vec2 distortion = (rw1 * 0.50 + rw2 * 0.35 + rw3 * 0.15) * (0.0022 + ripNoise * 0.0012);
 
-    vec3 dPdx = dFdx(ViewPos);
-    vec3 dPdy = dFdy(ViewPos);
-    vec3 faceNormal = cross(dPdx, dPdy);
-    float lenN = length(faceNormal);
-    faceNormal = lenN > 1e-6 ? faceNormal / lenN : vec3(0.0, 1.0, 0.0);
-    vec3 V = normalize(-ViewPos);
-    if (dot(faceNormal, V) < 0.0) {
-        faceNormal = -faceNormal;
+    vec3 dWdx = dFdx(WorldPos);
+    vec3 dWdy = dFdy(WorldPos);
+    vec3 geomNormal = cross(dWdx, dWdy);
+    float lenGN = length(geomNormal);
+    geomNormal = lenGN > 1e-6 ? geomNormal / lenGN : vec3(0.0, 1.0, 0.0);
+    vec3 viewDir = normalize(-ViewPos);
+    if (dot(mat3(u_view) * geomNormal, viewDir) < 0.0) {
+        geomNormal = -geomNormal;
     }
-    vec3 tangent = normalize(dPdx);
-    vec3 bitangent = normalize(cross(faceNormal, tangent));
-    vec3 waveNormal = normalize(faceNormal + tangent * (distortion.x * 25.0) + bitangent * (distortion.y * 25.0));
+    bool isHorizontal = abs(geomNormal.y) > 0.6;
+    vec3 worldFaceNormal = isHorizontal ? vec3(0.0, 1.0, 0.0) : geomNormal;
+    if (dot(mat3(u_view) * worldFaceNormal, viewDir) < 0.0) {
+        worldFaceNormal = -worldFaceNormal;
+    }
+
+    uint packedMaterial = floatBitsToUint(Material);
+    float vertAmp = float((packedMaterial >> 16u) & 0xFFu);
+    float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
+    float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
+    vec2 totalSlope = distortion * 25.0 + vec2(vertSlopeX, vertSlopeZ);
+    vec3 worldWaveNormal;
+    if (isHorizontal) {
+        worldWaveNormal = normalize(vec3(-totalSlope.x, worldFaceNormal.y, -totalSlope.y));
+    } else {
+        vec3 tAxis = abs(worldFaceNormal.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 t1 = normalize(cross(tAxis, worldFaceNormal));
+        vec3 t2 = cross(worldFaceNormal, t1);
+        worldWaveNormal = normalize(worldFaceNormal + t1 * distortion.x * 25.0 + t2 * distortion.y * 25.0);
+    }
+    vec3 waveNormal = normalize(mat3(u_view) * worldWaveNormal);
+    vec3 V = viewDir;
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
     float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 4.0);
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
@@ -197,7 +216,7 @@ void renderSlime(bool isImpenetrable) {
     vec3 slimeTint = vec3(0.18, 0.85, 0.15);
     vec3 slimeSurface = (length(texColor) > 0.04) ? mix(slimeTint, texColor, 0.60) : slimeTint;
     vec3 finalSlime = slimeSurface;
-    if (!isImpenetrable) {
+    if (!isSolid) {
         vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
         float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
         float sampleZN = sampleDepthRaw * 2.0 - 1.0;
@@ -224,8 +243,11 @@ void renderSlime(bool isImpenetrable) {
             finalSlime = mix(slimeBody, slimeSurface, surfaceOpacity);
         }
     } else {
+        vec2 refractedUV = TexCoords.xy + distortion * 2.0;
+        vec3 bedTex = getDiffuse(vec3(refractedUV, TexCoords.z)).rgb;
+        vec3 bedBase = (length(bedTex) > 0.03) ? bedTex : slimeTint;
         float waveLight = max(dot(waveNormal, L), 0.0) * 0.25 + 0.75;
-        finalSlime *= waveLight;
+        finalSlime = mix(bedBase * waveLight, slimeSurface, 0.45);
     }
 
     float spec = pow(NdotH, 32.0) * 0.40 * (0.30 + 0.70 * fresnel);
@@ -236,7 +258,7 @@ void renderSlime(bool isImpenetrable) {
     BrightColor = vec4(bloomSlime, 1.0);
 }
 
-void renderBlood(bool isImpenetrable) {
+void renderBlood(bool isSolid) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
     float waterDepth = abs(ViewPos.z);
@@ -249,18 +271,37 @@ void renderBlood(bool isImpenetrable) {
     float ripNoise = fbm(p * 0.6 + vec2(t * 0.03, -t * 0.025));
     vec2 distortion = (rw1 * 0.50 + rw2 * 0.35 + rw3 * 0.15) * (0.0022 + ripNoise * 0.0012);
 
-    vec3 dPdx = dFdx(ViewPos);
-    vec3 dPdy = dFdy(ViewPos);
-    vec3 faceNormal = cross(dPdx, dPdy);
-    float lenN = length(faceNormal);
-    faceNormal = lenN > 1e-6 ? faceNormal / lenN : vec3(0.0, 1.0, 0.0);
-    vec3 V = normalize(-ViewPos);
-    if (dot(faceNormal, V) < 0.0) {
-        faceNormal = -faceNormal;
+    vec3 dWdx = dFdx(WorldPos);
+    vec3 dWdy = dFdy(WorldPos);
+    vec3 geomNormal = cross(dWdx, dWdy);
+    float lenGN = length(geomNormal);
+    geomNormal = lenGN > 1e-6 ? geomNormal / lenGN : vec3(0.0, 1.0, 0.0);
+    vec3 viewDir = normalize(-ViewPos);
+    if (dot(mat3(u_view) * geomNormal, viewDir) < 0.0) {
+        geomNormal = -geomNormal;
     }
-    vec3 tangent = normalize(dPdx);
-    vec3 bitangent = normalize(cross(faceNormal, tangent));
-    vec3 waveNormal = normalize(faceNormal + tangent * (distortion.x * 25.0) + bitangent * (distortion.y * 25.0));
+    bool isHorizontal = abs(geomNormal.y) > 0.6;
+    vec3 worldFaceNormal = isHorizontal ? vec3(0.0, 1.0, 0.0) : geomNormal;
+    if (dot(mat3(u_view) * worldFaceNormal, viewDir) < 0.0) {
+        worldFaceNormal = -worldFaceNormal;
+    }
+
+    uint packedMaterial = floatBitsToUint(Material);
+    float vertAmp = float((packedMaterial >> 16u) & 0xFFu);
+    float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
+    float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
+    vec2 totalSlope = distortion * 25.0 + vec2(vertSlopeX, vertSlopeZ);
+    vec3 worldWaveNormal;
+    if (isHorizontal) {
+        worldWaveNormal = normalize(vec3(-totalSlope.x, worldFaceNormal.y, -totalSlope.y));
+    } else {
+        vec3 tAxis = abs(worldFaceNormal.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 t1 = normalize(cross(tAxis, worldFaceNormal));
+        vec3 t2 = cross(worldFaceNormal, t1);
+        worldWaveNormal = normalize(worldFaceNormal + t1 * distortion.x * 25.0 + t2 * distortion.y * 25.0);
+    }
+    vec3 waveNormal = normalize(mat3(u_view) * worldWaveNormal);
+    vec3 V = viewDir;
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
     float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 4.0);
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
@@ -270,7 +311,7 @@ void renderBlood(bool isImpenetrable) {
     vec3 bloodTint = vec3(0.65, 0.05, 0.03);
     vec3 bloodSurface = (length(texColor) > 0.04) ? mix(bloodTint, texColor, 0.60) : bloodTint;
     vec3 finalBlood = bloodSurface;
-    if (!isImpenetrable) {
+    if (!isSolid) {
         vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
         float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
         float sampleZN = sampleDepthRaw * 2.0 - 1.0;
@@ -297,8 +338,11 @@ void renderBlood(bool isImpenetrable) {
             finalBlood = mix(bloodBody, bloodSurface, surfaceOpacity);
         }
     } else {
+        vec2 refractedUV = TexCoords.xy + distortion * 2.0;
+        vec3 bedTex = getDiffuse(vec3(refractedUV, TexCoords.z)).rgb;
+        vec3 bedBase = (length(bedTex) > 0.03) ? bedTex : bloodTint;
         float waveLight = max(dot(waveNormal, L), 0.0) * 0.25 + 0.75;
-        finalBlood *= waveLight;
+        finalBlood = mix(bedBase * waveLight, bloodSurface, 0.45);
     }
 
     float spec = pow(NdotH, 48.0) * 0.50 * (0.35 + 0.65 * fresnel);
@@ -369,7 +413,7 @@ float dancingSunlightCaustics(vec2 pos, float t) {
     return pow(c, 2.0) * 1.8;
 }
 
-void renderWater(bool isImpenetrable, bool isSea) {
+void renderWater(bool isSolid, bool isSea) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
     float waterDepth = abs(ViewPos.z);
@@ -394,22 +438,28 @@ void renderWater(bool isImpenetrable, bool isSea) {
     // For horizontal liquid surfaces (standard water/pool/sea), use fixed up normal (0,1,0)
     // combined with analytic vertex wave slope to guarantee 100% seamless triangles without facet creasing.
     bool isHorizontal = abs(geomNormal.y) > 0.6;
-    vec3 worldFaceNormal = isHorizontal ? vec3(0.0, sign(geomNormal.y), 0.0) : geomNormal;
+    vec3 worldFaceNormal = isHorizontal ? vec3(0.0, 1.0, 0.0) : geomNormal;
     if (dot(mat3(u_view) * worldFaceNormal, viewDir) < 0.0) {
         worldFaceNormal = -worldFaceNormal;
     }
 
     // World tangent & bitangent: strictly aligned to global axes for planar surfaces
-    vec3 worldTangent = isHorizontal ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), worldFaceNormal));
-    vec3 worldBitangent = normalize(cross(worldFaceNormal, worldTangent));
-
     // Analytic vertex wave slope matching main.vert displacement (eliminates triangle diagonal seams)
-    const float vertAmp = 2.5;
+    uint packedMaterial = floatBitsToUint(Material);
+    float vertAmp = float((packedMaterial >> 16u) & 0xFFu);
     float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
     float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
     vec2 totalSlope = waveDisp + vec2(vertSlopeX, vertSlopeZ);
 
-    vec3 worldWaveNormal = normalize(worldFaceNormal - worldTangent * totalSlope.x - worldBitangent * totalSlope.y);
+    vec3 worldWaveNormal;
+    if (isHorizontal) {
+        worldWaveNormal = normalize(vec3(-totalSlope.x, worldFaceNormal.y, -totalSlope.y));
+    } else {
+        vec3 tAxis = abs(worldFaceNormal.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+        vec3 t1 = normalize(cross(tAxis, worldFaceNormal));
+        vec3 t2 = cross(worldFaceNormal, t1);
+        worldWaveNormal = normalize(worldFaceNormal + t1 * waveDisp.x + t2 * waveDisp.y);
+    }
     vec3 waveNormal = normalize(mat3(u_view) * worldWaveNormal);
     vec3 V = viewDir;
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
@@ -437,23 +487,24 @@ void renderWater(bool isImpenetrable, bool isSea) {
 
     vec3 finalWater;
 
-    if (isImpenetrable) {
-        // --- Impenetrable Water (Doom, Duke3D, Jedi floor liquids) ---
+    if (isSolid) {
+        // Impenetrable Water (Doom, Duke3D, Jedi floor liquids)
         vec2 refractedUV = TexCoords.xy + waveDisp * 0.015;
         vec3 bedTex = getDiffuse(vec3(refractedUV, TexCoords.z)).rgb;
-        vec3 bedBase = (length(bedTex) > 0.03) ? bedTex : vec3(0.12, 0.25, 0.32);
+        vec3 bedBase = (length(bedTex) > 0.03) ? bedTex : shallowColor;
 
-        // Color filter on floor texture to give it a natural underwater appearance
-        vec3 bottomTinted = bedBase * vec3(0.25, 0.75, 0.90);
+        // Dynamic wave lighting reflecting the scene sunlight direction
+        float waveLight = max(dot(waveNormal, L), 0.0) * 0.35 + 0.85;
 
-        // Dancing caustics on the pool bed
+        // Dancing caustics on the liquid surface
         float caustics = dancingSunlightCaustics(wPos, t);
-        bottomTinted += bottomTinted * caustics * 0.25;
+        vec3 litWater = bedBase * waveLight + bedBase * (caustics * 0.35);
 
-        // Volumetric liquid body (50% water volume color, 50% filtered floor)
-        vec3 waterBody = mix(bottomTinted, shallowColor, 0.45);
+        // Harmonious aquatic presence without crushing the game's original texture
+        vec3 waterBody = mix(litWater, shallowColor, 0.25);
+
         // Blend with environment reflection via Fresnel
-        finalWater = mix(waterBody, envReflection, fresnel * 0.70 + 0.04);
+        finalWater = mix(waterBody, envReflection, fresnel * 0.55 + 0.05);
     } else {
         // --- Penetrable / Swimmable Water (Quake swimmable volumes) ---
         vec2 distortion = waveNormal.xy * (isSea ? 0.0035 : 0.0020);
@@ -493,6 +544,7 @@ void renderWater(bool isImpenetrable, bool isSea) {
 
             // Submerged scene: blend from clear refracted bottom into atmospheric liquid volume
             vec3 waterBody = mix(bottomTinted, waterVolumeColor, turbidity);
+            waterBody = max(waterBody, shallowColor * 0.15);
 
             // Subsurface Scattering light glow through waves facing sun
             float sssSun = pow(clamp(dot(V, -L), 0.0, 1.0), 3.0);
@@ -528,36 +580,24 @@ void renderWater(bool isImpenetrable, bool isSea) {
 }
 
 void main() {
-    //TODO FROM VERTEX
-    //uint packedMaterial = floatBitsToUint(Material);
-    //uint liquidType     =  packedMaterial        & 0xFFu;
-    //uint isImpenetrable = (packedMaterial >>  8u) & 0xFFu;
-    //uint c               = (packedMaterial >> 16u) & 0xFFu;
-    //uint d               = (packedMaterial >> 24u) & 0xFFu;
-
-    bool isImpenetrable = (Material >= 9.5);
-    int liquidType = 0;
-    if (Material >= -0.5) {
-        if (isImpenetrable) {
-            liquidType = int(Material - 10.0 + 0.1);
-        } else {
-            liquidType = int(Material + 0.1);
-        }
-    }
+    uint packedMaterial = floatBitsToUint(Material);
+    uint liquidType     = (packedMaterial)        & 0xFFu;
+    uint solid          = (packedMaterial >>  8u) & 0xFFu;
+    bool isSolid = (solid != 0u);
 
     if (liquidType == LIQUID_WATER) {
-        renderWater(isImpenetrable, false);
+        renderWater(isSolid, false);
     } else if (liquidType == LIQUID_SEA) {
-        renderWater(isImpenetrable, true);
+        renderWater(isSolid, true);
     } else if (liquidType == LIQUID_LAVA) {
-        renderLava(isImpenetrable);
+        renderLava(isSolid);
     } else if (liquidType == LIQUID_SLIME) {
-        renderSlime(isImpenetrable);
+        renderSlime(isSolid);
     } else if (liquidType == LIQUID_BLOOD) {
-        renderBlood(isImpenetrable);
+        renderBlood(isSolid);
     } else if (liquidType == LIQUID_FOG) {
-        renderFog(isImpenetrable);
+        renderFog(isSolid);
     } else {
-        renderWater(isImpenetrable, false);
+        renderWater(isSolid, false);
     }
 }

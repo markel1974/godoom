@@ -14,6 +14,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+func ToFaceBlend(mat *textures.Material) float32 {
+	if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
+		return 0.5
+	}
+	return 0.0
+}
+
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
 	ctx              api.IContext
@@ -159,21 +166,14 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					tId, _ = w.tex.Get(tex)
 					tex.SetIdentifier(tId)
 				}
-				faceBlendT := float32(0.0)
-				material := float32(mat.GetKind())
-				switch mat.GetKind() {
-				case int(config.MaterialKindSky):
-					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV()
+
+				if config.MaterialKind(mat.GetKind()) == config.MaterialKindSky {
+					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV() // Nebbia volumetrica atmosferica
 					continue
-				case int(config.MaterialKindLiquid):
-					// Penetrable liquid volume (e.g. Quake swimmable water)
-					faceBlendT = 0.5
-					material = float32(mat.GetLiquidType())
-				case int(config.MaterialKindLiquidImpenetrable):
-					// Impenetrable opaque liquid surface (Doom, Jedi, Duke3D solid liquid floors)
-					faceBlendT = 0.5
-					material = float32(mat.GetLiquidType()) + 10.0
 				}
+
+				faceBlendT := ToFaceBlend(mat)
+				material := mat.GetPacked()
 				spec := float32(mat.GetSpecularBoost())
 				shininess := float32(mat.GetShininess())
 				detailScale := mat.GetDetailScale()
@@ -298,12 +298,15 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				tId, _ = w.tex.Get(tex)
 				tex.SetIdentifier(tId)
 			}
-			material := float32(mat.GetKind())
-			if mat.GetKind() == int(config.MaterialKindLiquid) {
-				material = float32(mat.GetLiquidType())
-			} else if mat.GetKind() == int(config.MaterialKindLiquidImpenetrable) {
-				material = float32(mat.GetLiquidType()) + 10.0
+			switch mat.GetKind() {
+			case int(config.MaterialKindNone):
+				continue
+			case int(config.MaterialKindSky):
+				w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV()
+				continue
 			}
+
+			material := mat.GetPacked()
 			spec := float32(mat.GetSpecularBoost())
 			shininess := float32(mat.GetShininess())
 			detailScale := mat.GetDetailScale()

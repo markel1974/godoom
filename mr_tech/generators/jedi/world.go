@@ -82,9 +82,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			names, _ := b.archive.AddTexture(texName)
 			animKind := config.MaterialKindSolid
 			isLiquid := b.isLiquid(texName) || sector.IsWater()
-			if isLiquid {
-				animKind = config.MaterialKindLiquidImpenetrable
-			}
 			cSector.Floor = config.NewConfigMaterial("cSector.Floor", names, animKind)
 			ConfigureMaterial(cSector.Floor, texName, false, isLiquid, b.eMode)
 		} else {
@@ -100,8 +97,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 			if isSky {
 				animKind = config.MaterialKindSky
 				cSector.Light.Kind = config.LightKindOpenAir
-			} else if isLiquid {
-				animKind = config.MaterialKindLiquidImpenetrable
 			}
 			cSector.Ceil = config.NewConfigMaterial("cSector.Ceil", names, animKind)
 			ConfigureMaterial(cSector.Ceil, texName, isSky, isLiquid, b.eMode)
@@ -145,9 +140,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						cSeg.Kind = config.SegmentWall
 						animKind := config.MaterialKindSolid
 						isLiquid := b.isLiquid(texName)
-						if isLiquid {
-							animKind = config.MaterialKindLiquidImpenetrable
-						}
 						cSeg.Middle = config.NewConfigMaterial("cSector.Middle", names, animKind)
 						ConfigureMaterial(cSeg.Middle, texName, false, isLiquid, b.eMode)
 					}
@@ -201,9 +193,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						names, _ := b.archive.AddTexture(texName)
 						animKind := config.MaterialKindSolid
 						isLiquid := b.isLiquid(texName)
-						if isLiquid {
-							animKind = config.MaterialKindLiquidImpenetrable
-						}
 						cSeg.Upper = config.NewConfigMaterial("cSeg.Upper", names, animKind)
 						ConfigureMaterial(cSeg.Upper, texName, false, isLiquid, b.eMode)
 					} else if sector.IsSky() && adjacent.IsSky() {
@@ -217,9 +206,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 						names, _ := b.archive.AddTexture(texName)
 						animKind := config.MaterialKindSolid
 						isLiquid := b.isLiquid(texName)
-						if isLiquid {
-							animKind = config.MaterialKindLiquidImpenetrable
-						}
 						cSeg.Lower = config.NewConfigMaterial("cSeg.Lower", names, animKind)
 						ConfigureMaterial(cSeg.Lower, texName, false, isLiquid, b.eMode)
 					}
@@ -231,9 +217,6 @@ func (b *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Light, er
 							names, _ := b.archive.AddTexture(texName)
 							animKind := config.MaterialKindSolid
 							isLiquid := b.isLiquid(texName)
-							if isLiquid {
-								animKind = config.MaterialKindLiquidImpenetrable
-							}
 							cSeg.Middle = config.NewConfigMaterial("cSeg.Middle", names, animKind)
 							ConfigureMaterial(cSeg.Middle, texName, false, isLiquid, b.eMode)
 						}

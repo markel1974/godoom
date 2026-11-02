@@ -30,29 +30,31 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 	var res []*config.Volume
 
 	for _, v := range faces {
+		isLiquid := false
 		animKind := config.MaterialKindSolid
 		velX, velY := 0.0, 0.0
 		if v.IsSky {
 			animKind = config.MaterialKindSky
 			velX, velY = 0.05, 0.05
 		} else if len(v.TexName) > 0 && v.TexName[0] == '*' {
-			animKind = config.MaterialKindLiquid
+			isLiquid = true
 		}
-		material := config.NewConfigMaterial("volume", []string{v.TexName}, animKind)
-		if animKind == config.MaterialKindLiquid {
+
+		if isLiquid {
 			tName := v.TexName
 			if len(tName) > 0 && tName[0] == '*' {
 				tName = tName[1:]
 			}
 			switch tName {
 			case "lava":
-				material.SetLiquidType(config.LiquidTypeLava)
+				animKind = config.MaterialKindLava
 			case "slime":
-				material.SetLiquidType(config.LiquidTypeSlime)
+				animKind = config.MaterialKindSlime
 			default:
-				material.SetLiquidType(config.LiquidTypeWater)
+				animKind = config.MaterialKindWater
 			}
 		}
+		material := config.NewConfigMaterial("volume", []string{v.TexName}, animKind)
 		material.U = velX
 		material.V = velY
 		ConfigureFaceMaterial(material, v.TexName, v.IsSky)

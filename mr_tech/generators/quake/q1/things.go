@@ -123,14 +123,18 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
 		animKind := config.MaterialKindSolid
+		//isSolid := true
 		velX, velY := 0.0, 0.0
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky
+			//isSolid = false
 			velX, velY = 0.05, 0.05
 		} else if len(bspFace.TexName) > 0 && bspFace.TexName[0] == '*' {
-			animKind = config.MaterialKindLiquid
+			animKind = config.MaterialKindWater
+			//isSolid = false
 		}
 		specificMaterial := config.NewConfigMaterial("bmodel", []string{texName}, animKind)
+		//specificMaterial.SetSolid(isSolid)
 		specificMaterial.U = velX
 		specificMaterial.V = velY
 		ConfigureFaceMaterial(specificMaterial, texName, bspFace.IsSky)
@@ -207,14 +211,17 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		// RETRIEVAL OF SPECIFIC TEXTURE
 		texName := bspFace.TexName
 		animKind := config.MaterialKindSolid
+		//isSolid := true
 		velX, velY := 0.0, 0.0
 		if bspFace.IsSky {
 			animKind = config.MaterialKindSky
 			velX, velY = 0.05, 0.05
 		} else if len(bspFace.TexName) > 0 && bspFace.TexName[0] == '*' {
-			animKind = config.MaterialKindLiquid
+			//isSolid = false
+			animKind = config.MaterialKindWater
 		}
 		specificMaterial := config.NewConfigMaterial("bsp", []string{texName}, animKind)
+		//specificMaterial.SetSolid(isSolid)
 		specificMaterial.U = velX
 		specificMaterial.V = velY
 		ConfigureFaceMaterial(specificMaterial, texName, bspFace.IsSky)

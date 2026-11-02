@@ -13,17 +13,16 @@ func ConfigureMaterial(mat *config.Material, texName string, isSky bool, isLiqui
 	if mat == nil {
 		return
 	}
-	if isLiquid || mat.Kind == config.MaterialKindLiquid || mat.Kind == config.MaterialKindLiquidImpenetrable {
-		mat.SetKind(config.MaterialKindLiquidImpenetrable)
+	if isLiquid {
 		nameUpper := strings.ToUpper(strings.TrimSpace(texName))
 		if strings.Contains(nameUpper, "LAVA") || strings.Contains(nameUpper, "MAGMA") {
-			mat.SetLiquidType(config.LiquidTypeLava)
+			mat.SetKindSolid(config.MaterialKindLava, true)
 		} else if strings.Contains(nameUpper, "SLIME") || strings.Contains(nameUpper, "SEWER") || strings.Contains(nameUpper, "ACID") || strings.Contains(nameUpper, "WASTE") {
-			mat.SetLiquidType(config.LiquidTypeSlime)
+			mat.SetKindSolid(config.MaterialKindSlime, true)
 		} else if strings.Contains(nameUpper, "BLOOD") {
-			mat.SetLiquidType(config.LiquidTypeBlood)
+			mat.SetKindSolid(config.MaterialKindBlood, true)
 		} else {
-			mat.SetLiquidType(config.LiquidTypeWater)
+			mat.SetKindSolid(config.MaterialKindWater, true)
 		}
 	}
 	spec, shine, dScale, dFactor := HeuristicMaterialProperties(texName, isSky, isLiquid, eMode)

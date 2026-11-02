@@ -97,11 +97,13 @@ void renderModel3D() {
 }
 
 void renderLiquid() {
-    //TODO FROM VERTEX
-    const float amplitude = 3;
+    uint packedMaterial = floatBitsToUint(aMaterial);
+    uint amplitude = (packedMaterial >> 16u) & 0xFFu;
+    float amplitudeF = float(amplitude);
+
     vec4 worldPos = vec4(aPos, 1.0);
-    worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * amplitude;
-    worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * amplitude;
+    worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * amplitudeF;
+    worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * amplitudeF;
     TexCoords.x += u_time * 0.1;
     TexCoords.y += u_time * 0.05;
     vec4 viewPos = u_view * worldPos;

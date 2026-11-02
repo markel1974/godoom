@@ -464,7 +464,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 			animKind := config.MaterialKindSolid
 			texNameLC := strings.ToLower(shaderName)
 			if t.shaders.IsLiquid(texNameLC) {
-				animKind = config.MaterialKindLiquid
+				animKind = config.MaterialKindWater
 			}
 			material = config.NewConfigMaterial("md3.part", []string{shaderName}, animKind)
 			t.shaders.MaterialBind(texNameLC, material)

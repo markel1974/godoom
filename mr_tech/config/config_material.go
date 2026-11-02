@@ -6,16 +6,45 @@ import (
 
 // TODO MaterialKind deve contenere tutti i tipi anche WaterImpenetrable, Water, SeaImpenetrable, Sea, Blood, BloodImpenetrable
 
+type MaterialFamily int
+
+const (
+	MaterialFamilyNone MaterialFamily = iota
+	MaterialFamilySolid
+	MaterialFamilyLiquid
+	MaterialFamilyGas
+	MaterialFamilyLatest
+)
+
 type MaterialKind int
 
 const (
 	MaterialKindNone MaterialKind = iota
 	MaterialKindSolid
+	MaterialKindWater
+	MaterialKindSea   // Mare oceanico (con onde ampie e schiuma su creste e riva)
+	MaterialKindLava  // Lava incandescente opaca con vene di magma
+	MaterialKindSlime // Slime / Nukage acido radioattivo torbido
+	MaterialKindBlood // Sangue denso e viscoso
+	MaterialKindFog   // Nebbia volumetrica atmosferica
 	MaterialKindSky
-	MaterialKindLiquidImpenetrable
-	MaterialKindLiquid
 	MaterialKindLatest
 )
+
+func (m MaterialKind) ToMaterialFamily() MaterialFamily {
+	switch m {
+	case MaterialKindNone:
+		return MaterialFamilyNone
+	case MaterialKindSolid:
+		return MaterialFamilySolid
+	case MaterialKindWater, MaterialKindSea, MaterialKindLava, MaterialKindSlime, MaterialKindBlood, MaterialKindFog:
+		return MaterialFamilyLiquid
+	case MaterialKindSky:
+		return MaterialFamilyGas
+	default:
+		return MaterialFamilyNone
+	}
+}
 
 const (
 	BlendModeOpaque = iota
@@ -93,7 +122,7 @@ type Material struct {
 	SpecularBoost  float64         `json:"specularBoost"`
 	Shininess      float64         `json:"shininess"`
 	IsSolid        bool            `json:"isSolid"`
-	Liquid         *Liquid         `json:"liquid"`
+	Amplitude      float64         `json:"amplitude"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.
@@ -105,8 +134,8 @@ func NewConfigMaterial(name string, textures []string, kind MaterialKind) *Mater
 		DepthWrite: true, // Default to true for opaque materials
 		CullMode:   CullFront,
 		BlendMode:  BlendModeOpaque,
+		Kind:       kind,
 		IsSolid:    true,
-		Liquid:     nil,
 	}
 	m.SetKind(kind)
 	m.SpecularBoost = 0.1
@@ -115,37 +144,41 @@ func NewConfigMaterial(name string, textures []string, kind MaterialKind) *Mater
 	m.DetailFactor = 1.0
 	m.ScaleU = 1.0
 	m.ScaleV = 1.0
+	m.Amplitude = 3.0
 	return m
 }
 
-// SetKind sets the material's kind and updates related properties like blend mode, depth write, solidity, and liquid type.
+// SetKind updates the material's kind and adjusts its properties such as blend mode, solid state, and depth write settings.
 func (m *Material) SetKind(kind MaterialKind) {
 	m.Kind = kind
-	if m.Kind == MaterialKindLiquid || m.Kind == MaterialKindLiquidImpenetrable {
+	switch m.Kind.ToMaterialFamily() {
+	case MaterialFamilySolid:
+		m.IsSolid = true
+		m.BlendMode = BlendModeOpaque
+		m.DepthWrite = true
+	case MaterialFamilyLiquid:
+		m.IsSolid = false
 		m.BlendMode = BlendModeLiquid
-		m.DepthWrite = kind == MaterialKindLiquidImpenetrable
-		if m.Liquid == nil {
-			m.Liquid = NewLiquid(LiquidTypeWater)
-		}
-		m.IsSolid = kind == MaterialKindLiquidImpenetrable
+		m.DepthWrite = false
+	case MaterialFamilyNone:
+		m.IsSolid = false
+		m.BlendMode = BlendModeOpaque
+		m.DepthWrite = false
+	case MaterialFamilyGas:
+		m.IsSolid = false
+		m.BlendMode = BlendModeOpaque
+		m.DepthWrite = false
+	default:
+		m.IsSolid = false
+		m.BlendMode = BlendModeOpaque
+		m.DepthWrite = false
 	}
 }
 
-// SetLiquidType sets the liquid rendering type for the material.
-func (m *Material) SetLiquidType(t LiquidType) {
-	if m.Liquid == nil {
-		m.Liquid = NewLiquid(t)
-	} else {
-		m.Liquid.Type = t
-	}
-}
-
-// GetLiquidType returns the liquid rendering type for the material.
-func (m *Material) GetLiquidType() LiquidType {
-	if m.Liquid != nil {
-		return m.Liquid.Type
-	}
-	return LiquidTypeWater
+// SetKindSolid sets the material's kind and explicitly overrides its solid state with the provided value.
+func (m *Material) SetKindSolid(kind MaterialKind, solid bool) {
+	m.SetKind(kind)
+	m.IsSolid = solid
 }
 
 // HashKey generates a unique key for the Material instance based on its Id field.

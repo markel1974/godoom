@@ -48,9 +48,7 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	material.SetShader(ca.Shader)
 	material.SetBlendMode(ca.BlendMode)
 	material.SetIsSolid(ca.IsSolid)
-	if ca.Liquid != nil {
-		material.SetLiquidType(int(ca.Liquid.Type))
-	}
+	material.SetAmplitude(ca.Amplitude)
 	material.SetCullMode(ca.CullMode)
 	material.SetDepthWrite(ca.DepthWrite)
 	material.SetAlphaTest(ca.AlphaTest)

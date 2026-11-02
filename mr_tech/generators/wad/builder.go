@@ -154,18 +154,10 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	ceilingType := config.MaterialKindSolid
 	floorType := config.MaterialKindSolid
 	light, kind, falloff, r, g, b := bld.heuristicLight(lightLevel, ceilPic, ceilY, floorPic, floorY, edges)
-
-	floorLiquidType := config.LiquidTypeWater
-	if kind, lType, ok := bld.heuristicMaterial(floorPic); ok {
-		floorType = kind
-		floorLiquidType = lType
-	}
-
 	miSector := config.NewConfigSector(sectorId, light, kind, falloff)
 	miSector.Light.R = r
 	miSector.Light.G = g
 	miSector.Light.B = b
-
 	miSector.FloorY = floorY * ScaleSectorH
 	miSector.CeilY = ceilY * ScaleSectorH
 	miSector.Tag = sectorId
@@ -179,9 +171,7 @@ func (bld *Builder) buildSector(sectorId string, lightLevel int16, floorPic stri
 	}
 	miSector.Ceil = config.NewConfigMaterial("miSector.Ceil", texHandler.FlatCreateAnimation(ceilPic), ceilingType)
 	miSector.Floor = config.NewConfigMaterial("miSector.Floor", texHandler.FlatCreateAnimation(floorPic), floorType)
-	if floorType == config.MaterialKindLiquid || floorType == config.MaterialKindLiquidImpenetrable {
-		miSector.Floor.SetLiquidType(floorLiquidType)
-	}
+	//miSector.Floor.SetSolid(floorSolid)
 	bld.configureMaterial(miSector.Ceil, ceilPic)
 	bld.configureMaterial(miSector.Floor, floorPic)
 	miSector.FloorAlign = config.NewUVAlignSurface(false, geometry.XY{}, geometry.XY{}, false, false, false, geometry.XY{}, ScaleTextureW, ScaleTextureH)
@@ -439,9 +429,8 @@ func (bld *Builder) configureMaterial(mat *config.Material, texName string) {
 	mat.DetailFactor = dFactor
 
 	// Liquids: highly reflective, fluid mirror surface without rock/metal grain
-	if kind, lType, ok := bld.heuristicMaterial(texName); ok {
-		mat.SetKind(kind)
-		mat.SetLiquidType(lType)
+	if kind, isSolid, ok := bld.heuristicMaterial(texName); ok {
+		mat.SetKindSolid(kind, isSolid)
 	}
 }
 
@@ -557,25 +546,25 @@ func (bld *Builder) heuristicThingMaterialProperties(spriteName string) (float64
 
 // heuristicMaterial determines the material type and whether it matches known liquid kinds based on the texture name.
 // In Doom / Doom 2, liquids are impenetrable because there is no underlying submerged geometry.
-func (bld *Builder) heuristicMaterial(floorPic string) (config.MaterialKind, config.LiquidType, bool) {
+func (bld *Builder) heuristicMaterial(floorPic string) (config.MaterialKind, bool, bool) {
 	floorPic = strings.TrimSpace(strings.ToUpper(floorPic))
 	// Acido / Radioattività (Nukage, Slime, Sfall) -> Verde
 	if strings.Contains(floorPic, "NUKAGE") || strings.Contains(floorPic, "SLIME") || strings.Contains(floorPic, "SFALL") {
-		return config.MaterialKindLiquidImpenetrable, config.LiquidTypeSlime, true
+		return config.MaterialKindSlime, true, true
 	}
 	// Lava -> Magma
 	if strings.Contains(floorPic, "LAVA") {
-		return config.MaterialKindLiquidImpenetrable, config.LiquidTypeLava, true
+		return config.MaterialKindLava, true, true
 	}
 	// Sangue (Blood, Bfall) -> Rosso
 	if strings.Contains(floorPic, "BLOOD") || strings.Contains(floorPic, "BFALL") {
-		return config.MaterialKindLiquidImpenetrable, config.LiquidTypeBlood, true
+		return config.MaterialKindBlood, true, true
 	}
 	// Acqua (Fwater, Water, Wfall)
 	if strings.Contains(floorPic, "FWATER") || strings.Contains(floorPic, "WATER") || strings.Contains(floorPic, "WFALL") {
-		return config.MaterialKindLiquidImpenetrable, config.LiquidTypeWater, true
+		return config.MaterialKindWater, true, true
 	}
-	return config.MaterialKindNone, config.LiquidTypeWater, false
+	return config.MaterialKindNone, false, false
 }
 
 // heuristicLight determines the light intensity, kind, falloff, and color values for a scene based on provided parameters.

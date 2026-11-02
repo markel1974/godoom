@@ -168,6 +168,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					//TODO ALL MATERIALS
 					faceBlendT = 0.5
 				}
+				material := float32(mat.GetKind())
 				spec := float32(mat.GetSpecularBoost())
 				shininess := float32(mat.GetShininess())
 				detailScale := mat.GetDetailScale()
@@ -175,9 +176,9 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 				startIdx := w.fv.GetIndicesLen()
 				p := face.GetPoints()
 				u, v := face.GetUV()
-				id0 := w.fv.AddVertex14(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, faceBlendT, spec, shininess, detailScale, detailFactor)
-				id1 := w.fv.AddVertex14(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, faceBlendT, spec, shininess, detailScale, detailFactor)
-				id2 := w.fv.AddVertex14(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, faceBlendT, spec, shininess, detailScale, detailFactor)
+				id0 := w.fv.AddVertex14(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				id1 := w.fv.AddVertex14(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				id2 := w.fv.AddVertex14(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
 				w.fv.AddTriangle(id0, id1, id2)
 				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
 				added++
@@ -292,6 +293,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				tId, _ = w.tex.Get(tex)
 				tex.SetIdentifier(tId)
 			}
+			material := float32(mat.GetKind())
 			spec := float32(mat.GetSpecularBoost())
 			shininess := float32(mat.GetShininess())
 			detailScale := mat.GetDetailScale()
@@ -301,9 +303,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			nf := nextFaces[fx]
 			np := nf.GetPoints()
 			startIndices := w.fv.GetIndicesLen()
-			id0 := w.fv.AddVertex19(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, float32(renderMode), float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw, spec, shininess, detailScale, detailFactor)
-			id1 := w.fv.AddVertex19(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, float32(renderMode), float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw, spec, shininess, detailScale, detailFactor)
-			id2 := w.fv.AddVertex19(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, float32(renderMode), float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw, spec, shininess, detailScale, detailFactor)
+			id0 := w.fv.AddVertex20(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, float32(renderMode), float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
+			id1 := w.fv.AddVertex20(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, float32(renderMode), float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
+			id2 := w.fv.AddVertex20(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, float32(renderMode), float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
 			w.fv.AddTriangle(id0, id1, id2)
 
 			currentIndices := w.fv.GetIndicesLen()

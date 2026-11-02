@@ -10,8 +10,8 @@ const (
 	MaterialKindNone MaterialKind = iota
 	MaterialKindSolid
 	MaterialKindSky
-	MaterialKindLiquid
 	MaterialKindLiquidImpenetrable
+	MaterialKindLiquid
 	MaterialKindLatest
 )
 

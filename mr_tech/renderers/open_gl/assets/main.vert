@@ -7,9 +7,10 @@ layout (location = 3) in float aRenderMode;
 layout (location = 4) in vec3 aPosNext;
 layout (location = 5) in float aLerp;
 layout (location = 6) in float aYaw;
-layout (location = 7) in float aSpecBoost;
-layout (location = 8) in float aShininess;
-layout (location = 9) in vec2 aDetailParams;
+layout (location = 7) in float aMaterial;
+layout (location = 8) in float aSpecBoost;
+layout (location = 9) in float aShininess;
+layout (location = 10) in vec2 aDetailParams;
 
 out vec3 TexCoords;
 out float FragDepth;
@@ -18,6 +19,7 @@ out vec3 WorldPos;
 out vec4 FragPosLightRoom;
 out vec4 FragPosLightFlash;
 out float IsFullbright;
+out float Material;
 out float SpecBoost;
 out float Shininess;
 out vec2 DetailParams;
@@ -28,9 +30,8 @@ uniform mat4 u_roomSpaceMatrix;
 uniform mat4 u_flashSpaceMatrix;
 uniform float u_time;
 
-void renderInterface() {
+void renderUI() {
     // HUD / SCREEN SPACE (2D PURO)
-    // Bypassiamo totalmente matrici e ritorni anticipati
     float aspect = 1.777;
     float scale = 0.005;
     float ndcX = (aPos.x * scale) / aspect;
@@ -126,6 +127,7 @@ void renderDefault() {
 
 void main() {
     TexCoords = aTexCoords;
+    Material = aMaterial;
     SpecBoost = aSpecBoost;
     Shininess = aShininess;
     DetailParams = aDetailParams;
@@ -137,7 +139,7 @@ void main() {
     } else if (aRenderMode >= 1.5 && aRenderMode < 2.5) {
         renderModel3D();
     } else if (aRenderMode >= 2.5 && aRenderMode < 3.5) {
-        renderInterface();
+        renderUI();
     } else {
         renderDefault();
     }

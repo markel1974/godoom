@@ -149,11 +149,13 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 	w.visibleVol.Sort()
 
+	counter := 0
+
 	pushPass := func() {
 		for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 			vol := w.visibleVol.At(vIdx)
 			faces, faceCount := vol.GetFaces()
-
+			added := false
 			//var added int
 			for x := 0; x < faceCount; x++ {
 				face := (*faces)[x]
@@ -201,12 +203,18 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					targetDc := w.modes[blendMode]
 					targetDc.Compute(startIdx, endIdx, mat)
 					startIdx = endIdx
+					added = true
 				}
+			}
+			if added {
+				counter++
 			}
 		}
 	}
 
 	pushPass()
+
+	//fmt.Println("Added:", counter)
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
@@ -336,7 +344,7 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 		dz := posZ - pZ
 		distSq := dx*dx + dy*dy + dz*dz
 
-		// 1. Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
+		// Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
 		// la luce illumina l'ambiente circostante il giocatore.
 		// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
 		nearRadius := effectiveRadius + 250.0

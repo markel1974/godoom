@@ -143,7 +143,7 @@ func (q1 *BSPReader) GetExternalBModelFileName(classname string) string {
 
 // Build processes the BSP file's data, including faces, entities, lights, and models, and populates the provided Root structure.
 func (q1 *BSPReader) Build(root *config.Root) error {
-	const chunkSize = float64(1024)
+	const chunkSize = float64(2048)
 	mIdx := 0
 	faces, rfErr := q1.GetRawFaces(mIdx)
 	if rfErr != nil {

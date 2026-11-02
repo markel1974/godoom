@@ -58,6 +58,21 @@ func (fc *Face) GetUV() ([3]float64, [3]float64) {
 	return fc.u, fc.v
 }
 
+// GetUV0 retrieves the UV texture coordinates (u, v) for the first vertex of the triangular face.
+func (fc *Face) GetUV0() (float64, float64) {
+	return fc.u[0], fc.v[0]
+}
+
+// GetUV1 returns the second set of UV texture coordinates (u1, v1) of the face.
+func (fc *Face) GetUV1() (float64, float64) {
+	return fc.u[1], fc.v[1]
+}
+
+// GetUV2 retrieves the UV texture coordinates (u, v) of the third vertex of the Face.
+func (fc *Face) GetUV2() (float64, float64) {
+	return fc.u[2], fc.v[2]
+}
+
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
 func (fc *Face) GetParent() *Volume {
 	return fc.parent
@@ -96,6 +111,21 @@ func (fc *Face) GetMaterial() *textures2.Material {
 // GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
 func (fc *Face) GetPoints() [3]geometry.XYZ {
 	return fc.tri
+}
+
+// GetPoint0 returns the X, Y, and Z coordinates of the first vertex of the triangle that defines the face.
+func (fc *Face) GetPoint0() (float64, float64, float64) {
+	return fc.tri[0].X, fc.tri[0].Y, fc.tri[0].Z
+}
+
+// GetPoint1 retrieves the coordinates (X, Y, Z) of the second vertex of the triangle defining the Face.
+func (fc *Face) GetPoint1() (float64, float64, float64) {
+	return fc.tri[1].X, fc.tri[1].Y, fc.tri[1].Z
+}
+
+// GetPoint2 returns the X, Y, and Z coordinates of the third vertex in the Face's triangular geometry.
+func (fc *Face) GetPoint2() (float64, float64, float64) {
+	return fc.tri[2].X, fc.tri[2].Y, fc.tri[2].Z
 }
 
 // PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.

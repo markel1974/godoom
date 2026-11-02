@@ -14,13 +14,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-func ToFaceBlend(mat *textures.Material) float32 {
-	if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
-		return 0.5
-	}
-	return 0.0
-}
-
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
 	ctx              api.IContext
@@ -143,18 +136,16 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 	w.visibleVol.Sort()
 
-	counter := 0
-
 	pushPass := func() {
 		for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 			vol := w.visibleVol.At(vIdx)
 			faces, faceCount := vol.GetFaces()
 
-			var added int
+			//var added int
 			for x := 0; x < faceCount; x++ {
 				face := (*faces)[x]
 				mat := face.GetMaterial()
-				if mat == nil {
+				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 					continue
 				}
 				tex := mat.GetCurrentFrame()
@@ -166,28 +157,31 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					tId, _ = w.tex.Get(tex)
 					tex.SetIdentifier(tId)
 				}
-
-				if config.MaterialKind(mat.GetKind()) == config.MaterialKindSky {
+				if mat.GetKind() == int(config.MaterialKindSky) {
 					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV() // Nebbia volumetrica atmosferica
 					continue
 				}
-
-				faceBlendT := ToFaceBlend(mat)
+				faceBlendT := float32(0.0)
+				if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
+					faceBlendT = 0.5
+				}
 				material := mat.GetPacked()
 				spec := float32(mat.GetSpecularBoost())
 				shininess := float32(mat.GetShininess())
 				detailScale := mat.GetDetailScale()
 				detailFactor := mat.GetDetailFactor()
 				startIdx := w.fv.GetIndicesLen()
-				p := face.GetPoints()
-				u, v := face.GetUV()
-				id0 := w.fv.AddVertex14(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-				id1 := w.fv.AddVertex14(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-				id2 := w.fv.AddVertex14(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				p0X, p0Y, p0Z := face.GetPoint0()
+				p1X, p1Y, p1Z := face.GetPoint1()
+				p2X, p2Y, p2Z := face.GetPoint2()
+				u0, v0 := face.GetUV0()
+				u1, v1 := face.GetUV1()
+				u2, v2 := face.GetUV2()
+				id0 := w.fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				id1 := w.fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				id2 := w.fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
 				w.fv.AddTriangle(id0, id1, id2)
 				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
-				added++
-
 				endIdx := w.fv.GetIndicesLen()
 				if startIdx != endIdx {
 					blendMode := mat.GetBlendMode()
@@ -196,14 +190,106 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					startIdx = endIdx
 				}
 			}
-
-			if added > 0 {
-				counter++
-			}
 		}
 	}
 
 	pushPass()
+}
+
+// pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
+	//counter := 0
+	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
+		if !thing.IsVisible() {
+			return
+		}
+
+		lerp := float32(lp)
+		yaw := float32(thing.GetAngle())
+		tPosX, tPosY, zBot := thing.GetVerticesCenter()
+		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+		faces := *pFaces
+		nextFaces := *pNextFaces
+
+		for fx := 0; fx < faceCount; fx++ {
+			face := faces[fx]
+			mat := face.GetMaterial()
+			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
+				continue
+			}
+			tex := mat.GetCurrentFrame()
+			if tex == nil {
+				continue
+			}
+			tId := tex.GetIdentifier()
+			if tId < 0 {
+				tId, _ = w.tex.Get(tex)
+				tex.SetIdentifier(tId)
+			}
+			material := mat.GetPacked()
+			spec := float32(mat.GetSpecularBoost())
+			shininess := float32(mat.GetShininess())
+			detailScale := mat.GetDetailScale()
+			detailFactor := mat.GetDetailFactor()
+			p0X, p0Y, p0Z := face.GetPoint0()
+			p1X, p1Y, p1Z := face.GetPoint1()
+			p2X, p2Y, p2Z := face.GetPoint2()
+			u0, v0 := face.GetUV0()
+			u1, v1 := face.GetUV1()
+			u2, v2 := face.GetUV2()
+			nf := nextFaces[fx]
+			np0X, np0Y, np0Z := nf.GetPoint0()
+			np1X, np1Y, np1Z := nf.GetPoint1()
+			np2X, np2Y, np2Z := nf.GetPoint2()
+
+			startIndices := w.fv.GetIndicesLen()
+			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
+			id1 := w.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, float32(renderMode), float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
+			id2 := w.fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, float32(renderMode), float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
+			w.fv.AddTriangle(id0, id1, id2)
+
+			currentIndices := w.fv.GetIndicesLen()
+			if startIndices != currentIndices {
+				blendMode := mat.GetBlendMode()
+				targetDc := w.modes[blendMode]
+				targetDc.Compute(startIndices, currentIndices, mat)
+				startIndices = currentIndices
+			}
+		}
+	}
+
+	qOcclusion := func(object aabb.IObject) bool {
+		thing := object.(model.IThing)
+		occState := w.occlusion.GetState(thing.GetEntity().GetId())
+		if occState != nil && !occState.IsVisible {
+			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
+			return false                               // CULLATO! Non generiamo i vertici
+		}
+		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
+		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		if faceCount == 0 {
+			// Anche se non ha facce, teniamo vivo occlusion test
+			return false
+		}
+
+		pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
+		//counter++
+		return false
+	}
+
+	qStatic := func(object aabb.IObject) bool {
+		thing := object.(model.IThing)
+		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		if faceCount > 0 {
+			pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
+		}
+		return false
+	}
+
+	things.QueryStatic(qStatic) //UI Objects
+	things.QueryFrustum(frustumFront, qOcclusion)
+
+	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
@@ -265,104 +351,6 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 	//_, _, dynamicCount := w.fl.GetLights()
 	//_, shadowCount := w.fl.GetShadowLights()
 	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
-}
-
-// pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
-	counter := 0
-
-	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
-		if !thing.IsVisible() {
-			return
-		}
-
-		lerp := float32(lp)
-		yaw := float32(thing.GetAngle())
-		tPosX, tPosY, zBot := thing.GetVerticesCenter()
-		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		faces := *pFaces
-		nextFaces := *pNextFaces
-
-		for fx := 0; fx < faceCount; fx++ {
-			face := faces[fx]
-			mat := face.GetMaterial()
-			if mat == nil {
-				continue
-			}
-			tex := mat.GetCurrentFrame()
-			if tex == nil {
-				continue
-			}
-			tId := tex.GetIdentifier()
-			if tId < 0 {
-				tId, _ = w.tex.Get(tex)
-				tex.SetIdentifier(tId)
-			}
-			switch mat.GetKind() {
-			case int(config.MaterialKindNone):
-				continue
-			case int(config.MaterialKindSky):
-				w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV()
-				continue
-			}
-
-			material := mat.GetPacked()
-			spec := float32(mat.GetSpecularBoost())
-			shininess := float32(mat.GetShininess())
-			detailScale := mat.GetDetailScale()
-			detailFactor := mat.GetDetailFactor()
-			p := face.GetPoints()
-			u, v := face.GetUV()
-			nf := nextFaces[fx]
-			np := nf.GetPoints()
-			startIndices := w.fv.GetIndicesLen()
-			id0 := w.fv.AddVertex20(float32(p[0].X), float32(p[0].Z), float32(-p[0].Y), float32(u[0]), float32(-v[0]), tId, oX, oY, oZ, float32(renderMode), float32(np[0].X), float32(np[0].Z), float32(-np[0].Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
-			id1 := w.fv.AddVertex20(float32(p[1].X), float32(p[1].Z), float32(-p[1].Y), float32(u[1]), float32(-v[1]), tId, oX, oY, oZ, float32(renderMode), float32(np[1].X), float32(np[1].Z), float32(-np[1].Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
-			id2 := w.fv.AddVertex20(float32(p[2].X), float32(p[2].Z), float32(-p[2].Y), float32(u[2]), float32(-v[2]), tId, oX, oY, oZ, float32(renderMode), float32(np[2].X), float32(np[2].Z), float32(-np[2].Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
-			w.fv.AddTriangle(id0, id1, id2)
-
-			currentIndices := w.fv.GetIndicesLen()
-			if startIndices != currentIndices {
-				blendMode := mat.GetBlendMode()
-				targetDc := w.modes[blendMode]
-				targetDc.Compute(startIndices, currentIndices, mat)
-				startIndices = currentIndices
-			}
-		}
-	}
-
-	qOcclusion := func(object aabb.IObject) bool {
-		thing := object.(model.IThing)
-		occState := w.occlusion.GetState(thing.GetEntity().GetId())
-		if occState != nil && !occState.IsVisible {
-			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
-			return false                               // CULLATO! Non generiamo i vertici
-		}
-		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
-		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-		if faceCount == 0 {
-			// Anche se non ha facce, teniamo vivo occlusion test
-			return false
-		}
-
-		pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
-		counter++
-		return false
-	}
-
-	qStatic := func(object aabb.IObject) bool {
-		thing := object.(model.IThing)
-		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-		if faceCount > 0 {
-			pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
-		}
-		return false
-	}
-
-	things.QueryStatic(qStatic) //UI Objects
-	things.QueryFrustum(frustumFront, qOcclusion)
-
-	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }
 
 // GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.

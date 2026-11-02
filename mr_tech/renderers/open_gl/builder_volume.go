@@ -160,15 +160,20 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					tex.SetIdentifier(tId)
 				}
 				faceBlendT := float32(0.0)
+				material := float32(mat.GetKind())
 				switch mat.GetKind() {
 				case int(config.MaterialKindSky):
 					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV()
 					continue
 				case int(config.MaterialKindLiquid):
-					//TODO ALL MATERIALS
+					// Penetrable liquid volume (e.g. Quake swimmable water)
 					faceBlendT = 0.5
+					material = float32(mat.GetLiquidType())
+				case int(config.MaterialKindLiquidImpenetrable):
+					// Impenetrable opaque liquid surface (Doom, Jedi, Duke3D solid liquid floors)
+					faceBlendT = 0.5
+					material = float32(mat.GetLiquidType()) + 10.0
 				}
-				material := float32(mat.GetKind())
 				spec := float32(mat.GetSpecularBoost())
 				shininess := float32(mat.GetShininess())
 				detailScale := mat.GetDetailScale()
@@ -294,6 +299,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				tex.SetIdentifier(tId)
 			}
 			material := float32(mat.GetKind())
+			if mat.GetKind() == int(config.MaterialKindLiquid) || mat.GetKind() == int(config.MaterialKindLiquidImpenetrable) {
+				material = float32(mat.GetLiquidType())
+			}
 			spec := float32(mat.GetSpecularBoost())
 			shininess := float32(mat.GetShininess())
 			detailScale := mat.GetDetailScale()

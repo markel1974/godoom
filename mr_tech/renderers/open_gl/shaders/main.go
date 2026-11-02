@@ -180,17 +180,21 @@ func (s *Main) Init() error {
 		s.ctx.VertexAttribPointer(6, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(14*4))
 		s.ctx.EnableVertexAttribArray(6)
 
-		// Location 7: aSpecBoost - 1 float
+		// Location 7: aMaterial - 1 float
 		s.ctx.VertexAttribPointer(7, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(15*4))
 		s.ctx.EnableVertexAttribArray(7)
 
-		// Location 8: aShininess - 1 float
+		// Location 8: aSpecBoost - 1 float
 		s.ctx.VertexAttribPointer(8, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(16*4))
 		s.ctx.EnableVertexAttribArray(8)
 
-		// Location 9: aDetailParams (detailScale, detailFactor) - 2 float
-		s.ctx.VertexAttribPointer(9, 2, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(17*4))
+		// Location 9: aShininess - 1 float
+		s.ctx.VertexAttribPointer(9, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(17*4))
 		s.ctx.EnableVertexAttribArray(9)
+
+		// Location 10: aDetailParams (detailScale, detailFactor) - 2 float
+		s.ctx.VertexAttribPointer(10, 2, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(18*4))
+		s.ctx.EnableVertexAttribArray(10)
 	}
 
 	s.ctx.Enable(api.DEPTH_TEST)

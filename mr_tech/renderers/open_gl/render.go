@@ -225,17 +225,6 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	} else {
 		w.hwOcc.Readback()
 	}
-	// MAIN ADDITIVE
-	if w.dcAdditive.HasCommands() {
-		w.additive.RenderAdditive(w.dcAdditive.Render)
-	}
-	// MAIN LIQUID (Refraction & Depth Fog)
-	if w.dcLiquid.HasCommands() {
-		// Resolve MSAA color & depth buffers so liquid refracts the clean opaque background
-		// without feedback-loop darkening from previous frame's water.
-		w.post.ResolveMSAA(fbW, fbH)
-		w.liquid.Render(w.dcLiquid.Render, true)
-	}
 	// SKYBOX
 	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
 		skyTexId := skyTex.GetIdentifier()
@@ -246,6 +235,17 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 		u, v := w.builder.GetSkyUV()
 		tick := float32(textures.TickF())
 		w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
+	}
+	// MAIN LIQUID (Refraction & Depth Fog)
+	if w.dcLiquid.HasCommands() {
+		// Resolve MSAA color & depth buffers so liquid refracts the clean opaque background
+		// without feedback-loop darkening from previous frame's water.
+		w.post.ResolveMSAA(fbW, fbH)
+		w.liquid.Render(w.dcLiquid.Render, true)
+	}
+	// MAIN ADDITIVE
+	if w.dcAdditive.HasCommands() {
+		w.additive.RenderAdditive(w.dcAdditive.Render)
 	}
 	// MSAA resolution
 	w.post.Prepare()

@@ -88,6 +88,15 @@ func (m *Map) GetViewPtr() *float32 {
 	return m.viewPtr
 }
 
+// TransformDirectionToView transforms a normalized 3D direction vector into the view space and computes its squared length.
+func (m *Map) TransformDirectionToView(normLx, normLy, normLz float32) (float32, float32, float32, float32) {
+	lvX := m.view[0]*normLx + m.view[4]*normLy + m.view[8]*normLz
+	lvY := m.view[1]*normLx + m.view[5]*normLy + m.view[9]*normLz
+	lvZ := m.view[2]*normLx + m.view[6]*normLy + m.view[10]*normLz
+	lenSq := lvX*lvX + lvY*lvY + lvZ*lvZ
+	return lvX, lvY, lvZ, lenSq
+}
+
 // GetInvViewPtr returns a pointer to the inverse view matrix of the map as a float32.
 func (m *Map) GetInvViewPtr() *float32 {
 	return m.invViewPtr

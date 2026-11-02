@@ -5,11 +5,33 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/duke3d/lumps"
 )
 
+// IsLiquid checks if a tile ID corresponds to liquid (Water, Slime/Nukage, Lava, Blood).
+// In Duke Nukem 3D, all liquid surfaces are impenetrable because there is no underlying submerged floor.
+func IsLiquid(picNum int) (config.LiquidType, bool) {
+	// Water (animated water surface, pools, fountains, waterfalls)
+	if (picNum >= 330 && picNum <= 345) || (picNum >= 200 && picNum <= 205) || (picNum >= 1060 && picNum <= 1065) {
+		return config.LiquidTypeWater, true
+	}
+	// Slime / Nukage / Acid (toxic green radioactive waste)
+	if picNum >= 1082 && picNum <= 1105 {
+		return config.LiquidTypeSlime, true
+	}
+	// Blood pools
+	if picNum >= 1111 && picNum <= 1119 {
+		return config.LiquidTypeBlood, true
+	}
+	return config.LiquidTypeWater, false
+}
+
 // ConfigureMaterial assigns physically differentiated specular and detail texture properties
 // based on Duke Nukem 3D tile IDs and surface flags.
 func ConfigureMaterial(mat *config.Material, picNum int, isSky bool) {
 	if mat == nil {
 		return
+	}
+	if lType, ok := IsLiquid(picNum); ok {
+		mat.SetKind(config.MaterialKindLiquidImpenetrable)
+		mat.SetLiquidType(lType)
 	}
 	spec, shine, dScale, dFactor := HeuristicMaterialProperties(picNum, isSky, false)
 	mat.SpecularBoost = spec
@@ -30,6 +52,10 @@ func ConfigureWallMaterial(mat *config.Material, wall *lumps.Wall) {
 func ConfigureWallMaterialWithTile(mat *config.Material, wall *lumps.Wall, tilePic int) {
 	if mat == nil || wall == nil {
 		return
+	}
+	if lType, ok := IsLiquid(tilePic); ok {
+		mat.SetKind(config.MaterialKindLiquidImpenetrable)
+		mat.SetLiquidType(lType)
 	}
 	isTranslucent := wall.IsTranslucent()
 	spec, shine, dScale, dFactor := HeuristicMaterialProperties(tilePic, false, isTranslucent)

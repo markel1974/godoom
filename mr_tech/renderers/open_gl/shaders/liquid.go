@@ -2,7 +2,6 @@ package shaders
 
 import (
 	"math"
-	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -167,7 +166,7 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 	if transparent {
 		s.ctx.Enable(api.BLEND)
 		s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
-		s.ctx.DepthMask(false) // Do not write to depth buffer
+		s.ctx.DepthMask(true)
 	} else {
 		s.ctx.Disable(api.BLEND)
 		s.ctx.DepthMask(true)
@@ -189,12 +188,7 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 			normLy float32 = 0.8437
 			normLz float32 = 0.4467
 		)
-		vSlice := unsafe.Slice(view, 16)
-		lvX := vSlice[0]*normLx + vSlice[4]*normLy + vSlice[8]*normLz
-		lvY := vSlice[1]*normLx + vSlice[5]*normLy + vSlice[9]*normLz
-		lvZ := vSlice[2]*normLx + vSlice[6]*normLy + vSlice[10]*normLz
-		lenSq := lvX*lvX + lvY*lvY + lvZ*lvZ
-		if lenSq > 1e-6 {
+		if lvX, lvY, lvZ, lenSq := s.metrics.TransformDirectionToView(normLx, normLy, normLz); lenSq > 1e-6 {
 			invLen := float32(1.0 / math.Sqrt(float64(lenSq)))
 			s.ctx.Uniform3f(loc, lvX*invLen, lvY*invLen, lvZ*invLen)
 		} else {

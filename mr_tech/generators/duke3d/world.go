@@ -119,6 +119,9 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 			floorKind = config.MaterialKindSky
 			floorFrames = []string{w.textures.GetSkyTile(int(sec.FloorPicNum))}
 		} else {
+			if _, ok := IsLiquid(int(sec.FloorPicNum)); ok {
+				floorKind = config.MaterialKindLiquidImpenetrable
+			}
 			floorFrames = w.textures.GetTileFrames(int(sec.FloorPicNum))
 		}
 		cSector.Floor = config.NewConfigMaterial("floorFrames", floorFrames, floorKind)
@@ -131,6 +134,9 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 			ceilKind = config.MaterialKindSky
 			ceilFrames = []string{w.textures.GetSkyTile(int(sec.CeilingPicNum))}
 		} else {
+			if _, ok := IsLiquid(int(sec.CeilingPicNum)); ok {
+				ceilKind = config.MaterialKindLiquidImpenetrable
+			}
 			ceilFrames = w.textures.GetTileFrames(int(sec.CeilingPicNum))
 		}
 		cSector.Ceil = config.NewConfigMaterial("ceilFrames", ceilFrames, ceilKind)

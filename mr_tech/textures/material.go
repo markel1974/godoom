@@ -12,6 +12,7 @@ type Material struct {
 	frames          []*Texture
 	totalFrames     uint64
 	kind            int
+	liquidType      int
 	u               float64
 	v               float64
 	clampAnim       bool
@@ -104,6 +105,16 @@ func (m *Material) GetName() string { return m.name }
 // GetKind returns the type of the animation as an integer value.
 func (m *Material) GetKind() int {
 	return m.kind
+}
+
+// SetLiquidType sets the liquid rendering type for the Material.
+func (m *Material) SetLiquidType(t int) {
+	m.liquidType = t
+}
+
+// GetLiquidType returns the liquid rendering type for the Material.
+func (m *Material) GetLiquidType() int {
+	return m.liquidType
 }
 
 // GetU returns the horizontal scroll offset of the material.

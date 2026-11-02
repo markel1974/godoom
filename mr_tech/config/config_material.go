@@ -121,13 +121,29 @@ func (m *Material) SetKind(kind MaterialKind) {
 	m.Kind = kind
 	if m.Kind == MaterialKindLiquid || m.Kind == MaterialKindLiquidImpenetrable {
 		m.BlendMode = BlendModeLiquid
-		m.DepthWrite = false // Liquids non scrivono nel depth buffer opaco
-		m.Liquid = NewLiquid(LiquidTypeWater)
-		m.IsSolid = false
-		if kind == MaterialKindLiquidImpenetrable {
-			m.IsSolid = true
+		m.DepthWrite = kind == MaterialKindLiquidImpenetrable
+		if m.Liquid == nil {
+			m.Liquid = NewLiquid(LiquidTypeWater)
 		}
+		m.IsSolid = kind == MaterialKindLiquidImpenetrable
 	}
+}
+
+// SetLiquidType sets the liquid rendering type for the material.
+func (m *Material) SetLiquidType(t LiquidType) {
+	if m.Liquid == nil {
+		m.Liquid = NewLiquid(t)
+	} else {
+		m.Liquid.Type = t
+	}
+}
+
+// GetLiquidType returns the liquid rendering type for the material.
+func (m *Material) GetLiquidType() LiquidType {
+	if m.Liquid != nil {
+		return m.Liquid.Type
+	}
+	return LiquidTypeWater
 }
 
 // HashKey generates a unique key for the Material instance based on its Id field.

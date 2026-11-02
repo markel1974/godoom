@@ -105,10 +105,10 @@ void renderFog() {
     float sampleDepthRaw = texture(u_depthTex, screenUV).r;
     float sampleZN = sampleDepthRaw * 2.0 - 1.0;
     float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    float depthDiff = max(sampleDepth - waterDepth, 0.0);
-    if (sampleDepthRaw >= 0.9999) depthDiff = max(depthDiff, 150.0);
+    bool hasSubmerged = (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1);
+    float depthDiff = hasSubmerged ? max(sampleDepth - waterDepth, 0.0) : 50.0;
     float fogFactor = clamp(1.0 - exp(-depthDiff * 0.015), 0.0, 1.0);
-    vec3 bg = texture(u_refractionTex, screenUV).rgb;
+    vec3 bg = hasSubmerged ? texture(u_refractionTex, screenUV).rgb : texColor;
     vec3 fogColor = mix(texColor, vec3(0.72, 0.76, 0.82), 0.35);
     vec3 finalFog = mix(bg, fogColor, fogFactor * 0.92);
     FragColor = vec4(finalFog, 1.0);
@@ -125,7 +125,7 @@ void renderLava() {
     float n1 = fbm(wPos * 0.015 + vec2(lavaT * 0.04, -lavaT * 0.03));
     float n2 = fbm(wPos * 0.035 + vec2(-lavaT * 0.05, lavaT * 0.04));
     float lavaNoise = mix(n1, n2, 0.5);
-    vec3 lavaCrust = texColor * 0.35;
+    vec3 lavaCrust = texColor;
     vec3 lavaHot   = vec3(1.35, 0.38, 0.02);
     vec3 lavaCore  = vec3(1.90, 1.25, 0.30);
     float tear = clamp(lavaNoise * 1.5 - 0.25, 0.0, 1.0);
@@ -134,13 +134,16 @@ void renderLava() {
     float sampleDepthRaw = texture(u_depthTex, screenUV).r;
     float sampleZN = sampleDepthRaw * 2.0 - 1.0;
     float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    float depthDiff = max(sampleDepth - waterDepth, 0.0);
-    const float LAVA_RIM = 5.0;
-    if (depthDiff < LAVA_RIM) {
-        float rimGrad = 1.0 - (depthDiff / LAVA_RIM);
-        float rimNoise = fbm(wPos * 0.06 + vec2(lavaT * 0.15, -lavaT * 0.12));
-        float sizzle = smoothstep(0.35, 0.75, rimGrad + rimNoise * 0.4);
-        finalLava = mix(finalLava, vec3(1.95, 0.95, 0.18), sizzle * 0.85);
+    bool hasSubmerged = (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1);
+    if (hasSubmerged) {
+        float depthDiff = max(sampleDepth - waterDepth, 0.0);
+        const float LAVA_RIM = 5.0;
+        if (depthDiff < LAVA_RIM) {
+            float rimGrad = 1.0 - (depthDiff / LAVA_RIM);
+            float rimNoise = fbm(wPos * 0.06 + vec2(lavaT * 0.15, -lavaT * 0.12));
+            float sizzle = smoothstep(0.35, 0.75, rimGrad + rimNoise * 0.4);
+            finalLava = mix(finalLava, vec3(1.95, 0.95, 0.18), sizzle * 0.85);
+        }
     }
     float glow = dot(finalLava, vec3(0.35, 0.55, 0.10));
     vec3 bloomLava = glow > 0.85 ? (finalLava - 0.65) * 1.3 : vec3(0.0);
@@ -165,22 +168,7 @@ void renderSlime() {
     float ripNoise = fbm(p * 0.6 + vec2(t * 0.03, -t * 0.025));
     vec2 distortion = (rw1 * 0.50 + rw2 * 0.35 + rw3 * 0.15) * (0.0022 + ripNoise * 0.0012);
     float waveElevation = (rw1.x + rw2.y) * 0.5;
-    // Refraction sampling with foreground depth rejection
-    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
-    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
-    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
-    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    if (sampleDepth < waterDepth - 0.5) {
-        distortedUV = screenUV;
-        sampleDepthRaw = texture(u_depthTex, screenUV).r;
-        sampleZN = sampleDepthRaw * 2.0 - 1.0;
-        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    }
-    float depthDiff = max(sampleDepth - waterDepth, 0.0);
-    if (sampleDepthRaw >= 0.9999) {
-        depthDiff = max(depthDiff, 150.0);
-    }
-    vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+
     // Surface-aligned normal perturbation
     vec3 dPdx = dFdx(ViewPos);
     vec3 dPdy = dFdy(ViewPos);
@@ -199,24 +187,43 @@ void renderSlime() {
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
-    const vec3 SLIME_EXTINCTION = vec3(0.055, 0.010, 0.050);
-    vec3 transmittance = clamp(exp(-depthDiff * SLIME_EXTINCTION), 0.0, 1.0);
-    vec3 transmittedBg = refractionColor * transmittance;
-    vec3 shallowSlime = mix(vec3(0.18, 0.78, 0.12), texColor * 1.15, 0.50);
-    vec3 deepSlime    = mix(vec3(0.03, 0.22, 0.02), texColor * 0.35, 0.60);
-    float depthFactor = clamp(1.0 - exp(-depthDiff * 0.020), 0.0, 1.0);
-    vec3 slimeFog = mix(shallowSlime, deepSlime, depthFactor);
-    float turbidity = mix(0.35, 0.88, depthFactor);
-    vec3 slimeBody = mix(transmittedBg, slimeFog, turbidity);
-    float surfaceOpacity = mix(0.25, 0.65, fresnel);
-    vec3 finalSlime = mix(slimeBody, texColor, surfaceOpacity);
-    // Shoreline bubbling scum
-    const float SLIME_FOAM = 5.0;
-    if (depthDiff < SLIME_FOAM) {
-        float scumGrad = 1.0 - (depthDiff / SLIME_FOAM);
-        float scumNoise = fbm(wPos * 0.08 + vec2(t * 0.12, -t * 0.08));
-        float scumFactor = smoothstep(0.35, 0.75, scumGrad * 1.2 + scumNoise * 0.4 - 0.2);
-        finalSlime = mix(finalSlime, vec3(0.65, 0.95, 0.35), scumFactor * 0.60);
+
+    // Refraction sampling with foreground depth rejection
+    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
+    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
+    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
+    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    if (sampleDepth < waterDepth - 0.5) {
+        distortedUV = screenUV;
+        sampleDepthRaw = texture(u_depthTex, screenUV).r;
+        sampleZN = sampleDepthRaw * 2.0 - 1.0;
+        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    }
+    bool hasSubmerged = (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1);
+
+    vec3 finalSlime = texColor;
+    if (hasSubmerged) {
+        float depthDiff = max(sampleDepth - waterDepth, 0.0);
+        vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+        const vec3 SLIME_EXTINCTION = vec3(0.055, 0.010, 0.050);
+        vec3 transmittance = clamp(exp(-depthDiff * SLIME_EXTINCTION), 0.0, 1.0);
+        vec3 transmittedBg = refractionColor * transmittance;
+        vec3 shallowSlime = mix(vec3(0.18, 0.78, 0.12), texColor * 1.15, 0.50);
+        vec3 deepSlime    = mix(vec3(0.03, 0.22, 0.02), texColor * 0.35, 0.60);
+        float depthFactor = clamp(1.0 - exp(-depthDiff * 0.020), 0.0, 1.0);
+        vec3 slimeFog = mix(shallowSlime, deepSlime, depthFactor);
+        float turbidity = mix(0.35, 0.88, depthFactor);
+        vec3 slimeBody = mix(transmittedBg, slimeFog, turbidity);
+        float surfaceOpacity = mix(0.70, 0.92, fresnel);
+        finalSlime = mix(slimeBody, texColor, surfaceOpacity);
+        // Shoreline bubbling scum
+        const float SLIME_FOAM = 5.0;
+        if (depthDiff < SLIME_FOAM) {
+            float scumGrad = 1.0 - (depthDiff / SLIME_FOAM);
+            float scumNoise = fbm(wPos * 0.08 + vec2(t * 0.12, -t * 0.08));
+            float scumFactor = smoothstep(0.35, 0.75, scumGrad * 1.2 + scumNoise * 0.4 - 0.2);
+            finalSlime = mix(finalSlime, vec3(0.65, 0.95, 0.35), scumFactor * 0.60);
+        }
     }
     float spec = pow(NdotH, 32.0) * 0.40 * (0.30 + 0.70 * fresnel);
     finalSlime += vec3(0.8, 1.0, 0.6) * spec;
@@ -243,22 +250,7 @@ void renderBlood() {
     float ripNoise = fbm(p * 0.6 + vec2(t * 0.03, -t * 0.025));
     vec2 distortion = (rw1 * 0.50 + rw2 * 0.35 + rw3 * 0.15) * (0.0022 + ripNoise * 0.0012);
     float waveElevation = (rw1.x + rw2.y) * 0.5;
-    // Refraction sampling with foreground depth rejection
-    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
-    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
-    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
-    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    if (sampleDepth < waterDepth - 0.5) {
-        distortedUV = screenUV;
-        sampleDepthRaw = texture(u_depthTex, screenUV).r;
-        sampleZN = sampleDepthRaw * 2.0 - 1.0;
-        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    }
-    float depthDiff = max(sampleDepth - waterDepth, 0.0);
-    if (sampleDepthRaw >= 0.9999) {
-        depthDiff = max(depthDiff, 150.0);
-    }
-    vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+
     // Surface-aligned normal perturbation
     vec3 dPdx = dFdx(ViewPos);
     vec3 dPdy = dFdy(ViewPos);
@@ -277,17 +269,36 @@ void renderBlood() {
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
-    const vec3 BLOOD_EXTINCTION = vec3(0.010, 0.055, 0.055);
-    vec3 transmittance = clamp(exp(-depthDiff * BLOOD_EXTINCTION), 0.0, 1.0);
-    vec3 transmittedBg = refractionColor * transmittance;
-    vec3 shallowBlood = mix(vec3(0.55, 0.05, 0.03), texColor * 1.10, 0.45);
-    vec3 deepBlood    = mix(vec3(0.12, 0.01, 0.01), texColor * 0.30, 0.60);
-    float depthFactor = clamp(1.0 - exp(-depthDiff * 0.020), 0.0, 1.0);
-    vec3 bloodFog = mix(shallowBlood, deepBlood, depthFactor);
-    float turbidity = mix(0.40, 0.90, depthFactor);
-    vec3 bloodBody = mix(transmittedBg, bloodFog, turbidity);
-    float surfaceOpacity = mix(0.25, 0.70, fresnel);
-    vec3 finalBlood = mix(bloodBody, texColor, surfaceOpacity);
+
+    // Refraction sampling with foreground depth rejection
+    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
+    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
+    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
+    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    if (sampleDepth < waterDepth - 0.5) {
+        distortedUV = screenUV;
+        sampleDepthRaw = texture(u_depthTex, screenUV).r;
+        sampleZN = sampleDepthRaw * 2.0 - 1.0;
+        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    }
+    bool hasSubmerged = (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1);
+
+    vec3 finalBlood = texColor;
+    if (hasSubmerged) {
+        float depthDiff = max(sampleDepth - waterDepth, 0.0);
+        vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+        const vec3 BLOOD_EXTINCTION = vec3(0.010, 0.055, 0.055);
+        vec3 transmittance = clamp(exp(-depthDiff * BLOOD_EXTINCTION), 0.0, 1.0);
+        vec3 transmittedBg = refractionColor * transmittance;
+        vec3 shallowBlood = mix(vec3(0.55, 0.05, 0.03), texColor * 1.10, 0.45);
+        vec3 deepBlood    = mix(vec3(0.12, 0.01, 0.01), texColor * 0.30, 0.60);
+        float depthFactor = clamp(1.0 - exp(-depthDiff * 0.020), 0.0, 1.0);
+        vec3 bloodFog = mix(shallowBlood, deepBlood, depthFactor);
+        float turbidity = mix(0.40, 0.90, depthFactor);
+        vec3 bloodBody = mix(transmittedBg, bloodFog, turbidity);
+        float surfaceOpacity = mix(0.75, 0.95, fresnel);
+        finalBlood = mix(bloodBody, texColor, surfaceOpacity);
+    }
     float spec = pow(NdotH, 48.0) * 0.50 * (0.35 + 0.65 * fresnel);
     finalBlood += vec3(1.0, 0.85, 0.85) * spec;
     FragColor = vec4(finalBlood, 1.0);
@@ -310,22 +321,7 @@ void renderSea() {
     float seaNoise = fbm(p * 0.4 + vec2(t * 0.03, -t * 0.02));
     vec2 distortion = (sw1 * 0.65 + sw2 * 0.35) * (0.0035 + seaNoise * 0.0020);
     float waveElevation = (sw1.x + sw2.y) * 0.5 + seaNoise * 0.5;
-    // Refraction sampling with foreground depth rejection
-    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
-    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
-    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
-    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    if (sampleDepth < waterDepth - 0.5) {
-        distortedUV = screenUV;
-        sampleDepthRaw = texture(u_depthTex, screenUV).r;
-        sampleZN = sampleDepthRaw * 2.0 - 1.0;
-        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    }
-    float depthDiff = max(sampleDepth - waterDepth, 0.0);
-    if (sampleDepthRaw >= 0.9999) {
-        depthDiff = max(depthDiff, 150.0);
-    }
-    vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+
     // Surface-aligned normal perturbation
     vec3 dPdx = dFdx(ViewPos);
     vec3 dPdy = dFdy(ViewPos);
@@ -344,27 +340,50 @@ void renderSea() {
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
-    // Deep marine oceanic extinction
-    vec3 seaTint = mix(vec3(0.04, 0.40, 0.55), texColor * 1.1, 0.30);
-    float depthFactor = clamp(depthDiff * 0.015, 0.0, 1.0);
-    vec3 transmitted = mix(refractionColor, refractionColor * seaTint * 1.6, depthFactor * 0.60);
-    vec3 deepAbyss = mix(vec3(0.01, 0.10, 0.22), texColor * 0.4, 0.45);
-    vec3 seaBody = mix(transmitted, deepAbyss, clamp(depthDiff * 0.008 - 0.1, 0.0, 0.60));
-    float surfaceMix = mix(0.10, 0.45, fresnel);
-    vec3 finalSea = mix(seaBody, texColor, surfaceMix);
+
+    // Refraction sampling with foreground depth rejection
+    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
+    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
+    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
+    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    if (sampleDepth < waterDepth - 0.5) {
+        distortedUV = screenUV;
+        sampleDepthRaw = texture(u_depthTex, screenUV).r;
+        sampleZN = sampleDepthRaw * 2.0 - 1.0;
+        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    }
+    bool hasSubmerged = (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1);
+
+    vec3 finalSea = texColor;
+    if (hasSubmerged) {
+        float depthDiff = max(sampleDepth - waterDepth, 0.0);
+        vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+        // Deep marine oceanic extinction
+        vec3 seaTint = mix(vec3(0.04, 0.40, 0.55), texColor * 1.1, 0.30);
+        float depthFactor = clamp(depthDiff * 0.015, 0.0, 1.0);
+        vec3 transmitted = mix(refractionColor, refractionColor * seaTint * 1.6, depthFactor * 0.60);
+        vec3 deepAbyss = mix(vec3(0.01, 0.10, 0.22), texColor * 0.4, 0.45);
+        vec3 seaBody = mix(transmitted, deepAbyss, clamp(depthDiff * 0.008 - 0.1, 0.0, 0.60));
+        float surfaceMix = mix(0.55, 0.85, fresnel);
+        finalSea = mix(seaBody, texColor, surfaceMix);
+
+        // Shoreline Surf Foam (Schiuma a riva contro pareti e coste)
+        const float SHORE_DISTANCE = 8.0;
+        if (depthDiff < SHORE_DISTANCE) {
+            float shoreGrad = 1.0 - (depthDiff / SHORE_DISTANCE);
+            float shoreNoise = fbm(wPos * 0.05 + vec2(t * 0.14, -t * 0.10));
+            float shoreFoam = smoothstep(0.30, 0.70, shoreGrad * 1.3 + shoreNoise * 0.45 - 0.25);
+            vec3 foamWhite = vec3(0.95, 0.98, 1.0);
+            finalSea = mix(finalSea, foamWhite, shoreFoam * 0.75);
+        }
+    }
+
     // Wave Crest Foam (Schiuma sulle creste delle onde)
     float crestNoise = fbm(wPos * 0.025 + vec2(t * 0.08, -t * 0.06));
     float crestFoam = smoothstep(0.35, 0.75, waveElevation * 0.9 + crestNoise * 0.45 - 0.20);
     vec3 foamWhite = vec3(0.95, 0.98, 1.0);
     finalSea = mix(finalSea, foamWhite, crestFoam * 0.65);
-    // Shoreline Surf Foam (Schiuma a riva contro pareti e coste)
-    const float SHORE_DISTANCE = 8.0;
-    if (depthDiff < SHORE_DISTANCE) {
-        float shoreGrad = 1.0 - (depthDiff / SHORE_DISTANCE);
-        float shoreNoise = fbm(wPos * 0.05 + vec2(t * 0.14, -t * 0.10));
-        float shoreFoam = smoothstep(0.30, 0.70, shoreGrad * 1.3 + shoreNoise * 0.45 - 0.25);
-        finalSea = mix(finalSea, foamWhite, shoreFoam * 0.75);
-    }
+
     // Specular highlight
     float spec = pow(NdotH, 48.0) * 0.55 * (0.25 + 0.75 * fresnel);
     finalSea += vec3(1.0, 0.98, 0.94) * spec;
@@ -389,22 +408,7 @@ void renderWater() {
     float ripNoise = fbm(p * 0.6 + vec2(t * 0.03, -t * 0.025));
     vec2 distortion = (rw1 * 0.50 + rw2 * 0.35 + rw3 * 0.15) * (0.0022 + ripNoise * 0.0012);
     float waveElevation = (rw1.x + rw2.y) * 0.5;
-    // Refraction sampling with foreground depth rejection
-    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
-    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
-    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
-    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    if (sampleDepth < waterDepth - 0.5) {
-        distortedUV = screenUV;
-        sampleDepthRaw = texture(u_depthTex, screenUV).r;
-        sampleZN = sampleDepthRaw * 2.0 - 1.0;
-        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-    }
-    float depthDiff = max(sampleDepth - waterDepth, 0.0);
-    if (sampleDepthRaw >= 0.9999) {
-        depthDiff = max(depthDiff, 150.0);
-    }
-    vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+
     // Surface-aligned normal perturbation
     vec3 dPdx = dFdx(ViewPos);
     vec3 dPdy = dFdy(ViewPos);
@@ -423,26 +427,46 @@ void renderWater() {
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
-    // Water tint filter
-    vec3 waterTint = mix(vec3(0.06, 0.45, 0.58), texColor * 1.15, 0.30);
-    float depthFactor = clamp(depthDiff * 0.015, 0.0, 1.0);
-    // Contrast attenuation: underwater forward scattering softens sharp edges and harsh black shadows
-    float lumBg = dot(refractionColor, vec3(0.299, 0.587, 0.114));
-    vec3 softenedBg = mix(refractionColor, waterTint * lumBg * 1.6, depthFactor * 0.32);
-    // Background transmission: filtered by aquatic color
-    vec3 transmitted = mix(softenedBg, softenedBg * waterTint * 1.7, depthFactor * 0.50);
-    // Deep water gradual transition (only in deep water, never muddy)
-    vec3 deepAbyss = mix(vec3(0.015, 0.12, 0.22), texColor * 0.40, 0.40);
-    vec3 waterBody = mix(transmitted, deepAbyss, clamp(depthDiff * 0.007 - 0.15, 0.0, 0.50));
-    // Surface reflection: light at normal angles (~7%), reflective at glancing angles (Fresnel)
-    float surfaceMix = mix(0.07, 0.42, fresnel);
-    vec3 finalWater = mix(waterBody, texColor, surfaceMix);
+
+    // Refraction sampling with foreground depth rejection
+    vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
+    float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
+    float sampleZN = sampleDepthRaw * 2.0 - 1.0;
+    float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    if (sampleDepth < waterDepth - 0.5) {
+        distortedUV = screenUV;
+        sampleDepthRaw = texture(u_depthTex, screenUV).r;
+        sampleZN = sampleDepthRaw * 2.0 - 1.0;
+        sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+    }
+    bool hasSubmerged = (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1);
+
+    vec3 finalWater = texColor;
+    if (hasSubmerged) {
+        float depthDiff = max(sampleDepth - waterDepth, 0.0);
+        vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
+        // Water tint filter
+        vec3 waterTint = mix(vec3(0.06, 0.45, 0.58), texColor * 1.15, 0.30);
+        float depthFactor = clamp(depthDiff * 0.015, 0.0, 1.0);
+        // Contrast attenuation: underwater forward scattering softens sharp edges and harsh black shadows
+        float lumBg = dot(refractionColor, vec3(0.299, 0.587, 0.114));
+        vec3 softenedBg = mix(refractionColor, waterTint * lumBg * 1.6, depthFactor * 0.32);
+        // Background transmission: filtered by aquatic color
+        vec3 transmitted = mix(softenedBg, softenedBg * waterTint * 1.7, depthFactor * 0.50);
+        // Deep water gradual transition (only in deep water, never muddy)
+        vec3 deepAbyss = mix(vec3(0.015, 0.12, 0.22), texColor * 0.40, 0.40);
+        vec3 waterBody = mix(transmitted, deepAbyss, clamp(depthDiff * 0.007 - 0.15, 0.0, 0.50));
+        // Surface reflection: show the texture prominently while retaining aquatic depth
+        float surfaceMix = mix(0.55, 0.85, fresnel);
+        finalWater = mix(waterBody, texColor, surfaceMix);
+        // Soft geometry edge fade only when submerged geometry is present and close
+        float edgeFade = clamp(depthDiff * 0.8, 0.4, 1.0);
+        finalWater = mix(refractionColor, finalWater, edgeFade);
+    }
+
     // Specular sunlight glints
     float spec = pow(NdotH, 48.0) * 0.55 * (0.25 + 0.75 * fresnel);
     finalWater += vec3(1.0, 0.98, 0.94) * spec;
-    // Soft geometry edge fade: avoids harsh pixelated polygon edge against walls
-    float edgeFade = clamp(depthDiff * 0.8, 0.0, 1.0);
-    finalWater = mix(refractionColor, finalWater, edgeFade);
     // Output
     FragColor = vec4(finalWater, 1.0);
     // Bloom emission for sun glints
@@ -451,17 +475,22 @@ void renderWater() {
 }
 
 void main() {
-    if (u_liquidType == LIQUID_WATER) {
+    int liquidType = u_liquidType;
+    if (Material >= -0.5 && Material < 5.5) {
+        liquidType = int(Material + 0.1);
+    }
+
+    if (liquidType == LIQUID_WATER) {
         renderWater();
-    } else if (u_liquidType == LIQUID_SEA) {
+    } else if (liquidType == LIQUID_SEA) {
         renderSea();
-    } else if (u_liquidType == LIQUID_LAVA) {
+    } else if (liquidType == LIQUID_LAVA) {
         renderLava();
-    } else if (u_liquidType == LIQUID_SLIME) {
+    } else if (liquidType == LIQUID_SLIME) {
         renderSlime();
-    } else if (u_liquidType == LIQUID_BLOOD) {
+    } else if (liquidType == LIQUID_BLOOD) {
         renderBlood();
-    } else if (u_liquidType == LIQUID_FOG) {
+    } else if (liquidType == LIQUID_FOG) {
         renderFog();
     } else {
         renderWater();

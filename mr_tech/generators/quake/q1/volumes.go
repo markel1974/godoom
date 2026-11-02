@@ -39,6 +39,20 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 			animKind = config.MaterialKindLiquid
 		}
 		material := config.NewConfigMaterial("volume", []string{v.TexName}, animKind)
+		if animKind == config.MaterialKindLiquid {
+			tName := v.TexName
+			if len(tName) > 0 && tName[0] == '*' {
+				tName = tName[1:]
+			}
+			switch tName {
+			case "lava":
+				material.SetLiquidType(config.LiquidTypeLava)
+			case "slime":
+				material.SetLiquidType(config.LiquidTypeSlime)
+			default:
+				material.SetLiquidType(config.LiquidTypeWater)
+			}
+		}
 		material.U = velX
 		material.V = velY
 		ConfigureFaceMaterial(material, v.TexName, v.IsSky)

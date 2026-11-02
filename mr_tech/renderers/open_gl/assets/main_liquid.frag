@@ -297,8 +297,6 @@ void renderBlood(bool isImpenetrable) {
     BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 
-// --- GTA V Realistic Water Simulation ---
-
 // Multi-scale Gerstner wave spectrum with camera distance LOD filtering
 vec2 getWaterWaves(vec2 pos, float t, float viewDist, bool isSea) {
     float distFade1 = clamp(1.0 - viewDist / 600.0, 0.0, 1.0);
@@ -329,7 +327,7 @@ vec2 getWaterWaves(vec2 pos, float t, float viewDist, bool isSea) {
 }
 
 // GTA V Procedural Dancing Sunlight Caustics
-float gtaCaustics(vec2 pos, float t) {
+float dancingSunlightCaustics(vec2 pos, float t) {
     vec2 p = pos * 0.035;
     vec2 p1 = p + vec2(t * 0.04, t * 0.02);
     vec2 p2 = p * 1.25 - vec2(t * 0.03, -t * 0.05);
@@ -340,7 +338,7 @@ float gtaCaustics(vec2 pos, float t) {
     return pow(c, 2.0) * 1.8;
 }
 
-void renderGTAWaterInternal(bool isImpenetrable, bool isSea) {
+void renderWater(bool isImpenetrable, bool isSea) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
     float waterDepth = abs(ViewPos.z);
@@ -407,7 +405,7 @@ void renderGTAWaterInternal(bool isImpenetrable, bool isSea) {
         vec3 bottomTinted = bedBase * vec3(0.18, 0.68, 0.88);
 
         // Dancing caustics on the pool bed
-        float caustics = gtaCaustics(wPos + waveDisp * 12.0, t);
+        float caustics = dancingSunlightCaustics(wPos + waveDisp * 12.0, t);
         bottomTinted += bottomTinted * caustics * vec3(0.25, 0.50, 0.45);
 
         // Volumetric liquid body (50% water volume color, 50% filtered floor)
@@ -442,7 +440,7 @@ void renderGTAWaterInternal(bool isImpenetrable, bool isSea) {
             vec3 bottomTinted = refractionColor * vec3(0.18, 0.68, 0.88);
 
             // Underwater dancing caustics on submerged surfaces
-            float caustics = gtaCaustics(wPos + waveDisp * 14.0, t);
+            float caustics = dancingSunlightCaustics(wPos + waveDisp * 14.0, t);
             float causticFade = clamp(1.0 - depthDiff * 0.015, 0.0, 1.0);
             bottomTinted += bottomTinted * caustics * vec3(0.25, 0.50, 0.45) * causticFade;
 
@@ -487,14 +485,6 @@ void renderGTAWaterInternal(bool isImpenetrable, bool isSea) {
     BrightColor = vec4(bloomColor, 1.0);
 }
 
-void renderSea(bool isImpenetrable) {
-    renderGTAWaterInternal(isImpenetrable, true);
-}
-
-void renderWater(bool isImpenetrable) {
-    renderGTAWaterInternal(isImpenetrable, false);
-}
-
 void main() {
     //TODO FROM VERTEX
     //uint packedMaterial = floatBitsToUint(Material);
@@ -514,9 +504,9 @@ void main() {
     }
 
     if (liquidType == LIQUID_WATER) {
-        renderWater(isImpenetrable);
+        renderWater(isImpenetrable, false);
     } else if (liquidType == LIQUID_SEA) {
-        renderSea(isImpenetrable);
+        renderWater(isImpenetrable, true);
     } else if (liquidType == LIQUID_LAVA) {
         renderLava(isImpenetrable);
     } else if (liquidType == LIQUID_SLIME) {
@@ -526,6 +516,6 @@ void main() {
     } else if (liquidType == LIQUID_FOG) {
         renderFog(isImpenetrable);
     } else {
-        renderWater(isImpenetrable);
+        renderWater(isImpenetrable, false);
     }
 }

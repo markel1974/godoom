@@ -97,9 +97,11 @@ void renderModel3D() {
 }
 
 void renderLiquid() {
+    //TODO FROM VERTEX
+    const float amplitude = 3.0;
     vec4 worldPos = vec4(aPos, 1.0);
-    worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * 2.0;
-    worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * 2.0;
+    worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * amplitude;
+    worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * amplitude;
     TexCoords.x += u_time * 0.1;
     TexCoords.y += u_time * 0.05;
     vec4 viewPos = u_view * worldPos;

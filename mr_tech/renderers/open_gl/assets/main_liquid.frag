@@ -296,19 +296,62 @@ void renderBlood(bool isImpenetrable) {
     BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 
-void renderSea(bool isImpenetrable) {
+// --- GTA V Clear Realistic Water Simulation ---
+
+// Multi-scale organic wave interference (calibrated for game world units, no parallel zebra lines)
+vec2 getWaterWaves(vec2 pos, float t, bool isSea) {
+    vec2 p = pos * (isSea ? 0.012 : 0.020);
+
+    // Wave train 1: Rolling swell
+    vec2 w1 = vec2(
+        sin(p.x * 1.4 + p.y * 0.9 + t * 1.1),
+        cos(p.y * 1.3 - p.x * 0.8 + t * 0.95)
+    );
+
+    // Wave train 2: Angled cross swell
+    vec2 w2 = vec2(
+        sin(p.y * 2.1 + p.x * 1.2 - t * 1.25),
+        cos(p.x * 1.8 - p.y * 1.1 - t * 1.05)
+    );
+
+    // Wave train 3: Fine surface ripples
+    vec2 w3 = vec2(
+        sin((p.x + p.y) * 3.2 + t * 1.7),
+        cos((p.x - p.y) * 2.9 - t * 1.5)
+    );
+
+    // Organic micro turbulence
+    float turb = fbm(p * 1.6 + vec2(t * 0.05, -t * 0.04));
+
+    vec2 combined = w1 * 0.45 + w2 * 0.35 + w3 * 0.20;
+    combined += (turb - 0.5) * 0.25;
+    return combined;
+}
+
+// GTA V Procedural Dancing Sunlight Caustics
+float gtaCaustics(vec2 pos, float t) {
+    vec2 p = pos * 0.045;
+    vec2 p1 = p + vec2(t * 0.05, t * 0.03);
+    vec2 p2 = p * 1.3 - vec2(t * 0.04, -t * 0.06);
+
+    float c1 = sin(p1.x * 2.2 + cos(p1.y * 1.9 + t * 0.6)) * 0.5 + 0.5;
+    float c2 = cos(p2.y * 2.4 + sin(p2.x * 2.0 - t * 0.5)) * 0.5 + 0.5;
+    float c = c1 * c2;
+    c = pow(c, 2.0) * 2.2;
+    return clamp(c, 0.0, 2.5);
+}
+
+void renderGTAWaterInternal(bool isImpenetrable, bool isSea) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     vec2 screenUV = gl_FragCoord.xy / u_resolution;
     float waterDepth = abs(ViewPos.z);
     float t = u_time;
     vec2 wPos = WorldPos.xz;
-    vec2 p = wPos * 0.012;
-    vec2 sw1 = vec2(sin(p.x * 1.5 + p.y * 0.7 + t * 0.9), cos(p.y * 1.4 - p.x * 0.8 + t * 0.8));
-    vec2 sw2 = vec2(sin(p.y * 2.2 + p.x * 1.1 - t * 0.7), cos(p.x * 1.9 - p.y * 1.2 - t * 0.85));
-    float seaNoise = fbm(p * 0.4 + vec2(t * 0.03, -t * 0.02));
-    vec2 distortion = (sw1 * 0.65 + sw2 * 0.35) * (0.0035 + seaNoise * 0.0020);
-    float waveElevation = (sw1.x + sw2.y) * 0.5 + seaNoise * 0.5;
 
+    // Organic wave field
+    vec2 waveDisp = getWaterWaves(wPos, t, isSea);
+
+    // Surface normal perturbation (gentle and smooth, preventing harsh stripes)
     vec3 dPdx = dFdx(ViewPos);
     vec3 dPdy = dFdy(ViewPos);
     vec3 faceNormal = cross(dPdx, dPdy);
@@ -320,126 +363,115 @@ void renderSea(bool isImpenetrable) {
     }
     vec3 tangent = normalize(dPdx);
     vec3 bitangent = normalize(cross(faceNormal, tangent));
-    vec3 waveNormal = normalize(faceNormal + tangent * (distortion.x * 25.0) + bitangent * (distortion.y * 25.0));
+
+    float waveScale = isSea ? 0.30 : 0.16;
+    vec3 waveNormal = normalize(faceNormal + tangent * (waveDisp.x * waveScale) + bitangent * (waveDisp.y * waveScale));
+
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
-    float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 4.0);
+    // Subtle Fresnel: water remains translucent from all viewing angles
+    float fresnel = 0.02 + 0.48 * pow(1.0 - NdotV, 4.0);
+
+    // Sunlight and reflection vectors
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
+    vec3 R = reflect(-V, waveNormal);
 
-    vec3 seaTint = vec3(0.04, 0.38, 0.55);
-    vec3 seaSurface = (length(texColor) > 0.04) ? mix(seaTint, texColor, 0.60) : seaTint;
-    vec3 finalSea = seaSurface;
-    if (!isImpenetrable) {
+    // GTA V Sky gradient reflection
+    vec3 skyHorizon    = vec3(0.55, 0.72, 0.88);
+    vec3 skyZenith     = vec3(0.22, 0.46, 0.75);
+    vec3 envReflection = mix(skyHorizon, skyZenith, clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
+
+    // GTA V Vibrant Tropical Water Colors (Clear cyan-blue, NEVER pitch black)
+    vec3 shallowWaterColor = vec3(0.16, 0.74, 0.84);
+    vec3 midWaterColor     = vec3(0.07, 0.46, 0.64);
+    vec3 deepWaterColor    = vec3(0.03, 0.26, 0.46);
+
+    vec3 finalWater;
+
+    if (isImpenetrable) {
+        // --- Impenetrable Water (Doom, Duke3D, Jedi floor liquids) ---
+        vec2 refractedUV = TexCoords.xy + waveDisp * 0.018;
+        vec3 bedTex = getDiffuse(vec3(refractedUV, TexCoords.z)).rgb;
+        vec3 bedBase = (length(bedTex) > 0.03) ? bedTex : vec3(0.20, 0.45, 0.52);
+
+        // Dancing caustics on the pool bed
+        float caustics = gtaCaustics(wPos + waveDisp * 15.0, t);
+        vec3 illuminatedBed = bedBase * (0.90 + caustics * vec3(0.32, 0.62, 0.58));
+
+        // Translucent water volume tint
+        vec3 waterBody = mix(illuminatedBed, illuminatedBed * shallowWaterColor * 1.35 + midWaterColor * 0.22, 0.35);
+
+        // Sky reflection
+        finalWater = mix(waterBody, envReflection, fresnel * 0.38);
+    } else {
+        // --- Penetrable / Swimmable Water (Quake swimmable volumes) ---
+        vec2 distortion = waveDisp * (isSea ? 0.0035 : 0.0020);
         vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
         float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
         float sampleZN = sampleDepthRaw * 2.0 - 1.0;
         float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
+
         if (sampleDepth < waterDepth - 0.5) {
             distortedUV = screenUV;
             sampleDepthRaw = texture(u_depthTex, screenUV).r;
             sampleZN = sampleDepthRaw * 2.0 - 1.0;
             sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
         }
-        if (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.5) {
+
+        if (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.1) {
             float depthDiff = max(sampleDepth - waterDepth, 0.0);
             vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
-            vec3 seaFog = mix(vec3(0.04, 0.40, 0.55), texColor * 1.1, 0.30);
-            float depthFactor = clamp(depthDiff * 0.015, 0.0, 1.0);
-            vec3 transmitted = mix(refractionColor, refractionColor * seaFog * 1.6, depthFactor * 0.60);
-            vec3 deepAbyss = mix(vec3(0.01, 0.10, 0.22), texColor * 0.4, 0.45);
-            vec3 seaBody = mix(transmitted, deepAbyss, clamp(depthDiff * 0.008 - 0.1, 0.0, 0.60));
-            float surfaceMix = mix(0.70, 0.90, fresnel);
-            finalSea = mix(seaBody, seaSurface, surfaceMix);
+
+            // Underwater dancing caustics on submerged floors & objects
+            float caustics = gtaCaustics(wPos + waveDisp * 18.0, t);
+            float causticFade = clamp(1.0 - depthDiff * 0.006, 0.0, 1.0);
+            refractionColor += refractionColor * caustics * vec3(0.28, 0.58, 0.54) * causticFade;
+
+            // Physical transmittance (calibrated so underwater structures stay crisp and visible)
+            vec3 transmittance = clamp(exp(-depthDiff * vec3(0.0012, 0.0004, 0.0001)), 0.18, 1.0);
+            vec3 transmitted = refractionColor * transmittance;
+
+            // Crystal-clear tropical water depth tint
+            float depthFactor = clamp(1.0 - exp(-depthDiff * 0.0035), 0.0, 0.60);
+            vec3 waterTint = mix(shallowWaterColor, deepWaterColor, depthFactor);
+            vec3 waterBody = mix(transmitted, transmitted * waterTint * 1.35 + waterTint * 0.18, depthFactor * 0.65);
+
+            // Shoreline / Contact soft edge foam
+            float shoreFoam = clamp(1.0 - depthDiff / 6.0, 0.0, 1.0);
+            shoreFoam = pow(shoreFoam, 2.0) * (0.5 + 0.5 * sin(t * 3.0 + wPos.x * 0.15));
+
+            // Sky reflection
+            finalWater = mix(waterBody, envReflection, fresnel * 0.40);
+
+            // Apply soft shoreline foam
+            finalWater = mix(finalWater, vec3(0.95, 0.98, 1.0), shoreFoam * 0.55);
+        } else {
+            // Surface fallback
+            vec3 waterBody = mix(shallowWaterColor, midWaterColor, 0.5);
+            finalWater = mix(waterBody, envReflection, fresnel * 0.40);
         }
-    } else {
-        float waveLight = max(dot(waveNormal, L), 0.0) * 0.25 + 0.75;
-        finalSea *= waveLight;
     }
 
-    // Wave Crest Foam
-    float crestNoise = fbm(wPos * 0.025 + vec2(t * 0.08, -t * 0.06));
-    float crestFoam = smoothstep(0.35, 0.75, waveElevation * 0.9 + crestNoise * 0.45 - 0.20);
-    vec3 foamWhite = vec3(0.95, 0.98, 1.0);
-    finalSea = mix(finalSea, foamWhite, crestFoam * 0.65);
+    // Specular sunlight glints (GTA V sun path)
+    float specBroad = pow(NdotH, 24.0) * 0.35;
+    float specCore  = pow(NdotH, 128.0) * 1.5;
+    vec3 sunSpecular = vec3(1.0, 0.98, 0.92) * (specBroad + specCore);
+    finalWater += sunSpecular;
 
-    // Specular highlight
-    float spec = pow(NdotH, 36.0) * 0.65 * (0.35 + 0.65 * fresnel);
-    finalSea += vec3(1.0, 0.98, 0.94) * spec;
-    FragColor = vec4(finalSea, 1.0);
-    float brightness = dot(finalSea, vec3(0.2126, 0.7152, 0.0722));
-    BrightColor = vec4(brightness > 1.3 ? finalSea * 0.5 : vec3(0.0), 1.0);
+    FragColor = vec4(finalWater, 1.0);
+    // Write specular glints to bloom channel
+    float bloomLum = dot(sunSpecular, vec3(0.2126, 0.7152, 0.0722));
+    vec3 bloomColor = bloomLum > 0.8 ? (sunSpecular - 0.8) * 1.2 : vec3(0.0);
+    BrightColor = vec4(bloomColor, 1.0);
+}
+
+void renderSea(bool isImpenetrable) {
+    renderGTAWaterInternal(isImpenetrable, true);
 }
 
 void renderWater(bool isImpenetrable) {
-    vec3 texColor = getDiffuse(TexCoords).rgb;
-    vec2 screenUV = gl_FragCoord.xy / u_resolution;
-    float waterDepth = abs(ViewPos.z);
-    float t = u_time;
-    vec2 wPos = WorldPos.xz;
-    vec2 p = wPos * 0.025;
-    vec2 rw1 = vec2(sin(p.x * 1.7 + p.y * 0.8 + t * 1.2), cos(p.y * 1.5 - p.x * 0.9 + t * 1.0));
-    vec2 rw2 = vec2(sin(p.y * 2.3 + p.x * 1.3 - t * 0.85), cos(p.x * 2.1 - p.y * 1.4 - t * 1.15));
-    vec2 rw3 = vec2(sin((p.x + p.y) * 3.1 + t * 0.65), cos((p.x - p.y) * 2.8 - t * 0.75));
-    float ripNoise = fbm(p * 0.6 + vec2(t * 0.03, -t * 0.025));
-    vec2 distortion = (rw1 * 0.50 + rw2 * 0.35 + rw3 * 0.15) * (0.0022 + ripNoise * 0.0012);
-
-    vec3 dPdx = dFdx(ViewPos);
-    vec3 dPdy = dFdy(ViewPos);
-    vec3 faceNormal = cross(dPdx, dPdy);
-    float lenN = length(faceNormal);
-    faceNormal = lenN > 1e-6 ? faceNormal / lenN : vec3(0.0, 1.0, 0.0);
-    vec3 V = normalize(-ViewPos);
-    if (dot(faceNormal, V) < 0.0) {
-        faceNormal = -faceNormal;
-    }
-    vec3 tangent = normalize(dPdx);
-    vec3 bitangent = normalize(cross(faceNormal, tangent));
-    vec3 waveNormal = normalize(faceNormal + tangent * (distortion.x * 25.0) + bitangent * (distortion.y * 25.0));
-    float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
-    float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 4.0);
-    vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
-    vec3 H = normalize(L + V);
-    float NdotH = max(dot(waveNormal, H), 0.0);
-
-    vec3 waterTint = vec3(0.08, 0.42, 0.65);
-    vec3 waterSurface = (length(texColor) > 0.04) ? mix(waterTint, texColor, 0.60) : waterTint;
-    vec3 finalWater = waterSurface;
-    if (!isImpenetrable) {
-        vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
-        float sampleDepthRaw = texture(u_depthTex, distortedUV).r;
-        float sampleZN = sampleDepthRaw * 2.0 - 1.0;
-        float sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-        if (sampleDepth < waterDepth - 0.5) {
-            distortedUV = screenUV;
-            sampleDepthRaw = texture(u_depthTex, screenUV).r;
-            sampleZN = sampleDepthRaw * 2.0 - 1.0;
-            sampleDepth = (2.0 * u_near * u_far) / (u_far + u_near - sampleZN * (u_far - u_near));
-        }
-        if (sampleDepthRaw < 0.9999 && sampleDepth > waterDepth + 0.5) {
-            float depthDiff = max(sampleDepth - waterDepth, 0.0);
-            vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
-            vec3 waterFog = mix(waterTint, texColor * 1.15, 0.30);
-            float depthFactor = clamp(depthDiff * 0.015, 0.0, 1.0);
-            float lumBg = dot(refractionColor, vec3(0.299, 0.587, 0.114));
-            vec3 softenedBg = mix(refractionColor, waterFog * lumBg * 1.6, depthFactor * 0.32);
-            vec3 transmitted = mix(softenedBg, softenedBg * waterFog * 1.7, depthFactor * 0.50);
-            vec3 deepAbyss = mix(vec3(0.015, 0.12, 0.22), texColor * 0.40, 0.40);
-            vec3 waterBody = mix(transmitted, deepAbyss, clamp(depthDiff * 0.007 - 0.15, 0.0, 0.50));
-            float surfaceMix = mix(0.70, 0.92, fresnel);
-            finalWater = mix(waterBody, waterSurface, surfaceMix);
-        }
-    } else {
-        float waveLight = max(dot(waveNormal, L), 0.0) * 0.25 + 0.75;
-        finalWater *= waveLight;
-    }
-
-    // Specular sunlight glints
-    float spec = pow(NdotH, 36.0) * 0.65 * (0.35 + 0.65 * fresnel);
-    finalWater += vec3(1.0, 0.98, 0.94) * spec;
-    FragColor = vec4(finalWater, 1.0);
-    float brightness = dot(finalWater, vec3(0.2126, 0.7152, 0.0722));
-    BrightColor = vec4(brightness > 1.3 ? finalWater * 0.5 : vec3(0.0), 1.0);
+    renderGTAWaterInternal(isImpenetrable, false);
 }
 
 void main() {

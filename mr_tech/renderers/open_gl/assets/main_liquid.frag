@@ -21,7 +21,6 @@ uniform float u_far;
 
 uniform mat4 u_view;
 uniform vec3 u_lightDir;
-//uniform int u_liquidType;
 
 const int LIQUID_WATER = 0; // Acqua limpida
 const int LIQUID_SEA   = 1; // Mare con onde ampie e schiuma su creste e riva
@@ -29,6 +28,17 @@ const int LIQUID_LAVA  = 2; // Lava incandescente opaca con vene di magma
 const int LIQUID_SLIME = 3; // Slime / Nukage acido radioattivo
 const int LIQUID_BLOOD = 4; // Sangue rosso denso
 const int LIQUID_FOG   = 5; // Nebbia volumetrica atmosferica
+
+
+// TODO FROM CONFIG
+// Water Colors (Lush Caribbean turquoise to deep sapphire blue)
+const vec3 waterColorShallow = vec3(0.05, 0.45, 0.62);
+const vec3 waterColorDeep    = vec3(0.015, 0.18, 0.32);
+// Environment reflection (Lush sky & ambient sheen)
+const vec3 envHorizon    = vec3(0.30, 0.52, 0.72);
+const vec3 envZenith     = vec3(0.12, 0.26, 0.48);
+
+
 
 // Water / Liquid diffuse texture sampler
 vec4 getDiffuse(vec3 tc) {
@@ -301,37 +311,31 @@ void renderBlood(bool isImpenetrable) {
 vec2 getWaterWaves(vec2 pos, float t, float viewDist, bool isSea) {
     float distFade1 = clamp(1.0 - viewDist / 600.0, 0.0, 1.0);
     float distFade2 = clamp(1.0 - viewDist / 350.0, 0.0, 1.0);
-
     // Wave 1: Primary rolling swell
     vec2 d1 = vec2(0.707, 0.707);
     float p1 = dot(d1, pos) * (isSea ? 0.010 : 0.018) + t * 1.1;
     vec2 w1 = vec2(sin(p1), cos(p1));
-
     // Wave 2: Angled cross swell
     vec2 d2 = vec2(-0.6, 0.8);
     float p2 = dot(d2, pos) * (isSea ? 0.018 : 0.030) - t * 1.25;
     vec2 w2 = vec2(sin(p2), cos(p2));
-
     // Wave 3: Medium wind chop (fades with distance to prevent moiré)
     vec2 d3 = vec2(0.85, -0.52);
     float p3 = dot(d3, pos) * (isSea ? 0.035 : 0.060) + t * 1.7;
     vec2 w3 = vec2(sin(p3), cos(p3)) * distFade1;
-
     // Wave 4: Capillary surface ripples (fades at distance)
     vec2 d4 = vec2(-0.4, -0.9);
     float p4 = dot(d4, pos) * (isSea ? 0.070 : 0.120) - t * 2.2;
     vec2 w4 = vec2(sin(p4), cos(p4)) * distFade2;
-
     vec2 combined = w1 * 0.45 + w2 * 0.35 + w3 * 0.15 + w4 * 0.08;
     return combined;
 }
 
-// GTA V Procedural Dancing Sunlight Caustics
+// procedural Dancing Sunlight Caustics
 float dancingSunlightCaustics(vec2 pos, float t) {
     vec2 p = pos * 0.035;
     vec2 p1 = p + vec2(t * 0.04, t * 0.02);
     vec2 p2 = p * 1.25 - vec2(t * 0.03, -t * 0.05);
-
     float c1 = sin(p1.x * 2.2 + cos(p1.y * 1.9 + t * 0.5)) * 0.5 + 0.5;
     float c2 = cos(p2.y * 2.5 + sin(p2.x * 2.1 - t * 0.5)) * 0.5 + 0.5;
     float c = c1 * c2;
@@ -345,10 +349,8 @@ void renderWater(bool isImpenetrable, bool isSea) {
     float t = u_time;
     vec2 wPos = WorldPos.xz;
     float viewDist = length(ViewPos);
-
     // Multi-scale wave field with distance filtering
     vec2 waveDisp = getWaterWaves(wPos, t, viewDist, isSea);
-
     // Compute seamless normal and tangent frame in world coordinates.
     // This guarantees that adjacent triangles forming flat water quads share the exact same
     // orientation and normal derivatives, completely eliminating visible triangle seams under specular light.
@@ -357,41 +359,27 @@ void renderWater(bool isImpenetrable, bool isSea) {
     vec3 worldFaceNormal = cross(dWdx, dWdy);
     float lenWN = length(worldFaceNormal);
     worldFaceNormal = lenWN > 1e-6 ? worldFaceNormal / lenWN : vec3(0.0, 1.0, 0.0);
-
     // Orientation check against view direction
     vec3 viewDir = normalize(-ViewPos);
     if (dot(mat3(u_view) * worldFaceNormal, viewDir) < 0.0) {
         worldFaceNormal = -worldFaceNormal;
     }
-
     // World tangent & bitangent: strictly aligned to global axes for planar surfaces
     vec3 worldTangent = abs(worldFaceNormal.y) > 0.8 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), worldFaceNormal));
     vec3 worldBitangent = normalize(cross(worldFaceNormal, worldTangent));
-
     float waveScale = isSea ? 0.20 : 0.12;
     vec3 worldWaveNormal = normalize(worldFaceNormal + worldTangent * (waveDisp.x * waveScale) + worldBitangent * (waveDisp.y * waveScale));
     vec3 waveNormal = normalize(mat3(u_view) * worldWaveNormal);
-
     vec3 V = viewDir;
-
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
-    // GTA V Glassy Fresnel: minimum base sheen (0.12) rising to brilliant reflection at grazing angles
+    // Glassy Fresnel: minimum base sheen (0.12) rising to brilliant reflection at grazing angles
     float fresnel = 0.12 + 0.88 * pow(1.0 - NdotV, 3.5);
-
     // Sunlight and reflection vectors
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
     vec3 R = reflect(-V, waveNormal);
-
-    // GTA V Environment reflection (Lush sky & ambient sheen)
-    vec3 envHorizon    = vec3(0.30, 0.52, 0.72);
-    vec3 envZenith     = vec3(0.12, 0.26, 0.48);
     vec3 envReflection = mix(envHorizon, envZenith, clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
-
-    // GTA V Water Colors (Lush Caribbean turquoise to deep sapphire blue)
-    vec3 waterColorShallow = vec3(0.05, 0.45, 0.62);
-    vec3 waterColorDeep    = vec3(0.015, 0.18, 0.32);
 
     vec3 finalWater;
 
@@ -410,7 +398,6 @@ void renderWater(bool isImpenetrable, bool isSea) {
 
         // Volumetric liquid body (50% water volume color, 50% filtered floor)
         vec3 waterBody = mix(bottomTinted, waterColorShallow, 0.50);
-
         // Blend with environment reflection via Fresnel
         finalWater = mix(waterBody, envReflection, fresnel * 0.65);
     } else {
@@ -444,7 +431,7 @@ void renderWater(bool isImpenetrable, bool isSea) {
             float causticFade = clamp(1.0 - depthDiff * 0.015, 0.0, 1.0);
             bottomTinted += bottomTinted * caustics * vec3(0.25, 0.50, 0.45) * causticFade;
 
-            // GTA V Water Volume: depth gradient from Caribbean turquoise to deep sapphire
+            // Water Volume: depth gradient from Caribbean turquoise to deep sapphire [CONFIG]
             float depthFactor = clamp(depthDiff * 0.018, 0.0, 1.0);
             vec3 waterVolumeColor = mix(waterColorShallow, waterColorDeep, depthFactor);
 
@@ -472,7 +459,7 @@ void renderWater(bool isImpenetrable, bool isSea) {
         }
     }
 
-    // Specular sunlight glints (GTA V Blinn-Phong sun path)
+    // Specular sunlight glints (Blinn-Phong sun path)
     float specBroad = pow(NdotH, 24.0) * 0.35;
     float specCore  = pow(NdotH, 128.0) * 1.50;
     vec3 sunSpecular = vec3(1.0, 0.98, 0.90) * (specBroad + specCore) * (0.35 + 0.65 * fresnel);

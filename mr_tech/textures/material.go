@@ -460,8 +460,10 @@ func (m *Material) updatePacked() {
 	if !m.isSolid {
 		isSolid = 0
 	}
-	amplitude := uint32(m.amplitude)
-	unk2 := uint32(0)
-	raw := uint32(m.kind) | (isSolid << 8) | (amplitude << 16) | (unk2 << 24)
+	amplitude := uint32(m.amplitude) & 0x7F
+	// Exponent bias di 127 (0x7F) nei bit 23..30 garantisce un float IEEE 754 normalizzato in [1.0, 2.0).
+	// Questo impedisce alla GPU di azzerare (Flush-To-Zero) il bitfield compattato come denormale/subnormale.
+	const exponentBias = uint32(127) << 23
+	raw := (uint32(m.kind) & 0xFF) | ((isSolid & 0xFF) << 8) | (amplitude << 16) | exponentBias
 	m.packed = math.Float32frombits(raw)
 }

@@ -19,7 +19,7 @@ out vec3 WorldPos;
 out vec4 FragPosLightRoom;
 out vec4 FragPosLightFlash;
 out float IsFullbright;
-out float Material;
+flat out float Material;
 out float SpecBoost;
 out float Shininess;
 out vec2 DetailParams;
@@ -98,7 +98,7 @@ void renderModel3D() {
 
 void renderLiquid() {
     uint packedMaterial = floatBitsToUint(aMaterial);
-    uint amplitude = (packedMaterial >> 16u) & 0xFFu;
+    uint amplitude = (packedMaterial >> 16u) & 0x7Fu;
     float amplitudeF = float(amplitude);
 
     vec4 worldPos = vec4(aPos, 1.0);

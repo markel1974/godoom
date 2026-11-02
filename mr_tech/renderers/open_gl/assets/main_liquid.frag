@@ -3,7 +3,7 @@
 in vec3 TexCoords;
 in vec3 ViewPos;
 in vec3 WorldPos;
-in float Material;
+flat in float Material;
 
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
@@ -192,7 +192,7 @@ void renderSlime(bool isSolid) {
     }
 
     uint packedMaterial = floatBitsToUint(Material);
-    float vertAmp = float((packedMaterial >> 16u) & 0xFFu);
+    float vertAmp = float((packedMaterial >> 16u) & 0x7Fu);
     float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
     float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
     vec2 totalSlope = distortion * 25.0 + vec2(vertSlopeX, vertSlopeZ);
@@ -287,7 +287,7 @@ void renderBlood(bool isSolid) {
     }
 
     uint packedMaterial = floatBitsToUint(Material);
-    float vertAmp = float((packedMaterial >> 16u) & 0xFFu);
+    float vertAmp = float((packedMaterial >> 16u) & 0x7Fu);
     float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
     float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
     vec2 totalSlope = distortion * 25.0 + vec2(vertSlopeX, vertSlopeZ);
@@ -446,7 +446,7 @@ void renderWater(bool isSolid, bool isSea) {
     // World tangent & bitangent: strictly aligned to global axes for planar surfaces
     // Analytic vertex wave slope matching main.vert displacement (eliminates triangle diagonal seams)
     uint packedMaterial = floatBitsToUint(Material);
-    float vertAmp = float((packedMaterial >> 16u) & 0xFFu);
+    float vertAmp = float((packedMaterial >> 16u) & 0x7Fu);
     float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
     float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
     vec2 totalSlope = waveDisp + vec2(vertSlopeX, vertSlopeZ);

@@ -68,7 +68,6 @@ float noise(vec2 p) {
 float fbm(vec2 p) {
     float value = 0.0;
     float amplitude = 0.5;
-
     value += noise(p) * amplitude;
     p *= 2.03;
     amplitude *= 0.5;
@@ -80,14 +79,11 @@ float fbm(vec2 p) {
 }
 
 vec3 refraction(float depthDiff, vec2 distortion, vec2 distortedUV) {
-    // -------------------------------------------------------------------------
     // MULTI-TAP OPTICAL DIFFUSION & CHROMATIC DISPERSION
     // Submerged elements become softer and less razor-sharp with increasing depth
-    // -------------------------------------------------------------------------
     float blurRadius = clamp(depthDiff * 0.00007, 0.0007, 0.0035);
     vec2 dispDir = length(distortion) > 1e-5 ? normalize(distortion) : vec2(0.707, 0.707);
     vec2 dispOffset = dispDir * (blurRadius * 0.85);
-
     // 5-tap kernel around distorted coordinate
     vec3 cCenter = texture(u_refractionTex, distortedUV).rgb;
     vec3 c1 = texture(u_refractionTex, distortedUV + vec2(blurRadius, blurRadius * 0.55)).rgb;
@@ -95,12 +91,10 @@ vec3 refraction(float depthDiff, vec2 distortion, vec2 distortedUV) {
     vec3 c3 = texture(u_refractionTex, distortedUV + vec2(-blurRadius * 0.55, blurRadius)).rgb;
     vec3 c4 = texture(u_refractionTex, distortedUV + vec2(blurRadius * 0.55, -blurRadius)).rgb;
     vec3 diffusedRefraction = cCenter * 0.36 + (c1 + c2 + c3 + c4) * 0.16;
-
     // Chromatic dispersion (splitting red and blue slightly along refraction wave gradient)
     float rCh = texture(u_refractionTex, distortedUV + dispOffset).r;
     float bCh = texture(u_refractionTex, distortedUV - dispOffset).b;
     vec3 refractionColor = vec3(rCh * 0.45 + diffusedRefraction.r * 0.55, diffusedRefraction.g, bCh * 0.45 + diffusedRefraction.b * 0.55);
-
     return refractionColor;
 }
 
@@ -300,7 +294,6 @@ void renderBlood() {
     BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 
-
 void renderSea() {
     // Diffuse texture from material
     vec3 texColor = getDiffuse(TexCoords).rgb;
@@ -379,7 +372,6 @@ void renderSea() {
     float brightness = dot(finalSea, vec3(0.2126, 0.7152, 0.0722));
     BrightColor = vec4(brightness > 1.3 ? finalSea * 0.5 : vec3(0.0), 1.0);
 }
-
 
 void renderWater() {
     // Diffuse texture from material

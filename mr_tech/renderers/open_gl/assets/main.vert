@@ -31,7 +31,7 @@ uniform mat4 u_flashSpaceMatrix;
 uniform float u_time;
 
 void renderUI() {
-    // HUD / SCREEN SPACE (2D PURO)
+    // HUD / SCREEN SPACE
     float aspect = 1.777;
     float scale = 0.005;
     float ndcX = (aPos.x * scale) / aspect;

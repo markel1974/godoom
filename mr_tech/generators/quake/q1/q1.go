@@ -143,7 +143,7 @@ func (q1 *BSPReader) GetExternalBModelFileName(classname string) string {
 
 // Build processes the BSP file's data, including faces, entities, lights, and models, and populates the provided Root structure.
 func (q1 *BSPReader) Build(root *config.Root) error {
-	const chunkSize = float64(2048)
+	const chunkSize = float64(384)
 	mIdx := 0
 	faces, rfErr := q1.GetRawFaces(mIdx)
 	if rfErr != nil {
@@ -356,7 +356,7 @@ func (q1 *BSPReader) Retrieve() (*config.Root, error) {
 	_ = common.NewPlayer(root.Player)
 	root.Player.GForce = GForce
 	root.Player.JumpForce = JumpForce
-	root.Player.Impulse = 0.13 //mod
+	root.Player.Impulse = 0.18 //mod
 
 	root.Player.Flash.ZFar = 8192
 	root.Player.Flash.Intensity = 0.02

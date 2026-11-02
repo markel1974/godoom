@@ -1,6 +1,7 @@
 package open_gl
 
 import (
+	"fmt"
 	"math"
 	"unsafe"
 
@@ -214,7 +215,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 	pushPass()
 
-	//fmt.Println("Added:", counter)
+	fmt.Println("Volumes:", volumes.Len(), counter, volumes.Len()-counter)
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.

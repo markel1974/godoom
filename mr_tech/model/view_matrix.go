@@ -136,7 +136,7 @@ func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {
 	dirX := pitchCos * vi.angleCos
 	dirY := pitchSin
 	dirZ := pitchCos * vi.angleSin
-	// Nota: potrei avere la necessita invertire il segno [Right-Handed o Left-Handed] di uno degli assi (es. -dirZ o -dirX)
+	// Nota: potrei avere la necessita di invertire il segno [Right-Handed o Left-Handed] di uno degli assi (es. -dirZ o -dirX)
 	// per allinearlo perfettamente con il Frustum.
 	return float32(dirX), float32(dirY), float32(dirZ)
 }

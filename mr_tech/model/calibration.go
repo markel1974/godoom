@@ -51,6 +51,13 @@ func (c *Calibration) Setup() error {
 	//}
 	root, ok := c.volumes.tree.GetRoot()
 	if !ok {
+		c.ZNearRoom = 0.1
+		if c.ZFarRoom <= c.ZNearRoom || math.IsNaN(c.ZFarRoom) || math.IsInf(c.ZFarRoom, 0) {
+			c.ZFarRoom = 8192.0
+		}
+		if c.PrjScale <= 0 || math.IsNaN(c.PrjScale) || math.IsInf(c.PrjScale, 0) {
+			c.PrjScale = 0.85
+		}
 		return nil
 	}
 	width := root.GetWidth()
@@ -61,21 +68,32 @@ func (c *Calibration) Setup() error {
 	} else {
 		c.OrthoSize = depth / 2.0
 	}
+	if math.IsNaN(c.OrthoSize) || math.IsInf(c.OrthoSize, 0) || c.OrthoSize <= 0 {
+		c.OrthoSize = 1024.0
+	}
 	c.MapCenterX = root.GetMinX() + (width / 2.0)
 	c.MapCenterZ = root.GetMinZ() + (depth / 2.0)
 	c.LightCamY = root.GetMaxY()
 	c.ZNearRoom = 0.1
 	// Diagonale 3D della mappa: massima distanza euclidea teorica visibile
-	c.ZFarRoom = math.Sqrt(width*width + h*h + depth*depth)
+	diag := math.Sqrt(width*width + h*h + depth*depth)
+	if math.IsNaN(diag) || math.IsInf(diag, 0) || diag <= c.ZNearRoom {
+		diag = 8192.0
+	}
+	c.ZFarRoom = diag
 
 	fovY := c.FovVerticalDegrees
-	if fovY <= 0 {
+	if fovY <= 0 || fovY >= 180 || math.IsNaN(fovY) || math.IsInf(fovY, 0) {
 		fovY = 90.0
 	}
 	fovYRad := (fovY * math.Pi) / 180.0
 	focal := 1.0 / math.Tan(fovYRad/2.0)
 	const guardBand = 0.85
-	c.PrjScale = focal * guardBand
+	prjScale := focal * guardBand
+	if math.IsNaN(prjScale) || math.IsInf(prjScale, 0) || prjScale <= 0 {
+		prjScale = 1.0 * guardBand
+	}
+	c.PrjScale = prjScale
 
 	return nil
 }

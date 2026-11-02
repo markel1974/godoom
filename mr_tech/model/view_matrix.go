@@ -1,8 +1,6 @@
 package model
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -110,23 +108,6 @@ func (vi *ViewMatrix) GetSway() (float64, float64, float64) {
 	return vi.swayX, vi.swayY, vi.swaySensitivity
 }
 
-func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {
-	// Calcoliamo il seno e coseno del pitch (inclinazione verticale)
-	pitchCos := math.Cos(vi.pitch)
-	pitchSin := math.Sin(vi.pitch)
-
-	// Conversione da coordinate sferiche a cartesiane 3D.
-	// Assumendo che Y sia l'asse verticale (Up) nel tuo shader:
-	dirX := pitchCos * vi.angleCos
-	dirY := pitchSin
-	dirZ := pitchCos * vi.angleSin
-
-	// Nota: a seconda se il tuo engine è Right-Handed o Left-Handed,
-	// potresti dover invertire il segno di uno degli assi (es. -dirZ o -dirX)
-	// per allinearlo perfettamente con il Frustum.
-	return float32(dirX), float32(dirY), float32(dirZ)
-}
-
 // GetFrustum computes and returns the front and rear frustums of the ViewMatrix based on the provided matrices.
 func (vi *ViewMatrix) GetFrustum(f [16]float32, r [16]float32) (*aabb.Frustum, *aabb.Frustum) {
 	return vi.GetFrontFrustum(f), vi.GetRearFrustum(r)
@@ -143,3 +124,20 @@ func (vi *ViewMatrix) GetRearFrustum(f [16]float32) *aabb.Frustum {
 	vi.rear.Rebuild(f)
 	return vi.rear
 }
+
+/*
+// GetForwardVector calculates and returns the forward direction vector of the ViewMatrix in 3D space as (x, y, z).
+func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {
+	// Calcoliamo il seno e coseno del pitch (inclinazione verticale)
+	pitchCos := math.Cos(vi.pitch)
+	pitchSin := math.Sin(vi.pitch)
+	// Conversione da coordinate sferiche a cartesiane 3D.
+	// Assumendo che Y sia l'asse verticale (Up) nello shader:
+	dirX := pitchCos * vi.angleCos
+	dirY := pitchSin
+	dirZ := pitchCos * vi.angleSin
+	// Nota: potrei avere la necessita invertire il segno [Right-Handed o Left-Handed] di uno degli assi (es. -dirZ o -dirX)
+	// per allinearlo perfettamente con il Frustum.
+	return float32(dirX), float32(dirY), float32(dirZ)
+}
+*/

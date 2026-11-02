@@ -28,6 +28,7 @@ func NewFrustum() *Frustum {
 	return v
 }
 
+// Setup configures the frustum's projection scaling factors and plane parameters based on the provided aspect ratio and depth values.
 func (f *Frustum) Setup(aspect, zFar, zNear float32, prjScaleX, prjScaleY float64) {
 	const kScale = float32(1.0)
 	f.scaleX = (kScale / aspect) * float32(prjScaleX)

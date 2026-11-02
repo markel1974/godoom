@@ -50,7 +50,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	// TODO: Implement ProcReader and MapReader
 
 	// Create dummy root to compile
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
 	cal.AspectRatio = 1.0
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
 	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, nil)

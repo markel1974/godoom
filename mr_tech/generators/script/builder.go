@@ -50,7 +50,7 @@ func (p *Builder) Build(res common.IResources, id string) (*config.Root, error) 
 	player := zp.Build()
 	_ = common.NewPlayer(player)
 
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
 	cal.AspectRatio = AspectRatio
 
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}

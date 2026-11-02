@@ -283,7 +283,7 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 // Retrieve constructs and returns a populated config.Root object based on BSPReader state or an error if the process fails.
 func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	texManager := q3.GetTextures()
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
 	//cal.Auto = false
 	//cal.OrthoSize = 32092
 	//cal.LightCamY = 8000

@@ -13,7 +13,6 @@ type Calibration struct {
 	BeamRatio          float64 `json:"beamRatio"`
 	VolSteps           float64 `json:"volSteps"`
 	AoFactor           float64 `json:"aoFactor"`
-	Auto               bool    `json:"auto"`
 }
 
 // NewConfigCalibration creates and returns a new Calibration instance with the specified parameters.
@@ -22,7 +21,7 @@ type Calibration struct {
 // lightCamY specifies the Y-coordinate for the light camera.
 // zNearRoom and zFarRoom determine near and far plane distances for the room.
 // auto defines whether to enable automatic calibration.
-func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoom, zFarRoom float64, auto bool) *Calibration {
+func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoom, zFarRoom float64) *Calibration {
 	c := &Calibration{
 		OrthoSize:  orthoSize,
 		MapCenterX: mapCenterX,
@@ -30,7 +29,6 @@ func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoo
 		LightCamY:  lightCamY,
 		ZNearRoom:  zNearRoom,
 		ZFarRoom:   zFarRoom,
-		Auto:       auto,
 	}
 	c.AspectRatio = 0.4
 	c.FovVerticalDegrees = 90

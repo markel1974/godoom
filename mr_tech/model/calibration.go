@@ -1,6 +1,10 @@
 package model
 
-import "github.com/markel1974/godoom/mr_tech/config"
+import (
+	"math"
+
+	"github.com/markel1974/godoom/mr_tech/config"
+)
 
 // Calibration contains parameters for configuring the camera and map projection in a 3D engine.
 type Calibration struct {
@@ -10,7 +14,6 @@ type Calibration struct {
 	LightCamY          float64
 	ZNearRoom          float64
 	ZFarRoom           float64
-	Auto               bool
 	AspectRatio        float64
 	FovVerticalDegrees float64
 	BeamRatio          float64
@@ -18,6 +21,7 @@ type Calibration struct {
 	AoFactor           float64
 	EnableShadowLights bool
 	EnableShadows      bool
+	PrjScale           float64
 	volumes            *Volumes
 }
 
@@ -30,7 +34,6 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		LightCamY:          cfg.LightCamY,
 		ZNearRoom:          cfg.ZNearRoom,
 		ZFarRoom:           cfg.ZFarRoom,
-		Auto:               cfg.Auto,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
 		BeamRatio:          cfg.BeamRatio,
@@ -43,16 +46,16 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 
 // Setup initializes the calibration's parameters based on the dimensions and position of the root volume if Auto is enabled.
 func (c *Calibration) Setup() error {
-	if !c.Auto {
-		return nil
-	}
+	//if !c.Auto {
+	//	return nil
+	//}
 	root, ok := c.volumes.tree.GetRoot()
 	if !ok {
 		return nil
 	}
 	width := root.GetWidth()
+	h := root.GetHeight()
 	depth := root.GetDepth()
-	// 2. OrthoSize è esattamente la metà dell'asse maggiore
 	if width > depth {
 		c.OrthoSize = width / 2.0
 	} else {
@@ -60,11 +63,19 @@ func (c *Calibration) Setup() error {
 	}
 	c.MapCenterX = root.GetMinX() + (width / 2.0)
 	c.MapCenterZ = root.GetMinZ() + (depth / 2.0)
-	// La telecamera si posiziona appena sopra il punto più alto della mappa
-	c.LightCamY = root.GetMaxY() //+ 2.0
-	// Distanze di proiezione relative dalla telecamera
-	c.ZNearRoom = 1.0
-	c.ZFarRoom = root.GetMaxY() - root.GetMinY()
+	c.LightCamY = root.GetMaxY()
+	c.ZNearRoom = 0.1
+	// Diagonale 3D della mappa: massima distanza euclidea teorica visibile
+	c.ZFarRoom = math.Sqrt(width*width + h*h + depth*depth)
+
+	fovY := c.FovVerticalDegrees
+	if fovY <= 0 {
+		fovY = 90.0
+	}
+	fovYRad := (fovY * math.Pi) / 180.0
+	focal := 1.0 / math.Tan(fovYRad/2.0)
+	const guardBand = 0.85
+	c.PrjScale = focal * guardBand
 
 	return nil
 }

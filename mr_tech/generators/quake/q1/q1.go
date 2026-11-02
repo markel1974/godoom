@@ -331,7 +331,7 @@ func (q1 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 // Retrieve creates and initializes a Root configuration object, processing BSP data and setting player and rendering properties.
 func (q1 *BSPReader) Retrieve() (*config.Root, error) {
 	texManager := q1.GetTextures()
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
 	//cal.Auto = false
 	//cal.OrthoSize = 32092
 	//cal.LightCamY = 8000

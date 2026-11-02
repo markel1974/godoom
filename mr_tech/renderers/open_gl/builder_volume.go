@@ -33,6 +33,8 @@ type BuilderVolume struct {
 	visibleVol       *VisibleVolumes
 	modes            []*DrawCommands
 	occlusion        *OcclusionHW
+	frustumFront     *metrics.Frustum
+	frustumRear      *metrics.Frustum
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -55,8 +57,16 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		visibleVol:       NewVisibleVols(8192),
 		modes:            make([]*DrawCommands, config.BlendModeLatest),
 		occlusion:        NewOcclusionHW(ctx, 4096),
+		frustumFront:     metrics.NewFrustum(),
+		frustumRear:      metrics.NewFrustum(),
 		//occBuffer:      NewOcclusionSW(640, 480),
 	}
+	prjScale := bv.cal.PrjScale
+	aspect := float32(bv.cal.AspectRatio)
+	zNear := float32(bv.cal.ZNearRoom)
+	zFar := float32(bv.cal.ZFarRoom)
+	bv.frustumFront.Setup(aspect, zFar, zNear, prjScale, prjScale)
+	bv.frustumRear.Setup(aspect, zFar, zNear, prjScale, prjScale)
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
 	bv.modes[bv.dcLiquid.GetBlendMode()] = bv.dcLiquid
@@ -95,17 +105,11 @@ func (w *BuilderVolume) GetSkyUV() (float64, float64) { return w.cSkyU, w.cSkyV 
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	px, py, pz := vi.GetView()
 	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()
+	rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll
+	w.frustumFront.Update(float32(px), float32(py), float32(pz), angle, pitch, roll)
+	w.frustumRear.Update(float32(px), float32(py), float32(pz), rAngle, rPitch, rRoll)
 
-	fovY := w.cal.FovVerticalDegrees
-	if fovY <= 0 {
-		fovY = 90.0
-	}
-	fovYRad := (fovY * math.Pi) / 180.0
-	focal := 1.0 / math.Tan(fovYRad/2.0)
-	const guardBand = 0.85
-	prjScale := focal * guardBand
-
-	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll, prjScale, prjScale)
+	fm, fr := w.frustumFront.Get(), w.frustumRear.Get()
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
 
 	// Ripristina VBO e Comandi allo stato congelato

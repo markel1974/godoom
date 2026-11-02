@@ -342,7 +342,7 @@ func (q2 *BSPReader) registerTexture(texName string) (int, int, error) {
 // Retrieve initializes and constructs the root configuration, player settings, textures, and game world from BSP data.
 func (q2 *BSPReader) Retrieve() (*config.Root, error) {
 	texManager := q2.GetTextures()
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0, true)
+	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
 	//cal.Auto = false
 	//cal.OrthoSize = 32092
 	//cal.LightCamY = 8000

@@ -299,8 +299,10 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				tex.SetIdentifier(tId)
 			}
 			material := float32(mat.GetKind())
-			if mat.GetKind() == int(config.MaterialKindLiquid) || mat.GetKind() == int(config.MaterialKindLiquidImpenetrable) {
+			if mat.GetKind() == int(config.MaterialKindLiquid) {
 				material = float32(mat.GetLiquidType())
+			} else if mat.GetKind() == int(config.MaterialKindLiquidImpenetrable) {
+				material = float32(mat.GetLiquidType()) + 10.0
 			}
 			spec := float32(mat.GetSpecularBoost())
 			shininess := float32(mat.GetShininess())

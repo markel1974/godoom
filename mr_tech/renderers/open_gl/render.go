@@ -238,10 +238,12 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 	}
 	// MAIN LIQUID (Refraction & Depth Fog)
 	if w.dcLiquid.HasCommands() {
+		// Ensure diffuse texture buckets 0..3 are bound before rendering liquid
+		w.tex.BindBuckets()
 		// Resolve MSAA color & depth buffers so liquid refracts the clean opaque background
 		// without feedback-loop darkening from previous frame's water.
 		w.post.ResolveMSAA(fbW, fbH)
-		w.liquid.Render(w.dcLiquid.Render, true)
+		w.liquid.Render(w.dcLiquid.Render)
 	}
 	// MAIN ADDITIVE
 	if w.dcAdditive.HasCommands() {

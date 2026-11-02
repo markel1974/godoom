@@ -1,9 +1,9 @@
 package shaders
 
 import (
+	"fmt"
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -31,7 +31,7 @@ const (
 	ShaderLiquidLocFar
 	ShaderLiquidLocTexture
 	ShaderLiquidLocLightDir
-	ShaderLiquidLocLiquidType
+	//ShaderLiquidLocLiquidType
 	ShaderLiquidLocLast
 )
 
@@ -41,29 +41,17 @@ type Liquid struct {
 	prg   uint32
 	table [ShaderLiquidLocLast]int32
 
-	handler    *Handler
-	main       *Main
-	post       *Post
-	metrics    *metrics.Map
-	liquidType config.LiquidType
+	handler *Handler
+	main    *Main
+	post    *Post
+	metrics *metrics.Map
 }
 
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
 func NewLiquid() *Liquid {
 	return &Liquid{
-		prg:        0,
-		liquidType: config.LiquidTypeWater,
+		prg: 0,
 	}
-}
-
-// SetLiquidType sets the active liquid rendering type (Water, Sea, Lava, Slime, Blood, Fog).
-func (s *Liquid) SetLiquidType(t config.LiquidType) {
-	s.liquidType = t
-}
-
-// GetLiquidType returns the currently set liquid type.
-func (s *Liquid) GetLiquidType() config.LiquidType {
-	return s.liquidType
 }
 
 // Setup initializes the Lights instance by assigning the rendering context from the provided Handler.
@@ -81,7 +69,16 @@ func (s *Liquid) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 
 	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
-	s.ctx.Uniform1iv(s.GetUniform(ShaderLiquidLocTexture), 4, &diffuseUnits[0])
+	if loc := s.GetUniform(ShaderLiquidLocTexture); loc != -1 {
+		s.ctx.Uniform1iv(loc, 4, &diffuseUnits[0])
+	}
+	for i := 0; i < 4; i++ {
+		loc := s.ctx.GetUniformLocation(s.prg, s.ctx.Str(fmt.Sprintf("u_texture[%d]\x00", i)))
+		if loc != -1 {
+			s.ctx.Uniform1i(loc, api.TexUnitDiffuseBase+int32(i))
+		}
+	}
+
 	locRefraction := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_refractionTex\x00"))
 	if locRefraction != -1 {
 		s.ctx.Uniform1i(locRefraction, api.TexUnitRefraction)
@@ -136,9 +133,13 @@ func (s *Liquid) Compile(a IAssets) error {
 	s.table[ShaderLiquidLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_resolution\x00"))
 	s.table[ShaderLiquidLocNear] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_near\x00"))
 	s.table[ShaderLiquidLocFar] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_far\x00"))
-	s.table[ShaderLiquidLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	locTex := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture[0]\x00"))
+	if locTex == -1 {
+		locTex = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	}
+	s.table[ShaderLiquidLocTexture] = locTex
 	s.table[ShaderLiquidLocLightDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_lightDir\x00"))
-	s.table[ShaderLiquidLocLiquidType] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_liquidType\x00"))
+	//s.table[ShaderLiquidLocLiquidType] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_liquidType\x00"))
 
 	return nil
 }
@@ -149,7 +150,7 @@ func (s *Liquid) Init() error {
 }
 
 // Render handles the rendering logic for the liquid, applying shaders, setting up textures, and drawing geometry based on parameters.
-func (s *Liquid) Render(renderGeometry func(), transparent bool) {
+func (s *Liquid) Render(renderGeometry func()) {
 	vao := s.main.GetVAO()
 	refractionTex := s.post.GetColorBuffer()
 	depthTex := s.post.GetDepthBuffer()
@@ -158,19 +159,14 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 	fbW, fbH := s.handler.GetSize()
 
 	s.ctx.UseProgram(s.prg)
+	_ = s.SetupSamplers()
 
 	//TODO from config
 	const liquidTimeScale = 0.02
 	interval := float32(textures.GlobalTick()) * liquidTimeScale
-	//TODO from config
-	if transparent {
-		s.ctx.Enable(api.BLEND)
-		s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
-		s.ctx.DepthMask(true)
-	} else {
-		s.ctx.Disable(api.BLEND)
-		s.ctx.DepthMask(true)
-	}
+
+	s.ctx.Disable(api.BLEND)
+	s.ctx.DepthMask(true)
 	s.ctx.Enable(api.DEPTH_TEST)
 	s.ctx.DepthFunc(api.LEQUAL)
 
@@ -180,7 +176,6 @@ func (s *Liquid) Render(renderGeometry func(), transparent bool) {
 	s.ctx.Uniform2f(s.GetUniform(ShaderLiquidLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), s.metrics.GetRoomZNear())
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocFar), s.metrics.GetRoomZFar())
-	s.ctx.Uniform1i(s.GetUniform(ShaderLiquidLocLiquidType), int32(s.liquidType))
 
 	if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
 		const (

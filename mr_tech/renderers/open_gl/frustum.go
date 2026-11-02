@@ -19,9 +19,9 @@ func CreateFrustum(aspect, zFarRoom, px, py, pz float32, yaw, pitch, roll float6
 	scaleY := kScale * float32(prjScaleY)
 	zNear := float32(0.1)
 	zFar := zFarRoom
-	if zFar <= zNear {
-		zFar = 10000.0
-	}
+	//if zFar <= zNear {
+	//	zFar = 10000.0
+	//}
 	proj := [16]float32{
 		scaleX, 0, 0, 0,
 		0, scaleY, 0, 0,

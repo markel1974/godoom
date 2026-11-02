@@ -1,6 +1,7 @@
 package open_gl
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -93,8 +94,16 @@ func (w *BuilderVolume) GetSkyUV() (float64, float64) { return w.cSkyU, w.cSkyV 
 // Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
 	px, py, pz := vi.GetView()
-	angle, pitch, roll := vi.GetAngle(), vi.GetPitch(), vi.GetRoll()
-	prjScale := 0.001
+	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()
+
+	fovY := w.cal.FovVerticalDegrees
+	if fovY <= 0 {
+		fovY = 90.0
+	}
+	fovYRad := (fovY * math.Pi) / 180.0
+	focal := 1.0 / math.Tan(fovYRad/2.0)
+	const guardBand = 0.85
+	prjScale := focal * guardBand
 
 	fm, fr := CreateFrontRearFrustum(float32(w.cal.AspectRatio), float32(w.cal.ZFarRoom), float32(px), float32(py), float32(pz), angle, pitch, roll, prjScale, prjScale)
 	frustumFront, frustumRear := vi.GetFrustum(fm, fr)

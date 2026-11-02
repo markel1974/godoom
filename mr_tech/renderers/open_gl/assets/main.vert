@@ -98,7 +98,7 @@ void renderModel3D() {
 
 void renderLiquid() {
     //TODO FROM VERTEX
-    const float amplitude = 3.0;
+    const float amplitude = 3;
     vec4 worldPos = vec4(aPos, 1.0);
     worldPos.y += sin(worldPos.x * 0.05 + u_time * 2.0) * amplitude;
     worldPos.y += cos(worldPos.z * 0.05 + u_time * 1.5) * amplitude;

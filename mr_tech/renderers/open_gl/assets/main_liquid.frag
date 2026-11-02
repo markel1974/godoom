@@ -311,24 +311,51 @@ void renderBlood(bool isImpenetrable) {
 vec2 getWaterWaves(vec2 pos, float t, float viewDist, bool isSea) {
     float distFade1 = clamp(1.0 - viewDist / 600.0, 0.0, 1.0);
     float distFade2 = clamp(1.0 - viewDist / 350.0, 0.0, 1.0);
-    // Wave 1: Primary rolling swell
-    vec2 d1 = vec2(0.707, 0.707);
-    float p1 = dot(d1, pos) * (isSea ? 0.010 : 0.018) + t * 1.1;
-    vec2 w1 = vec2(sin(p1), cos(p1));
-    // Wave 2: Angled cross swell
-    vec2 d2 = vec2(-0.6, 0.8);
-    float p2 = dot(d2, pos) * (isSea ? 0.018 : 0.030) - t * 1.25;
-    vec2 w2 = vec2(sin(p2), cos(p2));
-    // Wave 3: Medium wind chop (fades with distance to prevent moiré)
-    vec2 d3 = vec2(0.85, -0.52);
-    float p3 = dot(d3, pos) * (isSea ? 0.035 : 0.060) + t * 1.7;
-    vec2 w3 = vec2(sin(p3), cos(p3)) * distFade1;
-    // Wave 4: Capillary surface ripples (fades at distance)
-    vec2 d4 = vec2(-0.4, -0.9);
-    float p4 = dot(d4, pos) * (isSea ? 0.070 : 0.120) - t * 2.2;
-    vec2 w4 = vec2(sin(p4), cos(p4)) * distFade2;
-    vec2 combined = w1 * 0.45 + w2 * 0.35 + w3 * 0.15 + w4 * 0.08;
-    return combined;
+    float scale = isSea ? 1.6 : 1.0;
+
+    vec2 totalSlope = vec2(0.0);
+
+    // Wave 1: Primary rolling swell (direction ~ 22 deg)
+    vec2 d1 = vec2(0.927, 0.375);
+    float p1 = dot(d1, pos) * (0.075 / scale) - t * 1.1;
+    totalSlope += d1 * (0.042 * cos(p1));
+
+    // Wave 2: Counter rolling swell (direction ~ 112 deg)
+    vec2 d2 = vec2(-0.375, 0.927);
+    float p2 = dot(d2, pos) * (0.120 / scale) - t * 1.35;
+    totalSlope += d2 * (0.035 * cos(p2));
+
+    // Wave 3: Cross chop (direction ~ 213 deg)
+    vec2 d3 = vec2(-0.839, -0.545);
+    float p3 = dot(d3, pos) * (0.195 / scale) + t * 1.6;
+    totalSlope += d3 * (0.028 * cos(p3));
+
+    // Wave 4: Diagonal ripple (direction ~ 303 deg)
+    vec2 d4 = vec2(0.545, -0.839);
+    float p4 = dot(d4, pos) * (0.340 / scale) - t * 1.9;
+    totalSlope += d4 * (0.022 * cos(p4));
+
+    // Wave 5: Medium wind ripple (direction ~ 45 deg, fades with distance to prevent moiré)
+    vec2 d5 = vec2(0.707, 0.707);
+    float p5 = dot(d5, pos) * (0.580 / scale) + t * 2.3;
+    totalSlope += d5 * (0.018 * cos(p5) * distFade1);
+
+    // Wave 6: Medium chop (direction ~ 156 deg)
+    vec2 d6 = vec2(-0.914, 0.407);
+    float p6 = dot(d6, pos) * (0.920 / scale) - t * 2.8;
+    totalSlope += d6 * (0.014 * cos(p6) * distFade1);
+
+    // Wave 7: Capillary surface ripple (direction ~ 258 deg, fades at distance)
+    vec2 d7 = vec2(-0.208, -0.978);
+    float p7 = dot(d7, pos) * (1.650 / scale) + t * 3.4;
+    totalSlope += d7 * (0.010 * cos(p7) * distFade2);
+
+    // Wave 8: Micro capillary shimmer (direction ~ 340 deg)
+    vec2 d8 = vec2(0.940, -0.342);
+    float p8 = dot(d8, pos) * (2.850 / scale) - t * 4.1;
+    totalSlope += d8 * (0.007 * cos(p8) * distFade2);
+
+    return totalSlope * (isSea ? 1.4 : 1.0);
 }
 
 // procedural Dancing Sunlight Caustics
@@ -356,30 +383,57 @@ void renderWater(bool isImpenetrable, bool isSea) {
     // orientation and normal derivatives, completely eliminating visible triangle seams under specular light.
     vec3 dWdx = dFdx(WorldPos);
     vec3 dWdy = dFdy(WorldPos);
-    vec3 worldFaceNormal = cross(dWdx, dWdy);
-    float lenWN = length(worldFaceNormal);
-    worldFaceNormal = lenWN > 1e-6 ? worldFaceNormal / lenWN : vec3(0.0, 1.0, 0.0);
+    vec3 geomNormal = cross(dWdx, dWdy);
+    float lenGN = length(geomNormal);
+    geomNormal = lenGN > 1e-6 ? geomNormal / lenGN : vec3(0.0, 1.0, 0.0);
     // Orientation check against view direction
     vec3 viewDir = normalize(-ViewPos);
+    if (dot(mat3(u_view) * geomNormal, viewDir) < 0.0) {
+        geomNormal = -geomNormal;
+    }
+    // For horizontal liquid surfaces (standard water/pool/sea), use fixed up normal (0,1,0)
+    // combined with analytic vertex wave slope to guarantee 100% seamless triangles without facet creasing.
+    bool isHorizontal = abs(geomNormal.y) > 0.6;
+    vec3 worldFaceNormal = isHorizontal ? vec3(0.0, sign(geomNormal.y), 0.0) : geomNormal;
     if (dot(mat3(u_view) * worldFaceNormal, viewDir) < 0.0) {
         worldFaceNormal = -worldFaceNormal;
     }
+
     // World tangent & bitangent: strictly aligned to global axes for planar surfaces
-    vec3 worldTangent = abs(worldFaceNormal.y) > 0.8 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), worldFaceNormal));
+    vec3 worldTangent = isHorizontal ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), worldFaceNormal));
     vec3 worldBitangent = normalize(cross(worldFaceNormal, worldTangent));
-    float waveScale = isSea ? 0.20 : 0.12;
-    vec3 worldWaveNormal = normalize(worldFaceNormal + worldTangent * (waveDisp.x * waveScale) + worldBitangent * (waveDisp.y * waveScale));
+
+    // Analytic vertex wave slope matching main.vert displacement (eliminates triangle diagonal seams)
+    const float vertAmp = 2.5;
+    float vertSlopeX = isHorizontal ? (0.05 * cos(WorldPos.x * 0.05 + t * 2.0) * vertAmp) : 0.0;
+    float vertSlopeZ = isHorizontal ? (-0.05 * sin(WorldPos.z * 0.05 + t * 1.5) * vertAmp) : 0.0;
+    vec2 totalSlope = waveDisp + vec2(vertSlopeX, vertSlopeZ);
+
+    vec3 worldWaveNormal = normalize(worldFaceNormal - worldTangent * totalSlope.x - worldBitangent * totalSlope.y);
     vec3 waveNormal = normalize(mat3(u_view) * worldWaveNormal);
     vec3 V = viewDir;
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
-    // Glassy Fresnel: minimum base sheen (0.12) rising to brilliant reflection at grazing angles
-    float fresnel = 0.12 + 0.88 * pow(1.0 - NdotV, 3.5);
+    // Glassy Fresnel: minimum base sheen (0.02 for water) rising to brilliant reflection at grazing angles
+    float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
     // Sunlight and reflection vectors
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
     vec3 H = normalize(L + V);
     float NdotH = max(dot(waveNormal, H), 0.0);
     vec3 R = reflect(-V, waveNormal);
-    vec3 envReflection = mix(envHorizon, envZenith, clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
+
+    // Water Colors: lush aquatic tones blended with material texture if valid
+    vec3 shallowColor = waterColorShallow;
+    vec3 deepColor    = waterColorDeep;
+    if (length(texColor) > 0.15) {
+        // If texture has noticeable tint, incorporate it harmoniously
+        shallowColor = mix(waterColorShallow, texColor * 1.25, 0.35);
+        deepColor    = mix(waterColorDeep, texColor * 0.50, 0.40);
+    }
+
+    // Environment reflection (ambient sheen and sky gradient)
+    vec3 ambientReflection = mix(vec3(0.20, 0.28, 0.32), shallowColor * 0.85, 0.40);
+    vec3 skyReflection     = mix(envHorizon, envZenith, clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
+    vec3 envReflection     = mix(ambientReflection, skyReflection, 0.65);
 
     vec3 finalWater;
 
@@ -390,19 +444,19 @@ void renderWater(bool isImpenetrable, bool isSea) {
         vec3 bedBase = (length(bedTex) > 0.03) ? bedTex : vec3(0.12, 0.25, 0.32);
 
         // Color filter on floor texture to give it a natural underwater appearance
-        vec3 bottomTinted = bedBase * vec3(0.18, 0.68, 0.88);
+        vec3 bottomTinted = bedBase * vec3(0.25, 0.75, 0.90);
 
         // Dancing caustics on the pool bed
-        float caustics = dancingSunlightCaustics(wPos + waveDisp * 12.0, t);
-        bottomTinted += bottomTinted * caustics * vec3(0.25, 0.50, 0.45);
+        float caustics = dancingSunlightCaustics(wPos, t);
+        bottomTinted += bottomTinted * caustics * 0.25;
 
         // Volumetric liquid body (50% water volume color, 50% filtered floor)
-        vec3 waterBody = mix(bottomTinted, waterColorShallow, 0.50);
+        vec3 waterBody = mix(bottomTinted, shallowColor, 0.45);
         // Blend with environment reflection via Fresnel
-        finalWater = mix(waterBody, envReflection, fresnel * 0.65);
+        finalWater = mix(waterBody, envReflection, fresnel * 0.70 + 0.04);
     } else {
         // --- Penetrable / Swimmable Water (Quake swimmable volumes) ---
-        vec2 distortion = waveDisp * (isSea ? 0.0028 : 0.0016);
+        vec2 distortion = waveNormal.xy * (isSea ? 0.0035 : 0.0020);
         vec2 distortedUV = clamp(screenUV + distortion, 0.001, 0.999);
 
         // Sample depth at distorted UV
@@ -423,46 +477,47 @@ void renderWater(bool isImpenetrable, bool isSea) {
             float depthDiff = max(sampleDepth - waterDepth, 0.0);
             vec3 refractionColor = refraction(depthDiff, distortion, distortedUV);
 
-            // Water optical filter: transforms raw green floor into deep aquatic teal/blue
-            vec3 bottomTinted = refractionColor * vec3(0.18, 0.68, 0.88);
+            // Water optical filter: transforms raw floor into rich aquatic tone
+            float depthFactor = clamp(depthDiff * 0.020, 0.0, 1.0);
+            vec3 bottomTinted = refractionColor * mix(vec3(0.35, 0.80, 0.92), vec3(0.12, 0.50, 0.70), depthFactor);
 
             // Underwater dancing caustics on submerged surfaces
-            float caustics = dancingSunlightCaustics(wPos + waveDisp * 14.0, t);
+            float caustics = dancingSunlightCaustics(wPos, t);
             float causticFade = clamp(1.0 - depthDiff * 0.015, 0.0, 1.0);
-            bottomTinted += bottomTinted * caustics * vec3(0.25, 0.50, 0.45) * causticFade;
+            bottomTinted += bottomTinted * caustics * 0.25 * causticFade;
 
-            // Water Volume: depth gradient from Caribbean turquoise to deep sapphire [CONFIG]
-            float depthFactor = clamp(depthDiff * 0.018, 0.0, 1.0);
-            vec3 waterVolumeColor = mix(waterColorShallow, waterColorDeep, depthFactor);
+            // Optical depth extinction: light is absorbed exponentially (Beer-Lambert law)
+            // Shallow water is transparent; deeper water smoothly obscures the bottom
+            float turbidity = 1.0 - exp(-depthDiff * 0.022);
+            vec3 waterVolumeColor = mix(shallowColor, deepColor, depthFactor);
 
-            // Water density: 45% in shallow water rising to 85% in deep water
-            float waterDensity = mix(0.45, 0.85, depthFactor);
-            vec3 waterBody = mix(bottomTinted, waterVolumeColor, waterDensity);
+            // Submerged scene: blend from clear refracted bottom into atmospheric liquid volume
+            vec3 waterBody = mix(bottomTinted, waterVolumeColor, turbidity);
 
             // Subsurface Scattering light glow through waves facing sun
             float sssSun = pow(clamp(dot(V, -L), 0.0, 1.0), 3.0);
-            waterBody += vec3(0.05, 0.35, 0.32) * (sssSun * 0.20);
+            waterBody += shallowColor * (sssSun * 0.30);
 
             // Shoreline / Contact soft edge foam
-            float shoreFoam = clamp(1.0 - depthDiff / 5.0, 0.0, 1.0);
-            shoreFoam = pow(shoreFoam, 2.0) * (0.45 + 0.45 * sin(t * 3.0 + wPos.x * 0.15));
+            float shoreFoam = clamp(1.0 - depthDiff / 6.0, 0.0, 1.0);
+            shoreFoam = pow(shoreFoam, 2.0) * (0.45 + 0.45 * sin(t * 3.0 + (wPos.x + wPos.y) * 0.15));
 
             // Surface reflection blend via Fresnel (gives glassy liquid presence)
-            finalWater = mix(waterBody, envReflection, fresnel * 0.65);
+            finalWater = mix(waterBody, envReflection, fresnel * 0.75 + 0.04);
 
             // Apply soft shoreline foam
             finalWater = mix(finalWater, vec3(0.92, 0.96, 1.0), shoreFoam * 0.35);
         } else {
             // Surface fallback
-            vec3 inscatterColor = mix(waterColorShallow, waterColorDeep, 0.5);
-            finalWater = mix(inscatterColor, envReflection, fresnel * 0.65);
+            vec3 inscatterColor = mix(shallowColor, deepColor, 0.5);
+            finalWater = mix(inscatterColor, envReflection, fresnel * 0.75 + 0.04);
         }
     }
 
     // Specular sunlight glints (Blinn-Phong sun path)
-    float specBroad = pow(NdotH, 24.0) * 0.35;
-    float specCore  = pow(NdotH, 128.0) * 1.50;
-    vec3 sunSpecular = vec3(1.0, 0.98, 0.90) * (specBroad + specCore) * (0.35 + 0.65 * fresnel);
+    float specBroad = pow(NdotH, 32.0) * 0.30;
+    float specCore  = pow(NdotH, 160.0) * 1.80;
+    vec3 sunSpecular = vec3(1.0, 0.98, 0.92) * (specBroad + specCore) * (0.25 + 0.75 * fresnel);
     finalWater += sunSpecular;
 
     FragColor = vec4(finalWater, 1.0);

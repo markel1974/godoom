@@ -4,6 +4,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
+// TODO MaterialKind deve contenere tutti i tipi anche WaterImpenetrable, Water, SeaImpenetrable, Sea, Blood, BloodImpenetrable
+
 type MaterialKind int
 
 const (

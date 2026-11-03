@@ -102,14 +102,44 @@ func (e *MapEntity) GetLightRadius() float64 {
 // GetAngle parses and returns the yaw angle from the "angle" property.
 func (e *MapEntity) GetAngle() float64 {
 	val, ok := e.GetProperty("angle")
-	if !ok {
-		return 0.0
+	if ok {
+		if a, err := strconv.ParseFloat(val, 64); err == nil {
+			return a
+		}
 	}
-	a, err := strconv.ParseFloat(val, 64)
-	if err != nil {
-		return 0.0
+
+	// In Doom 3, entities often use a 3x3 rotation matrix "m00 m01 m02 m10 m11 m12 m20 m21 m22"
+	if rot, ok := e.GetProperty("rotation"); ok {
+		parts := strings.Fields(rot)
+		if len(parts) >= 4 {
+			m00, err1 := strconv.ParseFloat(parts[0], 64)
+			m10, err2 := strconv.ParseFloat(parts[3], 64)
+			if err1 == nil && err2 == nil {
+				rad := math.Atan2(m10, m00)
+				deg := rad * 180.0 / math.Pi
+				if deg < 0 {
+					deg += 360.0
+				}
+				return deg
+			}
+		}
 	}
-	return a
+
+	return 0.0
+}
+
+// IsDormant checks if the entity is dormant, hidden, or waiting for a trigger/teleport spawn event in Doom 3.
+func (e *MapEntity) IsDormant() bool {
+	if val, ok := e.GetProperty("teleport"); ok && val != "" && val != "0" {
+		return true
+	}
+	if val, ok := e.GetProperty("hide"); ok && (val == "1" || val == "2" || strings.ToLower(val) == "true") {
+		return true
+	}
+	if val, ok := e.GetProperty("trigger"); ok && (val == "1" || strings.ToLower(val) == "true") {
+		return true
+	}
+	return false
 }
 
 // GetLightKind determines whether the light entity is a spotlight, ambient, or diffuse point light.

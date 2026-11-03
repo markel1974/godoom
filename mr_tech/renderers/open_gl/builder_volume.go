@@ -249,6 +249,10 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		faces := *pFaces
 		nextFaces := *pNextFaces
 
+		var currentMat *textures.Material
+		var currentTargetDc *DrawCommands
+		batchStart := w.fv.GetIndicesLen()
+
 		for fx := 0; fx < faceCount; fx++ {
 			face := faces[fx]
 			mat := face.GetMaterial()
@@ -264,6 +268,17 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				tId, _ = w.tex.Get(tex)
 				tex.SetIdentifier(tId)
 			}
+
+			if mat != currentMat {
+				currentIndices := w.fv.GetIndicesLen()
+				if currentIndices > batchStart && currentTargetDc != nil {
+					currentTargetDc.Compute(batchStart, currentIndices, currentMat)
+				}
+				batchStart = currentIndices
+				currentMat = mat
+				currentTargetDc = w.modes[mat.GetBlendMode()]
+			}
+
 			material := mat.GetPacked()
 			spec := float32(mat.GetSpecularBoost())
 			shininess := float32(mat.GetShininess())
@@ -280,19 +295,15 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			np1X, np1Y, np1Z := nf.GetPoint1()
 			np2X, np2Y, np2Z := nf.GetPoint2()
 
-			startIndices := w.fv.GetIndicesLen()
 			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
 			id1 := w.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, float32(renderMode), float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
 			id2 := w.fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, float32(renderMode), float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
 			w.fv.AddTriangle(id0, id1, id2)
+		}
 
-			currentIndices := w.fv.GetIndicesLen()
-			if startIndices != currentIndices {
-				blendMode := mat.GetBlendMode()
-				targetDc := w.modes[blendMode]
-				targetDc.Compute(startIndices, currentIndices, mat)
-				startIndices = currentIndices
-			}
+		currentIndices := w.fv.GetIndicesLen()
+		if currentIndices > batchStart && currentTargetDc != nil {
+			currentTargetDc.Compute(batchStart, currentIndices, currentMat)
 		}
 	}
 

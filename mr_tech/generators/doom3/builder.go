@@ -112,10 +112,12 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 
 	playerPos := geometry.XYZ{X: 0, Y: 0, Z: 64}
 	playerAngle := 0.0
+	monsters := 0
 
 	// Parse corresponding .map file to extract player start and dynamic lights
 	mapName := strings.TrimSuffix(maps[levelIndex], ".proc")
 	mapPath := "maps" + proc.Pak4Separator + mapName + ".map"
+	thingsManager := NewThings(arc, materials, texManager, imgLoader)
 	if mf, err := arc.Open(mapPath); err == nil {
 		if mapData, err := io.ReadAll(mf); err == nil {
 			mapParser := NewMapParser(mapData)
@@ -150,12 +152,28 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 					case "trigger": //IMPLEMENT
 					case "speaker": //IMPLEMENT
 					case "item": //IMPLEMENT
+						if thing, err := thingsManager.Create(ent); err == nil {
+							root.Things = append(root.Things, thing)
+						}
 					case "path": //IMPLEMENT
 					case "admin": //IMPLEMENT
 					case "monster": //IMPLEMENT
+						if thing, err := thingsManager.Create(ent); err == nil {
+							monsters++
+							root.Things = append(root.Things, thing)
+						}
 					case "ammo": //IMPLEMENT
+						if thing, err := thingsManager.Create(ent); err == nil {
+							root.Things = append(root.Things, thing)
+						}
 					case "weapon": //IMPLEMENT
+						if thing, err := thingsManager.Create(ent); err == nil {
+							root.Things = append(root.Things, thing)
+						}
 					case "moveable": //IMPLEMENT
+						if thing, err := thingsManager.Create(ent); err == nil {
+							root.Things = append(root.Things, thing)
+						}
 					case "target": //IMPLEMENT
 					case "ai": //IMPLEMENT
 					case "env": //IMPLEMENT
@@ -167,6 +185,8 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 			}
 		}
 	}
+
+	fmt.Printf("MONSTERS: %d\n", monsters)
 
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 50)
 	_ = common.NewPlayer(root.Player)

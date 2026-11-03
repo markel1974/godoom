@@ -8,8 +8,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
-	"github.com/markel1974/godoom/mr_tech/generators/doom3/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
+	md6 "github.com/markel1974/godoom/mr_tech/generators/doom3/proc/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
@@ -51,23 +51,23 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	}
 	//defer mf.Close()
 
-	mesh := md5.NewMesh()
+	mesh := md6.NewMesh()
 	if err := mesh.Parse(mf); err != nil {
 		return nil, fmt.Errorf("parsing md5mesh %s: %w", cleanPath, err)
 	}
 
-	var headMesh *md5.Mesh
+	var headMesh *md6.Mesh
 	if len(spec.HeadMesh) > 0 {
 		cHeadPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.HeadMesh, "\\", "/")))
 		if hf, err := t.arc.Open(cHeadPath); err == nil {
-			parsedHead := md5.NewMesh()
+			parsedHead := md6.NewMesh()
 			if err := parsedHead.Parse(hf); err == nil {
 				headMesh = parsedHead
 			}
 		}
 	}
 
-	anims := make(map[string]*md5.Anim)
+	anims := make(map[string]*md6.Anim)
 	loadAnim := func(actionKey, animPath string) {
 		if len(animPath) == 0 {
 			return
@@ -75,7 +75,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 		cAnimPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(animPath, "\\", "/")))
 		if af, err := t.arc.Open(cAnimPath); err == nil {
 			//defer af.Close()
-			anim := md5.NewAnim()
+			anim := md6.NewAnim()
 			if err := anim.Parse(af); err == nil {
 				anims[actionKey] = anim
 			}
@@ -121,7 +121,7 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 
 	var cModel *config.Model3DEntry
 	if strings.HasSuffix(cleanPath, ".md5mesh") {
-		mesh := md5.NewMesh()
+		mesh := md6.NewMesh()
 		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
@@ -263,7 +263,7 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 }
 
 // BakeMD5Model evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
-func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim, materials *Materials) (*config.Model3DEntry, error) {
+func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName string, anims map[string]*md6.Anim, materials *Materials) (*config.Model3DEntry, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 {
 		return nil, fmt.Errorf("empty md5 mesh")
 	}
@@ -281,10 +281,10 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	}
 
 	// Prepare head submesh materials and attachment if present
-	var headAttachment *md5.HeadAttachment
+	var headAttachment *md6.HeadAttachment
 	var headMaterials []*config.Material
 	if headMesh != nil && len(headMesh.SubMeshes) > 0 {
-		headAttachment = md5.NewHeadAttachment(mesh, headMesh, headJointName)
+		headAttachment = md6.NewHeadAttachment(mesh, headMesh, headJointName)
 		headMaterials = make([]*config.Material, len(headMesh.SubMeshes))
 		for sIdx, sub := range headMesh.SubMeshes {
 			var mat *config.Material
@@ -302,7 +302,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	var actionNames []string
 	var actionIntervals [][2]int
 
-	bakeFrameWithSkel := func(skel []md5.Joint) config.Model3DEntryFrame {
+	bakeFrameWithSkel := func(skel []md6.Joint) config.Model3DEntryFrame {
 		var frameTriangles []config.Model3DEntryTriangle
 		// Bake body submeshes
 		for sIdx, sub := range mesh.SubMeshes {
@@ -314,7 +314,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 					weight := sub.Weights[vert.WeightIdx+w]
 					joint := skel[weight.Joint]
 
-					rotated := md5.QuatRotate(joint.Orient, weight.Pos)
+					rotated := md6.QuatRotate(joint.Orient, weight.Pos)
 					p.X += (joint.Pos.X + rotated.X) * weight.Bias
 					p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
 					p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
@@ -347,7 +347,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 					for w := 0; w < vert.WeightSpan; w++ {
 						weight := sub.Weights[vert.WeightIdx+w]
 						joint := headSkel[weight.Joint]
-						rotated := md5.QuatRotate(joint.Orient, weight.Pos)
+						rotated := md6.QuatRotate(joint.Orient, weight.Pos)
 						p.X += (joint.Pos.X + rotated.X) * weight.Bias
 						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
 						p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias

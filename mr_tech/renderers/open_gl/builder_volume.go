@@ -330,8 +330,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }
 
-// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
-// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
+/*
 func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare()
@@ -384,6 +383,60 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 		return false
 	}
 	ls.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
+	//_, _, dynamicCount := w.fl.GetLights()
+	//_, shadowCount := w.fl.GetShadowLights()
+	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
+}
+*/
+
+// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
+// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
+func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
+	//TODO IMPLEMENTAZIONE CON FRUSTU
+	w.fl.DeepReset()
+	w.fl.Prepare()
+	counter := 0
+
+	for _, light := range ls.Get() {
+		if light.GetKind() == config.LightKindNone {
+			continue
+		}
+		posX, posY, posZ := light.GetPosXYZ()
+		dx := posX - pX
+		dy := posY - pY
+		dz := posZ - pZ
+		distSq := dx*dx + dy*dy + dz*dz
+
+		/*
+			// Raggio di influenza effettivo reale (stessa formula di decadimento dello shader GLSL)
+			falloff := light.GetFalloff()
+			effectiveRadius := light.GetRadius()
+			if r := 4.605 * falloff * intensity; r > effectiveRadius {
+				effectiveRadius = r
+			}
+			if effectiveRadius < 100.0 {
+				effectiveRadius = 100.0
+			}
+
+			b := light.GetAABB()
+			isFront := b.IntersectFrustum(frustumFront)
+
+			// Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
+			// la luce illumina l'ambiente circostante il giocatore.
+			// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
+			nearRadius := effectiveRadius + 250.0
+			if distSq > nearRadius*nearRadius {
+				// Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
+				if !isFront {
+					continue
+				}
+			}
+		*/
+		b := light.GetAABB()
+		isFront := b.IntersectFrustum(frustumFront)
+		w.fl.Create(light, distSq, isFront)
+		counter++
+	}
 	//_, _, dynamicCount := w.fl.GetLights()
 	//_, shadowCount := w.fl.GetShadowLights()
 	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)

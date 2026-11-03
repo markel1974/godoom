@@ -233,9 +233,9 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 				skyTexId, _ = w.tex.Get(skyTex)
 				skyTex.SetIdentifier(skyTexId)
 			}
-			u, v := skyMat.GetU(), skyMat.GetV()
+			u, v := float32(skyMat.GetU()), float32(skyMat.GetV())
 			tick := float32(textures.TickF())
-			w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
+			w.sky.Render(skyTexId, u*tick, v*tick)
 		}
 	}
 	// MAIN LIQUID (Refraction & Depth Fog)

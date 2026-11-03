@@ -7,7 +7,7 @@ import (
 )
 
 // flashFactorIncrement defines the incremental value used to adjust the flashlight's intensity factor.
-const flashFactorIncrement = 0.001
+const flashFactorIncrement = 0.0001
 
 // degreesToRadians converts an angle in degrees to its equivalent in radians.
 func degreesToRadians(degrees float64) float64 {

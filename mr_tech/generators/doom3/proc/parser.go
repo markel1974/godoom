@@ -24,12 +24,12 @@ func (p *Parser) Parse() (*File, error) {
 	proc := NewProcFile()
 
 	for {
-		tok, err := p.lexer.NextToken()
-		if err != nil {
-			if err == io.EOF {
+		tok, tErr := p.lexer.NextToken()
+		if tErr != nil {
+			if tErr == io.EOF {
 				break
 			}
-			return nil, err
+			return nil, tErr
 		}
 
 		switch tok {
@@ -120,9 +120,15 @@ func (p *Parser) parseSurface() (*Surface, error) {
 		return nil, fmt.Errorf("failed to read numVerts: %w", err)
 	}
 
+	numIndexes, err := p.lexer.ReadInt()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read numIndexes: %w", err)
+	}
+
 	surface := &Surface{
 		Material: material,
 		Vertices: make([]Vertex, numVerts),
+		Indices:  make([]int, numIndexes),
 	}
 
 	for v := 0; v < numVerts; v++ {
@@ -133,12 +139,6 @@ func (p *Parser) parseSurface() (*Surface, error) {
 		surface.Vertices[v] = vert
 	}
 
-	numIndexes, err := p.lexer.ReadInt()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read numIndexes: %w", err)
-	}
-
-	surface.Indices = make([]int, numIndexes)
 	for i := 0; i < numIndexes; i++ {
 		idx, err := p.lexer.ReadInt()
 		if err != nil {
@@ -159,7 +159,7 @@ func (p *Parser) parseSurface() (*Surface, error) {
 func (p *Parser) parseVertex() (Vertex, error) {
 	var vert Vertex
 
-	// 1. Position: ( x y z )
+	// Doom 3 vertex format: ( x y z u v nx ny nz )
 	if err := p.lexer.Expect("("); err != nil {
 		return vert, err
 	}
@@ -175,46 +175,40 @@ func (p *Parser) parseVertex() (Vertex, error) {
 	if err != nil {
 		return vert, err
 	}
-	if err := p.lexer.Expect(")"); err != nil {
+	u, err := p.lexer.ReadFloat()
+	if err != nil {
 		return vert, err
 	}
+	v, err := p.lexer.ReadFloat()
+	if err != nil {
+		return vert, err
+	}
+	nx, err := p.lexer.ReadFloat()
+	if err != nil {
+		return vert, err
+	}
+	ny, err := p.lexer.ReadFloat()
+	if err != nil {
+		return vert, err
+	}
+	nz, err := p.lexer.ReadFloat()
+	if err != nil {
+		return vert, err
+	}
+
 	vert.Pos = geometry.XYZ{X: x, Y: y, Z: z}
+	vert.U = u
+	vert.V = v
+	vert.Normal = geometry.XYZ{X: nx, Y: ny, Z: nz}
 
-	// 2. Texture coordinates: s t
-	s, err := p.lexer.ReadFloat()
-	if err != nil {
-		return vert, err
-	}
-	t, err := p.lexer.ReadFloat()
-	if err != nil {
-		return vert, err
-	}
-	vert.U = s
-	vert.V = t
-
-	// 3. Normal vector: ( nx ny nz )
-	peek, err := p.lexer.PeekToken()
-	if err == nil && peek == "(" {
-		_ = p.lexer.Expect("(")
-		nx, _ := p.lexer.ReadFloat()
-		ny, _ := p.lexer.ReadFloat()
-		nz, _ := p.lexer.ReadFloat()
-		_ = p.lexer.Expect(")")
-		vert.Normal = geometry.XYZ{X: nx, Y: ny, Z: nz}
-	}
-
-	// 4. Optional Tangent / Bitangent vectors: ( tx ty tz ) ( bx by bz )
+	// Consume any optional extra attributes until matching closing ")"
 	for {
-		peek, err := p.lexer.PeekToken()
-		if err != nil || peek != "(" {
-			break
+		tok, err := p.lexer.NextToken()
+		if err != nil {
+			return vert, err
 		}
-		_ = p.lexer.Expect("(")
-		for {
-			t, err := p.lexer.NextToken()
-			if err != nil || t == ")" {
-				break
-			}
+		if tok == ")" {
+			break
 		}
 	}
 
@@ -226,14 +220,14 @@ func (p *Parser) parseInterAreaPortals() ([]*Portal, error) {
 		return nil, err
 	}
 
-	_, err := p.lexer.ReadInt() // numAreas
-	if err != nil {
+	// numAreas
+	if _, err := p.lexer.ReadInt(); err != nil {
 		return nil, err
 	}
 
-	numPortals, err := p.lexer.ReadInt()
-	if err != nil {
-		return nil, err
+	numPortals, npErr := p.lexer.ReadInt()
+	if npErr != nil {
+		return nil, npErr
 	}
 
 	portals := make([]*Portal, 0, numPortals)

@@ -81,6 +81,13 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 			continue
 		}
 		for _, surface := range model.Surfaces {
+			texNameLC := strings.ToLower(surface.Material)
+			if strings.HasPrefix(texNameLC, "textures/decals/") || strings.HasSuffix(texNameLC, "_shadow") {
+				continue
+			}
+			if def := materials.Resolve(surface.Material); def != nil && def.IsDecal {
+				continue
+			}
 			imgLoader.LoadMaterialMaps(surface.Material)
 		}
 	}
@@ -127,8 +134,8 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 					case "light":
 						if origin, err := ent.GetOrigin(); err == nil {
 							r, g, b := ent.GetColor()
-							radius := ent.GetLightRadius() * 2
-							light := config.NewConfigLight(origin, 1.0, config.LightKindDiffuse, radius)
+							radius := ent.GetLightRadius()
+							light := config.NewConfigLight(origin, 1.0, config.LightKindAmbient, radius)
 							light.R = r
 							light.G = g
 							light.B = b

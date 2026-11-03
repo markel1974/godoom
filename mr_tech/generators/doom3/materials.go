@@ -1,7 +1,6 @@
 package doom3
 
 import (
-	"fmt"
 	"io"
 	"strings"
 
@@ -35,13 +34,17 @@ type MaterialDef struct {
 	NormalMap   string
 	SpecularMap string
 	Kind        config.MaterialKind
+	IsDecal     bool
 }
 
 // NewMaterialDef creates and initializes a new MaterialDef instance based on the provided material name.
 func NewMaterialDef(matName string) *MaterialDef {
+	nameLower := strings.ToLower(matName)
+	isDecal := strings.HasPrefix(nameLower, "textures/decals/") || strings.HasSuffix(nameLower, "_shadow")
 	mat := &MaterialDef{
-		Name: matName,
-		Kind: ToMaterial(matName),
+		Name:    matName,
+		Kind:    ToMaterial(matName),
+		IsDecal: isDecal,
 	}
 	return mat
 }
@@ -76,6 +79,45 @@ func (m *Materials) LoadFromArchive(arc IPkArchive) error {
 	return nil
 }
 
+// parseMtrPath parses a texture path from material tokens, unwrapping functions like addnormals or heightmap.
+func parseMtrPath(lexer *proc.Lexer) string {
+	tok, err := lexer.NextToken()
+	if err != nil {
+		return ""
+	}
+	tokLower := strings.ToLower(proc.StripQuotes(tok))
+
+	if idx := strings.Index(tokLower, "("); idx != -1 {
+		tokLower = tokLower[idx+1:]
+		if endIdx := strings.IndexAny(tokLower, ",)"); endIdx != -1 {
+			tokLower = tokLower[:endIdx]
+		}
+		clean := strings.Trim(tokLower, ",()")
+		if strings.Contains(clean, "/") {
+			return clean
+		}
+	}
+
+	if tokLower == "addnormals" || tokLower == "heightmap" || tokLower == "makealpha" || tokLower == "(" {
+		for {
+			sub, err := lexer.NextToken()
+			if err != nil || sub == "}" || sub == "{" {
+				return ""
+			}
+			clean := strings.Trim(strings.ToLower(proc.StripQuotes(sub)), ",()")
+			if strings.Contains(clean, "/") {
+				return clean
+			}
+		}
+	}
+
+	clean := strings.Trim(tokLower, ",()")
+	if clean == "_white" || clean == "_black" || clean == "_default" || clean == "_currentrender" || strings.HasPrefix(clean, "$") {
+		return ""
+	}
+	return clean
+}
+
 // parseMtrData parses material definitions from a byte slice and populates the Materials' map with parsed data.
 func (m *Materials) parseMtrData(data []byte) {
 	lexer := proc.NewLexer(data)
@@ -94,6 +136,8 @@ func (m *Materials) parseMtrData(data []byte) {
 		_ = lexer.Expect("{")
 
 		def := NewMaterialDef(name)
+		editorImage := ""
+		currentBlend := ""
 		depth := 1
 		for depth > 0 {
 			tok, err := lexer.NextToken()
@@ -102,32 +146,91 @@ func (m *Materials) parseMtrData(data []byte) {
 			}
 			if tok == "{" {
 				depth++
+				currentBlend = ""
 				continue
 			}
 			if tok == "}" {
 				depth--
+				currentBlend = ""
 				continue
 			}
 			tokLower := strings.ToLower(tok)
 			switch tokLower {
 			case "diffusemap":
-				val, err := lexer.NextToken()
-				if err == nil {
-					def.DiffuseMap = strings.ToLower(proc.StripQuotes(val))
+				val := parseMtrPath(lexer)
+				if val != "" {
+					def.DiffuseMap = val
 				}
 			case "bumpmap":
-				val, err := lexer.NextToken()
-				if err == nil {
-					def.NormalMap = strings.ToLower(proc.StripQuotes(val))
+				val := parseMtrPath(lexer)
+				if val != "" {
+					def.NormalMap = val
 				}
 			case "specularmap":
-				val, err := lexer.NextToken()
-				if err == nil {
-					def.SpecularMap = strings.ToLower(proc.StripQuotes(val))
+				val := parseMtrPath(lexer)
+				if val != "" {
+					def.SpecularMap = val
 				}
-			default:
-				fmt.Println("Unknown material property:", tokLower)
+			case "qer_editorimage":
+				val := parseMtrPath(lexer)
+				if val != "" && editorImage == "" {
+					editorImage = val
+				}
+			case "blend":
+				blendTok, err := lexer.NextToken()
+				if err == nil {
+					currentBlend = strings.Trim(strings.ToLower(proc.StripQuotes(blendTok)), ",()")
+					if strings.Contains(currentBlend, "/") && def.DiffuseMap == "" {
+						def.DiffuseMap = currentBlend
+					}
+				}
+			case "map":
+				val := parseMtrPath(lexer)
+				if val != "" {
+					if strings.Contains(currentBlend, "bumpmap") {
+						if def.NormalMap == "" {
+							def.NormalMap = val
+						}
+					} else if strings.Contains(currentBlend, "specularmap") {
+						if def.SpecularMap == "" {
+							def.SpecularMap = val
+						}
+					} else if strings.Contains(currentBlend, "diffusemap") {
+						if def.DiffuseMap == "" {
+							def.DiffuseMap = val
+						}
+					} else if def.DiffuseMap == "" {
+						def.DiffuseMap = val
+					}
+				}
+			case "if":
+				peekIf, err := lexer.PeekToken()
+				if err == nil && peekIf == "(" {
+					_ = lexer.Expect("(")
+					pDepth := 1
+					for pDepth > 0 {
+						pTok, pErr := lexer.NextToken()
+						if pErr != nil || pTok == "}" {
+							break
+						}
+						if pTok == "(" {
+							pDepth++
+						} else if pTok == ")" {
+							pDepth--
+						}
+					}
+				}
+			case "translucent":
+				def.Kind = config.MaterialKindSolid // TODO config.MaterialKindTranslucent
+			case "decal_macro", "polygonoffset":
+				def.IsDecal = true
+			case "(", ")":
+				// NOTHING TO DO
 			}
+		}
+
+		if def.DiffuseMap == "" && editorImage != "" {
+			def.DiffuseMap = editorImage
 		}
 
 		m.defs[name] = def

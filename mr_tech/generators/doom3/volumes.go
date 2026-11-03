@@ -41,6 +41,16 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 			matName := surface.Material
 			texNameLC := strings.ToLower(matName)
 
+			// Skip decal overlay surfaces and fake baked shadow planes which require multipass/decal blending.
+			if strings.HasPrefix(texNameLC, "textures/decals/") || strings.HasSuffix(texNameLC, "_shadow") {
+				continue
+			}
+			if vs.materials != nil {
+				if def := vs.materials.Resolve(matName); def != nil && def.IsDecal {
+					continue
+				}
+			}
+
 			var material *config.Material
 			if vs.materials != nil {
 				material = vs.materials.CreateConfigMaterial(matName)

@@ -1,6 +1,7 @@
 package doom3
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
@@ -124,6 +125,8 @@ func (m *Materials) parseMtrData(data []byte) {
 				if err == nil {
 					def.SpecularMap = strings.ToLower(proc.StripQuotes(val))
 				}
+			default:
+				fmt.Println("Unknown material property:", tokLower)
 			}
 		}
 

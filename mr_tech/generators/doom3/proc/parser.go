@@ -125,12 +125,7 @@ func (p *Parser) parseSurface() (*Surface, error) {
 		return nil, fmt.Errorf("failed to read numIndexes: %w", err)
 	}
 
-	surface := &Surface{
-		Material: material,
-		Vertices: make([]Vertex, numVerts),
-		Indices:  make([]int, numIndexes),
-	}
-
+	surface := NewSurface(material, numVerts, numIndexes)
 	for v := 0; v < numVerts; v++ {
 		vert, err := p.parseVertex()
 		if err != nil {
@@ -156,56 +151,50 @@ func (p *Parser) parseSurface() (*Surface, error) {
 
 // parseVertex parses standard Doom 3 vertex format:
 // ( x y z ) s t ( nx ny nz ) [ ( tx ty tz ) ( bx by bz ) ]
-func (p *Parser) parseVertex() (Vertex, error) {
-	var vert Vertex
-
+func (p *Parser) parseVertex() (*Vertex, error) {
 	// Doom 3 vertex format: ( x y z u v nx ny nz )
 	if err := p.lexer.Expect("("); err != nil {
-		return vert, err
+		return nil, err
 	}
 	x, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	y, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	z, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	u, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	v, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	nx, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	ny, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 	nz, err := p.lexer.ReadFloat()
 	if err != nil {
-		return vert, err
+		return nil, err
 	}
 
-	vert.Pos = geometry.XYZ{X: x, Y: y, Z: z}
-	vert.U = u
-	vert.V = v
-	vert.Normal = geometry.XYZ{X: nx, Y: ny, Z: nz}
-
+	vert := NewVertex(x, y, z, nx, ny, nz, u, v)
 	// Consume any optional extra attributes until matching closing ")"
 	for {
 		tok, err := p.lexer.NextToken()
 		if err != nil {
-			return vert, err
+			return nil, err
 		}
 		if tok == ")" {
 			break
@@ -246,12 +235,7 @@ func (p *Parser) parseInterAreaPortals() ([]*Portal, error) {
 			return nil, err
 		}
 
-		portal := &Portal{
-			Points:       make([]geometry.XYZ, numPoints),
-			PositiveArea: positiveArea,
-			NegativeArea: negativeArea,
-		}
-
+		portal := NewPorta(numPoints, positiveArea, negativeArea)
 		for pt := 0; pt < numPoints; pt++ {
 			if err := p.lexer.Expect("("); err != nil {
 				return nil, err
@@ -264,7 +248,6 @@ func (p *Parser) parseInterAreaPortals() ([]*Portal, error) {
 			}
 			portal.Points[pt] = geometry.XYZ{X: x, Y: y, Z: z}
 		}
-
 		portals = append(portals, portal)
 	}
 

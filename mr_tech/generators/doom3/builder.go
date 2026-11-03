@@ -12,6 +12,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const GForce = 9.8 * 50
+
+const JumpForce = GForce * 8
+
 // Builder manages the construction and handling of graphical assets for Doom 3 (id Tech 4).
 type Builder struct {
 }
@@ -132,15 +136,33 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 50)
 	_ = common.NewPlayer(root.Player)
-	root.Player.GForce = 9.8
-	root.Player.JumpForce = 270
-	root.Player.Impulse = 0.15
+	root.Player.GForce = GForce
+	root.Player.JumpForce = JumpForce
+	root.Player.Impulse = 0.18 //mod
 
 	root.Player.Flash.ZFar = 8192
 	root.Player.Flash.Intensity = 0.02
 	root.Player.Flash.Falloff = 2000
 	root.Player.Flash.OffsetX = 0.2
 	root.Player.Flash.OffsetY = 0.1
+	root.Player.Bobbing.SwayScale = 1.0 //mod
+	root.Player.Bobbing.SwayOffsetX = 50
+	root.Player.Bobbing.SwayOffsetY = -0.9
+	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
+	root.Player.Bobbing.MaxAmplitudeY = 5.5
+	root.Player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	// Breathing
+	root.Player.Bobbing.IdleAmpX = 0.9  //mod 0.9
+	root.Player.Bobbing.IdleAmpY = 0.9  //mod 0.9
+	root.Player.Bobbing.IdleDrift = 3.0 //2.0 - 0.01
+
+	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
+	root.Player.Bobbing.AmpLerp = 0.20
+	root.Player.Bobbing.ImpactMax = 1000.0
+	root.Player.Bobbing.ImpactScale = 0.02   // LANDING: 1000 * 0.02 = 20 units of vertical shake
+	root.Player.Bobbing.SpringTension = 0.20 // Stiffer spring (faster return)
+	root.Player.Bobbing.SpringDamping = 0.80
+	root.Player.Bobbing.TiltAmp = 0.05
 
 	return root, nil
 }

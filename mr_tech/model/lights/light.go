@@ -177,6 +177,11 @@ func (cl *Light) GetBlue() float64 {
 	return cl.b
 }
 
+// GetRGB returns the RGB color components of the light as three float64 values.
+func (cl *Light) GetRGB() (float64, float64, float64) {
+	return cl.r, cl.g, cl.b
+}
+
 // GetDirX returns the X component of the light's direction vector.
 func (cl *Light) GetDirX() float64 {
 	return cl.dirX
@@ -190,6 +195,11 @@ func (cl *Light) GetDirY() float64 {
 // GetDirZ returns the Z component of the light's direction vector.
 func (cl *Light) GetDirZ() float64 {
 	return cl.dirZ
+}
+
+// GetDirXYZ retrieves the X, Y, and Z components of the light's direction vector as separate float64 values.
+func (cl *Light) GetDirXYZ() (float64, float64, float64) {
+	return cl.dirX, cl.dirY, cl.dirZ
 }
 
 // GetCutOff returns the inner cutoff angle (in cosine) for spotlight calculations.

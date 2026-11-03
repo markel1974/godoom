@@ -99,10 +99,11 @@ func (f *FrameLights) Create(light *lights.Light, distSq float64, isFront bool) 
 	if intensity <= 0.001 {
 		return
 	}
-	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
+	r, g, b := light.GetRGB()
 	posX, posY, posZ := light.GetPosXYZ()
+	dirX, dirY, dirZ := light.GetDirXYZ()
 	glPosX, glPosY, glPosZ := float32(posX), float32(posZ), float32(-posY)
-	glDirX, glDirY, glDirZ := float32(light.GetDirX()), float32(light.GetDirZ()), float32(-light.GetDirY())
+	glDirX, glDirY, glDirZ := float32(dirX), float32(dirZ), float32(-dirY)
 	//glDirX, glDirY, glDirZ := float32(light.GetDirX()), float32(light.GetDirY()), float32(light.GetDirZ())
 	cutOff := float32(light.GetCutOff())
 	outerCutOff := float32(light.GetOuterCutOff())
@@ -126,7 +127,7 @@ func (f *FrameLights) Create(light *lights.Light, distSq float64, isFront bool) 
 				float32(distSq),
 				glPosX, glPosY, glPosZ,
 				lType,
-				r, g, b, intensity,
+				float32(r), float32(g), float32(b), intensity,
 				glDirX, glDirY, glDirZ, falloff,
 				cutOff, outerCutOff,
 				float32(light.GetRadius()),
@@ -143,7 +144,7 @@ func (f *FrameLights) Create(light *lights.Light, distSq float64, isFront bool) 
 
 	f.add(
 		glPosX, glPosY, glPosZ, lType,
-		r, g, b, intensity,
+		float32(r), float32(g), float32(b), intensity,
 		glDirX, glDirY, glDirZ, falloff,
 		cutOff, outerCutOff, 0.0, 0.0,
 	)

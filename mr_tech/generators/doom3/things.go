@@ -29,7 +29,63 @@ func NewThings(arc IPkArchive, materials *Materials, texManager *textures.Textur
 	}
 }
 
-// loadModel loads and caches a 3D model (.md5mesh or .lwo) from the PK4 archive.
+// loadAnimatedMonster loads and caches a skinned, animated MD5 model with idle, walk, and run cycles.
+func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry, error) {
+	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.ModelPath, "\\", "/")))
+	if cached, ok := t.modelCache[cleanPath]; ok {
+		return cached, nil
+	}
+
+	mf, err := t.arc.Open(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening md5mesh %s: %w", cleanPath, err)
+	}
+	//defer mf.Close()
+
+	mesh, err := ParseMD5Mesh(mf)
+	if err != nil {
+		return nil, fmt.Errorf("parsing md5mesh %s: %w", cleanPath, err)
+	}
+
+	anims := make(map[string]*MD5Anim)
+	loadAnim := func(actionKey, animPath string) {
+		if len(animPath) == 0 {
+			return
+		}
+		cAnimPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(animPath, "\\", "/")))
+		if af, err := t.arc.Open(cAnimPath); err == nil {
+			//defer af.Close()
+			if parsedAnim, err := ParseMD5Anim(af); err == nil {
+				anims[actionKey] = parsedAnim
+			}
+		}
+	}
+
+	loadAnim("idle", spec.IdleAnim)
+	loadAnim("walk", spec.WalkAnim)
+	loadAnim("run", spec.RunAnim)
+
+	cModel, err := BakeMD5Model(mesh, anims, t.materials)
+	if err != nil {
+		return nil, fmt.Errorf("baking md5 model %s: %w", cleanPath, err)
+	}
+
+	// Preload all texture maps (diffuse, normal, specular)
+	if t.imgLoader != nil && len(cModel.Frames) > 0 {
+		for _, tri := range cModel.Frames[0].Triangles {
+			if tri.Material != nil {
+				for _, texName := range tri.Material.Textures {
+					t.imgLoader.LoadMaterialMaps(texName)
+				}
+			}
+		}
+	}
+
+	t.modelCache[cleanPath] = cModel
+	return cModel, nil
+}
+
+// loadModel loads and caches a static 3D model (.md5mesh or .lwo) from the PK4 archive.
 func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(modelPath, "\\", "/")))
 	if cached, ok := t.modelCache[cleanPath]; ok {
@@ -40,10 +96,15 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening model %s: %w", cleanPath, err)
 	}
+	//defer f.Close()
 
 	var cModel *config.Model3DEntry
 	if strings.HasSuffix(cleanPath, ".md5mesh") {
-		cModel, err = ParseMD5Mesh(f, t.materials)
+		mesh, mErr := ParseMD5Mesh(f)
+		if mErr != nil {
+			return nil, mErr
+		}
+		cModel, err = BakeMD5Model(mesh, nil, t.materials)
 	} else if strings.HasSuffix(cleanPath, ".lwo") {
 		cModel, err = ParseLWO(f, t.materials)
 	} else {
@@ -55,13 +116,11 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 	}
 
 	// Preload all texture maps (diffuse, normal, specular) for all materials referenced by the model
-	if t.imgLoader != nil {
-		for _, frame := range cModel.Frames {
-			for _, tri := range frame.Triangles {
-				if tri.Material != nil {
-					for _, texName := range tri.Material.Textures {
-						t.imgLoader.LoadMaterialMaps(texName)
-					}
+	if t.imgLoader != nil && len(cModel.Frames) > 0 {
+		for _, tri := range cModel.Frames[0].Triangles {
+			if tri.Material != nil {
+				for _, texName := range tri.Material.Textures {
+					t.imgLoader.LoadMaterialMaps(texName)
 				}
 			}
 		}
@@ -105,7 +164,12 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 		}
 	}
 
-	cModel, err := t.loadModel(modelPath)
+	var cModel *config.Model3DEntry
+	if spec.Kind == config.ThingEnemyDef && strings.HasSuffix(strings.ToLower(modelPath), ".md5mesh") {
+		cModel, err = t.loadAnimatedMonster(spec)
+	} else {
+		cModel, err = t.loadModel(modelPath)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("loading model for %s (%s): %w", classname, modelPath, err)
 	}
@@ -116,9 +180,14 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 
 	if spec.Kind == config.ThingEnemyDef {
 		actions := config.NewEnemyAnimations()
-		actions.Add(config.EnemyStateIdle, 0, 1)
-		actions.Add(config.EnemyStateWalk, 0, 1)
-		actions.Add(config.EnemyStateRun, 0, 1)
+		if len(cModel.ActionDefinitions) > 0 {
+			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
+		}
+		if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
+			actions.Add(config.EnemyStateIdle, 0, 1)
+			actions.Add(config.EnemyStateWalk, 0, 1)
+			actions.Add(config.EnemyStateRun, 0, 1)
+		}
 
 		thingCfg.JumpForce = JumpForce
 		thingCfg.Impulse = 3.0

@@ -9,6 +9,9 @@ import (
 // Doom3ThingSpec holds the default physical and rendering configuration for a Doom 3 entity type.
 type Doom3ThingSpec struct {
 	ModelPath string
+	IdleAnim  string
+	WalkAnim  string
+	RunAnim   string
 	Kind      config.ThingType
 	Mass      float64
 	Radius    float64
@@ -17,11 +20,32 @@ type Doom3ThingSpec struct {
 	Health    float64
 }
 
+// ConvertAnimation maps Doom 3 animation definitions and frame intervals to Engine EnemyState values.
+func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals [][2]int) {
+	for idx, animName := range animations {
+		frames := intervals[idx][1] - intervals[idx][0] + 1
+		if frames <= 1 {
+			continue
+		}
+		switch strings.ToLower(animName) {
+		case "idle", "stand":
+			r.Add(config.EnemyStateIdle, idx, frames)
+		case "walk":
+			r.Add(config.EnemyStateWalk, idx, frames)
+		case "run":
+			r.Add(config.EnemyStateRun, idx, frames)
+		}
+	}
+}
+
 // _doom3DictModelFilename maps Doom 3 entity classnames to their corresponding 3D model paths in PK4 archives.
 var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	// Monsters (MD5 animated models)
 	"monster_demon_imp": {
 		ModelPath: "models/md5/monsters/imp/imp.md5mesh",
+		IdleAnim:  "models/md5/monsters/imp/idle1.md5anim",
+		WalkAnim:  "models/md5/monsters/imp/walk1.md5anim",
+		RunAnim:   "models/md5/monsters/imp/faster_walk.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    24.0,
@@ -31,6 +55,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_demon_pinky": {
 		ModelPath: "models/md5/monsters/pinky/pinky.md5mesh",
+		IdleAnim:  "models/md5/monsters/pinky/idle1.md5anim",
+		WalkAnim:  "models/md5/monsters/pinky/run.md5anim",
+		RunAnim:   "models/md5/monsters/pinky/run.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      40.0,
 		Radius:    36.0,
@@ -40,6 +67,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zombie_fat": {
 		ModelPath: "models/md5/monsters/zfat/zfat.md5mesh",
+		IdleAnim:  "models/md5/monsters/zfat/idle1.md5anim",
+		WalkAnim:  "models/md5/monsters/zfat/walk1.md5anim",
+		RunAnim:   "models/md5/monsters/zfat/walk1.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      35.0,
 		Radius:    24.0,
@@ -49,6 +79,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zombie_jumpsuit": {
 		ModelPath: "models/md5/monsters/zombies/jumpsuitzombie.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zidle1.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zwalk1.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zwalk1.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    20.0,
@@ -58,6 +91,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zombie_labcoat_limb": {
 		ModelPath: "models/md5/monsters/zombies/labcoatzombie.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zidle1.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zwalk1.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zwalk1.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    20.0,
@@ -67,6 +103,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zombie_labcoat_pipe": {
 		ModelPath: "models/md5/monsters/zombies/labcoatzombie.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zidle1.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zwalk1.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zwalk1.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    20.0,
@@ -76,6 +115,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zombie_suit_bloodymouth": {
 		ModelPath: "models/md5/monsters/zombies/suitzombie.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zidle1.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zwalk1.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zwalk1.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    20.0,
@@ -85,6 +127,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zsec_machinegun": {
 		ModelPath: "models/md5/monsters/zombies/zsec_machinegun/zsecmachinegun.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zsec_machinegun/machinegun_stand.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zsec_machinegun/machinegun_walk.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zsec_machinegun/machinegun_run.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    22.0,
@@ -94,6 +139,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zsec_pistol": {
 		ModelPath: "models/md5/monsters/zombies/zsec_pistol/zsecpistol.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zsec_pistol/stand.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zsec_pistol/walk2.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zsec_pistol/run1.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    22.0,
@@ -103,6 +151,9 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 	"monster_zsec_shotgun": {
 		ModelPath: "models/md5/monsters/zombies/zsec_shotgun/zsecshotgun.md5mesh",
+		IdleAnim:  "models/md5/monsters/zombies/zsec_shotgun/stand.md5anim",
+		WalkAnim:  "models/md5/monsters/zombies/zsec_shotgun/walk.md5anim",
+		RunAnim:   "models/md5/monsters/zombies/zsec_shotgun/run.md5anim",
 		Kind:      config.ThingEnemyDef,
 		Mass:      30.0,
 		Radius:    22.0,

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -105,9 +106,10 @@ func (np *NodePk4) pathCleaner(in string) string {
 
 // Pk4 represents a package loader for managing and extracting files from zip-based archives (e.g., PK4 files).
 type Pk4 struct {
-	res    common.IResources
-	root   *NodePk4
-	reader *zip.Reader
+	res     common.IResources
+	root    *NodePk4
+	reader  *zip.Reader
+	readers []*zip.Reader
 }
 
 // NewPk4 creates a new instance of Pk4 using the provided IResources interface implementation.
@@ -120,30 +122,54 @@ func NewPk4(res common.IResources) *Pk4 {
 // Setup initializes the Pk4 instance by loading and parsing the resources from the provided zip file path.
 // It constructs an internal directory structure to manage the file hierarchy within the zip.
 func (pk *Pk4) Setup(path string) error {
-	k, err := pk.res.Open(path)
-	if err != nil {
-		return err
-	}
-	size, err := k.Seek(0, io.SeekEnd)
-	if err != nil {
-		return err
-	}
-	if _, err = k.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	r, err := zip.NewReader(k, size)
-	if err != nil {
-		return err
-	}
-	pk.reader = r
-
 	pk.root = NewPk3Node(nil)
-	for _, f := range r.File {
-		if f.FileInfo().IsDir() {
+
+	// Collect any sibling pk4 files in the directory so multi-part assets (pak000..pak004) are mounted together
+	dir := filepath.Dir(path)
+	var pk4Files []string
+	if entries, err := pk.res.ReadDir(dir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".pk4") {
+				pk4Files = append(pk4Files, filepath.Join(dir, entry.Name()))
+			}
+		}
+		sort.Strings(pk4Files)
+	}
+
+	if len(pk4Files) == 0 {
+		pk4Files = []string{path}
+	}
+
+	for _, p := range pk4Files {
+		k, err := pk.res.Open(p)
+		if err != nil {
 			continue
 		}
-		pk.root.AddNode(f.Name, f)
+		size, err := k.Seek(0, io.SeekEnd)
+		if err != nil {
+			continue
+		}
+		if _, err = k.Seek(0, io.SeekStart); err != nil {
+			continue
+		}
+		r, err := zip.NewReader(k, size)
+		if err != nil {
+			continue
+		}
+		pk.readers = append(pk.readers, r)
+		pk.reader = r
+		for _, f := range r.File {
+			if f.FileInfo().IsDir() {
+				continue
+			}
+			pk.root.AddNode(f.Name, f)
+		}
 	}
+
+	if len(pk.readers) == 0 {
+		return fmt.Errorf("failed to open pk4 archive %s", path)
+	}
+
 	return nil
 }
 
@@ -169,21 +195,35 @@ func (pk *Pk4) ReadDir(fullPath string) ([]string, error) {
 }
 
 // ReadDirFilter filters directory entries at the given path based on a wildcard pattern and returns a sorted list of matches.
+// It searches the specified directory and any subdirectories recursively.
 func (pk *Pk4) ReadDirFilter(fullPath string, wildcard string) ([]string, error) {
 	r, err := regexp.Compile(wildcard)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := pk.ReadDir(fullPath)
-	if err != nil {
-		return nil, err
+	node := pk.root.GetNode(fullPath)
+	if node == nil {
+		return nil, fmt.Errorf("directory not found: %s", fullPath)
 	}
+
 	var out []string
-	for _, entry := range entries {
-		if r.MatchString(entry) {
-			out = append(out, entry)
+	var walk func(n *NodePk4, relPrefix string)
+	walk = func(n *NodePk4, relPrefix string) {
+		for name, child := range n.children {
+			rel := name
+			if relPrefix != "" {
+				rel = relPrefix + Pak4Separator + name
+			}
+			if child.entry != nil {
+				if r.MatchString(rel) || r.MatchString(name) {
+					out = append(out, rel)
+				}
+			} else {
+				walk(child, rel)
+			}
 		}
 	}
+	walk(node, "")
 	sort.Strings(out)
 	return out, nil
 }

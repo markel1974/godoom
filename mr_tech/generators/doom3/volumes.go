@@ -14,13 +14,15 @@ import (
 type Volumes struct {
 	pFile     *proc.File
 	chunkSize float64
+	materials *Materials
 }
 
-// NewVolumes initializes and returns a pointer to a Volumes instance with the provided proc.File and chunk size.
-func NewVolumes(pFile *proc.File, chunkSize float64) *Volumes {
+// NewVolumes initializes and returns a pointer to a Volumes instance with the provided proc.File, chunk size, and materials.
+func NewVolumes(pFile *proc.File, chunkSize float64, materials *Materials) *Volumes {
 	return &Volumes{
 		pFile:     pFile,
 		chunkSize: chunkSize,
+		materials: materials,
 	}
 }
 
@@ -33,18 +35,14 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 		for _, surface := range model.Surfaces {
 			matName := surface.Material
 			texNameLC := strings.ToLower(matName)
-			kind := config.MaterialKindSolid
-			if strings.Contains(texNameLC, "sky") {
-				kind = config.MaterialKindSky
-			} else if strings.Contains(texNameLC, "water") {
-				kind = config.MaterialKindWater
-			} else if strings.Contains(texNameLC, "liquid") {
-				kind = config.MaterialKindWater
-			} else if strings.Contains(texNameLC, "slime") {
-				kind = config.MaterialKindSlime
-			}
 
-			material := config.NewConfigMaterial(matName, []string{texNameLC}, kind)
+			var material *config.Material
+			if vs.materials != nil {
+				material = vs.materials.CreateConfigMaterial(matName)
+			} else {
+				kind := ToMaterial(texNameLC)
+				material = config.NewConfigMaterial(matName, []string{texNameLC}, kind)
+			}
 
 			for i := 0; i+2 < len(surface.Indices); i += 3 {
 				i0, i1, i2 := surface.Indices[i], surface.Indices[i+1], surface.Indices[i+2]

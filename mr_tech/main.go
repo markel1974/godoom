@@ -118,7 +118,7 @@ var _availableModes = []ModeDef{
 	{
 		Name:   "doom3",
 		Zip:    false,
-		Target: "resources" + string(os.PathSeparator) + "doom3" + string(os.PathSeparator) + "pak002.pk4",
+		Target: "resources" + string(os.PathSeparator) + "doom3" + string(os.PathSeparator) + "pak000.pk4",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			qb := doom3.NewBuilder()
 			return qb.Setup(res, target, level)

@@ -3,10 +3,12 @@ package doom3
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -25,7 +27,6 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 		lev = 1
 	}
 
-	// Doom 3 uses .pk4 archives which are identical to zip (.pk3)
 	arc := proc.NewPk4(res)
 
 	if err := arc.Setup(pk4Path); err != nil {
@@ -64,8 +65,19 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 		return nil, fmt.Errorf("failed to parse proc file %s: %w", procPath, err)
 	}
 
+	materials := NewMaterials()
+	_ = materials.LoadFromArchive(arc)
+
+	texManager := textures.NewTextures()
+	imgLoader := NewImageLoader(arc, texManager, materials)
+	for _, model := range procFile.Models {
+		for _, surface := range model.Surfaces {
+			imgLoader.LoadMaterialMaps(surface.Material)
+		}
+	}
+
 	const chunkSize = float64(512)
-	vol := NewVolumes(procFile, chunkSize)
+	vol := NewVolumes(procFile, chunkSize, materials)
 	volumes, err := vol.Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build volumes: %w", err)
@@ -77,11 +89,42 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	cal.ZFarRear = 512
 
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
-	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, nil)
+	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texManager)
 	root.Volumes = volumes
 
 	playerPos := geometry.XYZ{X: 0, Y: 0, Z: 64}
 	playerAngle := 0.0
+
+	// Parse corresponding .map file to extract player start and dynamic lights
+	mapName := strings.TrimSuffix(maps[levelIndex], ".proc")
+	mapPath := "maps" + proc.Pak4Separator + mapName + ".map"
+	if mf, err := arc.Open(mapPath); err == nil {
+		if mapData, err := io.ReadAll(mf); err == nil {
+			mapParser := NewMapParser(mapData)
+			if entities, err := mapParser.Parse(); err == nil {
+				for _, ent := range entities {
+					classname, _ := ent.GetProperty("classname")
+					switch classname {
+					case "info_player_start":
+						if origin, err := ent.GetOrigin(); err == nil {
+							playerPos = origin
+							playerAngle = ent.GetAngle()
+						}
+					case "light":
+						if origin, err := ent.GetOrigin(); err == nil {
+							r, g, b := ent.GetColor()
+							radius := ent.GetLightRadius()
+							light := config.NewConfigLight(origin, 1.0, config.LightKindDiffuse, radius)
+							light.R = r
+							light.G = g
+							light.B = b
+							root.Lights = append(root.Lights, light)
+						}
+					}
+				}
+			}
+		}
+	}
 
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 50)
 	_ = common.NewPlayer(root.Player)

@@ -135,7 +135,7 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 		return nil, fmt.Errorf("duke3d: failed to build world: %w", err)
 	}
 
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
+	cal := config.NewConfigCalibration()
 	cal.AspectRatio = AspectRatio
 
 	pX := float64(level.Header.PosX) * b.scaleXY

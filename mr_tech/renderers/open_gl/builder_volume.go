@@ -63,11 +63,8 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		//occBuffer:      NewOcclusionSW(640, 480),
 	}
 	prjScale := bv.cal.PrjScale
-	aspect := float32(bv.cal.AspectRatio)
-	zNear := float32(bv.cal.ZNearRoom)
-	zFar := float32(bv.cal.ZFarRoom)
-	bv.frustumFront.Setup(aspect, zFar, zNear, prjScale, prjScale)
-	bv.frustumRear.Setup(aspect, zFar, zNear, prjScale, prjScale)
+	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFarFront), float32(bv.cal.ZNearFront), prjScale, prjScale)
+	bv.frustumRear.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFarRear), float32(bv.cal.ZNearRear), prjScale, prjScale)
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
 	bv.modes[bv.dcLiquid.GetBlendMode()] = bv.dcLiquid

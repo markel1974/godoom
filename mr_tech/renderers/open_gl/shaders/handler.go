@@ -100,7 +100,7 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.F
 
 	h.profiler = NewGpuProfiler(h.ctx, physics.GetFps())
 	h.mapMetrics = metrics.NewMap()
-	h.mapMetrics.SetOrthoSize(float32(h.cal.OrthoSize), float32(h.cal.ZNearRoom), float32(h.cal.ZFarRoom)+4.0)
+	h.mapMetrics.SetOrthoSize(float32(h.cal.OrthoSize), float32(h.cal.ZNearFront), float32(h.cal.ZFarFront)+4.0)
 	h.mapMetrics.SetCenter(float32(h.cal.MapCenterX), float32(h.cal.MapCenterZ), float32(h.cal.LightCamY)+2.0)
 	h.flashlightMetrics = metrics.NewFlashlight(h.flash)
 	h.shadowLightsMetrics = metrics.NewShadowLights()

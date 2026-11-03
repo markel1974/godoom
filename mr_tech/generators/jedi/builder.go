@@ -101,7 +101,7 @@ func (b *Builder) Build(fs common.IResources, eMode EngineMode, dir string, leve
 		return nil, err
 	}
 
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
+	cal := config.NewConfigCalibration()
 	cal.AspectRatio = aspectRatio
 	tex := archive.GetTextures()
 	crosshair := common.NewSimpleCrosshair()

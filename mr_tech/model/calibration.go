@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -12,8 +13,10 @@ type Calibration struct {
 	MapCenterX         float64
 	MapCenterZ         float64
 	LightCamY          float64
-	ZNearRoom          float64
-	ZFarRoom           float64
+	ZNearFront         float64
+	ZNearRear          float64
+	ZFarFront          float64
+	ZFarRear           float64
 	AspectRatio        float64
 	FovVerticalDegrees float64
 	BeamRatio          float64
@@ -32,8 +35,10 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		MapCenterX:         cfg.MapCenterX,
 		MapCenterZ:         cfg.MapCenterZ,
 		LightCamY:          cfg.LightCamY,
-		ZNearRoom:          cfg.ZNearRoom,
-		ZFarRoom:           cfg.ZFarRoom,
+		ZNearFront:         cfg.ZNearFront,
+		ZNearRear:          cfg.ZNearRear,
+		ZFarFront:          cfg.ZFarFront,
+		ZFarRear:           cfg.ZFarRear,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
 		BeamRatio:          cfg.BeamRatio,
@@ -48,14 +53,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 func (c *Calibration) Setup() error {
 	root, ok := c.volumes.tree.GetRoot()
 	if !ok {
-		c.ZNearRoom = 0.1
-		if c.ZFarRoom <= c.ZNearRoom || math.IsNaN(c.ZFarRoom) || math.IsInf(c.ZFarRoom, 0) {
-			c.ZFarRoom = 8192.0
-		}
-		if c.PrjScale <= 0 || math.IsNaN(c.PrjScale) || math.IsInf(c.PrjScale, 0) {
-			c.PrjScale = 0.85
-		}
-		return nil
+		return fmt.Errorf("no root volume found")
 	}
 	width := root.GetWidth()
 	h := root.GetHeight()
@@ -71,14 +69,23 @@ func (c *Calibration) Setup() error {
 	c.MapCenterX = root.GetMinX() + (width / 2.0)
 	c.MapCenterZ = root.GetMinZ() + (depth / 2.0)
 	c.LightCamY = root.GetMaxY()
-	c.ZNearRoom = 0.1
-	// Diagonale 3D della mappa: massima distanza euclidea teorica visibile
-	diag := math.Sqrt(width*width + h*h + depth*depth)
-	if math.IsNaN(diag) || math.IsInf(diag, 0) || diag <= c.ZNearRoom {
-		diag = 8192.0
+	if c.ZNearFront <= 0 {
+		c.ZNearFront = 0.1
 	}
-	c.ZFarRoom = diag
-
+	if c.ZNearRear <= 0 {
+		c.ZNearRear = 0.1
+	}
+	// Diagonale 3D della mappa: massima distanza euclidea teorica visibile
+	maxFar := math.Sqrt(width*width + h*h + depth*depth)
+	if math.IsNaN(maxFar) || math.IsInf(maxFar, 0) || maxFar <= c.ZNearFront {
+		maxFar = 8192.0
+	}
+	if c.ZFarFront <= 0 {
+		c.ZFarFront = maxFar / 2
+	}
+	if c.ZFarRear <= 0 {
+		c.ZFarRear = c.ZFarFront / 4
+	}
 	fovY := c.FovVerticalDegrees
 	if fovY <= 0 || fovY >= 180 || math.IsNaN(fovY) || math.IsInf(fovY, 0) {
 		fovY = 90.0

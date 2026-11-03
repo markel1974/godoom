@@ -181,7 +181,7 @@ func (b *Builder) generateSimple(t *Textures, maxX int, maxY int) (*config.Root,
 	p := NewPlayer(0, 0, 0)
 	player2 := p.Build()
 	_ = common.NewPlayer(player2)
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
+	cal := config.NewConfigCalibration()
 	cal.AspectRatio = AspectRatio
 
 	scaleFactor := geometry.XYZ{X: 1, Y: 1, Z: 1}
@@ -217,7 +217,7 @@ func (b *Builder) generateDungeon(t *Textures, gridWidth int, gridHeight int, ce
 	p := NewPlayer(0, 0, 0)
 	player := p.Build()
 	_ = common.NewPlayer(player)
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
+	cal := config.NewConfigCalibration()
 	cal.AspectRatio = AspectRatio
 
 	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}

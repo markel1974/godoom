@@ -61,7 +61,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 		return nil, fmt.Errorf("mapData size does not match width * height")
 	}
 
-	cal := config.NewConfigCalibration(0, 0, 0, 0, 0, 0)
+	cal := config.NewConfigCalibration()
 	cal.AspectRatio = AspectRatio
 	scaleFactor := geometry.XYZ{X: 15.0, Y: 15.0, Z: 1}
 	root := config.NewConfigRoot(cal, nil, nil, nil, scaleFactor, texProvider)

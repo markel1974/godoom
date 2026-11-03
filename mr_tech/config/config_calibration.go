@@ -6,8 +6,10 @@ type Calibration struct {
 	MapCenterX         float64 `json:"mapCenterX"`
 	MapCenterZ         float64 `json:"mapCenterZ"`
 	LightCamY          float64 `json:"lightCamY"`
-	ZNearRoom          float64 `json:"zNearRoom"`
-	ZFarRoom           float64 `json:"zFarRoom"`
+	ZNearFront         float64 `json:"zNearFront"`
+	ZNearRear          float64 `json:"zNearRear"`
+	ZFarFront          float64 `json:"zFarFront"`
+	ZFarRear           float64 `json:"zFarRear"`
 	AspectRatio        float64 `json:"aspectRatio"`
 	FovVerticalDegrees float64 `json:"fovVerticalDegrees"`
 	BeamRatio          float64 `json:"beamRatio"`
@@ -15,21 +17,9 @@ type Calibration struct {
 	AoFactor           float64 `json:"aoFactor"`
 }
 
-// NewConfigCalibration creates and returns a new Calibration instance with the specified parameters.
-// orthoSize defines the orthographic size of the calibration.
-// mapCenterX and mapCenterZ set the center coordinates of the map.
-// lightCamY specifies the Y-coordinate for the light camera.
-// zNearRoom and zFarRoom determine near and far plane distances for the room.
-// auto defines whether to enable automatic calibration.
-func NewConfigCalibration(orthoSize, mapCenterX, mapCenterZ, lightCamY, zNearRoom, zFarRoom float64) *Calibration {
-	c := &Calibration{
-		OrthoSize:  orthoSize,
-		MapCenterX: mapCenterX,
-		MapCenterZ: mapCenterZ,
-		LightCamY:  lightCamY,
-		ZNearRoom:  zNearRoom,
-		ZFarRoom:   zFarRoom,
-	}
+// NewConfigCalibration initializes and returns a Calibration object with default configuration values.
+func NewConfigCalibration() *Calibration {
+	c := &Calibration{}
 	c.AspectRatio = 0.4
 	c.FovVerticalDegrees = 90
 	c.BeamRatio = 0.05

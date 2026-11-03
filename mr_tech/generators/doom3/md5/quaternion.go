@@ -1,4 +1,4 @@
-package doom3
+package md5
 
 import (
 	"math"

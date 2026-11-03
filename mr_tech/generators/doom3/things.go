@@ -7,7 +7,9 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Things manages the loading, caching, and instantiation of 3D entities (monsters, items, weapons, ammo) in Doom 3.
@@ -47,23 +49,23 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	}
 	//defer mf.Close()
 
-	mesh := NewMD5Mesh()
+	mesh := md5.NewMesh()
 	if err := mesh.Parse(mf); err != nil {
 		return nil, fmt.Errorf("parsing md5mesh %s: %w", cleanPath, err)
 	}
 
-	var headMesh *MD5Mesh
+	var headMesh *md5.Mesh
 	if len(spec.HeadMesh) > 0 {
 		cHeadPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.HeadMesh, "\\", "/")))
 		if hf, err := t.arc.Open(cHeadPath); err == nil {
-			parsedHead := NewMD5Mesh()
+			parsedHead := md5.NewMesh()
 			if err := parsedHead.Parse(hf); err == nil {
 				headMesh = parsedHead
 			}
 		}
 	}
 
-	anims := make(map[string]*MD5Anim)
+	anims := make(map[string]*md5.Anim)
 	loadAnim := func(actionKey, animPath string) {
 		if len(animPath) == 0 {
 			return
@@ -71,7 +73,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 		cAnimPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(animPath, "\\", "/")))
 		if af, err := t.arc.Open(cAnimPath); err == nil {
 			//defer af.Close()
-			anim := NewMD5Anim()
+			anim := md5.NewAnim()
 			if err := anim.Parse(af); err == nil {
 				anims[actionKey] = anim
 			}
@@ -117,7 +119,7 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 
 	var cModel *config.Model3DEntry
 	if strings.HasSuffix(cleanPath, ".md5mesh") {
-		mesh := NewMD5Mesh()
+		mesh := md5.NewMesh()
 		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
@@ -238,7 +240,7 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 
 	if spec.Kind == config.ThingEnemyDef {
 		actions := config.NewEnemyAnimations()
-		if len(cModel.ActionDefinitions) > 0 {
+		if cModel != nil && len(cModel.ActionDefinitions) > 0 {
 			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
 		}
 		if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
@@ -256,4 +258,208 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 	}
 
 	return thingCfg, nil
+}
+
+// BakeMD5Model evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
+func BakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim, materials *Materials) (*config.Model3DEntry, error) {
+	if mesh == nil || len(mesh.SubMeshes) == 0 {
+		return nil, fmt.Errorf("empty md5 mesh")
+	}
+	// Prepare body submesh materials
+	subMaterials := make([]*config.Material, len(mesh.SubMeshes))
+	for sIdx, sub := range mesh.SubMeshes {
+		var mat *config.Material
+		if materials != nil && len(sub.Shader) > 0 {
+			mat = materials.CreateConfigMaterial(sub.Shader)
+		}
+		if mat == nil {
+			mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
+		}
+		subMaterials[sIdx] = mat
+	}
+
+	// Prepare head submesh materials and attachment if present
+	var headAttachment *md5.HeadAttachment
+	var headMaterials []*config.Material
+	if headMesh != nil && len(headMesh.SubMeshes) > 0 {
+		headAttachment = md5.NewHeadAttachment(mesh, headMesh, headJointName)
+		headMaterials = make([]*config.Material, len(headMesh.SubMeshes))
+		for sIdx, sub := range headMesh.SubMeshes {
+			var mat *config.Material
+			if materials != nil && len(sub.Shader) > 0 {
+				mat = materials.CreateConfigMaterial(sub.Shader)
+			}
+			if mat == nil {
+				mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
+			}
+			headMaterials[sIdx] = mat
+		}
+	}
+
+	var allFrames []config.Model3DEntryFrame
+	var actionNames []string
+	var actionIntervals [][2]int
+
+	bakeFrameWithSkel := func(skel []md5.Joint) config.Model3DEntryFrame {
+		var frameTriangles []config.Model3DEntryTriangle
+		// Bake body submeshes
+		for sIdx, sub := range mesh.SubMeshes {
+			mat := subMaterials[sIdx]
+			computedVerts := make([]geometry.XYZ, len(sub.Vertices))
+			for i, vert := range sub.Vertices {
+				var p geometry.XYZ
+				for w := 0; w < vert.WeightSpan; w++ {
+					weight := sub.Weights[vert.WeightIdx+w]
+					joint := skel[weight.Joint]
+
+					rotated := md5.QuatRotate(joint.Orient, weight.Pos)
+					p.X += (joint.Pos.X + rotated.X) * weight.Bias
+					p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
+					p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
+				}
+				computedVerts[i] = p
+			}
+
+			for _, triIdx := range sub.Tris {
+				if triIdx[0] >= len(computedVerts) || triIdx[1] >= len(computedVerts) || triIdx[2] >= len(computedVerts) {
+					continue
+				}
+				tri := config.NewModel3DEntryTriangle(mat)
+				for k := 0; k < 3; k++ {
+					vi := triIdx[k]
+					v := sub.Vertices[vi]
+					tri.Vertices[k] = config.Model3DEntryVertex{Pos: computedVerts[vi], U: v.U, V: v.V}
+				}
+				frameTriangles = append(frameTriangles, tri)
+			}
+		}
+
+		// Bake attached head submeshes
+		if headAttachment != nil && headMesh != nil {
+			headSkel := headAttachment.BuildHeadSkeleton(skel)
+			for sIdx, sub := range headMesh.SubMeshes {
+				mat := headMaterials[sIdx]
+				computedVerts := make([]geometry.XYZ, len(sub.Vertices))
+				for i, vert := range sub.Vertices {
+					var p geometry.XYZ
+					for w := 0; w < vert.WeightSpan; w++ {
+						weight := sub.Weights[vert.WeightIdx+w]
+						joint := headSkel[weight.Joint]
+						rotated := md5.QuatRotate(joint.Orient, weight.Pos)
+						p.X += (joint.Pos.X + rotated.X) * weight.Bias
+						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
+						p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
+					}
+					computedVerts[i] = p
+				}
+
+				for _, triIdx := range sub.Tris {
+					if triIdx[0] >= len(computedVerts) || triIdx[1] >= len(computedVerts) || triIdx[2] >= len(computedVerts) {
+						continue
+					}
+
+					tri := config.NewModel3DEntryTriangle(mat)
+					for k := 0; k < 3; k++ {
+						vi := triIdx[k]
+						v := sub.Vertices[vi]
+						tri.Vertices[k] = config.Model3DEntryVertex{Pos: computedVerts[vi], U: v.U, V: v.V}
+					}
+					frameTriangles = append(frameTriangles, tri)
+				}
+			}
+		}
+
+		return config.NewModel3DEntryFrame(frameTriangles)
+	}
+
+	// Process actions in standard order: idle, walk, run
+	actionKeys := []string{"idle", "walk", "run"}
+	for _, aKey := range actionKeys {
+		anim, hasAnim := anims[aKey]
+		if !hasAnim || anim == nil || len(anim.Frames) == 0 {
+			continue
+		}
+		startFrame := len(allFrames)
+		for f := 0; f < len(anim.Frames); f++ {
+			skeleton := anim.BuildFrameSkeleton(f)
+			frame := bakeFrameWithSkel(skeleton)
+			allFrames = append(allFrames, frame)
+		}
+		endFrame := len(allFrames) - 1
+		actionNames = append(actionNames, aKey)
+		actionIntervals = append(actionIntervals, [2]int{startFrame, endFrame})
+	}
+
+	// Fallback to bind pose if no animations provided
+	if len(allFrames) == 0 {
+		frame := bakeFrameWithSkel(mesh.Joints)
+		allFrames = append(allFrames, frame)
+		actionNames = []string{"idle"}
+		actionIntervals = [][2]int{{0, 0}}
+	}
+
+	cModel := config.NewModel3DEntry(len(allFrames), actionNames)
+	for i, f := range allFrames {
+		cModel.Frames[i] = f
+	}
+	cModel.ActionDefinitions = actionNames
+	cModel.ActionIntervals = actionIntervals
+
+	// Center the model in X, Y, and Z so that its center is at (0, 0, 0).
+	// In Godoom, rendering places the model at (center.x, center.z, -center.y).
+	// Centering ensures that the feet touch the floor at pos.Z and the head reaches pos.Z + height.
+	CenterModel(cModel)
+
+	return cModel, nil
+}
+
+// CenterModel centers the 3D model's bounding box around (0, 0, 0) across all frames.
+func CenterModel(m *config.Model3DEntry) {
+	if m == nil || len(m.Frames) == 0 {
+		return
+	}
+
+	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
+	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+
+	for _, frame := range m.Frames {
+		for _, tri := range frame.Triangles {
+			for _, vertex := range tri.Vertices {
+				p := vertex.Pos
+				if p.X < minX {
+					minX = p.X
+				}
+				if p.X > maxX {
+					maxX = p.X
+				}
+				if p.Y < minY {
+					minY = p.Y
+				}
+				if p.Y > maxY {
+					maxY = p.Y
+				}
+				if p.Z < minZ {
+					minZ = p.Z
+				}
+				if p.Z > maxZ {
+					maxZ = p.Z
+				}
+			}
+		}
+	}
+
+	centerX := (minX + maxX) / 2
+	centerY := (minY + maxY) / 2
+	centerZ := (minZ + maxZ) / 2
+
+	for frameIdx := range m.Frames {
+		for triIdx := range m.Frames[frameIdx].Triangles {
+			for vertexIdx := range m.Frames[frameIdx].Triangles[triIdx].Vertices {
+				p := &m.Frames[frameIdx].Triangles[triIdx].Vertices[vertexIdx].Pos
+				p.X -= centerX
+				p.Y -= centerY
+				p.Z -= centerZ
+			}
+		}
+	}
 }

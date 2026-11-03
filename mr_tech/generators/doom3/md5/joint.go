@@ -1,0 +1,11 @@
+package md5
+
+import "github.com/markel1974/godoom/mr_tech/geometry"
+
+// Joint holds the position and orientation of a single bone in model space.
+type Joint struct {
+	name   string
+	parent int
+	Pos    geometry.XYZ
+	Orient [4]float64 // (qx, qy, qz, qw)
+}

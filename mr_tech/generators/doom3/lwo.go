@@ -11,6 +11,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+type LWO struct {
+}
+
+func NewLWO() *LWO {
+	return &LWO{}
+}
+
 // lwoVxIndex reads a variable-length index (2 or 4 bytes) from data at offset.
 func lwoVxIndex(data []byte, offset int) (int, int) {
 	if offset >= len(data) {
@@ -95,11 +102,7 @@ func ParseLWO(r io.Reader, materials *Materials) (*config.Model3DEntry, error) {
 				// Doom 3 X = LightWave X (pos[0])
 				// Doom 3 Y = LightWave Z (pos[2])
 				// Doom 3 Z = LightWave Y (pos[1])
-				points[i] = geometry.XYZ{
-					X: float64(math.Float32frombits(bitsX)),
-					Y: float64(math.Float32frombits(bitsZ)),
-					Z: float64(math.Float32frombits(bitsY)),
-				}
+				points[i] = geometry.XYZ{X: float64(math.Float32frombits(bitsX)), Y: float64(math.Float32frombits(bitsZ)), Z: float64(math.Float32frombits(bitsY))}
 			}
 
 		case "POLS":

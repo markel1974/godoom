@@ -144,6 +144,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 		return false
 	})
 
+	//GPU CULLING HELPER
 	w.visibleVol.Sort()
 
 	//counter := 0
@@ -159,8 +160,9 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 			fv := w.fv.Stage(marker)
 			if !vol.IsDirty() {
 				w.fv.Commit(fv, w.modes)
-				if fv.HasSky() {
-					w.cSky, w.cSkyU, w.cSkyV = fv.GetSky()
+				if skyMat := fv.GetMaterial(0); skyMat != nil {
+					w.cSky = skyMat.GetCurrentFrame()
+					w.cSkyU, w.cSkyV = skyMat.GetU(), skyMat.GetV()
 				}
 				continue
 			}
@@ -191,7 +193,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 				}
 				if mat.GetKind() == int(config.MaterialKindSky) {
 					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV() // Nebbia volumetrica atmosferica
-					fv.SetSky(tex, mat.GetU(), mat.GetV())
+					fv.SetMaterial(0, mat)
 					continue
 				}
 				faceBlendT := float32(0.0)

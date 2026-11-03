@@ -7,6 +7,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+const materialsMax = 8
+
+var _emptyMaterial = make([]*textures.Material, materialsMax)
+
 // FrameBatch represents a single drawing batch associated with a blend mode and material.
 type FrameBatch struct {
 	blendMode  int
@@ -31,9 +35,7 @@ type FrameVertices struct {
 	containers          []*FrameVertices
 	containerIdx        int
 	batches             []FrameBatch
-	cSky                *textures.Texture
-	cSkyU               float64
-	cSkyV               float64
+	materials           []*textures.Material
 }
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
@@ -47,6 +49,7 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 		containers:   make([]*FrameVertices, 16),
 		containerIdx: 0,
 		batches:      make([]FrameBatch, 0, 8),
+		materials:    make([]*textures.Material, materialsMax),
 	}
 	fv.verticesPtr = ctx.Ptr(fv.vertices)
 	fv.indicesPtr = ctx.Ptr(fv.indices)
@@ -87,21 +90,19 @@ func (w *FrameVertices) AddBatch(blendMode int, count int32, mat *textures.Mater
 	})
 }
 
-// SetSky records the sky texture and UV parameters for this staging container.
-func (w *FrameVertices) SetSky(tex *textures.Texture, u, v float64) {
-	w.cSky = tex
-	w.cSkyU = u
-	w.cSkyV = v
+// SetMaterial assigns a material to the specified index in the materials slice of the FrameVertices object.
+func (w *FrameVertices) SetMaterial(index int, mat *textures.Material) {
+	w.materials[index] = mat
 }
 
-// HasSky returns true if sky data was recorded.
-func (w *FrameVertices) HasSky() bool {
-	return w.cSky != nil
+// HasMaterial checks if there is a material assigned at the specified index in the materials slice.
+func (w *FrameVertices) HasMaterial(index int) bool {
+	return w.materials[index] != nil
 }
 
-// GetSky returns the recorded sky texture and UV parameters.
-func (w *FrameVertices) GetSky() (*textures.Texture, float64, float64) {
-	return w.cSky, w.cSkyU, w.cSkyV
+// GetMaterial retrieves the material at the specified index from the materials slice in the FrameVertices instance.
+func (w *FrameVertices) GetMaterial(index int) *textures.Material {
+	return w.materials[index]
 }
 
 // Commit fast-copies the staged vertices, re-indexes the indices to the current vertex slot,
@@ -157,7 +158,7 @@ func (w *FrameVertices) DeepReset() {
 	w.freezeIndicesCount = 0
 	w.freezeVerticesSlot = 0
 	w.batches = w.batches[:0]
-	w.cSky = nil
+	copy(w.materials, _emptyMaterial)
 	w.Reset()
 }
 

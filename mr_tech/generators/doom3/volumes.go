@@ -32,6 +32,11 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 	var volumes []*config.Volume
 
 	for _, model := range vs.pFile.Models {
+		// In Doom 3 .proc files, _area* models contain the static world geometry in world coordinates.
+		// Other models (func_static, triggers, movers, fractures) are entity submodels in local coordinates.
+		if !strings.HasPrefix(model.Name, "_area") {
+			continue
+		}
 		for _, surface := range model.Surfaces {
 			matName := surface.Material
 			texNameLC := strings.ToLower(matName)

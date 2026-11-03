@@ -77,6 +77,9 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	texManager := textures.NewTextures()
 	imgLoader := NewImageLoader(arc, texManager, materials)
 	for _, model := range procFile.Models {
+		if !strings.HasPrefix(model.Name, "_area") {
+			continue
+		}
 		for _, surface := range model.Surfaces {
 			imgLoader.LoadMaterialMaps(surface.Material)
 		}
@@ -121,13 +124,15 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 					case "light":
 						if origin, err := ent.GetOrigin(); err == nil {
 							r, g, b := ent.GetColor()
-							radius := ent.GetLightRadius()
+							radius := ent.GetLightRadius() * 2
 							light := config.NewConfigLight(origin, 1.0, config.LightKindDiffuse, radius)
 							light.R = r
 							light.G = g
 							light.B = b
 							root.Lights = append(root.Lights, light)
 						}
+					default:
+						fmt.Printf("Unhandled entity: %s\n", classname)
 					}
 				}
 			}

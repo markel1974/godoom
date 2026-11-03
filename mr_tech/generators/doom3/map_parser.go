@@ -3,9 +3,11 @@ package doom3
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
@@ -108,6 +110,75 @@ func (e *MapEntity) GetAngle() float64 {
 		return 0.0
 	}
 	return a
+}
+
+// GetLightKind determines whether the light entity is a spotlight, ambient, or diffuse point light.
+func (e *MapEntity) GetLightKind() config.LightKind {
+	tex, _ := e.GetProperty("texture")
+	texLower := strings.ToLower(tex)
+	ambient, _ := e.GetProperty("ambient")
+	if ambient == "1" || strings.Contains(texLower, "ambient") {
+		return config.LightKindAmbient
+	}
+	if _, ok := e.GetProperty("light_target"); ok {
+		return config.LightKindSpot
+	}
+	if strings.Contains(texLower, "spot") {
+		return config.LightKindSpot
+	}
+	return config.LightKindDiffuse
+}
+
+// GetSpotlightParams computes the direction vector and cone cut-off angles for a spotlight.
+func (e *MapEntity) GetSpotlightParams() (geometry.XYZ, float64, float64) {
+	dir := geometry.XYZ{X: 0, Y: 0, Z: -1}
+	cutOff := 45.0
+
+	if targetStr, ok := e.GetProperty("light_target"); ok {
+		parts := strings.Fields(targetStr)
+		if len(parts) == 3 {
+			x, err1 := strconv.ParseFloat(parts[0], 64)
+			y, err2 := strconv.ParseFloat(parts[1], 64)
+			z, err3 := strconv.ParseFloat(parts[2], 64)
+			if err1 == nil && err2 == nil && err3 == nil {
+				length := math.Sqrt(x*x + y*y + z*z)
+				if length > 0 {
+					dir = geometry.XYZ{X: x / length, Y: y / length, Z: z / length}
+					if rightStr, ok := e.GetProperty("light_right"); ok {
+						rParts := strings.Fields(rightStr)
+						if len(rParts) == 3 {
+							rx, rErr1 := strconv.ParseFloat(rParts[0], 64)
+							ry, rErr2 := strconv.ParseFloat(rParts[1], 64)
+							rz, rErr3 := strconv.ParseFloat(rParts[2], 64)
+							if rErr1 == nil && rErr2 == nil && rErr3 == nil {
+								rLen := math.Sqrt(rx*rx + ry*ry + rz*rz)
+								if rLen > 0 {
+									cutOff = math.Atan2(rLen, length) * 180.0 / math.Pi
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	} else if rotStr, ok := e.GetProperty("rotation"); ok {
+		parts := strings.Fields(rotStr)
+		if len(parts) == 9 {
+			r02, err1 := strconv.ParseFloat(parts[2], 64)
+			r12, err2 := strconv.ParseFloat(parts[5], 64)
+			r22, err3 := strconv.ParseFloat(parts[8], 64)
+			if err1 == nil && err2 == nil && err3 == nil {
+				dx, dy, dz := -r02, -r12, -r22
+				length := math.Sqrt(dx*dx + dy*dy + dz*dz)
+				if length > 0 {
+					dir = geometry.XYZ{X: dx / length, Y: dy / length, Z: dz / length}
+				}
+			}
+		}
+	}
+
+	outerCutOff := cutOff + 10.0
+	return dir, cutOff, outerCutOff
 }
 
 // MapParser parses Doom 3 .map ASCII files.

@@ -135,10 +135,15 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 						if origin, err := ent.GetOrigin(); err == nil {
 							r, g, b := ent.GetColor()
 							radius := ent.GetLightRadius()
-							light := config.NewConfigLight(origin, 1.0, config.LightKindAmbient, radius)
-							light.R = r
-							light.G = g
-							light.B = b
+							kind := ent.GetLightKind()
+							light := config.NewConfigLight(origin, 1.0, kind, radius)
+							light.R, light.G, light.B = r, g, b
+							if kind == config.LightKindSpot {
+								light.Intensity *= 5
+								dir, cutOff, outerCutOff := ent.GetSpotlightParams()
+								light.DirX, light.DirY, light.DirZ = dir.X, dir.Y, dir.Z
+								light.CutOff, light.OuterCutOff = cutOff, outerCutOff
+							}
 							root.Lights = append(root.Lights, light)
 						}
 					case "func": //IMPLEMENT

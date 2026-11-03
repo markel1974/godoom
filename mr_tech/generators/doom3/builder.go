@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -46,7 +45,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 		return nil, fmt.Errorf("level %d out of range for available maps", levelIndex)
 	}
 
-	procPath := "maps" + lumps.PakSeparator + maps[levelIndex]
+	procPath := "maps" + proc.Pak4Separator + maps[levelIndex]
 	fmt.Printf("Selected Doom 3 map: %s\n", procPath)
 
 	f, err := arc.Open(procPath)

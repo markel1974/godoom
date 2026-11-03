@@ -348,36 +348,35 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 			return false
 		}
 
-		// Raggio di influenza effettivo reale (stessa formula di decadimento dello shader GLSL)
-		falloff := light.GetFalloff()
-		effectiveRadius := 4.605 * falloff * intensity
-		if effectiveRadius < 100.0 {
-			effectiveRadius = 100.0
-		}
-
 		posX, posY, posZ := light.GetPosXYZ()
 		dx := posX - pX
 		dy := posY - pY
 		dz := posZ - pZ
 		distSq := dx*dx + dy*dy + dz*dz
 
+		// Raggio di influenza effettivo reale (stessa formula di decadimento dello shader GLSL)
+		falloff := light.GetFalloff()
+		effectiveRadius := 4.605 * falloff * intensity
+		if effectiveRadius < 100.0 {
+			effectiveRadius = 100.0
+		}
 		// Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
 		// la luce illumina l'ambiente circostante il giocatore.
 		// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
 		nearRadius := effectiveRadius + 250.0
 		if distSq > nearRadius*nearRadius {
 			// Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
-			b := light.GetAABB()
-			if !b.IntersectFrustum(frustumFront) {
+			if !isFront {
 				return false
 			}
+			//b := light.GetAABB()
 			// Occlusion culling: culla le luci lontane nascoste dietro i muri
-			occState := w.occlusion.GetState(light.GetId())
-			if occState != nil && !occState.IsVisible {
-				w.occlusion.Add(b, occState)
-				return false
-			}
-			w.occlusion.Add(b, occState)
+			//occState := w.occlusion.GetState(light.GetId())
+			//if occState != nil && !occState.IsVisible {
+			//	w.occlusion.Add(b, occState)
+			//	return false
+			//}
+			//w.occlusion.Add(b, occState)
 		}
 
 		w.fl.Create(light, distSq, isFront)

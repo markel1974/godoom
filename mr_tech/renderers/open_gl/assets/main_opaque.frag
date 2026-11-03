@@ -258,33 +258,41 @@ void main() {
     // DYNAMIC SHADOW LIGHTS (Spotlights with Shadow Atlas)
     vec3 shadowLightsTotal = vec3(0.0);
     for (int i = 0; i < u_numShadowLights; ++i) {
-        vec3 lightPosWorld = u_shadowLights[i].pos_intensity.xyz;
-        float intensity = u_shadowLights[i].pos_intensity.w;
+        int lightType = int(u_shadowLights[i].color_type.w);
+        float intensity = max(u_shadowLights[i].pos_intensity.w, 0.0);
         if (intensity <= 0.001) continue;
 
-        vec3 lightDirWorld = u_shadowLights[i].dir_falloff.xyz;
-        float falloffFactor = max(u_shadowLights[i].dir_falloff.w, 1.0);
         vec3 lightColor = u_shadowLights[i].color_type.xyz;
-        float outerCutOff = u_shadowLights[i].spot_params.x;
-        float cutOff = u_shadowLights[i].spot_params.y;
+        vec3 lightPosView = (u_view * vec4(u_shadowLights[i].pos_intensity.xyz, 1.0)).xyz;
+        vec3 spotDirView = normalize(mat3(u_view) * u_shadowLights[i].dir_falloff.xyz);
+        float falloffFactor = max(u_shadowLights[i].dir_falloff.w, 1.0);
 
-        vec3 lightPosView = (u_view * vec4(lightPosWorld, 1.0)).xyz;
-        vec3 spotDirView = normalize(mat3(u_view) * lightDirWorld);
+        vec3 L;
+        float dist;
+        float falloff = 1.0;
+        float spotEffect = 1.0;
 
-        vec3 diff = lightPosView - ViewPos;
-        float dist = length(diff);
-        float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
-        if (dist > effectiveRadius) continue;
+        if (lightType == 2) {
+            L = -spotDirView;
+        } else {
+            vec3 diff = lightPosView - ViewPos;
+            dist = length(diff);
+            float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
+            if (dist > effectiveRadius) continue;
 
-        vec3 L = diff / dist;
-        float theta = dot(-L, spotDirView);
-        float spotEffect = smoothstep(outerCutOff, cutOff, theta);
-        if (spotEffect <= 0.001) continue;
-
-        float expFalloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
+            L = diff / dist;
+            falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
+            if (lightType == 1) {
+                float theta = dot(-L, spotDirView);
+                float outerCutOff = u_shadowLights[i].spot_params.x;
+                float cutOff = u_shadowLights[i].spot_params.y;
+                spotEffect = smoothstep(outerCutOff, cutOff, theta);
+                if (spotEffect <= 0.001) continue;
+            }
+        }
 
         float shadow = 1.0;
-        if (u_enableShadows == 1) {
+        if (u_enableShadows == 1 && lightType == 1) {
             vec4 lightClip = u_shadowLights[i].lightSpace * vec4(WorldPos, 1.0);
             if (lightClip.w > 0.0) {
                 vec3 proj = lightClip.xyz / lightClip.w * 0.5 + 0.5;
@@ -293,7 +301,7 @@ void main() {
                     float row = float(i / 4);
                     vec2 atlasUV = vec2((clamp(proj.x, 0.001, 0.999) + col) * 0.25, (clamp(proj.y, 0.001, 0.999) + row) * 0.25);
                     float cosTheta = clamp(dot(finalNormal, L), 0.0, 1.0);
-                    float bias = max(0.001 * (1.0 - cosTheta), 0.0001);
+                    float bias = max(0.0025 * (1.0 - cosTheta), 0.0005);
 
                     vec2 texelSize = 1.0 / vec2(textureSize(u_shadowAtlas, 0));
                     float s = 0.0;
@@ -301,18 +309,19 @@ void main() {
                     s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * texelSize, proj.z - bias));
                     s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * texelSize, proj.z - bias));
                     s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * texelSize, proj.z - bias));
-                    shadow = s * 0.25;
-                } else {
-                    shadow = 0.0;
+                    float shadowOcclusion = s * 0.25;
+                    float edgeFade = smoothstep(0.0, 0.05, proj.x) * smoothstep(1.0, 0.95, proj.x) *
+                                     smoothstep(0.0, 0.05, proj.y) * smoothstep(1.0, 0.95, proj.y);
+                    shadow = mix(1.0, shadowOcclusion, edgeFade);
                 }
-            } else {
-                shadow = 0.0;
             }
         }
 
-        float NdotL = max(dot(finalNormal, L), 0.0);
-        float spec = calculateSpecular(finalNormal, L, V);
-        shadowLightsTotal += (albedo * lightColor * NdotL + vec3(spec) * lightColor) * (intensity * expFalloff * spotEffect * shadow);
+        float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
+        float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V);
+        vec3 diffuse = albedo * lightColor * NdotL;
+        vec3 specular = vec3(specularPower) * lightColor;
+        shadowLightsTotal += (diffuse + specular) * intensity * falloff * spotEffect * shadow;
     }
 
     // DYNAMIC POINT/AREA/DIR LIGHTS (UBO LightsBlock)
@@ -347,6 +356,7 @@ void main() {
                 float cutOff = u_lights[i].spot_params.x;
                 float outerCutOff = u_lights[i].spot_params.y;
                 spotEffect = smoothstep(outerCutOff, cutOff, theta);
+                if (spotEffect <= 0.001) continue;
             }
         }
 

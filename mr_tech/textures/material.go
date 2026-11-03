@@ -255,6 +255,11 @@ func (m *Material) GetHeadFrame() *Texture {
 	return m.frames[0]
 }
 
+// IsAnimated checks whether the material has more than one animation frame.
+func (m *Material) IsAnimated() bool {
+	return m.totalFrames > 1
+}
+
 // GetCurrentFrame returns the currently active frame of the animation based on global tick and tick interval.
 func (m *Material) GetCurrentFrame() *Texture {
 	if m.totalFrames > 1 {

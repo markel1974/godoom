@@ -151,7 +151,24 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 	pushPass := func() {
 		for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 			vol := w.visibleVol.At(vIdx)
+			marker := vol.GetMarker()
+			if marker <= 0 {
+				marker = w.fv.CreateMarker()
+				vol.SetMarker(marker)
+			}
+			fv := w.fv.Stage(marker)
+			if !vol.IsDirty() {
+				w.fv.Commit(fv, w.modes)
+				if fv.HasSky() {
+					w.cSky, w.cSkyU, w.cSkyV = fv.GetSky()
+				}
+				continue
+			}
+
+			fv.DeepReset()
+			hasAnim := false
 			faces, faceCount := vol.GetFaces()
+			startIdx := fv.GetIndicesLen()
 			//added := false
 			//var added int
 			for x := 0; x < faceCount; x++ {
@@ -159,6 +176,9 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 				mat := face.GetMaterial()
 				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 					continue
+				}
+				if mat.IsAnimated() {
+					hasAnim = true
 				}
 				tex := mat.GetCurrentFrame()
 				if tex == nil {
@@ -171,6 +191,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 				}
 				if mat.GetKind() == int(config.MaterialKindSky) {
 					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV() // Nebbia volumetrica atmosferica
+					fv.SetSky(tex, mat.GetU(), mat.GetV())
 					continue
 				}
 				faceBlendT := float32(0.0)
@@ -182,26 +203,29 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 				shininess := float32(mat.GetShininess())
 				detailScale := mat.GetDetailScale()
 				detailFactor := mat.GetDetailFactor()
-				startIdx := w.fv.GetIndicesLen()
 				p0X, p0Y, p0Z := face.GetPoint0()
 				p1X, p1Y, p1Z := face.GetPoint1()
 				p2X, p2Y, p2Z := face.GetPoint2()
 				u0, v0 := face.GetUV0()
 				u1, v1 := face.GetUV1()
 				u2, v2 := face.GetUV2()
-				id0 := w.fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-				id1 := w.fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-				id2 := w.fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-				w.fv.AddTriangle(id0, id1, id2)
+				id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+				fv.AddTriangle(id0, id1, id2)
 				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
-				endIdx := w.fv.GetIndicesLen()
+				endIdx := fv.GetIndicesLen()
 				if startIdx != endIdx {
 					blendMode := mat.GetBlendMode()
-					targetDc := w.modes[blendMode]
-					targetDc.Compute(startIdx, endIdx, mat)
+					fv.AddBatch(blendMode, endIdx-startIdx, mat)
 					startIdx = endIdx
 					//added = true
 				}
+			}
+
+			w.fv.Commit(fv, w.modes)
+			if !hasAnim {
+				vol.ClearDirty()
 			}
 			//if added {
 			//	counter++

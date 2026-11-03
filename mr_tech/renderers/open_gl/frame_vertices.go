@@ -4,7 +4,15 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+// FrameBatch represents a single drawing batch associated with a blend mode and material.
+type FrameBatch struct {
+	blendMode  int
+	indexCount int32
+	material   *textures.Material
+}
 
 // FrameVertices represents a structure for managing vertex and index buffers for rendering geometries in frames.
 type FrameVertices struct {
@@ -20,20 +28,120 @@ type FrameVertices struct {
 	freezeVerticesCount int32
 	freezeVerticesSlot  uint32
 	stride              int32
+	containers          []*FrameVertices
+	containerIdx        int
+	batches             []FrameBatch
+	cSky                *textures.Texture
+	cSkyU               float64
+	cSkyV               float64
 }
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 	const maxStride = 20
 	fv := &FrameVertices{
-		ctx:      ctx,
-		vertices: make([]float32, maxVerts),
-		indices:  make([]uint32, maxVerts),
-		stride:   maxStride,
+		ctx:          ctx,
+		vertices:     make([]float32, maxVerts),
+		indices:      make([]uint32, maxVerts),
+		stride:       maxStride,
+		containers:   make([]*FrameVertices, 16),
+		containerIdx: 0,
+		batches:      make([]FrameBatch, 0, 8),
 	}
 	fv.verticesPtr = ctx.Ptr(fv.vertices)
 	fv.indicesPtr = ctx.Ptr(fv.indices)
 	return fv
+}
+
+// CreateMarker increments the container index and returns the updated value as an integer.
+func (w *FrameVertices) CreateMarker() int {
+	w.containerIdx++
+	return w.containerIdx
+}
+
+// Stage ensures the container at the specified marker index exists, growing if needed, and returns it.
+func (w *FrameVertices) Stage(marker int) *FrameVertices {
+	for marker >= len(w.containers) {
+		w.growContainers()
+	}
+	if w.containers[marker] == nil {
+		w.containers[marker] = NewFrameVertices(w.ctx, 128)
+	}
+	return w.containers[marker]
+}
+
+// AddBatch appends or merges a draw batch of indices into the FrameVertices.
+func (w *FrameVertices) AddBatch(blendMode int, count int32, mat *textures.Material) {
+	if count <= 0 {
+		return
+	}
+	n := len(w.batches)
+	if n > 0 && w.batches[n-1].blendMode == blendMode && w.batches[n-1].material == mat {
+		w.batches[n-1].indexCount += count
+		return
+	}
+	w.batches = append(w.batches, FrameBatch{
+		blendMode:  blendMode,
+		indexCount: count,
+		material:   mat,
+	})
+}
+
+// SetSky records the sky texture and UV parameters for this staging container.
+func (w *FrameVertices) SetSky(tex *textures.Texture, u, v float64) {
+	w.cSky = tex
+	w.cSkyU = u
+	w.cSkyV = v
+}
+
+// HasSky returns true if sky data was recorded.
+func (w *FrameVertices) HasSky() bool {
+	return w.cSky != nil
+}
+
+// GetSky returns the recorded sky texture and UV parameters.
+func (w *FrameVertices) GetSky() (*textures.Texture, float64, float64) {
+	return w.cSky, w.cSkyU, w.cSkyV
+}
+
+// Commit fast-copies the staged vertices, re-indexes the indices to the current vertex slot,
+// and replays the draw commands into the appropriate blend modes.
+func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
+	vCount := fv.verticesCount
+	iCount := fv.indicesCount
+	if vCount == 0 || iCount == 0 {
+		return
+	}
+
+	for w.verticesCount+vCount >= int32(len(w.vertices)) {
+		w.growVertices()
+	}
+
+	copy(w.vertices[w.verticesCount:], fv.vertices[:vCount])
+
+	for w.indicesCount+iCount > int32(len(w.indices)) {
+		w.growIndices()
+	}
+
+	baseSlot := w.verticesSlot
+	dstIndices := w.indices[w.indicesCount : w.indicesCount+iCount]
+	srcIndices := fv.indices[:iCount]
+	for i := int32(0); i < iCount; i++ {
+		dstIndices[i] = srcIndices[i] + baseSlot
+	}
+
+	startIdx := w.indicesCount
+	for b := 0; b < len(fv.batches); b++ {
+		batch := fv.batches[b]
+		endIdx := startIdx + batch.indexCount
+		targetDc := modes[batch.blendMode]
+		targetDc.Compute(startIdx, endIdx, batch.material)
+		startIdx = endIdx
+	}
+
+	w.verticesCount += vCount
+	w.verticesSlot += fv.verticesSlot
+	w.indicesCount += iCount
 }
 
 // Freeze locks the current state of verticesCount, indicesCount, and verticesSlot for subsequent resets.
@@ -48,6 +156,8 @@ func (w *FrameVertices) DeepReset() {
 	w.freezeVerticesCount = 0
 	w.freezeIndicesCount = 0
 	w.freezeVerticesSlot = 0
+	w.batches = w.batches[:0]
+	w.cSky = nil
 	w.Reset()
 }
 
@@ -93,7 +203,7 @@ func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	return w.AddVertex20(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, material, specBoost, shininess, 1.0, 0.0)
 }
 
-// AddVertex19 adds a vertex to the buffer with 19 parameters, including detail scale and detail factor.
+// AddVertex20 adds a vertex to the buffer with 19 parameters, including detail scale and detail factor.
 func (w *FrameVertices) AddVertex20(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, material, specBoost, shininess, detailScale, detailFactor float32) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
@@ -175,4 +285,14 @@ func (w *FrameVertices) growVertices() {
 	copy(newData, w.vertices)
 	w.vertices = newData
 	w.verticesPtr = w.ctx.Ptr(w.vertices)
+}
+
+func (w *FrameVertices) growContainers() {
+	newSize := len(w.containers) * 2
+	if newSize == 0 {
+		newSize = 128
+	}
+	newData := make([]*FrameVertices, newSize)
+	copy(newData, w.containers)
+	w.containers = newData
 }

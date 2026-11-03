@@ -30,6 +30,8 @@ type Volume struct {
 	thing      IThing
 	sector     *sectors.Sector
 	vertexTags []Tag
+	marker     int
+	dirty      bool
 }
 
 // NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
@@ -43,6 +45,8 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
 		vertexTags: make([]Tag, 0),
+		dirty:      true,
+		marker:     -1,
 	}
 	v.facesPtr = &v.faces
 	return v
@@ -96,8 +100,34 @@ func (v *Volume) Rebuild() bool {
 
 	v.entity.Rebuild(minX, minY, minZ, w, h, d)
 	//v.entity.GetAABB().Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+	v.dirty = true
 
 	return true
+}
+
+// IsDirty checks whether the Volume has been marked as dirty, indicating that modifications are pending.
+func (v *Volume) IsDirty() bool {
+	return v.dirty
+}
+
+// SetDirty sets the dirty flag of the Volume, indicating whether it needs re-staging.
+func (v *Volume) SetDirty(dirty bool) {
+	v.dirty = dirty
+}
+
+// ClearDirty resets the dirty flag of the Volume to false, indicating no pending modifications need to be handled.
+func (v *Volume) ClearDirty() {
+	v.dirty = false
+}
+
+// SetMarker sets the marker value for the Volume instance, which can be used to distinguish or track it.
+func (v *Volume) SetMarker(marker int) {
+	v.marker = marker
+}
+
+// GetMarker retrieves the marker value associated with the Volume instance.
+func (v *Volume) GetMarker() int {
+	return v.marker
 }
 
 // SetThing sets the IThing instance associated with the Volume.

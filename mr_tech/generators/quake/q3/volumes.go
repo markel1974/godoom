@@ -24,7 +24,7 @@ func NewVolumes(shaders *Shaders) *Volumes {
 
 // Create generates and groups faces into 3D volumes based on spatial hashing, material properties, and shader configurations.
 func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, error) {
-	const chunkSize = float64(1024)
+	const chunkSize = float64(384)
 
 	var volumes []*config.Volume
 	chunks := make(map[string]*config.Volume)

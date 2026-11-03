@@ -115,11 +115,14 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 			if entities, err := mapParser.Parse(); err == nil {
 				for _, ent := range entities {
 					classname, _ := ent.GetProperty("classname")
-					switch classname {
-					case "info_player_start":
-						if origin, err := ent.GetOrigin(); err == nil {
-							playerPos = origin
-							playerAngle = ent.GetAngle()
+					base := strings.Split(classname, "_")[0]
+					switch base {
+					case "info":
+						if classname == "info_player_start" {
+							if origin, err := ent.GetOrigin(); err == nil {
+								playerPos = origin
+								playerAngle = ent.GetAngle()
+							}
 						}
 					case "light":
 						if origin, err := ent.GetOrigin(); err == nil {
@@ -131,6 +134,20 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 							light.B = b
 							root.Lights = append(root.Lights, light)
 						}
+					case "func": //IMPLEMENT
+					case "trigger": //IMPLEMENT
+					case "speaker": //IMPLEMENT
+					case "item": //IMPLEMENT
+					case "path": //IMPLEMENT
+					case "admin": //IMPLEMENT
+					case "monster": //IMPLEMENT
+					case "ammo": //IMPLEMENT
+					case "weapon": //IMPLEMENT
+					case "moveable": //IMPLEMENT
+					case "target": //IMPLEMENT
+					case "ai": //IMPLEMENT
+					case "env": //IMPLEMENT
+					case "worldspawn": //IMPLEMENT
 					default:
 						fmt.Printf("Unhandled entity: %s\n", classname)
 					}

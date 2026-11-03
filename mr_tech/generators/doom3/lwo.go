@@ -91,10 +91,14 @@ func ParseLWO(r io.Reader, materials *Materials) (*config.Model3DEntry, error) {
 				bitsX := binary.BigEndian.Uint32(cData[off : off+4])
 				bitsY := binary.BigEndian.Uint32(cData[off+4 : off+8])
 				bitsZ := binary.BigEndian.Uint32(cData[off+8 : off+12])
+				// LightWave coordinate system (left-handed, Y-up) to Doom 3 (right-handed, Z-up):
+				// Doom 3 X = LightWave X (pos[0])
+				// Doom 3 Y = LightWave Z (pos[2])
+				// Doom 3 Z = LightWave Y (pos[1])
 				points[i] = geometry.XYZ{
 					X: float64(math.Float32frombits(bitsX)),
-					Y: float64(math.Float32frombits(bitsY)),
-					Z: float64(math.Float32frombits(bitsZ)),
+					Y: float64(math.Float32frombits(bitsZ)),
+					Z: float64(math.Float32frombits(bitsY)),
 				}
 			}
 
@@ -234,6 +238,7 @@ func ParseLWO(r io.Reader, materials *Materials) (*config.Model3DEntry, error) {
 		}
 
 		// Triangulate convex polygons (triangle fan)
+		// Reverse winding (v0, v2, v1) due to coordinate system conversion (left-handed to right-handed)
 		v0 := getVertex(poly[0])
 		for i := 1; i < len(poly)-1; i++ {
 			v1 := getVertex(poly[i])
@@ -241,8 +246,8 @@ func ParseLWO(r io.Reader, materials *Materials) (*config.Model3DEntry, error) {
 
 			tri := config.NewModel3DEntryTriangle(mat)
 			tri.Vertices[0] = v0
-			tri.Vertices[1] = v1
-			tri.Vertices[2] = v2
+			tri.Vertices[1] = v2
+			tri.Vertices[2] = v1
 			triangles = append(triangles, tri)
 		}
 	}
@@ -256,7 +261,7 @@ func ParseLWO(r io.Reader, materials *Materials) (*config.Model3DEntry, error) {
 	cModel.ActionDefinitions = []string{"idle"}
 	cModel.ActionIntervals = [][2]int{{0, 0}}
 
-	cModel.DropToFloor()
+	CenterModel(cModel)
 
 	return cModel, nil
 }

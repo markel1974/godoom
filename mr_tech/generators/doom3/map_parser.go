@@ -139,6 +139,9 @@ func (e *MapEntity) IsDormant() bool {
 	if val, ok := e.GetProperty("trigger"); ok && (val == "1" || strings.ToLower(val) == "true") {
 		return true
 	}
+	if val, ok := e.GetProperty("bind"); ok && val != "" {
+		return true
+	}
 	return false
 }
 

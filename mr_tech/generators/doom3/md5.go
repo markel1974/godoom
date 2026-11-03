@@ -37,16 +37,10 @@ type md5Vert struct {
 
 // md5SubMesh holds the parsed geometry and weight list of an individual sub-mesh.
 type md5SubMesh struct {
-	shader  string
-	verts   []md5Vert
-	tris    [][3]int
-	weights []md5Weight
-}
-
-// MD5Mesh holds the parsed joints and submeshes of a .md5mesh file.
-type MD5Mesh struct {
-	joints    []md5Joint
-	subMeshes []md5SubMesh
+	shader   string
+	vertices []md5Vert
+	tris     [][3]int
+	weights  []md5Weight
 }
 
 // md5HierarchyJoint represents a bone in the hierarchy section of an .md5anim file.
@@ -63,63 +57,20 @@ type md5BaseFrameJoint struct {
 	orient [4]float64
 }
 
-// MD5Anim holds the parsed animation data of an .md5anim file.
-type MD5Anim struct {
-	numFrames int
-	frameRate int
-	hierarchy []md5HierarchyJoint
-	baseframe []md5BaseFrameJoint
-	frames    [][]float64
+// MD5Mesh represents a parsed MD5 mesh structure containing joints and sub-mesh data.
+type MD5Mesh struct {
+	joints    []md5Joint
+	subMeshes []md5SubMesh
 }
 
-// quatRotate rotates a 3D vector by a unit quaternion (qx, qy, qz, qw).
-func quatRotate(q [4]float64, v geometry.XYZ) geometry.XYZ {
-	qx, qy, qz, qw := q[0], q[1], q[2], q[3]
-
-	tx := 2.0 * (qy*v.Z - qz*v.Y)
-	ty := 2.0 * (qz*v.X - qx*v.Z)
-	tz := 2.0 * (qx*v.Y - qy*v.X)
-
-	rx := v.X + qw*tx + (qy*tz - qz*ty)
-	ry := v.Y + qw*ty + (qz*tx - qx*tz)
-	rz := v.Z + qw*tz + (qx*ty - qy*tx)
-
-	return geometry.XYZ{X: rx, Y: ry, Z: rz}
+// NewMD5Mesh creates and returns a new instance of MD5Mesh with uninitialized joints and sub-mesh data.
+func NewMD5Mesh() *MD5Mesh {
+	return &MD5Mesh{}
 }
 
-// quatMult multiplies two unit quaternions q1 and q2.
-func quatMult(q1, q2 [4]float64) [4]float64 {
-	x1, y1, z1, w1 := q1[0], q1[1], q1[2], q1[3]
-	x2, y2, z2, w2 := q2[0], q2[1], q2[2], q2[3]
-
-	return [4]float64{
-		w1*x2 + x1*w2 + y1*z2 - z1*y2,
-		w1*y2 - x1*z2 + y1*w2 + z1*x2,
-		w1*z2 + x1*y2 - y1*x2 + z1*w2,
-		w1*w2 - x1*x2 - y1*y2 - z1*z2,
-	}
-}
-
-// quatNormalize normalizes a quaternion to unit length.
-func quatNormalize(q [4]float64) [4]float64 {
-	lenSq := q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]
-	if lenSq <= 0.0 {
-		return [4]float64{0, 0, 0, 1}
-	}
-	l := math.Sqrt(lenSq)
-	return [4]float64{q[0] / l, q[1] / l, q[2] / l, q[3] / l}
-}
-
-// quatConj returns the conjugate of a unit quaternion, which is its inverse.
-func quatConj(q [4]float64) [4]float64 {
-	return [4]float64{-q[0], -q[1], -q[2], q[3]}
-}
-
-// ParseMD5Mesh parses a Doom 3 .md5mesh file.
-func ParseMD5Mesh(r io.Reader) (*MD5Mesh, error) {
+// Parse reads an MD5Mesh file from the provided reader and populates the mesh with parsed joints and sub-mesh data.
+func (mesh *MD5Mesh) Parse(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
-
-	mesh := &MD5Mesh{}
 	inJoints := false
 	inMesh := false
 
@@ -153,7 +104,7 @@ func ParseMD5Mesh(r io.Reader) (*MD5Mesh, error) {
 			if inJoints {
 				inJoints = false
 			} else if inMesh {
-				if len(currentSubMesh.verts) > 0 && len(currentSubMesh.tris) > 0 {
+				if len(currentSubMesh.vertices) > 0 && len(currentSubMesh.tris) > 0 {
 					mesh.subMeshes = append(mesh.subMeshes, currentSubMesh)
 				}
 				inMesh = false
@@ -236,7 +187,7 @@ func ParseMD5Mesh(r io.Reader) (*MD5Mesh, error) {
 						startW, _ := strconv.Atoi(tailFields[0])
 						countW, _ := strconv.Atoi(tailFields[1])
 
-						currentSubMesh.verts = append(currentSubMesh.verts, md5Vert{
+						currentSubMesh.vertices = append(currentSubMesh.vertices, md5Vert{
 							u:          float32(u),
 							v:          float32(v),
 							weightIdx:  startW,
@@ -275,22 +226,34 @@ func ParseMD5Mesh(r io.Reader) (*MD5Mesh, error) {
 		}
 	}
 
-	if inMesh && len(currentSubMesh.verts) > 0 && len(currentSubMesh.tris) > 0 {
+	if inMesh && len(currentSubMesh.vertices) > 0 && len(currentSubMesh.tris) > 0 {
 		mesh.subMeshes = append(mesh.subMeshes, currentSubMesh)
 	}
 
 	if len(mesh.subMeshes) == 0 {
-		return nil, fmt.Errorf("no valid sub-meshes parsed from md5mesh")
+		return fmt.Errorf("no valid sub-meshes parsed from md5mesh")
 	}
 
-	return mesh, nil
+	return nil
 }
 
-// ParseMD5Anim parses an .md5anim file.
-func ParseMD5Anim(r io.Reader) (*MD5Anim, error) {
-	scanner := bufio.NewScanner(r)
+// MD5Anim holds the parsed animation data of an .md5anim file.
+type MD5Anim struct {
+	numFrames int
+	frameRate int
+	hierarchy []md5HierarchyJoint
+	baseFrame []md5BaseFrameJoint
+	frames    [][]float64
+}
 
-	anim := &MD5Anim{}
+// NewMD5Anim initializes and returns a new MD5Anim object for parsing and managing .md5anim animation data.
+func NewMD5Anim() *MD5Anim {
+	return &MD5Anim{}
+}
+
+// Parse parses an .md5anim file.
+func (anim *MD5Anim) Parse(r io.Reader) error {
+	scanner := bufio.NewScanner(r)
 	inHierarchy := false
 	inBaseFrame := false
 	inFrame := false
@@ -388,7 +351,7 @@ func ParseMD5Anim(r io.Reader) (*MD5Anim, error) {
 					qy, _ := strconv.ParseFloat(qFields[1], 64)
 					qz, _ := strconv.ParseFloat(qFields[2], 64)
 
-					anim.baseframe = append(anim.baseframe, md5BaseFrameJoint{
+					anim.baseFrame = append(anim.baseFrame, md5BaseFrameJoint{
 						pos:    geometry.XYZ{X: px, Y: py, Z: pz},
 						orient: [4]float64{qx, qy, qz, 0},
 					})
@@ -408,7 +371,7 @@ func ParseMD5Anim(r io.Reader) (*MD5Anim, error) {
 		}
 	}
 
-	return anim, nil
+	return nil
 }
 
 // BuildFrameSkeleton constructs the animated skeleton joints in model space for a specific frame index.
@@ -420,7 +383,7 @@ func (anim *MD5Anim) BuildFrameSkeleton(frameIdx int) []md5Joint {
 	frameData := anim.frames[frameIdx]
 
 	for i, h := range anim.hierarchy {
-		base := anim.baseframe[i]
+		base := anim.baseFrame[i]
 		pos := base.pos
 		orient := base.orient
 		k := 0
@@ -479,144 +442,21 @@ func (anim *MD5Anim) BuildFrameSkeleton(frameIdx int) []md5Joint {
 			}
 		} else {
 			parentJoint := skel[h.parent]
-			rpos := quatRotate(parentJoint.orient, pos)
+			rPos := QuatRotate(parentJoint.orient, pos)
 			skel[i] = md5Joint{
 				name:   h.name,
 				parent: h.parent,
 				pos: geometry.XYZ{
-					X: parentJoint.pos.X + rpos.X,
-					Y: parentJoint.pos.Y + rpos.Y,
-					Z: parentJoint.pos.Z + rpos.Z,
+					X: parentJoint.pos.X + rPos.X,
+					Y: parentJoint.pos.Y + rPos.Y,
+					Z: parentJoint.pos.Z + rPos.Z,
 				},
-				orient: quatNormalize(quatMult(parentJoint.orient, orient)),
+				orient: QuatNormalize(QuatMultiplies(parentJoint.orient, orient)),
 			}
 		}
 	}
 
 	return skel
-}
-
-// headJointTransformType indicates whether a head joint maps directly to a body joint or to a child bone.
-type headJointTransformType int
-
-const (
-	headTransformBody headJointTransformType = iota
-	headTransformChild
-)
-
-type headJointBinding struct {
-	kind      headJointTransformType
-	bodyIdx   int
-	parentIdx int
-	pLocal    geometry.XYZ
-	qLocal    [4]float64
-}
-
-// HeadAttachment handles linking a separate head MD5 mesh (e.g. helmets, zombie heads) to an animated body skeleton.
-type HeadAttachment struct {
-	mesh     *MD5Mesh
-	bindings []headJointBinding
-}
-
-// NewHeadAttachment builds joint bindings between the head mesh and the body skeleton.
-func NewHeadAttachment(bodyMesh *MD5Mesh, headMesh *MD5Mesh, attachJoint string) *HeadAttachment {
-	if bodyMesh == nil || headMesh == nil || len(headMesh.joints) == 0 {
-		return nil
-	}
-
-	bodyJoints := make(map[string]int, len(bodyMesh.joints))
-	for i, j := range bodyMesh.joints {
-		bodyJoints[j.name] = i
-	}
-
-	attachIdx := -1
-	if len(attachJoint) > 0 {
-		if idx, ok := bodyJoints[attachJoint]; ok {
-			attachIdx = idx
-		}
-	}
-	if attachIdx < 0 {
-		if idx, ok := bodyJoints["Shoulders"]; ok {
-			attachIdx = idx
-		} else {
-			attachIdx = 0
-		}
-	}
-
-	bindings := make([]headJointBinding, len(headMesh.joints))
-	for i, hj := range headMesh.joints {
-		if hj.name == "origin" {
-			bindings[i] = headJointBinding{kind: headTransformBody, bodyIdx: attachIdx}
-		} else if bIdx, exists := bodyJoints[hj.name]; exists {
-			bindings[i] = headJointBinding{kind: headTransformBody, bodyIdx: bIdx}
-		} else {
-			pIdx := hj.parent
-			if pIdx < 0 || pIdx >= len(headMesh.joints) {
-				bindings[i] = headJointBinding{kind: headTransformBody, bodyIdx: attachIdx}
-				continue
-			}
-			pj := headMesh.joints[pIdx]
-			invQ := quatConj(pj.orient)
-			dPos := geometry.XYZ{
-				X: hj.pos.X - pj.pos.X,
-				Y: hj.pos.Y - pj.pos.Y,
-				Z: hj.pos.Z - pj.pos.Z,
-			}
-			pLoc := quatRotate(invQ, dPos)
-			qLoc := quatMult(invQ, hj.orient)
-			bindings[i] = headJointBinding{
-				kind:      headTransformChild,
-				parentIdx: pIdx,
-				pLocal:    pLoc,
-				qLocal:    qLoc,
-			}
-		}
-	}
-
-	return &HeadAttachment{
-		mesh:     headMesh,
-		bindings: bindings,
-	}
-}
-
-// BuildHeadSkeleton calculates the world pose of all head joints for the given body skeleton pose.
-func (h *HeadAttachment) BuildHeadSkeleton(bodySkel []md5Joint) []md5Joint {
-	if h == nil || h.mesh == nil || len(bodySkel) == 0 {
-		return nil
-	}
-	headSkel := make([]md5Joint, len(h.mesh.joints))
-	for i, hj := range h.mesh.joints {
-		b := h.bindings[i]
-		if b.kind == headTransformBody {
-			if b.bodyIdx >= 0 && b.bodyIdx < len(bodySkel) {
-				bj := bodySkel[b.bodyIdx]
-				headSkel[i] = md5Joint{
-					name:   hj.name,
-					parent: hj.parent,
-					pos:    bj.pos,
-					orient: bj.orient,
-				}
-			}
-		} else {
-			if b.parentIdx >= 0 && b.parentIdx < len(headSkel) {
-				pEval := headSkel[b.parentIdx]
-				rPos := quatRotate(pEval.orient, b.pLocal)
-				cPos := geometry.XYZ{
-					X: pEval.pos.X + rPos.X,
-					Y: pEval.pos.Y + rPos.Y,
-					Z: pEval.pos.Z + rPos.Z,
-				}
-				cOrient := quatNormalize(quatMult(pEval.orient, b.qLocal))
-				headSkel[i] = md5Joint{
-					name:   hj.name,
-					parent: hj.parent,
-					pos:    cPos,
-					orient: cOrient,
-				}
-			}
-		}
-	}
-	return headSkel
 }
 
 // BakeMD5Model evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
@@ -666,14 +506,14 @@ func BakeMD5Model(mesh *MD5Mesh, headMesh *MD5Mesh, headJointName string, anims 
 		// Bake body submeshes
 		for sIdx, sub := range mesh.subMeshes {
 			mat := subMaterials[sIdx]
-			computedVerts := make([]geometry.XYZ, len(sub.verts))
-			for i, vert := range sub.verts {
+			computedVerts := make([]geometry.XYZ, len(sub.vertices))
+			for i, vert := range sub.vertices {
 				var p geometry.XYZ
 				for w := 0; w < vert.weightSpan; w++ {
 					weight := sub.weights[vert.weightIdx+w]
 					joint := skel[weight.joint]
 
-					rotated := quatRotate(joint.orient, weight.pos)
+					rotated := QuatRotate(joint.orient, weight.pos)
 					p.X += (joint.pos.X + rotated.X) * weight.bias
 					p.Y += (joint.pos.Y + rotated.Y) * weight.bias
 					p.Z += (joint.pos.Z + rotated.Z) * weight.bias
@@ -689,7 +529,7 @@ func BakeMD5Model(mesh *MD5Mesh, headMesh *MD5Mesh, headJointName string, anims 
 				tri := config.NewModel3DEntryTriangle(mat)
 				for k := 0; k < 3; k++ {
 					vi := triIdx[k]
-					v := sub.verts[vi]
+					v := sub.vertices[vi]
 					tri.Vertices[k] = config.Model3DEntryVertex{
 						Pos: computedVerts[vi],
 						U:   v.u,
@@ -705,14 +545,14 @@ func BakeMD5Model(mesh *MD5Mesh, headMesh *MD5Mesh, headJointName string, anims 
 			headSkel := headAttachment.BuildHeadSkeleton(skel)
 			for sIdx, sub := range headMesh.subMeshes {
 				mat := headMaterials[sIdx]
-				computedVerts := make([]geometry.XYZ, len(sub.verts))
-				for i, vert := range sub.verts {
+				computedVerts := make([]geometry.XYZ, len(sub.vertices))
+				for i, vert := range sub.vertices {
 					var p geometry.XYZ
 					for w := 0; w < vert.weightSpan; w++ {
 						weight := sub.weights[vert.weightIdx+w]
 						joint := headSkel[weight.joint]
 
-						rotated := quatRotate(joint.orient, weight.pos)
+						rotated := QuatRotate(joint.orient, weight.pos)
 						p.X += (joint.pos.X + rotated.X) * weight.bias
 						p.Y += (joint.pos.Y + rotated.Y) * weight.bias
 						p.Z += (joint.pos.Z + rotated.Z) * weight.bias
@@ -728,7 +568,7 @@ func BakeMD5Model(mesh *MD5Mesh, headMesh *MD5Mesh, headJointName string, anims 
 					tri := config.NewModel3DEntryTriangle(mat)
 					for k := 0; k < 3; k++ {
 						vi := triIdx[k]
-						v := sub.verts[vi]
+						v := sub.vertices[vi]
 						tri.Vertices[k] = config.Model3DEntryVertex{
 							Pos: computedVerts[vi],
 							U:   v.u,
@@ -753,8 +593,8 @@ func BakeMD5Model(mesh *MD5Mesh, headMesh *MD5Mesh, headJointName string, anims 
 
 		startFrame := len(allFrames)
 		for f := 0; f < len(anim.frames); f++ {
-			skel := anim.BuildFrameSkeleton(f)
-			frame := bakeFrameWithSkel(skel)
+			skeleton := anim.BuildFrameSkeleton(f)
+			frame := bakeFrameWithSkel(skeleton)
 			allFrames = append(allFrames, frame)
 		}
 		endFrame := len(allFrames) - 1

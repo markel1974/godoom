@@ -2,6 +2,7 @@ package doom3
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -46,8 +47,8 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	}
 	//defer mf.Close()
 
-	mesh, err := ParseMD5Mesh(mf)
-	if err != nil {
+	mesh := NewMD5Mesh()
+	if err := mesh.Parse(mf); err != nil {
 		return nil, fmt.Errorf("parsing md5mesh %s: %w", cleanPath, err)
 	}
 
@@ -55,7 +56,8 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	if len(spec.HeadMesh) > 0 {
 		cHeadPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.HeadMesh, "\\", "/")))
 		if hf, err := t.arc.Open(cHeadPath); err == nil {
-			if parsedHead, err := ParseMD5Mesh(hf); err == nil {
+			parsedHead := NewMD5Mesh()
+			if err := parsedHead.Parse(hf); err == nil {
 				headMesh = parsedHead
 			}
 		}
@@ -69,8 +71,9 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 		cAnimPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(animPath, "\\", "/")))
 		if af, err := t.arc.Open(cAnimPath); err == nil {
 			//defer af.Close()
-			if parsedAnim, err := ParseMD5Anim(af); err == nil {
-				anims[actionKey] = parsedAnim
+			anim := NewMD5Anim()
+			if err := anim.Parse(af); err == nil {
+				anims[actionKey] = anim
 			}
 		}
 	}
@@ -114,8 +117,8 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 
 	var cModel *config.Model3DEntry
 	if strings.HasSuffix(cleanPath, ".md5mesh") {
-		mesh, mErr := ParseMD5Mesh(f)
-		if mErr != nil {
+		mesh := NewMD5Mesh()
+		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
 		cModel, err = BakeMD5Model(mesh, nil, "", nil, t.materials)
@@ -188,7 +191,48 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 		return nil, fmt.Errorf("loading model for %s (%s): %w", classname, modelPath, err)
 	}
 
-	thingCfg := config.NewConfigThing(classname, origin, angle, spec.Kind, spec.Mass, spec.Radius, spec.Height, spec.Speed)
+	height := spec.Height
+	radius := spec.Radius
+	if cModel != nil && len(cModel.Frames) > 0 {
+		minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
+		maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+		hasV := false
+		for _, tri := range cModel.Frames[0].Triangles {
+			for _, v := range tri.Vertices {
+				hasV = true
+				if v.Pos.X < minX {
+					minX = v.Pos.X
+				}
+				if v.Pos.X > maxX {
+					maxX = v.Pos.X
+				}
+				if v.Pos.Y < minY {
+					minY = v.Pos.Y
+				}
+				if v.Pos.Y > maxY {
+					maxY = v.Pos.Y
+				}
+				if v.Pos.Z < minZ {
+					minZ = v.Pos.Z
+				}
+				if v.Pos.Z > maxZ {
+					maxZ = v.Pos.Z
+				}
+			}
+		}
+		if hasV {
+			modelH := maxZ - minZ
+			if modelH > 1.0 {
+				height = modelH
+			}
+			modelR := math.Max(maxX-minX, maxY-minY) * 0.5
+			if modelR > 1.0 {
+				radius = modelR
+			}
+		}
+	}
+
+	thingCfg := config.NewConfigThing(classname, origin, angle, spec.Kind, spec.Mass, radius, height, spec.Speed)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
 

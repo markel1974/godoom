@@ -226,15 +226,17 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 		w.hwOcc.Readback()
 	}
 	// SKYBOX
-	if skyTex := w.builder.GetSkyTexture(); skyTex != nil {
-		skyTexId := skyTex.GetIdentifier()
-		if skyTexId < 0 {
-			skyTexId, _ = w.tex.Get(skyTex)
-			skyTex.SetIdentifier(skyTexId)
+	if skyMat := w.builder.GetSkyMaterial(); skyMat != nil {
+		if skyTex := skyMat.GetCurrentFrame(); skyTex != nil {
+			skyTexId := skyTex.GetIdentifier()
+			if skyTexId < 0 {
+				skyTexId, _ = w.tex.Get(skyTex)
+				skyTex.SetIdentifier(skyTexId)
+			}
+			u, v := skyMat.GetU(), skyMat.GetV()
+			tick := float32(textures.TickF())
+			w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
 		}
-		u, v := w.builder.GetSkyUV()
-		tick := float32(textures.TickF())
-		w.sky.Render(skyTexId, float32(u)*tick, float32(v)*tick)
 	}
 	// MAIN LIQUID (Refraction & Depth Fog)
 	if w.dcLiquid.HasCommands() {

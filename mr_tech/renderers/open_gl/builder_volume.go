@@ -27,14 +27,14 @@ type BuilderVolume struct {
 	dcRenderOpaque   *shaders.DrawCommandsRender
 	dcRenderAdditive *shaders.DrawCommandsRender
 	dcRenderLiquid   *shaders.DrawCommandsRender
-	cSky             *textures.Texture
-	cSkyU, cSkyV     float64
-	cal              *model.Calibration
-	visibleVol       *VisibleVolumes
-	modes            []*DrawCommands
-	occlusion        *OcclusionHW
-	frustumFront     *metrics.Frustum
-	frustumRear      *metrics.Frustum
+	cSky             *textures.Material
+	//cSkyU, cSkyV     float64
+	cal          *model.Calibration
+	visibleVol   *VisibleVolumes
+	modes        []*DrawCommands
+	occlusion    *OcclusionHW
+	frustumFront *metrics.Frustum
+	frustumRear  *metrics.Frustum
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -51,8 +51,6 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		dcRenderAdditive: shaders.NewDrawCommandsRender(ctx, "additive", true),
 		dcRenderLiquid:   shaders.NewDrawCommandsRender(ctx, "liquid", true),
 		cSky:             nil,
-		cSkyU:            0.0,
-		cSkyV:            0.0,
 		cal:              cal,
 		visibleVol:       NewVisibleVols(8192),
 		modes:            make([]*DrawCommands, config.BlendModeLatest),
@@ -92,11 +90,8 @@ func (w *BuilderVolume) GetVertices() (unsafe.Pointer, int, int32, unsafe.Pointe
 // GetLights retrieves the light data and their count from the frame lights. It returns a slice of float32 and an int32 count.
 func (w *BuilderVolume) GetLights() (unsafe.Pointer, int32, int32) { return w.fl.GetLights() }
 
-// GetSkyTexture retrieves the current sky texture associated with the BuilderVolume. Returns nil if no texture is set.
-func (w *BuilderVolume) GetSkyTexture() *textures.Texture { return w.cSky }
-
-// GetSkyUV retrieves the horizontal and vertical scroll offsets for the sky texture.
-func (w *BuilderVolume) GetSkyUV() (float64, float64) { return w.cSkyU, w.cSkyV }
+// GetSkyMaterial returns the sky material associated with the BuilderVolume.
+func (w *BuilderVolume) GetSkyMaterial() *textures.Material { return w.cSky }
 
 // Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
@@ -161,8 +156,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 			if !vol.IsDirty() {
 				w.fv.Commit(fv, w.modes)
 				if skyMat := fv.GetMaterial(0); skyMat != nil {
-					w.cSky = skyMat.GetCurrentFrame()
-					w.cSkyU, w.cSkyV = skyMat.GetU(), skyMat.GetV()
+					w.cSky = skyMat
 				}
 				continue
 			}
@@ -192,7 +186,7 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					tex.SetIdentifier(tId)
 				}
 				if mat.GetKind() == int(config.MaterialKindSky) {
-					w.cSky, w.cSkyU, w.cSkyV = tex, mat.GetU(), mat.GetV() // Nebbia volumetrica atmosferica
+					w.cSky = mat // Nebbia volumetrica atmosferica
 					fv.SetMaterial(0, mat)
 					continue
 				}

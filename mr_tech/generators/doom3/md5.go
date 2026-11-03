@@ -110,6 +110,11 @@ func quatNormalize(q [4]float64) [4]float64 {
 	return [4]float64{q[0] / l, q[1] / l, q[2] / l, q[3] / l}
 }
 
+// quatConj returns the conjugate of a unit quaternion, which is its inverse.
+func quatConj(q [4]float64) [4]float64 {
+	return [4]float64{-q[0], -q[1], -q[2], q[3]}
+}
+
 // ParseMD5Mesh parses a Doom 3 .md5mesh file.
 func ParseMD5Mesh(r io.Reader) (*MD5Mesh, error) {
 	scanner := bufio.NewScanner(r)
@@ -491,13 +496,136 @@ func (anim *MD5Anim) BuildFrameSkeleton(frameIdx int) []md5Joint {
 	return skel
 }
 
-// BakeMD5Model evaluates an MD5Mesh with optional animations and compiles it into a Config Model3DEntry.
-func BakeMD5Model(mesh *MD5Mesh, anims map[string]*MD5Anim, materials *Materials) (*config.Model3DEntry, error) {
+// headJointTransformType indicates whether a head joint maps directly to a body joint or to a child bone.
+type headJointTransformType int
+
+const (
+	headTransformBody headJointTransformType = iota
+	headTransformChild
+)
+
+type headJointBinding struct {
+	kind      headJointTransformType
+	bodyIdx   int
+	parentIdx int
+	pLocal    geometry.XYZ
+	qLocal    [4]float64
+}
+
+// HeadAttachment handles linking a separate head MD5 mesh (e.g. helmets, zombie heads) to an animated body skeleton.
+type HeadAttachment struct {
+	mesh     *MD5Mesh
+	bindings []headJointBinding
+}
+
+// NewHeadAttachment builds joint bindings between the head mesh and the body skeleton.
+func NewHeadAttachment(bodyMesh *MD5Mesh, headMesh *MD5Mesh, attachJoint string) *HeadAttachment {
+	if bodyMesh == nil || headMesh == nil || len(headMesh.joints) == 0 {
+		return nil
+	}
+
+	bodyJoints := make(map[string]int, len(bodyMesh.joints))
+	for i, j := range bodyMesh.joints {
+		bodyJoints[j.name] = i
+	}
+
+	attachIdx := -1
+	if len(attachJoint) > 0 {
+		if idx, ok := bodyJoints[attachJoint]; ok {
+			attachIdx = idx
+		}
+	}
+	if attachIdx < 0 {
+		if idx, ok := bodyJoints["Shoulders"]; ok {
+			attachIdx = idx
+		} else {
+			attachIdx = 0
+		}
+	}
+
+	bindings := make([]headJointBinding, len(headMesh.joints))
+	for i, hj := range headMesh.joints {
+		if hj.name == "origin" {
+			bindings[i] = headJointBinding{kind: headTransformBody, bodyIdx: attachIdx}
+		} else if bIdx, exists := bodyJoints[hj.name]; exists {
+			bindings[i] = headJointBinding{kind: headTransformBody, bodyIdx: bIdx}
+		} else {
+			pIdx := hj.parent
+			if pIdx < 0 || pIdx >= len(headMesh.joints) {
+				bindings[i] = headJointBinding{kind: headTransformBody, bodyIdx: attachIdx}
+				continue
+			}
+			pj := headMesh.joints[pIdx]
+			invQ := quatConj(pj.orient)
+			dPos := geometry.XYZ{
+				X: hj.pos.X - pj.pos.X,
+				Y: hj.pos.Y - pj.pos.Y,
+				Z: hj.pos.Z - pj.pos.Z,
+			}
+			pLoc := quatRotate(invQ, dPos)
+			qLoc := quatMult(invQ, hj.orient)
+			bindings[i] = headJointBinding{
+				kind:      headTransformChild,
+				parentIdx: pIdx,
+				pLocal:    pLoc,
+				qLocal:    qLoc,
+			}
+		}
+	}
+
+	return &HeadAttachment{
+		mesh:     headMesh,
+		bindings: bindings,
+	}
+}
+
+// BuildHeadSkeleton calculates the world pose of all head joints for the given body skeleton pose.
+func (h *HeadAttachment) BuildHeadSkeleton(bodySkel []md5Joint) []md5Joint {
+	if h == nil || h.mesh == nil || len(bodySkel) == 0 {
+		return nil
+	}
+	headSkel := make([]md5Joint, len(h.mesh.joints))
+	for i, hj := range h.mesh.joints {
+		b := h.bindings[i]
+		if b.kind == headTransformBody {
+			if b.bodyIdx >= 0 && b.bodyIdx < len(bodySkel) {
+				bj := bodySkel[b.bodyIdx]
+				headSkel[i] = md5Joint{
+					name:   hj.name,
+					parent: hj.parent,
+					pos:    bj.pos,
+					orient: bj.orient,
+				}
+			}
+		} else {
+			if b.parentIdx >= 0 && b.parentIdx < len(headSkel) {
+				pEval := headSkel[b.parentIdx]
+				rPos := quatRotate(pEval.orient, b.pLocal)
+				cPos := geometry.XYZ{
+					X: pEval.pos.X + rPos.X,
+					Y: pEval.pos.Y + rPos.Y,
+					Z: pEval.pos.Z + rPos.Z,
+				}
+				cOrient := quatNormalize(quatMult(pEval.orient, b.qLocal))
+				headSkel[i] = md5Joint{
+					name:   hj.name,
+					parent: hj.parent,
+					pos:    cPos,
+					orient: cOrient,
+				}
+			}
+		}
+	}
+	return headSkel
+}
+
+// BakeMD5Model evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
+func BakeMD5Model(mesh *MD5Mesh, headMesh *MD5Mesh, headJointName string, anims map[string]*MD5Anim, materials *Materials) (*config.Model3DEntry, error) {
 	if mesh == nil || len(mesh.subMeshes) == 0 {
 		return nil, fmt.Errorf("empty md5 mesh")
 	}
 
-	// Prepare submesh materials
+	// Prepare body submesh materials
 	subMaterials := make([]*config.Material, len(mesh.subMeshes))
 	for sIdx, sub := range mesh.subMeshes {
 		var mat *config.Material
@@ -510,6 +638,24 @@ func BakeMD5Model(mesh *MD5Mesh, anims map[string]*MD5Anim, materials *Materials
 		subMaterials[sIdx] = mat
 	}
 
+	// Prepare head submesh materials and attachment if present
+	var headAttachment *HeadAttachment
+	var headMaterials []*config.Material
+	if headMesh != nil && len(headMesh.subMeshes) > 0 {
+		headAttachment = NewHeadAttachment(mesh, headMesh, headJointName)
+		headMaterials = make([]*config.Material, len(headMesh.subMeshes))
+		for sIdx, sub := range headMesh.subMeshes {
+			var mat *config.Material
+			if materials != nil && len(sub.shader) > 0 {
+				mat = materials.CreateConfigMaterial(sub.shader)
+			}
+			if mat == nil {
+				mat = config.NewConfigMaterial("md5.mesh", []string{sub.shader}, config.MaterialKindSolid)
+			}
+			headMaterials[sIdx] = mat
+		}
+	}
+
 	var allFrames []config.Model3DEntryFrame
 	var actionNames []string
 	var actionIntervals [][2]int
@@ -517,6 +663,7 @@ func BakeMD5Model(mesh *MD5Mesh, anims map[string]*MD5Anim, materials *Materials
 	bakeFrameWithSkel := func(skel []md5Joint) config.Model3DEntryFrame {
 		var frameTriangles []config.Model3DEntryTriangle
 
+		// Bake body submeshes
 		for sIdx, sub := range mesh.subMeshes {
 			mat := subMaterials[sIdx]
 			computedVerts := make([]geometry.XYZ, len(sub.verts))
@@ -550,6 +697,46 @@ func BakeMD5Model(mesh *MD5Mesh, anims map[string]*MD5Anim, materials *Materials
 					}
 				}
 				frameTriangles = append(frameTriangles, tri)
+			}
+		}
+
+		// Bake attached head submeshes
+		if headAttachment != nil && headMesh != nil {
+			headSkel := headAttachment.BuildHeadSkeleton(skel)
+			for sIdx, sub := range headMesh.subMeshes {
+				mat := headMaterials[sIdx]
+				computedVerts := make([]geometry.XYZ, len(sub.verts))
+				for i, vert := range sub.verts {
+					var p geometry.XYZ
+					for w := 0; w < vert.weightSpan; w++ {
+						weight := sub.weights[vert.weightIdx+w]
+						joint := headSkel[weight.joint]
+
+						rotated := quatRotate(joint.orient, weight.pos)
+						p.X += (joint.pos.X + rotated.X) * weight.bias
+						p.Y += (joint.pos.Y + rotated.Y) * weight.bias
+						p.Z += (joint.pos.Z + rotated.Z) * weight.bias
+					}
+					computedVerts[i] = p
+				}
+
+				for _, triIdx := range sub.tris {
+					if triIdx[0] >= len(computedVerts) || triIdx[1] >= len(computedVerts) || triIdx[2] >= len(computedVerts) {
+						continue
+					}
+
+					tri := config.NewModel3DEntryTriangle(mat)
+					for k := 0; k < 3; k++ {
+						vi := triIdx[k]
+						v := sub.verts[vi]
+						tri.Vertices[k] = config.Model3DEntryVertex{
+							Pos: computedVerts[vi],
+							U:   v.u,
+							V:   v.v,
+						}
+					}
+					frameTriangles = append(frameTriangles, tri)
+				}
 			}
 		}
 

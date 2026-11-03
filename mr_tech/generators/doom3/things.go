@@ -32,7 +32,11 @@ func NewThings(arc IPkArchive, materials *Materials, texManager *textures.Textur
 // loadAnimatedMonster loads and caches a skinned, animated MD5 model with idle, walk, and run cycles.
 func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry, error) {
 	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.ModelPath, "\\", "/")))
-	if cached, ok := t.modelCache[cleanPath]; ok {
+	cacheKey := cleanPath
+	if len(spec.HeadMesh) > 0 {
+		cacheKey += "#" + strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.HeadMesh, "\\", "/")))
+	}
+	if cached, ok := t.modelCache[cacheKey]; ok {
 		return cached, nil
 	}
 
@@ -45,6 +49,16 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	mesh, err := ParseMD5Mesh(mf)
 	if err != nil {
 		return nil, fmt.Errorf("parsing md5mesh %s: %w", cleanPath, err)
+	}
+
+	var headMesh *MD5Mesh
+	if len(spec.HeadMesh) > 0 {
+		cHeadPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.HeadMesh, "\\", "/")))
+		if hf, err := t.arc.Open(cHeadPath); err == nil {
+			if parsedHead, err := ParseMD5Mesh(hf); err == nil {
+				headMesh = parsedHead
+			}
+		}
 	}
 
 	anims := make(map[string]*MD5Anim)
@@ -65,7 +79,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	loadAnim("walk", spec.WalkAnim)
 	loadAnim("run", spec.RunAnim)
 
-	cModel, err := BakeMD5Model(mesh, anims, t.materials)
+	cModel, err := BakeMD5Model(mesh, headMesh, spec.HeadJoint, anims, t.materials)
 	if err != nil {
 		return nil, fmt.Errorf("baking md5 model %s: %w", cleanPath, err)
 	}
@@ -81,7 +95,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 		}
 	}
 
-	t.modelCache[cleanPath] = cModel
+	t.modelCache[cacheKey] = cModel
 	return cModel, nil
 }
 
@@ -104,7 +118,7 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 		if mErr != nil {
 			return nil, mErr
 		}
-		cModel, err = BakeMD5Model(mesh, nil, t.materials)
+		cModel, err = BakeMD5Model(mesh, nil, "", nil, t.materials)
 	} else if strings.HasSuffix(cleanPath, ".lwo") {
 		cModel, err = ParseLWO(f, t.materials)
 	} else {

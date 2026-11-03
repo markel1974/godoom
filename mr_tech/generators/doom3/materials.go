@@ -8,12 +8,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 )
 
-// IPkArchive abstracts file and directory access within a package archive.
+// IPkArchive represents an interface for accessing custom archive formats, providing file opening and directory filtering.
 type IPkArchive interface {
 	Open(p string) (io.ReadSeeker, error)
 	ReadDirFilter(p string, f string) ([]string, error)
 }
 
+// ToMaterial determines the material kind based on the provided lowercase texture name string.
 func ToMaterial(texNameLC string) config.MaterialKind {
 	kind := config.MaterialKindSolid
 	if strings.Contains(texNameLC, "sky") {
@@ -26,7 +27,7 @@ func ToMaterial(texNameLC string) config.MaterialKind {
 	return kind
 }
 
-// MaterialDef holds parsed texture maps and properties for a Doom 3 material shader.
+// MaterialDef defines the properties of a material, including its name, texture maps, and material kind.
 type MaterialDef struct {
 	Name        string
 	DiffuseMap  string
@@ -35,6 +36,7 @@ type MaterialDef struct {
 	Kind        config.MaterialKind
 }
 
+// NewMaterialDef creates and initializes a new MaterialDef instance based on the provided material name.
 func NewMaterialDef(matName string) *MaterialDef {
 	mat := &MaterialDef{
 		Name: matName,
@@ -43,19 +45,19 @@ func NewMaterialDef(matName string) *MaterialDef {
 	return mat
 }
 
-// Materials manages and resolves Doom 3 materials from .mtr files and standard naming conventions.
+// Materials represents a collection of material definitions identified by unique string keys.
 type Materials struct {
 	defs map[string]*MaterialDef
 }
 
-// NewMaterials creates an initialized Materials manager.
+// NewMaterials initializes and returns a pointer to a new Materials instance with an empty map for material definitions.
 func NewMaterials() *Materials {
 	return &Materials{
 		defs: make(map[string]*MaterialDef),
 	}
 }
 
-// LoadFromArchive scans and parses all .mtr files in the materials/ folder of the archive.
+// LoadFromArchive processes material files from the provided archive and adds their data to the Materials collection.
 func (m *Materials) LoadFromArchive(arc IPkArchive) error {
 	mtrFiles, _ := arc.ReadDirFilter("materials", "\\.mtr$")
 	for _, mtrName := range mtrFiles {
@@ -73,9 +75,9 @@ func (m *Materials) LoadFromArchive(arc IPkArchive) error {
 	return nil
 }
 
+// parseMtrData parses material definitions from a byte slice and populates the Materials' map with parsed data.
 func (m *Materials) parseMtrData(data []byte) {
 	lexer := proc.NewLexer(data)
-
 	for {
 		name, err := lexer.NextToken()
 		if err != nil {
@@ -105,7 +107,6 @@ func (m *Materials) parseMtrData(data []byte) {
 				depth--
 				continue
 			}
-
 			tokLower := strings.ToLower(tok)
 			switch tokLower {
 			case "diffusemap":
@@ -130,7 +131,7 @@ func (m *Materials) parseMtrData(data []byte) {
 	}
 }
 
-// Resolve looks up a MaterialDef by material name, falling back to Doom 3 suffix conventions if not defined.
+// Resolve returns a MaterialDef for the given material name, creating a new definition if it doesn't exist in the collection.
 func (m *Materials) Resolve(materialName string) *MaterialDef {
 	nameLower := strings.ToLower(materialName)
 	if def, ok := m.defs[nameLower]; ok {
@@ -145,13 +146,11 @@ func (m *Materials) Resolve(materialName string) *MaterialDef {
 	return def
 }
 
-// CreateConfigMaterial constructs a config.Material with diffuse, normal, and specular bindings.
+// CreateConfigMaterial creates and returns a configured `config.Material` based on the provided material name.
 func (m *Materials) CreateConfigMaterial(materialName string) *config.Material {
 	def := m.Resolve(materialName)
-
 	textures := []string{def.DiffuseMap}
 	mat := config.NewConfigMaterial(def.Name, textures, def.Kind)
-
 	if def.NormalMap != "" {
 		mat.NormalMap = def.NormalMap
 	}
@@ -160,6 +159,5 @@ func (m *Materials) CreateConfigMaterial(materialName string) *config.Material {
 		mat.SpecularBoost = 0.4
 		mat.Shininess = 32.0
 	}
-
 	return mat
 }

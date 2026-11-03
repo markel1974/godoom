@@ -1,7 +1,6 @@
 package open_gl
 
 import (
-	"fmt"
 	"math"
 	"unsafe"
 
@@ -147,13 +146,13 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 	w.visibleVol.Sort()
 
-	counter := 0
+	//counter := 0
 
 	pushPass := func() {
 		for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
 			vol := w.visibleVol.At(vIdx)
 			faces, faceCount := vol.GetFaces()
-			added := false
+			//added := false
 			//var added int
 			for x := 0; x < faceCount; x++ {
 				face := (*faces)[x]
@@ -201,18 +200,18 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 					targetDc := w.modes[blendMode]
 					targetDc.Compute(startIdx, endIdx, mat)
 					startIdx = endIdx
-					added = true
+					//added = true
 				}
 			}
-			if added {
-				counter++
-			}
+			//if added {
+			//	counter++
+			//}
 		}
 	}
 
 	pushPass()
 
-	fmt.Println("Volumes:", volumes.Len(), counter, volumes.Len()-counter)
+	//fmt.Println("Volumes:", volumes.Len(), counter, volumes.Len()-counter)
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.

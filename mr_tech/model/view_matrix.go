@@ -110,19 +110,17 @@ func (vi *ViewMatrix) GetSway() (float64, float64, float64) {
 
 // GetFrustum computes and returns the front and rear frustums of the ViewMatrix based on the provided matrices.
 func (vi *ViewMatrix) GetFrustum(f [16]float32, r [16]float32) (*aabb.Frustum, *aabb.Frustum) {
-	return vi.GetFrontFrustum(f), vi.GetRearFrustum(r)
+	return vi.front.Rebuild(f), vi.rear.Rebuild(r)
 }
 
 // GetFrontFrustum computes and returns the front frustum based on the given 4x4 view-projection matrix.
 func (vi *ViewMatrix) GetFrontFrustum(f [16]float32) *aabb.Frustum {
-	vi.front.Rebuild(f)
-	return vi.front
+	return vi.front.Rebuild(f)
 }
 
 // GetRearFrustum rebuilds and returns the rear frustum using the provided 4x4 column-major matrix.
-func (vi *ViewMatrix) GetRearFrustum(f [16]float32) *aabb.Frustum {
-	vi.rear.Rebuild(f)
-	return vi.rear
+func (vi *ViewMatrix) GetRearFrustum(r [16]float32) *aabb.Frustum {
+	return vi.rear.Rebuild(r)
 }
 
 /*

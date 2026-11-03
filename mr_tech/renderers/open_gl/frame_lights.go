@@ -94,7 +94,7 @@ func (f *FrameLights) Prepare() {
 }
 
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
-func (f *FrameLights) Create(light *lights.Light, distSq float64) {
+func (f *FrameLights) Create(light *lights.Light, distSq float64, isFront bool) {
 	r, g, b := float32(light.GetRed()), float32(light.GetGreen()), float32(light.GetBlue())
 	posX, posY, posZ := light.GetPosXYZ()
 	glPosX, glPosY, glPosZ := float32(posX), float32(posZ), float32(-posY)
@@ -117,7 +117,7 @@ func (f *FrameLights) Create(light *lights.Light, distSq float64) {
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1
-		if f.useShadowLight {
+		if isFront && f.useShadowLight {
 			added := f.addShadowLight(
 				float32(distSq),
 				glPosX, glPosY, glPosZ,

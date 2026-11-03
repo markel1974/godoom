@@ -50,6 +50,6 @@ func (l *Lights) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IOb
 }
 
 // QueryMultiFrustum performs a query on the spatial tree using two frustums and invokes a callback for each intersected object.
-func (l *Lights) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject) bool) {
+func (l *Lights) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
 	l.tree.QueryMultiFrustum(rear, front, callback)
 }

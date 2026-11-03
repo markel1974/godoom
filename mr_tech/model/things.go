@@ -131,7 +131,7 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 }
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
-func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject) bool) {
+func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
 	th.tree.QueryMultiFrustum(rear, front, callback)
 }
 

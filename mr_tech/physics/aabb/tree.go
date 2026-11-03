@@ -236,7 +236,7 @@ func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool
 }
 
 // QueryMultiFrustum traverses the AABB tree to find objects intersecting any of the two given frustums, invoking the callback per match.
-func (a *Tree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IObject) bool) {
+func (a *Tree) QueryMultiFrustum(fFront, fBack *Frustum, callback func(object IObject, isFront bool, isBack bool) bool) {
 	stackIndex := 0
 	a.stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
@@ -248,10 +248,12 @@ func (a *Tree) QueryMultiFrustum(f1, f2 *Frustum, callback func(object IObject) 
 			continue
 		}
 		node := a.nodes[nodeIndex]
+		intersectFront := node.aabb.IntersectFrustum(fFront)
+		intersectBack := node.aabb.IntersectFrustum(fBack)
 		// Short-circuit evaluation: previene test doppi e invocazioni duplicate del callback
-		if node.aabb.IntersectFrustum(f1) || node.aabb.IntersectFrustum(f2) {
+		if intersectFront || intersectBack {
 			if node.IsLeaf() {
-				if callback(node.object) {
+				if callback(node.object, intersectFront, intersectBack) {
 					break
 				}
 			} else {

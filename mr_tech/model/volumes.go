@@ -86,7 +86,7 @@ func (s *Volumes) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.
 }
 
 // QueryMultiFrustum performs a spatial query using two frustums, invoking the callback for each overlapping object.
-func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject) bool) {
+func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
 	s.tree.QueryMultiFrustum(front, rear, callback)
 }
 

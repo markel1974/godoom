@@ -59,7 +59,7 @@ func (e *Engine) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.I
 }
 
 // QueryMultiFrustum checks which objects intersect both the front and rear frustums and invokes the callback for each intersecting object.
-func (e *Engine) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject) bool) {
+func (e *Engine) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
 	e.volumes.QueryMultiFrustum(front, rear, callback)
 }
 

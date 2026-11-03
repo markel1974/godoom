@@ -317,7 +317,7 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 	w.fl.Prepare()
 	counter := 0
 
-	queryLights := func(object aabb.IObject) bool {
+	queryLights := func(object aabb.IObject, isFront bool, isBack bool) bool {
 		light := object.(*lights.Light)
 		if light.GetKind() == config.LightKindNone {
 			return false
@@ -346,13 +346,12 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 		// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
 		nearRadius := effectiveRadius + 250.0
 		if distSq > nearRadius*nearRadius {
-			// 2. Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
+			// Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
 			b := light.GetAABB()
 			if !b.IntersectFrustum(frustumFront) {
 				return false
 			}
-
-			// 3. Occlusion culling: culla le luci lontane nascoste dietro i muri
+			// Occlusion culling: culla le luci lontane nascoste dietro i muri
 			occState := w.occlusion.GetState(light.GetId())
 			if occState != nil && !occState.IsVisible {
 				w.occlusion.Add(b, occState)
@@ -361,7 +360,7 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 			w.occlusion.Add(b, occState)
 		}
 
-		w.fl.Create(light, distSq)
+		w.fl.Create(light, distSq, isFront)
 		counter++
 		return false
 	}

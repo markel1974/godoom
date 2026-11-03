@@ -64,9 +64,11 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse proc file %s: %w", procPath, err)
 	}
+	fmt.Printf("Parsed %d models, %d portals from .proc\n", len(procFile.Models), len(procFile.Portals))
 
 	materials := NewMaterials()
 	_ = materials.LoadFromArchive(arc)
+	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.defs))
 
 	texManager := textures.NewTextures()
 	imgLoader := NewImageLoader(arc, texManager, materials)
@@ -75,6 +77,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 			imgLoader.LoadMaterialMaps(surface.Material)
 		}
 	}
+	fmt.Printf("Loaded textures for world geometry\n")
 
 	const chunkSize = float64(512)
 	vol := NewVolumes(procFile, chunkSize, materials)
@@ -82,6 +85,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	if err != nil {
 		return nil, fmt.Errorf("failed to build volumes: %w", err)
 	}
+	fmt.Printf("Built %d volumes\n", len(volumes))
 
 	cal := config.NewConfigCalibration()
 	cal.AspectRatio = 1.0

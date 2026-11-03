@@ -5,7 +5,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 // Lexer is a tokenizer for Doom 3 ASCII definition files (.proc, .map, .mtr).
@@ -56,6 +55,8 @@ func (l *Lexer) NextToken() (string, error) {
 			}
 			if l.pos+1 < l.len {
 				l.pos += 2
+			} else {
+				l.pos = l.len
 			}
 			continue
 		}
@@ -96,10 +97,14 @@ func (l *Lexer) NextToken() (string, error) {
 	start := l.pos
 	for l.pos < l.len {
 		c := l.data[l.pos]
-		if unicode.IsSpace(rune(c)) || c == '{' || c == '}' || c == '(' || c == ')' || c == '"' {
+		if c <= ' ' || c == '{' || c == '}' || c == '(' || c == ')' || c == '"' {
 			break
 		}
 		l.pos++
+	}
+	if start == l.pos && l.pos < l.len {
+		l.pos++
+		return string([]byte{b}), nil
 	}
 
 	return string(l.data[start:l.pos]), nil
@@ -159,25 +164,77 @@ func (l *Lexer) ReadInt() (int, error) {
 
 // SkipBlock skips tokens until the matching closing brace '}' for a block starting with '{'.
 func (l *Lexer) SkipBlock() error {
-	depth := 0
-	for {
-		tok, err := l.NextToken()
-		if err != nil {
-			return err
+	if l.hasP {
+		if l.peek == "{" {
+			l.hasP = false
+		} else if l.peek == "}" {
+			l.hasP = false
+			return nil
+		} else {
+			l.hasP = false
 		}
-		if tok == "{" {
+	}
+
+	depth := 1
+	for l.pos < l.len {
+		b := l.data[l.pos]
+
+		// Line comment //
+		if b == '/' && l.pos+1 < l.len && l.data[l.pos+1] == '/' {
+			l.pos += 2
+			for l.pos < l.len && l.data[l.pos] != '\n' {
+				l.pos++
+			}
+			continue
+		}
+
+		// Block comment /* ... */
+		if b == '/' && l.pos+1 < l.len && l.data[l.pos+1] == '*' {
+			l.pos += 2
+			for l.pos+1 < l.len && !(l.data[l.pos] == '*' && l.data[l.pos+1] == '/') {
+				l.pos++
+			}
+			if l.pos+1 < l.len {
+				l.pos += 2
+			} else {
+				l.pos = l.len
+			}
+			continue
+		}
+
+		// String literal "..."
+		if b == '"' {
+			l.pos++
+			for l.pos < l.len && l.data[l.pos] != '"' {
+				if l.data[l.pos] == '\\' && l.pos+1 < l.len {
+					l.pos++
+				}
+				l.pos++
+			}
+			if l.pos < l.len {
+				l.pos++
+			}
+			continue
+		}
+
+		if b == '{' {
 			depth++
-		} else if tok == "}" {
+		} else if b == '}' {
 			depth--
 			if depth <= 0 {
+				l.pos++
 				return nil
 			}
 		}
+
+		l.pos++
 	}
+
+	return io.EOF
 }
 
 func (l *Lexer) skipWhitespace() {
-	for l.pos < l.len && (l.data[l.pos] == ' ' || l.data[l.pos] == '\t' || l.data[l.pos] == '\r' || l.data[l.pos] == '\n') {
+	for l.pos < l.len && l.data[l.pos] <= ' ' {
 		l.pos++
 	}
 }

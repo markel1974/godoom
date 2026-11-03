@@ -35,6 +35,14 @@ type MaterialDef struct {
 	Kind        config.MaterialKind
 }
 
+func NewMaterialDef(matName string) *MaterialDef {
+	mat := &MaterialDef{
+		Name: matName,
+		Kind: ToMaterial(matName),
+	}
+	return mat
+}
+
 // Materials manages and resolves Doom 3 materials from .mtr files and standard naming conventions.
 type Materials struct {
 	defs map[string]*MaterialDef
@@ -82,12 +90,7 @@ func (m *Materials) parseMtrData(data []byte) {
 		}
 		_ = lexer.Expect("{")
 
-		def := &MaterialDef{
-			Name: name,
-			Kind: config.MaterialKindSolid,
-		}
-		def.Kind = ToMaterial(name)
-
+		def := NewMaterialDef(name)
 		depth := 1
 		for depth > 0 {
 			tok, err := lexer.NextToken()
@@ -133,22 +136,11 @@ func (m *Materials) Resolve(materialName string) *MaterialDef {
 	if def, ok := m.defs[nameLower]; ok {
 		return def
 	}
-
+	def := NewMaterialDef(nameLower)
 	// Implicit Doom 3 convention fallback
-	def := &MaterialDef{
-		Name:        nameLower,
-		DiffuseMap:  nameLower,
-		NormalMap:   nameLower + "_local",
-		SpecularMap: nameLower + "_s",
-		Kind:        config.MaterialKindSolid,
-	}
-
-	if strings.Contains(nameLower, "sky") {
-		def.Kind = config.MaterialKindSky
-	} else if strings.Contains(nameLower, "water") || strings.Contains(nameLower, "liquid") || strings.Contains(nameLower, "slime") {
-		def.Kind = config.MaterialKindWater
-	}
-
+	def.DiffuseMap = nameLower
+	def.NormalMap = nameLower + "_local"
+	def.SpecularMap = nameLower + "_s"
 	m.defs[nameLower] = def
 	return def
 }

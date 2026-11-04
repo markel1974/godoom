@@ -9,12 +9,17 @@ var _im = [3]geometry.XYZ{
 	{X: 0, Y: 0, Z: 1},
 }
 
-// Tag represents a 3D attachment point with spatial origin and 3x3 orientation axes.
+// Tag represents a spatial marker with an origin in 3D space and an associated transformation matrix (Axis).
 type Tag struct {
 	OriginX float64
 	OriginY float64
 	OriginZ float64
 	Axis    *Axis
+}
+
+// NewTag creates a new Tag instance using the given origin coordinates and axis orientation in 3D space.
+func NewTag(origin geometry.XYZ, axis [3]geometry.XYZ) *Tag {
+	return &Tag{OriginX: origin.X, OriginY: origin.Y, OriginZ: origin.Z, Axis: NewAxis(axis)}
 }
 
 // Axis represents a 3x3 matrix stored as an array of 3 geometry.XYZ vectors, used for transformations in 3D space.

@@ -23,7 +23,7 @@ type Volume struct {
 	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *sectors.Sector
-	vertexTags []Tag
+	vertexTags []*Tag
 	marker     int
 	dirty      bool
 }
@@ -38,7 +38,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faceCount:  0,
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
-		vertexTags: make([]Tag, 0),
+		vertexTags: make([]*Tag, 0),
 		dirty:      true,
 		marker:     -1,
 	}
@@ -210,11 +210,11 @@ func (v *Volume) SetSector(s *sectors.Sector) {
 // SetVertexTag associates the given tag index with the specified origin and orientation axes in the Volume's vertexTags array.
 func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ) {
 	if idx >= len(v.vertexTags) {
-		newTags := make([]Tag, idx+1)
+		newTags := make([]*Tag, idx+1)
 		copy(newTags, v.vertexTags)
 		v.vertexTags = newTags
 	}
-	v.vertexTags[idx] = Tag{OriginX: origin.X, OriginY: origin.Y, OriginZ: origin.Z, Axis: NewAxis(axis)}
+	v.vertexTags[idx] = NewTag(origin, axis)
 }
 
 // HasVertexTag checks if a vertex tag exists at the specified index within the Volume's vertexTags array.

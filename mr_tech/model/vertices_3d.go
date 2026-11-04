@@ -9,7 +9,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-var _identityMatrix = [3]geometry.XYZ{
+// _im is a predefined identity matrix array representing the standard basis vectors in 3D space.
+var _im = [3]geometry.XYZ{
 	{X: 1, Y: 0, Z: 0},
 	{X: 0, Y: 1, Z: 0},
 	{X: 0, Y: 0, Z: 1},
@@ -242,8 +243,8 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	rotationsA := make([][3]geometry.XYZ, numParts)
 	rotationsB := make([][3]geometry.XYZ, numParts)
 	for i := 0; i < numParts; i++ {
-		rotationsA[i] = _identityMatrix
-		rotationsB[i] = _identityMatrix
+		rotationsA[i] = _im
+		rotationsB[i] = _im
 	}
 
 	v := &Vertices3D{
@@ -388,23 +389,33 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 	var lerpTRet float64
 
 	reset := func(i int) {
-		v.volsA[i] = nil
-		v.volsB[i] = nil
 		v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
 		v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
-		v.rotationsA[i] = _identityMatrix
-		v.rotationsB[i] = _identityMatrix
+
+		v.rotationsA[i][0].X, v.rotationsA[i][0].Y, v.rotationsA[i][0].Z = _im[0].X, _im[0].Y, _im[0].Z
+		v.rotationsA[i][1].X, v.rotationsA[i][1].Y, v.rotationsA[i][1].Z = _im[1].X, _im[1].Y, _im[1].Z
+		v.rotationsA[i][2].X, v.rotationsA[i][2].Y, v.rotationsA[i][2].Z = _im[2].X, _im[2].Y, _im[2].Z
+
+		v.rotationsB[i][0].X, v.rotationsB[i][0].Y, v.rotationsB[i][0].Z = _im[0].X, _im[0].Y, _im[0].Z
+		v.rotationsB[i][1].X, v.rotationsB[i][1].Y, v.rotationsB[i][1].Z = _im[1].X, _im[1].Y, _im[1].Z
+		v.rotationsB[i][2].X, v.rotationsB[i][2].Y, v.rotationsB[i][2].Z = _im[2].X, _im[2].Y, _im[2].Z
+	}
+
+	resetFull := func(i int) {
+		v.volsA[i] = nil
+		v.volsB[i] = nil
+		reset(i)
 	}
 
 	for _, i := range v.executionOrder {
 		el := v.elements[i]
 		if el == nil {
-			reset(i)
+			resetFull(i)
 			continue
 		}
 		volA, volB, lerpT := el.GetVolumesAt(tick)
 		if volA == nil && volB == nil {
-			reset(i)
+			resetFull(i)
 			continue
 		}
 		// Fallback to the available volume if one is nil
@@ -436,22 +447,26 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 				tagOrigA, tagAxisA, okA := v.volsA[pIdx].GetVertexTag(tagIdx)
 				tagOrigB, tagAxisB, okB := v.volsB[pIdx].GetVertexTag(tagIdx)
 				if okA {
-					rotOrigAX, rotOrigAY, rotOrigAZ := v3dRotatePoint(v.rotationsA[pIdx], tagOrigA)
+					rotOrigAX, rotOrigAY, rotOrigAZ := v3dRotatePoint(v.rotationsA[pIdx], tagOrigA.X, tagOrigA.Y, tagOrigA.Z)
 					v.originsA[i].X = v.originsA[pIdx].X + rotOrigAX
 					v.originsA[i].Y = v.originsA[pIdx].Y + rotOrigAY
 					v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigAZ
-					v.rotationsA[i] = v3dMultiplyMatrix(tagAxisA, v.rotationsA[pIdx])
+					v.rotationsA[i][0].X, v.rotationsA[i][0].Y, v.rotationsA[i][0].Z,
+						v.rotationsA[i][1].X, v.rotationsA[i][1].Y, v.rotationsA[i][1].Z,
+						v.rotationsA[i][2].X, v.rotationsA[i][2].Y, v.rotationsA[i][2].Z = v3dMultiplyMatrix(tagAxisA, v.rotationsA[pIdx])
 				} else {
 					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsA[i] = v.originsA[pIdx]
 					v.rotationsA[i] = v.rotationsA[pIdx]
 				}
 				if okB {
-					rotOrigBX, rotOrigBY, rotOrigBZ := v3dRotatePoint(v.rotationsB[pIdx], tagOrigB)
+					rotOrigBX, rotOrigBY, rotOrigBZ := v3dRotatePoint(v.rotationsB[pIdx], tagOrigB.X, tagOrigB.Y, tagOrigB.Z)
 					v.originsB[i].X = v.originsB[pIdx].X + rotOrigBX
 					v.originsB[i].Y = v.originsB[pIdx].Y + rotOrigBY
 					v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigBZ
-					v.rotationsB[i] = v3dMultiplyMatrix(tagAxisB, v.rotationsB[pIdx])
+					v.rotationsB[i][0].X, v.rotationsB[i][0].Y, v.rotationsB[i][0].Z,
+						v.rotationsB[i][1].X, v.rotationsB[i][1].Y, v.rotationsB[i][1].Z,
+						v.rotationsB[i][2].X, v.rotationsB[i][2].Y, v.rotationsB[i][2].Z = v3dMultiplyMatrix(tagAxisB, v.rotationsB[pIdx])
 				} else {
 					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsB[i] = v.originsB[pIdx]
@@ -465,10 +480,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 				v.rotationsB[i] = v.rotationsB[pIdx]
 			}
 		} else {
-			v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
-			v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
-			v.rotationsA[i] = _identityMatrix
-			v.rotationsB[i] = _identityMatrix
+			reset(i)
 		}
 
 		offset := v.partFaceOffsets[i]
@@ -592,21 +604,17 @@ func v3dIsIdentity(m [3]geometry.XYZ) bool {
 }
 
 // v3dRotatePoint rotates point p by matrix m.
-func v3dRotatePoint(m [3]geometry.XYZ, p geometry.XYZ) (float64, float64, float64) {
-	x := p.X*m[0].X + p.Y*m[1].X + p.Z*m[2].X
-	y := p.X*m[0].Y + p.Y*m[1].Y + p.Z*m[2].Y
-	z := p.X*m[0].Z + p.Y*m[1].Z + p.Z*m[2].Z
+func v3dRotatePoint(m [3]geometry.XYZ, pX, pY, pZ float64) (float64, float64, float64) {
+	x := pX*m[0].X + pY*m[1].X + pZ*m[2].X
+	y := pX*m[0].Y + pY*m[1].Y + pZ*m[2].Y
+	z := pX*m[0].Z + pY*m[1].Z + pZ*m[2].Z
 	return x, y, z
 }
 
 // v3dMultiplyMatrix combines child and parent transformation matrices.
-func v3dMultiplyMatrix(child, parent [3]geometry.XYZ) [3]geometry.XYZ {
-	aX, aY, aZ := v3dRotatePoint(parent, child[0])
-	bX, bY, bZ := v3dRotatePoint(parent, child[1])
-	cX, cY, cZ := v3dRotatePoint(parent, child[2])
-	return [3]geometry.XYZ{
-		{aX, aY, aZ},
-		{bX, bY, bZ},
-		{cX, cY, cZ},
-	}
+func v3dMultiplyMatrix(child [3]geometry.XYZ, parent [3]geometry.XYZ) (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	aX, aY, aZ := v3dRotatePoint(parent, child[0].X, child[0].Y, child[0].Z)
+	bX, bY, bZ := v3dRotatePoint(parent, child[1].X, child[1].Y, child[1].Z)
+	cX, cY, cZ := v3dRotatePoint(parent, child[2].X, child[2].Y, child[2].Z)
+	return aX, aY, aZ, bX, bY, bZ, cX, cY, cZ
 }

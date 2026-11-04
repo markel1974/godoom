@@ -10,12 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// Tag represents a 3D attachment point with spatial origin and 3x3 orientation axes.
-type Tag struct {
-	Origin geometry.XYZ
-	Axis   [3]geometry.XYZ
-}
-
 // Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
 type Volume struct {
 	modelId    int
@@ -220,27 +214,20 @@ func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ
 		copy(newTags, v.vertexTags)
 		v.vertexTags = newTags
 	}
-	if axis[0].X == 0 && axis[0].Y == 0 && axis[0].Z == 0 &&
-		axis[1].X == 0 && axis[1].Y == 0 && axis[1].Z == 0 &&
-		axis[2].X == 0 && axis[2].Y == 0 && axis[2].Z == 0 {
-		axis[0] = geometry.XYZ{X: 1, Y: 0, Z: 0}
-		axis[1] = geometry.XYZ{X: 0, Y: 1, Z: 0}
-		axis[2] = geometry.XYZ{X: 0, Y: 0, Z: 1}
-	}
-	v.vertexTags[idx] = Tag{Origin: origin, Axis: axis}
+	v.vertexTags[idx] = Tag{OriginX: origin.X, OriginY: origin.Y, OriginZ: origin.Z, Axis: NewAxis(axis)}
+}
+
+// HasVertexTag checks if a vertex tag exists at the specified index within the Volume's vertexTags array.
+func (v *Volume) HasVertexTag(idx int) bool {
+	return idx >= 0 && idx < len(v.vertexTags)
 }
 
 // GetVertexTag retrieves the tag origin and orientation axes associated with a given tag index from the Volume's vertexTags array.
-func (v *Volume) GetVertexTag(idx int) (geometry.XYZ, [3]geometry.XYZ, bool) {
+func (v *Volume) GetVertexTag(idx int) (float64, float64, float64, *Axis, bool) {
 	if idx >= 0 && idx < len(v.vertexTags) {
-		return v.vertexTags[idx].Origin, v.vertexTags[idx].Axis, true
+		return v.vertexTags[idx].OriginX, v.vertexTags[idx].OriginY, v.vertexTags[idx].OriginZ, v.vertexTags[idx].Axis, true
 	}
-	identity := [3]geometry.XYZ{
-		{X: 1, Y: 0, Z: 0},
-		{X: 0, Y: 1, Z: 0},
-		{X: 0, Y: 0, Z: 1},
-	}
-	return geometry.XYZ{}, identity, false
+	return 0, 0, 0, nil, false
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.

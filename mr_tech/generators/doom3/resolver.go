@@ -7,6 +7,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 )
 
+const DefaultMonitorTexture = "models/mapobjects/filler/monitor_d"
+
+// ToMaterial determines the material kind based on the provided lowercase texture name and returns the corresponding MaterialKind.
 func ToMaterial(texNameLC string) config.MaterialKind {
 	kind := config.MaterialKindSolid
 	if texNameLC == "translucent" {
@@ -38,8 +41,6 @@ func CreateConfigMaterial(def *proc.MaterialDef) *config.Material {
 	}
 	return mat
 }
-
-const DefaultMonitorTexture = "models/mapobjects/filler/monitor_d"
 
 // IsGuiSurface checks if a material definition or material name represents a dynamic GUI surface.
 func IsGuiSurface(def *proc.MaterialDef, matName string) bool {

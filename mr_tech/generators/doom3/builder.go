@@ -211,7 +211,13 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 		case "target": //IMPLEMENT
 		case "ai": //IMPLEMENT
 		case "env": //IMPLEMENT
+		case "char": //IMPLEMENT
 		case "worldspawn": //IMPLEMENT
+		case "alphalabs2": //IMPLEMENT
+		case "alphalabs1": //IMPLEMENT
+		case "hellhole": //IMPLEMENT
+		case "marscity": //IMPLEMENT
+		case "ending": //IMPLEMENT
 		default:
 			fmt.Printf("Unhandled entity: %s\n", classname)
 		}

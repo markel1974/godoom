@@ -38,3 +38,85 @@ func CreateConfigMaterial(def *proc.MaterialDef) *config.Material {
 	}
 	return mat
 }
+
+const DefaultMonitorTexture = "models/mapobjects/filler/monitor_d"
+
+// IsGuiSurface checks if a material definition or material name represents a dynamic GUI surface.
+func IsGuiSurface(def *proc.MaterialDef, matName string) bool {
+	if def != nil && def.GuiSurf != "" {
+		return true
+	}
+	matLower := strings.ToLower(matName)
+	return strings.Contains(matLower, "entitygui") || strings.Contains(matLower, "pda_gui")
+}
+
+// ResolveGuiPath determines the .gui file path for a GUI surface based on entity properties or material definition.
+func ResolveGuiPath(def *proc.MaterialDef, matName string, ent *proc.MapEntity) string {
+	guiSurf := ""
+	if def != nil {
+		guiSurf = strings.ToLower(def.GuiSurf)
+	}
+	matLower := strings.ToLower(matName)
+
+	if guiSurf == "entity3" || strings.HasSuffix(matLower, "entitygui3") {
+		if ent != nil {
+			if g, ok := ent.GetProperty("gui3"); ok && len(g) > 0 {
+				return g
+			}
+		}
+		return ""
+	}
+	if guiSurf == "entity2" || strings.HasSuffix(matLower, "entitygui2") {
+		if ent != nil {
+			if g, ok := ent.GetProperty("gui2"); ok && len(g) > 0 {
+				return g
+			}
+		}
+		return ""
+	}
+	if guiSurf != "" && guiSurf != "entity" {
+		return guiSurf
+	}
+	if ent != nil {
+		if g, ok := ent.GetProperty("gui"); ok && len(g) > 0 {
+			return g
+		}
+		if g, ok := ent.GetProperty("gui_name"); ok && len(g) > 0 {
+			return g
+		}
+	}
+	return ""
+}
+
+// ResolveGuiBackgroundForSurface returns the resolved texture/material name for a surface if it is a GUI surface.
+func ResolveGuiBackgroundForSurface(arc proc.IPkArchive, materials *proc.Materials, matName string, ent *proc.MapEntity) string {
+	def := materials.Resolve(matName)
+	if !IsGuiSurface(def, matName) {
+		return ""
+	}
+	guiPath := ResolveGuiPath(def, matName, ent)
+	if len(guiPath) > 0 && arc != nil {
+		if bg := proc.ExtractGuiBackground(arc, guiPath); len(bg) > 0 {
+			return bg
+		}
+	}
+	return DefaultMonitorTexture
+}
+
+// ResolveGuiMaterial resolves and creates a config.Material for a GUI surface, or returns nil if not a GUI surface.
+func ResolveGuiMaterial(arc proc.IPkArchive, materials *proc.Materials, def *proc.MaterialDef, ent *proc.MapEntity) (*config.Material, string) {
+	if def == nil {
+		return nil, ""
+	}
+	if !IsGuiSurface(def, def.Name) {
+		return nil, ""
+	}
+
+	bg := ResolveGuiBackgroundForSurface(arc, materials, def.Name, ent)
+	if len(bg) == 0 {
+		bg = DefaultMonitorTexture
+	}
+	bgDef := materials.Resolve(bg)
+	mat := CreateConfigMaterial(bgDef)
+	return mat, bgDef.Name
+}

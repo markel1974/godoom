@@ -26,7 +26,7 @@ func NewBuilder() *Builder {
 }
 
 // Setup initializes the game environment by loading and processing Doom 3 maps and assets from a .pk4 file.
-func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config.Root, error) {
+func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config.Root, error) {
 	if lev < 1 {
 		lev = 1
 	}
@@ -90,7 +90,19 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 
 	texManager := textures.NewTextures()
 	imgLoader := proc.NewImageLoader(arc, texManager, materials)
+
+	entitiesMap := make(map[string]*proc.MapEntity, len(entities))
+	for _, ent := range entities {
+		if name, ok := ent.GetProperty("name"); ok && len(name) > 0 {
+			entitiesMap[name] = ent
+		}
+		if model, ok := ent.GetProperty("model"); ok && len(model) > 0 {
+			entitiesMap[model] = ent
+		}
+	}
+
 	for _, model := range procFile.Models {
+		ent := entitiesMap[model.Name]
 		for _, surface := range model.Surfaces {
 			texNameLC := strings.ToLower(surface.Material)
 			if strings.HasPrefix(texNameLC, "textures/decals/") || strings.HasSuffix(texNameLC, "_shadow") {
@@ -100,6 +112,9 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 				continue
 			}
 			imgLoader.LoadMaterialMaps(surface.Material)
+			if guiBg := ResolveGuiBackgroundForSurface(arc, materials, surface.Material, ent); len(guiBg) > 0 {
+				imgLoader.LoadMaterialMaps(guiBg)
+			}
 		}
 	}
 	for _, ent := range entities {
@@ -110,11 +125,15 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 				if err := lwd.Parse(lf); err == nil {
 					for _, tag := range lwd.Tags {
 						imgLoader.LoadMaterialMaps(tag)
+						if guiBg := ResolveGuiBackgroundForSurface(arc, materials, tag, ent); len(guiBg) > 0 {
+							imgLoader.LoadMaterialMaps(guiBg)
+						}
 					}
 				}
 			}
 		}
 	}
+	imgLoader.LoadMaterialMaps(DefaultMonitorTexture)
 	fmt.Printf("Loaded textures for world geometry\n")
 
 	const chunkSize = float64(512)
@@ -152,7 +171,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 			if origin, err := ent.GetOrigin(); err == nil {
 				r, g, b := ent.GetColor()
 				radius := ent.GetLightRadius()
-				kind := p.ToLightKind(ent.GetLightKind())
+				kind := br.ToLightKind(ent.GetLightKind())
 				light := config.NewConfigLight(origin, 1.0, kind, radius)
 				light.R, light.G, light.B = r, g, b
 				if kind == config.LightKindSpot {
@@ -166,26 +185,26 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 		case "func": //IMPLEMENT
 		case "trigger": //IMPLEMENT
 		case "speaker": //IMPLEMENT
-		case "item": //IMPLEMENT
+		case "item":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				root.Things = append(root.Things, thing)
 			}
 		case "path": //IMPLEMENT
 		case "admin": //IMPLEMENT
-		case "monster": //IMPLEMENT
+		case "monster":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				monsters++
 				root.Things = append(root.Things, thing)
 			}
-		case "ammo": //IMPLEMENT
+		case "ammo":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				root.Things = append(root.Things, thing)
 			}
-		case "weapon": //IMPLEMENT
+		case "weapon":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				root.Things = append(root.Things, thing)
 			}
-		case "moveable": //IMPLEMENT
+		case "moveable":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				root.Things = append(root.Things, thing)
 			}
@@ -204,40 +223,13 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	texManager.AddDirect(crosshair.GetTexture())
 	root.AddUIElement(crosshair.Create())
 
-	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 25, 80)
-	_ = common.NewPlayer(root.Player)
-	root.Player.GForce = GForce
-	root.Player.JumpForce = JumpForce
-	root.Player.Impulse = 0.18 //mod
-
-	root.Player.Flash.ZFar = 8192
-	root.Player.Flash.Intensity = 0.02
-	root.Player.Flash.Falloff = 2000
-	root.Player.Flash.OffsetX = 0.2
-	root.Player.Flash.OffsetY = 0.1
-	root.Player.Bobbing.SwayScale = 1.0 //mod
-	root.Player.Bobbing.SwayOffsetX = 50
-	root.Player.Bobbing.SwayOffsetY = -0.9
-	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
-	root.Player.Bobbing.MaxAmplitudeY = 5.5
-	root.Player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
-	// Breathing
-	root.Player.Bobbing.IdleAmpX = 0.9  //mod 0.9
-	root.Player.Bobbing.IdleAmpY = 0.9  //mod 0.9
-	root.Player.Bobbing.IdleDrift = 3.0 //2.0 - 0.01
-
-	root.Player.Bobbing.SpeedLerp = 0.30 // Instant reactivity to speed
-	root.Player.Bobbing.AmpLerp = 0.20
-	root.Player.Bobbing.ImpactMax = 1000.0
-	root.Player.Bobbing.ImpactScale = 0.02   // LANDING: 1000 * 0.02 = 20 units of vertical shake
-	root.Player.Bobbing.SpringTension = 0.20 // Stiffer spring (faster return)
-	root.Player.Bobbing.SpringDamping = 0.80
-	root.Player.Bobbing.TiltAmp = 0.05
+	root.Player = br.createPlayer(playerPos, playerAngle)
 
 	return root, nil
 }
 
-func (b *Builder) ToLightKind(tex, ambient, target string) config.LightKind {
+// ToLightKind determines the LightKind based on texture name, ambient flag, and target string conditions.
+func (br *Builder) ToLightKind(tex, ambient, target string) config.LightKind {
 	texLower := strings.ToLower(tex)
 	if ambient == "1" || strings.Contains(texLower, "ambient") {
 		return config.LightKindAmbient
@@ -249,4 +241,31 @@ func (b *Builder) ToLightKind(tex, ambient, target string) config.LightKind {
 		return config.LightKindSpot
 	}
 	return config.LightKindDiffuse
+}
+
+// createPlayer initializes and returns a Player instance with specified position, angle, and predefined configurations.
+func (br *Builder) createPlayer(playerPos geometry.XYZ, playerAngle float64) *config.Player {
+	player := config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 25, 80)
+	_ = common.NewPlayer(player)
+	player.GForce = GForce
+	player.JumpForce = JumpForce
+	player.Impulse = 0.18 //mod
+
+	player.Flash.ZFar = 8192
+	player.Flash.Intensity = 0.02
+	player.Flash.Falloff = 2000
+	player.Flash.OffsetX = 0.2
+	player.Flash.OffsetY = 0.1
+	player.Bobbing.SwayScale = 1.0 //mod
+	player.Bobbing.SwayOffsetX = 50
+	player.Bobbing.SwayOffsetY = -0.9
+	player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
+	player.Bobbing.MaxAmplitudeY = 5.5
+	player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
+	// Breathing
+	player.Bobbing.IdleAmpX = 0.9  //mod 0.9
+	player.Bobbing.IdleAmpY = 0.9  //mod 0.9
+	player.Bobbing.IdleDrift = 3.0 //2.0 - 0.01
+
+	return player
 }

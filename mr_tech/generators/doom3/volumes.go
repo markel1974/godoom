@@ -96,9 +96,15 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 			}
 
 			var material *config.Material
+			effectiveMatName := matName
 			if vs.materials != nil {
 				if matDef := vs.materials.Resolve(matName); matDef != nil {
-					material = CreateConfigMaterial(matDef)
+					if guiMat, guiName := ResolveGuiMaterial(vs.arc, vs.materials, matDef, ent); guiMat != nil {
+						material = guiMat
+						effectiveMatName = guiName
+					} else {
+						material = CreateConfigMaterial(matDef)
+					}
 				}
 			}
 			if material == nil {
@@ -122,7 +128,7 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 
 				tri := []geometry.XYZ{p0, p1, p2}
 				triUvs := [][2]float64{{v0.U, v0.V}, {v1.U, v1.V}, {v2.U, v2.V}}
-				addTriangle(tri, triUvs, material, matName)
+				addTriangle(tri, triUvs, material, effectiveMatName)
 			}
 		}
 	}
@@ -154,10 +160,17 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 
 			// Build materials for each tag
 			tagMaterials := make([]*config.Material, len(lwd.Tags))
+			tagNames := make([]string, len(lwd.Tags))
 			for ti, tagName := range lwd.Tags {
+				tagNames[ti] = tagName
 				if vs.materials != nil {
 					if matDef := vs.materials.Resolve(tagName); matDef != nil {
-						tagMaterials[ti] = CreateConfigMaterial(matDef)
+						if guiMat, guiName := ResolveGuiMaterial(vs.arc, vs.materials, matDef, ent); guiMat != nil {
+							tagMaterials[ti] = guiMat
+							tagNames[ti] = guiName
+						} else {
+							tagMaterials[ti] = CreateConfigMaterial(matDef)
+						}
 					}
 				}
 				if tagMaterials[ti] == nil {
@@ -174,13 +187,13 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 				matName := "lwo.part"
 				if tagIdx, ok := lwd.PolyTags[polyIdx]; ok && tagIdx >= 0 && tagIdx < len(tagMaterials) {
 					mat = tagMaterials[tagIdx]
-					if tagIdx < len(lwd.Tags) {
-						matName = lwd.Tags[tagIdx]
+					if tagIdx < len(tagNames) {
+						matName = tagNames[tagIdx]
 					}
 				}
 				if mat == nil && len(tagMaterials) > 0 {
 					mat = tagMaterials[0]
-					matName = lwd.Tags[0]
+					matName = tagNames[0]
 				}
 
 				getVertex := func(vi int) (geometry.XYZ, float64, float64) {

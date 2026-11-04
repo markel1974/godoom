@@ -434,7 +434,11 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 	tagMaterials := make([]*config.Material, len(lwd.Tags))
 	for i, tagName := range lwd.Tags {
 		if matDef := t.materials.Resolve(tagName); matDef != nil {
-			tagMaterials[i] = CreateConfigMaterial(matDef)
+			if guiMat, _ := ResolveGuiMaterial(t.arc, t.materials, matDef, nil); guiMat != nil {
+				tagMaterials[i] = guiMat
+			} else {
+				tagMaterials[i] = CreateConfigMaterial(matDef)
+			}
 		}
 		if tagMaterials[i] == nil {
 			tagMaterials[i] = config.NewConfigMaterial("lwo.part", []string{tagName}, config.MaterialKindSolid)

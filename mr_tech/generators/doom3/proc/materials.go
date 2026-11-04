@@ -17,6 +17,7 @@ type MaterialDef struct {
 	SpecularMap string
 	Kind2       string
 	IsDecal     bool
+	GuiSurf     string
 }
 
 // NewMaterialDef creates and initializes a new MaterialDef instance based on the provided material name.
@@ -138,6 +139,11 @@ func (m *Materials) parseMtrData(data []byte) {
 			}
 			tokLower := strings.ToLower(tok)
 			switch tokLower {
+			case "guisurf":
+				guiTok, err := lexer.NextToken()
+				if err == nil {
+					def.GuiSurf = strings.Trim(strings.ToLower(StripQuotes(guiTok)), ",()")
+				}
 			case "diffusemap":
 				val := parseMtrPath(lexer)
 				if val != "" {
@@ -212,7 +218,10 @@ func (m *Materials) parseMtrData(data []byte) {
 		}
 
 		if def.DiffuseMap == "" && editorImage != "" {
-			def.DiffuseMap = editorImage
+			editorLower := strings.ToLower(editorImage)
+			if def.GuiSurf == "" && !strings.Contains(editorLower, "entitygui") {
+				def.DiffuseMap = editorImage
+			}
 		}
 
 		m.Defs[name] = def

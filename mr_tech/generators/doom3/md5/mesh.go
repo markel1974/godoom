@@ -21,9 +21,9 @@ type MeshVertex struct {
 
 // MeshWeight represents a vertex skinning weight attached to a specific Joint.
 type MeshWeight struct {
-	Joint int
-	Bias  float64
-	Pos   geometry.XYZ
+	JointId int
+	Bias    float64
+	Pos     geometry.XYZ
 }
 
 // SubMesh holds the parsed geometry and weight list of an individual sub-mesh.
@@ -193,9 +193,9 @@ func (mesh *Mesh) Parse(r io.Reader) error {
 						wz, _ := strconv.ParseFloat(posFields[2], 64)
 
 						currentSubMesh.Weights = append(currentSubMesh.Weights, MeshWeight{
-							Joint: joint,
-							Bias:  bias,
-							Pos:   geometry.XYZ{X: wx, Y: wy, Z: wz},
+							JointId: joint,
+							Bias:    bias,
+							Pos:     geometry.XYZ{X: wx, Y: wy, Z: wz},
 						})
 					}
 				}

@@ -74,12 +74,23 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	_ = materials.LoadFromArchive(arc)
 	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.Defs))
 
+	// Parse corresponding .map file to extract entities (lights, player start, func_static, items)
+	mapName := strings.TrimSuffix(maps[levelIndex], ".proc")
+	mapPath := "maps" + proc.Pak4Separator + mapName + ".map"
+	var entities []*proc.MapEntity
+	if mf, err := arc.Open(mapPath); err == nil {
+		if mapData, err := io.ReadAll(mf); err == nil {
+			mapParser := proc.NewMapParser(mapData)
+			if parsedEntities, err := mapParser.Parse(); err == nil {
+				entities = parsedEntities
+			}
+		}
+	}
+	fmt.Printf("Parsed %d entities from .map\n", len(entities))
+
 	texManager := textures.NewTextures()
 	imgLoader := proc.NewImageLoader(arc, texManager, materials)
 	for _, model := range procFile.Models {
-		if !strings.HasPrefix(model.Name, "_area") {
-			continue
-		}
 		for _, surface := range model.Surfaces {
 			texNameLC := strings.ToLower(surface.Material)
 			if strings.HasPrefix(texNameLC, "textures/decals/") || strings.HasSuffix(texNameLC, "_shadow") {
@@ -91,10 +102,23 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 			imgLoader.LoadMaterialMaps(surface.Material)
 		}
 	}
+	for _, ent := range entities {
+		if modelPath, ok := ent.GetProperty("model"); ok && strings.HasSuffix(strings.ToLower(modelPath), ".lwo") {
+			cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(modelPath, "\\", "/")))
+			if lf, err := arc.Open(cleanPath); err == nil {
+				lwd := proc.NewLWO()
+				if err := lwd.Parse(lf); err == nil {
+					for _, tag := range lwd.Tags {
+						imgLoader.LoadMaterialMaps(tag)
+					}
+				}
+			}
+		}
+	}
 	fmt.Printf("Loaded textures for world geometry\n")
 
 	const chunkSize = float64(512)
-	vol := NewVolumes(procFile, chunkSize, materials)
+	vol := NewVolumes(procFile, chunkSize, materials, entities, arc)
 	volumes, err := vol.Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build volumes: %w", err)
@@ -114,75 +138,65 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	playerAngle := 0.0
 	monsters := 0
 
-	// Parse corresponding .map file to extract player start and dynamic lights
-	mapName := strings.TrimSuffix(maps[levelIndex], ".proc")
-	mapPath := "maps" + proc.Pak4Separator + mapName + ".map"
 	thingsManager := NewThings(arc, materials, texManager, imgLoader)
-	if mf, err := arc.Open(mapPath); err == nil {
-		if mapData, err := io.ReadAll(mf); err == nil {
-			mapParser := proc.NewMapParser(mapData)
-			if entities, err := mapParser.Parse(); err == nil {
-				for _, ent := range entities {
-					classname, _ := ent.GetProperty("classname")
-					base := strings.Split(classname, "_")[0]
-					switch base {
-					case "info":
-						if classname == "info_player_start" {
-							if origin, err := ent.GetOrigin(); err == nil {
-								playerPos = origin
-								playerAngle = ent.GetAngle()
-							}
-						}
-					case "light":
-						if origin, err := ent.GetOrigin(); err == nil {
-							r, g, b := ent.GetColor()
-							radius := ent.GetLightRadius()
-							kind := p.ToLightKind(ent.GetLightKind())
-							light := config.NewConfigLight(origin, 1.0, kind, radius)
-							light.R, light.G, light.B = r, g, b
-							if kind == config.LightKindSpot {
-								light.Intensity *= 5
-								dir, cutOff, outerCutOff := ent.GetSpotlightParams()
-								light.DirX, light.DirY, light.DirZ = dir.X, dir.Y, dir.Z
-								light.CutOff, light.OuterCutOff = cutOff, outerCutOff
-							}
-							root.Lights = append(root.Lights, light)
-						}
-					case "func": //IMPLEMENT
-					case "trigger": //IMPLEMENT
-					case "speaker": //IMPLEMENT
-					case "item": //IMPLEMENT
-						if thing, err := thingsManager.Create(ent); err == nil {
-							root.Things = append(root.Things, thing)
-						}
-					case "path": //IMPLEMENT
-					case "admin": //IMPLEMENT
-					case "monster": //IMPLEMENT
-						if thing, err := thingsManager.Create(ent); err == nil {
-							monsters++
-							root.Things = append(root.Things, thing)
-						}
-					case "ammo": //IMPLEMENT
-						if thing, err := thingsManager.Create(ent); err == nil {
-							root.Things = append(root.Things, thing)
-						}
-					case "weapon": //IMPLEMENT
-						if thing, err := thingsManager.Create(ent); err == nil {
-							root.Things = append(root.Things, thing)
-						}
-					case "moveable": //IMPLEMENT
-						if thing, err := thingsManager.Create(ent); err == nil {
-							root.Things = append(root.Things, thing)
-						}
-					case "target": //IMPLEMENT
-					case "ai": //IMPLEMENT
-					case "env": //IMPLEMENT
-					case "worldspawn": //IMPLEMENT
-					default:
-						fmt.Printf("Unhandled entity: %s\n", classname)
-					}
+	for _, ent := range entities {
+		classname, _ := ent.GetProperty("classname")
+		base := strings.Split(classname, "_")[0]
+		switch base {
+		case "info":
+			if classname == "info_player_start" {
+				if origin, err := ent.GetOrigin(); err == nil {
+					playerPos = origin
+					playerAngle = ent.GetAngle()
 				}
 			}
+		case "light":
+			if origin, err := ent.GetOrigin(); err == nil {
+				r, g, b := ent.GetColor()
+				radius := ent.GetLightRadius()
+				kind := p.ToLightKind(ent.GetLightKind())
+				light := config.NewConfigLight(origin, 1.0, kind, radius)
+				light.R, light.G, light.B = r, g, b
+				if kind == config.LightKindSpot {
+					light.Intensity *= 5
+					dir, cutOff, outerCutOff := ent.GetSpotlightParams()
+					light.DirX, light.DirY, light.DirZ = dir.X, dir.Y, dir.Z
+					light.CutOff, light.OuterCutOff = cutOff, outerCutOff
+				}
+				root.Lights = append(root.Lights, light)
+			}
+		case "func": //IMPLEMENT
+		case "trigger": //IMPLEMENT
+		case "speaker": //IMPLEMENT
+		case "item": //IMPLEMENT
+			if thing, err := thingsManager.Create(ent); err == nil {
+				root.Things = append(root.Things, thing)
+			}
+		case "path": //IMPLEMENT
+		case "admin": //IMPLEMENT
+		case "monster": //IMPLEMENT
+			if thing, err := thingsManager.Create(ent); err == nil {
+				monsters++
+				root.Things = append(root.Things, thing)
+			}
+		case "ammo": //IMPLEMENT
+			if thing, err := thingsManager.Create(ent); err == nil {
+				root.Things = append(root.Things, thing)
+			}
+		case "weapon": //IMPLEMENT
+			if thing, err := thingsManager.Create(ent); err == nil {
+				root.Things = append(root.Things, thing)
+			}
+		case "moveable": //IMPLEMENT
+			if thing, err := thingsManager.Create(ent); err == nil {
+				root.Things = append(root.Things, thing)
+			}
+		case "target": //IMPLEMENT
+		case "ai": //IMPLEMENT
+		case "env": //IMPLEMENT
+		case "worldspawn": //IMPLEMENT
+		default:
+			fmt.Printf("Unhandled entity: %s\n", classname)
 		}
 	}
 

@@ -436,10 +436,10 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 				tagOrigA, tagAxisA, okA := v.volsA[pIdx].GetVertexTag(tagIdx)
 				tagOrigB, tagAxisB, okB := v.volsB[pIdx].GetVertexTag(tagIdx)
 				if okA {
-					rotOrigA := v3dRotatePoint(v.rotationsA[pIdx], tagOrigA)
-					v.originsA[i].X = v.originsA[pIdx].X + rotOrigA.X
-					v.originsA[i].Y = v.originsA[pIdx].Y + rotOrigA.Y
-					v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigA.Z
+					rotOrigAX, rotOrigAY, rotOrigAZ := v3dRotatePoint(v.rotationsA[pIdx], tagOrigA)
+					v.originsA[i].X = v.originsA[pIdx].X + rotOrigAX
+					v.originsA[i].Y = v.originsA[pIdx].Y + rotOrigAY
+					v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigAZ
 					v.rotationsA[i] = v3dMultiplyMatrix(tagAxisA, v.rotationsA[pIdx])
 				} else {
 					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
@@ -447,10 +447,10 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 					v.rotationsA[i] = v.rotationsA[pIdx]
 				}
 				if okB {
-					rotOrigB := v3dRotatePoint(v.rotationsB[pIdx], tagOrigB)
-					v.originsB[i].X = v.originsB[pIdx].X + rotOrigB.X
-					v.originsB[i].Y = v.originsB[pIdx].Y + rotOrigB.Y
-					v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigB.Z
+					rotOrigBX, rotOrigBY, rotOrigBZ := v3dRotatePoint(v.rotationsB[pIdx], tagOrigB)
+					v.originsB[i].X = v.originsB[pIdx].X + rotOrigBX
+					v.originsB[i].Y = v.originsB[pIdx].Y + rotOrigBY
+					v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigBZ
 					v.rotationsB[i] = v3dMultiplyMatrix(tagAxisB, v.rotationsB[pIdx])
 				} else {
 					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
@@ -573,9 +573,15 @@ func v3dZeroFace(dst *Face) {
 	if dst == nil {
 		return
 	}
-	dst.tri[0] = geometry.XYZ{}
-	dst.tri[1] = geometry.XYZ{}
-	dst.tri[2] = geometry.XYZ{}
+	dst.tri[0].X = 0
+	dst.tri[0].Y = 0
+	dst.tri[0].Z = 0
+	dst.tri[1].X = 0
+	dst.tri[1].Y = 0
+	dst.tri[1].Z = 0
+	dst.tri[2].X = 0
+	dst.tri[2].Y = 0
+	dst.tri[2].Z = 0
 }
 
 // v3dIsIdentity returns true if the matrix is an identity matrix.
@@ -586,19 +592,21 @@ func v3dIsIdentity(m [3]geometry.XYZ) bool {
 }
 
 // v3dRotatePoint rotates point p by matrix m.
-func v3dRotatePoint(m [3]geometry.XYZ, p geometry.XYZ) geometry.XYZ {
-	return geometry.XYZ{
-		X: p.X*m[0].X + p.Y*m[1].X + p.Z*m[2].X,
-		Y: p.X*m[0].Y + p.Y*m[1].Y + p.Z*m[2].Y,
-		Z: p.X*m[0].Z + p.Y*m[1].Z + p.Z*m[2].Z,
-	}
+func v3dRotatePoint(m [3]geometry.XYZ, p geometry.XYZ) (float64, float64, float64) {
+	x := p.X*m[0].X + p.Y*m[1].X + p.Z*m[2].X
+	y := p.X*m[0].Y + p.Y*m[1].Y + p.Z*m[2].Y
+	z := p.X*m[0].Z + p.Y*m[1].Z + p.Z*m[2].Z
+	return x, y, z
 }
 
 // v3dMultiplyMatrix combines child and parent transformation matrices.
 func v3dMultiplyMatrix(child, parent [3]geometry.XYZ) [3]geometry.XYZ {
+	aX, aY, aZ := v3dRotatePoint(parent, child[0])
+	bX, bY, bZ := v3dRotatePoint(parent, child[1])
+	cX, cY, cZ := v3dRotatePoint(parent, child[2])
 	return [3]geometry.XYZ{
-		v3dRotatePoint(parent, child[0]),
-		v3dRotatePoint(parent, child[1]),
-		v3dRotatePoint(parent, child[2]),
+		{aX, aY, aZ},
+		{bX, bY, bZ},
+		{cX, cY, cZ},
 	}
 }

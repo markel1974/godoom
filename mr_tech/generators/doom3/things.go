@@ -316,7 +316,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 				var p geometry.XYZ
 				for w := 0; w < vert.WeightSpan; w++ {
 					weight := sub.Weights[vert.WeightIdx+w]
-					joint := skel[weight.Joint]
+					joint := skel[weight.JointId]
 
 					rotated := md5.QuatRotate(joint.Orient, weight.Pos)
 					p.X += (joint.Pos.X + rotated.X) * weight.Bias
@@ -350,7 +350,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 					var p geometry.XYZ
 					for w := 0; w < vert.WeightSpan; w++ {
 						weight := sub.Weights[vert.WeightIdx+w]
-						joint := headSkel[weight.Joint]
+						joint := headSkel[weight.JointId]
 						rotated := md5.QuatRotate(joint.Orient, weight.Pos)
 						p.X += (joint.Pos.X + rotated.X) * weight.Bias
 						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias

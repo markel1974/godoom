@@ -229,3 +229,42 @@ func (e *MapEntity) GetSpotlightParams() (geometry.XYZ, float64, float64) {
 	outerCutOff := cutOff + 10.0
 	return dir, cutOff, outerCutOff
 }
+
+// TransformPoint transforms a local coordinate point into world space using the entity's rotation and origin.
+func (e *MapEntity) TransformPoint(p geometry.XYZ) geometry.XYZ {
+	origin, _ := e.GetOrigin()
+
+	if rotStr, ok := e.GetProperty("rotation"); ok {
+		parts := strings.Fields(rotStr)
+		if len(parts) == 9 {
+			r0, e0 := strconv.ParseFloat(parts[0], 64)
+			r1, e1 := strconv.ParseFloat(parts[1], 64)
+			r2, e2 := strconv.ParseFloat(parts[2], 64)
+			r3, e3 := strconv.ParseFloat(parts[3], 64)
+			r4, e4 := strconv.ParseFloat(parts[4], 64)
+			r5, e5 := strconv.ParseFloat(parts[5], 64)
+			r6, e6 := strconv.ParseFloat(parts[6], 64)
+			r7, e7 := strconv.ParseFloat(parts[7], 64)
+			r8, e8 := strconv.ParseFloat(parts[8], 64)
+			if e0 == nil && e1 == nil && e2 == nil && e3 == nil && e4 == nil && e5 == nil && e6 == nil && e7 == nil && e8 == nil {
+				rx := p.X*r0 + p.Y*r3 + p.Z*r6
+				ry := p.X*r1 + p.Y*r4 + p.Z*r7
+				rz := p.X*r2 + p.Y*r5 + p.Z*r8
+				return geometry.XYZ{X: origin.X + rx, Y: origin.Y + ry, Z: origin.Z + rz}
+			}
+		}
+	}
+
+	if angleStr, ok := e.GetProperty("angle"); ok {
+		if a, err := strconv.ParseFloat(angleStr, 64); err == nil && a != 0 {
+			rad := a * math.Pi / 180.0
+			cosA := math.Cos(rad)
+			sinA := math.Sin(rad)
+			rx := p.X*cosA - p.Y*sinA
+			ry := p.X*sinA + p.Y*cosA
+			return geometry.XYZ{X: origin.X + rx, Y: origin.Y + ry, Z: origin.Z + p.Z}
+		}
+	}
+
+	return geometry.XYZ{X: origin.X + p.X, Y: origin.Y + p.Y, Z: origin.Z + p.Z}
+}

@@ -42,23 +42,22 @@ type BuilderVolume struct {
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
 func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *BuilderVolume {
 	bv := &BuilderVolume{
-		ctx:              ctx,
-		tex:              tex,
-		fv:               NewFrameVertices(ctx, 1048576),
-		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
-		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
-		dcLiquid:         NewDrawCommands(config.BlendModeLiquid, 4096),
-		fl:               NewFrameLights(ctx, 1024, cal.EnableShadowLights),
-		dcRenderOpaque:   shaders.NewDrawCommandsRender(ctx, "opaque", false),
-		dcRenderAdditive: shaders.NewDrawCommandsRender(ctx, "additive", true),
-		dcRenderLiquid:   shaders.NewDrawCommandsRender(ctx, "liquid", true),
-		cSky:             nil,
-		cal:              cal,
-		visibleVol:       NewVisibleVols(8192),
-		modes:            make([]*DrawCommands, config.BlendModeLatest),
-		occlusion:        NewOcclusionHW(ctx, 4096),
-		frustumFront:     metrics.NewFrustum(),
-		//frustumRear:       metrics.NewFrustum(),
+		ctx:               ctx,
+		tex:               tex,
+		fv:                NewFrameVertices(ctx, 1048576),
+		dcOpaque:          NewDrawCommands(config.BlendModeOpaque, 32768),
+		dcAdditive:        NewDrawCommands(config.BlendModeAdditive, 4096),
+		dcLiquid:          NewDrawCommands(config.BlendModeLiquid, 4096),
+		fl:                NewFrameLights(ctx, 1024, cal.EnableShadowLights),
+		dcRenderOpaque:    shaders.NewDrawCommandsRender(ctx, "opaque", false),
+		dcRenderAdditive:  shaders.NewDrawCommandsRender(ctx, "additive", true),
+		dcRenderLiquid:    shaders.NewDrawCommandsRender(ctx, "liquid", true),
+		cSky:              nil,
+		cal:               cal,
+		visibleVol:        NewVisibleVols(8192),
+		modes:             make([]*DrawCommands, config.BlendModeLatest),
+		occlusion:         NewOcclusionHW(ctx, 4096),
+		frustumFront:      metrics.NewFrustum(),
 		frustumLightFront: metrics.NewFrustum(),
 		frustumLightRear:  metrics.NewFrustum(),
 		lightFrontFrustum: aabb.NewFrustum(),
@@ -108,33 +107,13 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()
 	rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll
 	w.frustumFront.Update(float32(px), float32(py), float32(pz), angle, pitch, roll)
-	//w.frustumRear.Update(float32(px), float32(py), float32(pz), rAngle, rPitch, rRoll)
 
-	cosY, sinY := math.Cos(angle), math.Sin(angle)
-	cosP, sinP := math.Cos(pitch), math.Sin(pitch)
-	fX := cosY * cosP
-	fY := sinY * cosP
-	fZ := sinP
+	w.frustumLightFront.Update(float32(px), float32(py), float32(pz), angle, pitch, roll)
+	w.frustumLightRear.Update(float32(px), float32(py), float32(pz), rAngle, rPitch, rRoll)
 
-	// Offset light frustum origins backwards to completely envelop the player body
-	const playerOffset = 48.0
-	lpxFront := px - fX*playerOffset
-	lpyFront := py - fY*playerOffset
-	lpzFront := pz - fZ*playerOffset
-
-	lpxRear := px + fX*playerOffset
-	lpyRear := py + fY*playerOffset
-	lpzRear := pz + fZ*playerOffset
-
-	w.frustumLightFront.Update(float32(lpxFront), float32(lpyFront), float32(lpzFront), angle, pitch, roll)
-	w.frustumLightRear.Update(float32(lpxRear), float32(lpyRear), float32(lpzRear), rAngle, rPitch, rRoll)
-
-	fm := w.frustumFront.Get()
-	frustumFront := vi.GetFrontFrustum(fm)
-
-	flm, flr := w.frustumLightFront.Get(), w.frustumLightRear.Get()
-	frustumLightFront := w.lightFrontFrustum.Rebuild(flm)
-	frustumLightRear := w.lightRearFrustum.Rebuild(flr)
+	frustumFront := vi.GetFrontFrustum(w.frustumFront.Get())
+	frustumLightFront := w.lightFrontFrustum.Rebuild(w.frustumLightFront.Get())
+	//frustumLightRear := w.lightRearFrustum.Rebuild(w.frustumLightRear.Get())
 
 	// Ripristina VBO e Comandi allo stato congelato
 	//w.fv.Reset()
@@ -150,7 +129,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
 	w.pushQVolumes(engine.GetVolumes(), frustumFront, px, py, pz)
-	w.pushQLights(engine.GetLights(), frustumLightFront, frustumLightRear, px, py, pz)
+	w.pushLights(engine.GetLights(), frustumLightFront, px, py, pz)
+	//w.pushQLights(engine.GetLights(), frustumLightFront, frustumLightRear, px, py, pz)
 	w.pushQThings(engine.GetThings(), frustumFront)
 
 	w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
@@ -371,6 +351,33 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	things.QueryFrustum(frustumFront, qOcclusion)
 
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
+}
+
+// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
+// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
+func (w *BuilderVolume) pushLights(ls *lights.Lights, frustumFront *aabb.Frustum, pX, pY, pZ float64) {
+	//TODO IMPLEMENTAZIONE CON FRUSTUM
+	w.fl.DeepReset()
+	w.fl.Prepare()
+	counter := 0
+
+	for _, light := range ls.Get() {
+		if light.GetKind() == config.LightKindNone {
+			continue
+		}
+		posX, posY, posZ := light.GetPosXYZ()
+		dx := posX - pX
+		dy := posY - pY
+		dz := posZ - pZ
+		distSq := dx*dx + dy*dy + dz*dz
+		b := light.GetAABB()
+		isFront := b.IntersectFrustum(frustumFront)
+		w.fl.Create(light, distSq, isFront)
+		counter++
+	}
+	//_, _, dynamicCount := w.fl.GetLights()
+	//_, shadowCount := w.fl.GetShadowLights()
+	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
 }
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.

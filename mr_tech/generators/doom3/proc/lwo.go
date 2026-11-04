@@ -277,7 +277,8 @@ func (l *LWO) Parse(r io.Reader) error {
 						u := math.Float32frombits(binary.BigEndian.Uint32(cData[cPos : cPos+4]))
 						v := math.Float32frombits(binary.BigEndian.Uint32(cData[cPos+4 : cPos+8]))
 						cPos += 8
-						l.VMapUVs[vi+currentPointOffset] = [2]float32{u, v}
+						// LightWave V coordinates are bottom-to-top (0=bottom, 1=top), while Doom 3 is top-to-bottom (0=top, 1=bottom)
+						l.VMapUVs[vi+currentPointOffset] = [2]float32{u, 1.0 - v}
 					}
 				}
 			}
@@ -298,7 +299,8 @@ func (l *LWO) Parse(r io.Reader) error {
 						u := math.Float32frombits(binary.BigEndian.Uint32(cData[cPos : cPos+4]))
 						v := math.Float32frombits(binary.BigEndian.Uint32(cData[cPos+4 : cPos+8]))
 						cPos += 8
-						l.VMadUVs[UVKey{Poly: pi + currentPolyOffset, Vert: vi + currentPointOffset}] = [2]float32{u, v}
+						// LightWave V coordinates are bottom-to-top (0=bottom, 1=top), while Doom 3 is top-to-bottom (0=top, 1=bottom)
+						l.VMadUVs[UVKey{Poly: pi + currentPolyOffset, Vert: vi + currentPointOffset}] = [2]float32{u, 1.0 - v}
 					}
 				}
 			}

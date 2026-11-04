@@ -188,6 +188,10 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 
 	fmt.Printf("MONSTERS: %d\n", monsters)
 
+	crosshair := common.NewSimpleCrosshair()
+	texManager.AddDirect(crosshair.GetTexture())
+	root.AddUIElement(crosshair.Create())
+
 	root.Player = config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 15, 50)
 	_ = common.NewPlayer(root.Player)
 	root.Player.GForce = GForce

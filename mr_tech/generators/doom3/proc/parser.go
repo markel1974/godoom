@@ -7,19 +7,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-// Parser parses Doom 3 precalculated map geometry (.proc files).
+// Parser is responsible for converting tokenized input into structured data suitable for further processing.
 type Parser struct {
 	lexer *Lexer
 }
 
-// NewParser initializes a new Parser for the given file data.
+// NewParser creates a new Parser instance using the provided byte slice as input data.
 func NewParser(data []byte) *Parser {
 	return &Parser{
 		lexer: NewLexer(data),
 	}
 }
 
-// Parse processes the entire .proc file and returns a populated File structure.
+// Parse processes the input data from the lexer and constructs a File instance representing the parsed structure.
 func (p *Parser) Parse() (*File, error) {
 	proc := NewProcFile()
 
@@ -68,6 +68,7 @@ func (p *Parser) Parse() (*File, error) {
 	return proc, nil
 }
 
+// parseModel parses a model block, including its name and surfaces, and returns a populated Model instance.
 func (p *Parser) parseModel() (*Model, error) {
 	if err := p.lexer.Expect("{"); err != nil {
 		return nil, err
@@ -84,11 +85,7 @@ func (p *Parser) parseModel() (*Model, error) {
 		return nil, fmt.Errorf("failed to read numSurfaces for model %s: %w", name, err)
 	}
 
-	model := &Model{
-		Name:     name,
-		Surfaces: make([]*Surface, 0, numSurfaces),
-	}
-
+	model := NewModel(name, numSurfaces)
 	for sIdx := 0; sIdx < numSurfaces; sIdx++ {
 		surface, err := p.parseSurface()
 		if err != nil {
@@ -104,6 +101,7 @@ func (p *Parser) parseModel() (*Model, error) {
 	return model, nil
 }
 
+// parseSurface parses a Surface block, extracting its material, vertices, and indices, and returns a populated Surface.
 func (p *Parser) parseSurface() (*Surface, error) {
 	if err := p.lexer.Expect("{"); err != nil {
 		return nil, err
@@ -149,8 +147,7 @@ func (p *Parser) parseSurface() (*Surface, error) {
 	return surface, nil
 }
 
-// parseVertex parses standard Doom 3 vertex format:
-// ( x y z ) s t ( nx ny nz ) [ ( tx ty tz ) ( bx by bz ) ]
+// parseVertex parses a vertex definition in the format (x y z u v nx ny nz) and returns a Vertex object or an error.
 func (p *Parser) parseVertex() (*Vertex, error) {
 	// Doom 3 vertex format: ( x y z u v nx ny nz )
 	if err := p.lexer.Expect("("); err != nil {
@@ -200,25 +197,22 @@ func (p *Parser) parseVertex() (*Vertex, error) {
 			break
 		}
 	}
-
 	return vert, nil
 }
 
+// parseInterAreaPortals parses inter-area portals, reading their points, positive and negative areas, and returns a list of portals.
 func (p *Parser) parseInterAreaPortals() ([]*Portal, error) {
 	if err := p.lexer.Expect("{"); err != nil {
 		return nil, err
 	}
-
 	// numAreas
 	if _, err := p.lexer.ReadInt(); err != nil {
 		return nil, err
 	}
-
 	numPortals, npErr := p.lexer.ReadInt()
 	if npErr != nil {
 		return nil, npErr
 	}
-
 	portals := make([]*Portal, 0, numPortals)
 
 	for i := 0; i < numPortals; i++ {
@@ -235,7 +229,7 @@ func (p *Parser) parseInterAreaPortals() ([]*Portal, error) {
 			return nil, err
 		}
 
-		portal := NewPorta(numPoints, positiveArea, negativeArea)
+		portal := NewPortal(numPoints, positiveArea, negativeArea)
 		for pt := 0; pt < numPoints; pt++ {
 			if err := p.lexer.Expect("("); err != nil {
 				return nil, err

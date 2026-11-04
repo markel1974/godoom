@@ -52,7 +52,7 @@ func (l *LWO) Parse(r io.Reader) error {
 	pos := blockSize
 
 	for pos+8 <= len(data) {
-		chunkID := string(data[pos : pos+4])
+		chunkType := string(data[pos : pos+4])
 		chunkSize := int(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
 		chunkStart := pos + 8
 		chunkEnd := chunkStart + chunkSize
@@ -66,7 +66,7 @@ func (l *LWO) Parse(r io.Reader) error {
 			pos++ // IFF 2-byte alignment padding
 		}
 
-		switch chunkID {
+		switch chunkType {
 		case "TAGS":
 			// Null-terminated strings
 			parts := bytes.Split(cData, []byte{0})
@@ -167,15 +167,15 @@ func (l *LWO) Parse(r io.Reader) error {
 				}
 			}
 		case "LAYR":
-			fmt.Println("Unsupported chunk type:", chunkID)
+			fmt.Println("Unsupported chunk type:", chunkType) //TODO
 		case "BBOX":
-			fmt.Println("Unsupported chunk type:", chunkID)
+			fmt.Println("Unsupported chunk type:", chunkType) //TODO
 		case "CLIP":
-			fmt.Println("Unsupported chunk type:", chunkID)
+			fmt.Println("Unsupported chunk type:", chunkType) //TODO
 		case "SURF":
-			fmt.Println("Unsupported chunk type:", chunkID)
+			fmt.Println("Unsupported chunk type:", chunkType) //TODO
 		default:
-			fmt.Println("Unsupported chunk type:", chunkID)
+			fmt.Println("Unsupported chunk type:", chunkType) //TODO
 		}
 	}
 

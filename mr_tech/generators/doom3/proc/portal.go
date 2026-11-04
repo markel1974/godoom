@@ -11,8 +11,8 @@ type Portal struct {
 	NegativeArea int
 }
 
-// NewPorta creates and initializes a Portal with specified points, positive area, and negative area.
-func NewPorta(numPoints, positiveArea, negativeArea int) *Portal {
+// NewPortal creates and initializes a Portal with specified points, positive area, and negative area.
+func NewPortal(numPoints, positiveArea, negativeArea int) *Portal {
 	return &Portal{
 		Points:       make([]geometry.XYZ, numPoints),
 		PositiveArea: positiveArea,

@@ -485,8 +485,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			count = partCount
 		}
 
-		origA := v.originsA[i]
-		origB := v.originsB[i]
+		origAX, origAY, origAZ := v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z
+		origBX, origBY, origBZ := v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z
 		rotA := v.rotationsA[i]
 		rotB := v.rotationsB[i]
 
@@ -497,25 +497,25 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			srcA := volA.GetFace(j)
 			dstA := v.facesA[offset+j]
 			if isIdentA {
-				if origA.X == 0 && origA.Y == 0 && origA.Z == 0 {
+				if origAX == 0 && origAY == 0 && origAZ == 0 {
 					v3dCopyFacePoints(dstA, srcA)
 				} else {
-					v3dTransformPoints(dstA, srcA, origA)
+					v3dTransformPoints(dstA, srcA, origAX, origAY, origAZ)
 				}
 			} else {
-				v3dTransformPointsWithMatrix(dstA, srcA, origA, rotA)
+				v3dTransformPointsWithMatrix(dstA, srcA, origAX, origAY, origAZ, rotA)
 			}
 
 			srcB := volB.GetFace(j)
 			dstB := v.facesB[offset+j]
 			if isIdentB {
-				if origB.X == 0 && origB.Y == 0 && origB.Z == 0 {
+				if origBX == 0 && origBY == 0 && origBZ == 0 {
 					v3dCopyFacePoints(dstB, srcB)
 				} else {
-					v3dTransformPoints(dstB, srcB, origB)
+					v3dTransformPoints(dstB, srcB, origBX, origBY, origBZ)
 				}
 			} else {
-				v3dTransformPointsWithMatrix(dstB, srcB, origB, rotB)
+				v3dTransformPointsWithMatrix(dstB, srcB, origBX, origBY, origBZ, rotB)
 			}
 		}
 
@@ -530,28 +530,28 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 }
 
 // v3dTransformPoints transforms the points of src Face to a new position relative to origin, storing them in dst.
-func v3dTransformPoints(dst *Face, src *Face, origin geometry.XYZ) {
-	dst.tri[0].X = src.tri[0].X + origin.X
-	dst.tri[0].Y = src.tri[0].Y + origin.Y
-	dst.tri[0].Z = src.tri[0].Z + origin.Z
-	dst.tri[1].X = src.tri[1].X + origin.X
-	dst.tri[1].Y = src.tri[1].Y + origin.Y
-	dst.tri[1].Z = src.tri[1].Z + origin.Z
-	dst.tri[2].X = src.tri[2].X + origin.X
-	dst.tri[2].Y = src.tri[2].Y + origin.Y
-	dst.tri[2].Z = src.tri[2].Z + origin.Z
+func v3dTransformPoints(dst *Face, src *Face, originX, originY, originZ float64) {
+	dst.tri[0].X = src.tri[0].X + originX
+	dst.tri[0].Y = src.tri[0].Y + originY
+	dst.tri[0].Z = src.tri[0].Z + originZ
+	dst.tri[1].X = src.tri[1].X + originX
+	dst.tri[1].Y = src.tri[1].Y + originY
+	dst.tri[1].Z = src.tri[1].Z + originZ
+	dst.tri[2].X = src.tri[2].X + originX
+	dst.tri[2].Y = src.tri[2].Y + originY
+	dst.tri[2].Z = src.tri[2].Z + originZ
 }
 
 // v3dTransformPointsWithMatrix rotates the points of src Face by matrix m and translates them by origin, storing in dst.
-func v3dTransformPointsWithMatrix(dst *Face, src *Face, origin geometry.XYZ, m [3]geometry.XYZ) {
+func v3dTransformPointsWithMatrix(dst *Face, src *Face, originX, originY, originZ float64, m [3]geometry.XYZ) {
 	for k := 0; k < 3; k++ {
 		rx := src.tri[k].X*m[0].X + src.tri[k].Y*m[1].X + src.tri[k].Z*m[2].X
 		ry := src.tri[k].X*m[0].Y + src.tri[k].Y*m[1].Y + src.tri[k].Z*m[2].Y
 		rz := src.tri[k].X*m[0].Z + src.tri[k].Y*m[1].Z + src.tri[k].Z*m[2].Z
 
-		dst.tri[k].X = rx + origin.X
-		dst.tri[k].Y = ry + origin.Y
-		dst.tri[k].Z = rz + origin.Z
+		dst.tri[k].X = rx + originX
+		dst.tri[k].Y = ry + originY
+		dst.tri[k].Z = rz + originZ
 	}
 }
 

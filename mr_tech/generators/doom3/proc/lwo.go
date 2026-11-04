@@ -37,19 +37,19 @@ func NewLWO() *LWO {
 
 // Parse reads an LWO2 file from the provided io.Reader and populates the LWO structure with parsed data.
 func (l *LWO) Parse(r io.Reader) error {
+	const blockSize = 12
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return fmt.Errorf("reading LWO: %w", err)
 	}
-	if len(data) < 12 {
+	if len(data) < blockSize {
 		return fmt.Errorf("LWO data too short")
 	}
-
-	if string(data[:4]) != "FORM" || string(data[8:12]) != "LWO2" {
+	if string(data[:4]) != "FORM" || string(data[8:blockSize]) != "LWO2" {
 		return fmt.Errorf("not an LWO2 file")
 	}
 
-	pos := 12
+	pos := blockSize
 
 	for pos+8 <= len(data) {
 		chunkID := string(data[pos : pos+4])
@@ -75,22 +75,17 @@ func (l *LWO) Parse(r io.Reader) error {
 					l.Tags = append(l.Tags, string(part))
 				}
 			}
-
 		case "PNTS":
-			numPoints := len(cData) / 12
+			numPoints := len(cData) / blockSize
 			l.Points = make([]geometry.XYZ, numPoints)
 			for i := 0; i < numPoints; i++ {
-				off := i * 12
+				off := i * blockSize
 				bitsX := binary.BigEndian.Uint32(cData[off : off+4])
 				bitsY := binary.BigEndian.Uint32(cData[off+4 : off+8])
-				bitsZ := binary.BigEndian.Uint32(cData[off+8 : off+12])
+				bitsZ := binary.BigEndian.Uint32(cData[off+8 : off+blockSize])
 				// LightWave coordinate system (left-handed, Y-up) to Doom 3 (right-handed, Z-up):
-				// Doom 3 X = LightWave X (pos[0])
-				// Doom 3 Y = LightWave Z (pos[2])
-				// Doom 3 Z = LightWave Y (pos[1])
 				l.Points[i] = geometry.XYZ{X: float64(math.Float32frombits(bitsX)), Y: float64(math.Float32frombits(bitsZ)), Z: float64(math.Float32frombits(bitsY))}
 			}
-
 		case "POLS":
 			if len(cData) > 4 && string(cData[:4]) == "FACE" {
 				cPos := 4
@@ -98,7 +93,6 @@ func (l *LWO) Parse(r io.Reader) error {
 					numVerts := int(binary.BigEndian.Uint16(cData[cPos : cPos+2]))
 					cPos += 2
 					numVerts = numVerts & 0x03FF // mask flags
-
 					var poly []int
 					for v := 0; v < numVerts; v++ {
 						vi, nextPos := l.vxIndex(cData, cPos)
@@ -108,7 +102,6 @@ func (l *LWO) Parse(r io.Reader) error {
 					l.Polygons = append(l.Polygons, poly)
 				}
 			}
-
 		case "PTAG":
 			if len(cData) > 4 && string(cData[:4]) == "SURF" {
 				cPos := 4
@@ -123,7 +116,6 @@ func (l *LWO) Parse(r io.Reader) error {
 					l.PolyTags[polyIdx] = tagIdx
 				}
 			}
-
 		case "VMAP":
 			if len(cData) > 6 && string(cData[:4]) == "TXUV" {
 				dim := int(binary.BigEndian.Uint16(cData[4:6]))
@@ -148,7 +140,6 @@ func (l *LWO) Parse(r io.Reader) error {
 					}
 				}
 			}
-
 		case "VMAD":
 			if len(cData) > 6 && string(cData[:4]) == "TXUV" {
 				dim := int(binary.BigEndian.Uint16(cData[4:6]))
@@ -175,6 +166,16 @@ func (l *LWO) Parse(r io.Reader) error {
 					}
 				}
 			}
+		case "LAYR":
+			fmt.Println("Unsupported chunk type:", chunkID)
+		case "BBOX":
+			fmt.Println("Unsupported chunk type:", chunkID)
+		case "CLIP":
+			fmt.Println("Unsupported chunk type:", chunkID)
+		case "SURF":
+			fmt.Println("Unsupported chunk type:", chunkID)
+		default:
+			fmt.Println("Unsupported chunk type:", chunkID)
 		}
 	}
 

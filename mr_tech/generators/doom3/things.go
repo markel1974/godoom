@@ -8,8 +8,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
-	md6 "github.com/markel1974/godoom/mr_tech/generators/doom3/proc/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
@@ -51,23 +51,23 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	}
 	//defer mf.Close()
 
-	mesh := md6.NewMesh()
+	mesh := md5.NewMesh()
 	if err := mesh.Parse(mf); err != nil {
 		return nil, fmt.Errorf("parsing md5mesh %s: %w", cleanPath, err)
 	}
 
-	var headMesh *md6.Mesh
+	var headMesh *md5.Mesh
 	if len(spec.HeadMesh) > 0 {
 		cHeadPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.HeadMesh, "\\", "/")))
 		if hf, err := t.arc.Open(cHeadPath); err == nil {
-			parsedHead := md6.NewMesh()
+			parsedHead := md5.NewMesh()
 			if err := parsedHead.Parse(hf); err == nil {
 				headMesh = parsedHead
 			}
 		}
 	}
 
-	anims := make(map[string]*md6.Anim)
+	anims := make(map[string]*md5.Anim)
 	loadAnim := func(actionKey, animPath string) {
 		if len(animPath) == 0 {
 			return
@@ -75,7 +75,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 		cAnimPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(animPath, "\\", "/")))
 		if af, err := t.arc.Open(cAnimPath); err == nil {
 			//defer af.Close()
-			anim := md6.NewAnim()
+			anim := md5.NewAnim()
 			if err := anim.Parse(af); err == nil {
 				anims[actionKey] = anim
 			}
@@ -121,7 +121,7 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 
 	var cModel *config.Model3DEntry
 	if strings.HasSuffix(cleanPath, ".md5mesh") {
-		mesh := md6.NewMesh()
+		mesh := md5.NewMesh()
 		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
@@ -263,7 +263,7 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 }
 
 // BakeMD5Model evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
-func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName string, anims map[string]*md6.Anim, materials *Materials) (*config.Model3DEntry, error) {
+func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim, materials *Materials) (*config.Model3DEntry, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 {
 		return nil, fmt.Errorf("empty md5 mesh")
 	}
@@ -281,10 +281,10 @@ func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName 
 	}
 
 	// Prepare head submesh materials and attachment if present
-	var headAttachment *md6.HeadAttachment
+	var headAttachment *md5.HeadAttachment
 	var headMaterials []*config.Material
 	if headMesh != nil && len(headMesh.SubMeshes) > 0 {
-		headAttachment = md6.NewHeadAttachment(mesh, headMesh, headJointName)
+		headAttachment = md5.NewHeadAttachment(mesh, headMesh, headJointName)
 		headMaterials = make([]*config.Material, len(headMesh.SubMeshes))
 		for sIdx, sub := range headMesh.SubMeshes {
 			var mat *config.Material
@@ -302,7 +302,7 @@ func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName 
 	var actionNames []string
 	var actionIntervals [][2]int
 
-	bakeFrameWithSkel := func(skel []md6.Joint) config.Model3DEntryFrame {
+	bakeFrameWithSkel := func(skel []md5.Joint) config.Model3DEntryFrame {
 		var frameTriangles []config.Model3DEntryTriangle
 		// Bake body submeshes
 		for sIdx, sub := range mesh.SubMeshes {
@@ -314,7 +314,7 @@ func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName 
 					weight := sub.Weights[vert.WeightIdx+w]
 					joint := skel[weight.Joint]
 
-					rotated := md6.QuatRotate(joint.Orient, weight.Pos)
+					rotated := md5.QuatRotate(joint.Orient, weight.Pos)
 					p.X += (joint.Pos.X + rotated.X) * weight.Bias
 					p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
 					p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
@@ -347,7 +347,7 @@ func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName 
 					for w := 0; w < vert.WeightSpan; w++ {
 						weight := sub.Weights[vert.WeightIdx+w]
 						joint := headSkel[weight.Joint]
-						rotated := md6.QuatRotate(joint.Orient, weight.Pos)
+						rotated := md5.QuatRotate(joint.Orient, weight.Pos)
 						p.X += (joint.Pos.X + rotated.X) * weight.Bias
 						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
 						p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
@@ -410,7 +410,7 @@ func (t *Things) bakeMD5Model(mesh *md6.Mesh, headMesh *md6.Mesh, headJointName 
 	// Center the model in X, Y, and Z so that its center is at (0, 0, 0).
 	// In Godoom, rendering places the model at (center.x, center.z, -center.y).
 	// Centering ensures that the feet touch the floor at pos.Z and the head reaches pos.Z + height.
-	CenterModel(cModel)
+	cModel.Center()
 
 	return cModel, nil
 }
@@ -494,58 +494,7 @@ func (t *Things) bakeLWO(r io.Reader, materials *Materials) (*config.Model3DEntr
 	cModel.ActionDefinitions = []string{"idle"}
 	cModel.ActionIntervals = [][2]int{{0, 0}}
 
-	CenterModel(cModel)
+	cModel.Center()
 
 	return cModel, nil
-}
-
-// CenterModel centers the 3D model's bounding box around (0, 0, 0) across all frames.
-func CenterModel(m *config.Model3DEntry) {
-	if m == nil || len(m.Frames) == 0 {
-		return
-	}
-
-	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
-	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
-
-	for _, frame := range m.Frames {
-		for _, tri := range frame.Triangles {
-			for _, vertex := range tri.Vertices {
-				p := vertex.Pos
-				if p.X < minX {
-					minX = p.X
-				}
-				if p.X > maxX {
-					maxX = p.X
-				}
-				if p.Y < minY {
-					minY = p.Y
-				}
-				if p.Y > maxY {
-					maxY = p.Y
-				}
-				if p.Z < minZ {
-					minZ = p.Z
-				}
-				if p.Z > maxZ {
-					maxZ = p.Z
-				}
-			}
-		}
-	}
-
-	centerX := (minX + maxX) / 2
-	centerY := (minY + maxY) / 2
-	centerZ := (minZ + maxZ) / 2
-
-	for frameIdx := range m.Frames {
-		for triIdx := range m.Frames[frameIdx].Triangles {
-			for vertexIdx := range m.Frames[frameIdx].Triangles[triIdx].Vertices {
-				p := &m.Frames[frameIdx].Triangles[triIdx].Vertices[vertexIdx].Pos
-				p.X -= centerX
-				p.Y -= centerY
-				p.Z -= centerZ
-			}
-		}
-	}
 }

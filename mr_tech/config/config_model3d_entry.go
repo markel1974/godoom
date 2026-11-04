@@ -189,3 +189,54 @@ func (m *Model3DEntry) DropToFloor() {
 		}
 	}
 }
+
+// Center repositions the 3D model by centering its vertices around the origin of the coordinate system.
+func (m *Model3DEntry) Center() {
+	if m == nil || len(m.Frames) == 0 {
+		return
+	}
+
+	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
+	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+
+	for _, frame := range m.Frames {
+		for _, tri := range frame.Triangles {
+			for _, vertex := range tri.Vertices {
+				p := vertex.Pos
+				if p.X < minX {
+					minX = p.X
+				}
+				if p.X > maxX {
+					maxX = p.X
+				}
+				if p.Y < minY {
+					minY = p.Y
+				}
+				if p.Y > maxY {
+					maxY = p.Y
+				}
+				if p.Z < minZ {
+					minZ = p.Z
+				}
+				if p.Z > maxZ {
+					maxZ = p.Z
+				}
+			}
+		}
+	}
+
+	centerX := (minX + maxX) / 2
+	centerY := (minY + maxY) / 2
+	centerZ := (minZ + maxZ) / 2
+
+	for frameIdx := range m.Frames {
+		for triIdx := range m.Frames[frameIdx].Triangles {
+			for vertexIdx := range m.Frames[frameIdx].Triangles[triIdx].Vertices {
+				p := &m.Frames[frameIdx].Triangles[triIdx].Vertices[vertexIdx].Pos
+				p.X -= centerX
+				p.Y -= centerY
+				p.Z -= centerZ
+			}
+		}
+	}
+}

@@ -14,11 +14,11 @@ import (
 type Volumes struct {
 	pFile     *proc.File
 	chunkSize float64
-	materials *Materials
+	materials *proc.Materials
 }
 
 // NewVolumes initializes and returns a pointer to a Volumes instance with the provided proc.File, chunk size, and materials.
-func NewVolumes(pFile *proc.File, chunkSize float64, materials *Materials) *Volumes {
+func NewVolumes(pFile *proc.File, chunkSize float64, materials *proc.Materials) *Volumes {
 	return &Volumes{
 		pFile:     pFile,
 		chunkSize: chunkSize,
@@ -52,8 +52,9 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 			}
 
 			var material *config.Material
-			if vs.materials != nil {
-				material = vs.materials.CreateConfigMaterial(matName)
+
+			if matDef := vs.materials.Resolve(matName); matDef != nil {
+				material = CreateConfigMaterial(matDef)
 			} else {
 				kind := ToMaterial(texNameLC)
 				material = config.NewConfigMaterial(matName, []string{texNameLC}, kind)

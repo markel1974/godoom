@@ -1,4 +1,4 @@
-package doom3
+package proc
 
 import (
 	"errors"

@@ -1,31 +1,9 @@
-package doom3
+package proc
 
 import (
 	"io"
 	"strings"
-
-	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 )
-
-// IPkArchive represents an interface for accessing custom archive formats, providing file opening and directory filtering.
-type IPkArchive interface {
-	Open(p string) (io.ReadSeeker, error)
-	ReadDirFilter(p string, f string) ([]string, error)
-}
-
-// ToMaterial determines the material kind based on the provided lowercase texture name string.
-func ToMaterial(texNameLC string) config.MaterialKind {
-	kind := config.MaterialKindSolid
-	if strings.Contains(texNameLC, "sky") {
-		kind = config.MaterialKindSky
-	} else if strings.Contains(texNameLC, "water") || strings.Contains(texNameLC, "liquid") {
-		kind = config.MaterialKindWater
-	} else if strings.Contains(texNameLC, "slime") {
-		kind = config.MaterialKindSlime
-	}
-	return kind
-}
 
 // MaterialDef defines the properties of a material, including its name, texture maps, and material kind.
 type MaterialDef struct {
@@ -33,7 +11,7 @@ type MaterialDef struct {
 	DiffuseMap  string
 	NormalMap   string
 	SpecularMap string
-	Kind        config.MaterialKind
+	Kind2       string
 	IsDecal     bool
 }
 
@@ -43,7 +21,7 @@ func NewMaterialDef(matName string) *MaterialDef {
 	isDecal := strings.HasPrefix(nameLower, "textures/decals/") || strings.HasSuffix(nameLower, "_shadow")
 	mat := &MaterialDef{
 		Name:    matName,
-		Kind:    ToMaterial(matName),
+		Kind2:   matName,
 		IsDecal: isDecal,
 	}
 	return mat
@@ -51,13 +29,13 @@ func NewMaterialDef(matName string) *MaterialDef {
 
 // Materials represents a collection of material definitions identified by unique string keys.
 type Materials struct {
-	defs map[string]*MaterialDef
+	Defs map[string]*MaterialDef
 }
 
 // NewMaterials initializes and returns a pointer to a new Materials instance with an empty map for material definitions.
 func NewMaterials() *Materials {
 	return &Materials{
-		defs: make(map[string]*MaterialDef),
+		Defs: make(map[string]*MaterialDef),
 	}
 }
 
@@ -80,12 +58,12 @@ func (m *Materials) LoadFromArchive(arc IPkArchive) error {
 }
 
 // parseMtrPath parses a texture path from material tokens, unwrapping functions like addnormals or heightmap.
-func parseMtrPath(lexer *proc.Lexer) string {
+func parseMtrPath(lexer *Lexer) string {
 	tok, err := lexer.NextToken()
 	if err != nil {
 		return ""
 	}
-	tokLower := strings.ToLower(proc.StripQuotes(tok))
+	tokLower := strings.ToLower(StripQuotes(tok))
 
 	if idx := strings.Index(tokLower, "("); idx != -1 {
 		tokLower = tokLower[idx+1:]
@@ -104,7 +82,7 @@ func parseMtrPath(lexer *proc.Lexer) string {
 			if err != nil || sub == "}" || sub == "{" {
 				return ""
 			}
-			clean := strings.Trim(strings.ToLower(proc.StripQuotes(sub)), ",()")
+			clean := strings.Trim(strings.ToLower(StripQuotes(sub)), ",()")
 			if strings.Contains(clean, "/") {
 				return clean
 			}
@@ -120,13 +98,13 @@ func parseMtrPath(lexer *proc.Lexer) string {
 
 // parseMtrData parses material definitions from a byte slice and populates the Materials' map with parsed data.
 func (m *Materials) parseMtrData(data []byte) {
-	lexer := proc.NewLexer(data)
+	lexer := NewLexer(data)
 	for {
 		name, err := lexer.NextToken()
 		if err != nil {
 			break
 		}
-		name = strings.ToLower(proc.StripQuotes(name))
+		name = strings.ToLower(StripQuotes(name))
 
 		// Expect opening brace
 		peek, err := lexer.PeekToken()
@@ -179,7 +157,7 @@ func (m *Materials) parseMtrData(data []byte) {
 			case "blend":
 				blendTok, err := lexer.NextToken()
 				if err == nil {
-					currentBlend = strings.Trim(strings.ToLower(proc.StripQuotes(blendTok)), ",()")
+					currentBlend = strings.Trim(strings.ToLower(StripQuotes(blendTok)), ",()")
 					if strings.Contains(currentBlend, "/") && def.DiffuseMap == "" {
 						def.DiffuseMap = currentBlend
 					}
@@ -221,7 +199,7 @@ func (m *Materials) parseMtrData(data []byte) {
 					}
 				}
 			case "translucent":
-				def.Kind = config.MaterialKindSolid // TODO config.MaterialKindTranslucent
+				def.Kind2 = "translucent" // TODO config.MaterialKindTranslucent
 			case "decal_macro", "polygonoffset":
 				def.IsDecal = true
 			case "(", ")":
@@ -233,14 +211,14 @@ func (m *Materials) parseMtrData(data []byte) {
 			def.DiffuseMap = editorImage
 		}
 
-		m.defs[name] = def
+		m.Defs[name] = def
 	}
 }
 
 // Resolve returns a MaterialDef for the given material name, creating a new definition if it doesn't exist in the collection.
 func (m *Materials) Resolve(materialName string) *MaterialDef {
 	nameLower := strings.ToLower(materialName)
-	if def, ok := m.defs[nameLower]; ok {
+	if def, ok := m.Defs[nameLower]; ok {
 		return def
 	}
 	def := NewMaterialDef(nameLower)
@@ -248,15 +226,33 @@ func (m *Materials) Resolve(materialName string) *MaterialDef {
 	def.DiffuseMap = nameLower
 	def.NormalMap = nameLower + "_local"
 	def.SpecularMap = nameLower + "_s"
-	m.defs[nameLower] = def
+	m.Defs[nameLower] = def
 	return def
+}
+
+/*
+// ToMaterial determines the material kind based on the provided lowercase texture name string.
+func ToMaterial(texNameLC string) config.MaterialKind {
+	kind := config.MaterialKindSolid
+	if texNameLC == "translucent" {
+		kind = config.MaterialKindSolid //TODO config.MaterialKindTranslucent
+	} else if strings.Contains(texNameLC, "sky") {
+		kind = config.MaterialKindSky
+	} else if strings.Contains(texNameLC, "water") || strings.Contains(texNameLC, "liquid") {
+		kind = config.MaterialKindWater
+	} else if strings.Contains(texNameLC, "slime") {
+		kind = config.MaterialKindSlime
+	} else if strings.Contains(texNameLC, "common/collision") || strings.Contains(texNameLC, "common/nodraw") || strings.Contains(texNameLC, "common/caulk") || strings.Contains(texNameLC, "common/trig") {
+		kind = config.MaterialKindNone
+	}
+	return kind
 }
 
 // CreateConfigMaterial creates and returns a configured `config.Material` based on the provided material name.
 func (m *Materials) CreateConfigMaterial(materialName string) *config.Material {
 	def := m.Resolve(materialName)
 	textures := []string{def.DiffuseMap}
-	mat := config.NewConfigMaterial(def.Name, textures, def.Kind)
+	mat := config.NewConfigMaterial(def.Name, textures, ToMaterial(def.Kind2))
 	if def.NormalMap != "" {
 		mat.NormalMap = def.NormalMap
 	}
@@ -267,3 +263,6 @@ func (m *Materials) CreateConfigMaterial(materialName string) *config.Material {
 	}
 	return mat
 }
+
+
+*/

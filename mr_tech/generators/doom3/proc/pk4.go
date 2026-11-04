@@ -13,6 +13,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 )
 
+// IPkArchive represents an interface for accessing custom archive formats, providing file opening and directory filtering.
+type IPkArchive interface {
+	Open(p string) (io.ReadSeeker, error)
+	ReadDirFilter(p string, f string) ([]string, error)
+}
+
 const Pak4Separator = "/"
 
 // NodePk4 represents a node in a hierarchical structure for handling zip file contents.

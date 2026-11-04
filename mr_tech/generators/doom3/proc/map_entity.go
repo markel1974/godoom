@@ -1,14 +1,11 @@
-package doom3
+package proc
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"strings"
 
-	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -146,20 +143,11 @@ func (e *MapEntity) IsDormant() bool {
 }
 
 // GetLightKind determines whether the light entity is a spotlight, ambient, or diffuse point light.
-func (e *MapEntity) GetLightKind() config.LightKind {
+func (e *MapEntity) GetLightKind() (string, string, string) {
 	tex, _ := e.GetProperty("texture")
-	texLower := strings.ToLower(tex)
 	ambient, _ := e.GetProperty("ambient")
-	if ambient == "1" || strings.Contains(texLower, "ambient") {
-		return config.LightKindAmbient
-	}
-	if _, ok := e.GetProperty("light_target"); ok {
-		return config.LightKindSpot
-	}
-	if strings.Contains(texLower, "spot") {
-		return config.LightKindSpot
-	}
-	return config.LightKindDiffuse
+	target, _ := e.GetProperty("light_target")
+	return tex, ambient, target
 }
 
 // GetSpotlightParams computes the direction vector and cone cut-off angles for a spotlight.
@@ -212,77 +200,4 @@ func (e *MapEntity) GetSpotlightParams() (geometry.XYZ, float64, float64) {
 
 	outerCutOff := cutOff + 10.0
 	return dir, cutOff, outerCutOff
-}
-
-// MapParser parses Doom 3 .map ASCII files.
-type MapParser struct {
-	lexer *proc.Lexer
-}
-
-// NewMapParser initializes a new MapParser with the given .map file bytes.
-func NewMapParser(data []byte) *MapParser {
-	return &MapParser{
-		lexer: proc.NewLexer(data),
-	}
-}
-
-// Parse extracts all entities defined in the .map file.
-func (p *MapParser) Parse() ([]*MapEntity, error) {
-	var entities []*MapEntity
-
-	for {
-		tok, err := p.lexer.NextToken()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-
-		if tok == "{" {
-			ent, err := p.parseEntity()
-			if err != nil {
-				return nil, err
-			}
-			if len(ent.Properties) > 0 {
-				entities = append(entities, ent)
-			}
-		}
-	}
-
-	return entities, nil
-}
-
-func (p *MapParser) parseEntity() (*MapEntity, error) {
-	ent := NewMapEntity()
-
-	for {
-		tok, err := p.lexer.NextToken()
-		if err != nil {
-			return nil, err
-		}
-
-		if tok == "}" {
-			break
-		}
-
-		// Sub-blocks such as brushDef3 { ... } or patchDef2 { ... }
-		if tok == "{" {
-			if err := p.lexer.SkipBlock(); err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		// Property key
-		key := tok
-		val, err := p.lexer.NextToken()
-		if err != nil {
-			return nil, err
-		}
-
-		ent.Properties[strings.ToLower(key)] = val
-	}
-
-	return ent, nil
 }

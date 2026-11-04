@@ -16,15 +16,15 @@ import (
 
 // Things manages the loading, caching, and instantiation of 3D entities (monsters, items, weapons, ammo) in Doom 3.
 type Things struct {
-	arc        IPkArchive
-	materials  *Materials
+	arc        proc.IPkArchive
+	materials  *proc.Materials
 	texManager *textures.Textures
-	imgLoader  *ImageLoader
+	imgLoader  *proc.ImageLoader
 	modelCache map[string]*config.Model3DEntry
 }
 
 // NewThings initializes and returns a new Things manager.
-func NewThings(arc IPkArchive, materials *Materials, texManager *textures.Textures, imgLoader *ImageLoader) *Things {
+func NewThings(arc proc.IPkArchive, materials *proc.Materials, texManager *textures.Textures, imgLoader *proc.ImageLoader) *Things {
 	return &Things{
 		arc:        arc,
 		materials:  materials,
@@ -86,7 +86,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	loadAnim("walk", spec.WalkAnim)
 	loadAnim("run", spec.RunAnim)
 
-	cModel, err := t.bakeMD5Model(mesh, headMesh, spec.HeadJoint, anims, t.materials)
+	cModel, err := t.bakeMD5Model(mesh, headMesh, spec.HeadJoint, anims)
 	if err != nil {
 		return nil, fmt.Errorf("baking md5 model %s: %w", cleanPath, err)
 	}
@@ -125,9 +125,9 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
-		cModel, err = t.bakeMD5Model(mesh, nil, "", nil, t.materials)
+		cModel, err = t.bakeMD5Model(mesh, nil, "", nil)
 	} else if strings.HasSuffix(cleanPath, ".lwo") {
-		cModel, err = t.bakeLWO(f, t.materials)
+		cModel, err = t.bakeLWO(f)
 	} else {
 		return nil, fmt.Errorf("unsupported model format for %s", cleanPath)
 	}
@@ -152,7 +152,7 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 }
 
 // Create creates a new Thing entity based on the parsed MapEntity properties.
-func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
+func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	classname, ok := ent.GetProperty("classname")
 	if !ok {
 		return nil, fmt.Errorf("entity has no classname")
@@ -263,7 +263,7 @@ func (t *Things) Create(ent *MapEntity) (*config.Thing, error) {
 }
 
 // BakeMD5Model evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
-func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim, materials *Materials) (*config.Model3DEntry, error) {
+func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim) (*config.Model3DEntry, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 {
 		return nil, fmt.Errorf("empty md5 mesh")
 	}
@@ -271,8 +271,10 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	subMaterials := make([]*config.Material, len(mesh.SubMeshes))
 	for sIdx, sub := range mesh.SubMeshes {
 		var mat *config.Material
-		if materials != nil && len(sub.Shader) > 0 {
-			mat = materials.CreateConfigMaterial(sub.Shader)
+		if len(sub.Shader) > 0 {
+			if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
+				mat = CreateConfigMaterial(matDef)
+			}
 		}
 		if mat == nil {
 			mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
@@ -288,8 +290,10 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 		headMaterials = make([]*config.Material, len(headMesh.SubMeshes))
 		for sIdx, sub := range headMesh.SubMeshes {
 			var mat *config.Material
-			if materials != nil && len(sub.Shader) > 0 {
-				mat = materials.CreateConfigMaterial(sub.Shader)
+			if len(sub.Shader) > 0 {
+				if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
+					mat = CreateConfigMaterial(matDef)
+				}
 			}
 			if mat == nil {
 				mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
@@ -416,7 +420,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 }
 
 // BakeLWO parses a LightWave Object (LWO2) binary model file and converts it into a Config Model3DEntry.
-func (t *Things) bakeLWO(r io.Reader, materials *Materials) (*config.Model3DEntry, error) {
+func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 	lwd := proc.NewLWO()
 	if err := lwd.Parse(r); err != nil {
 		return nil, err
@@ -429,11 +433,22 @@ func (t *Things) bakeLWO(r io.Reader, materials *Materials) (*config.Model3DEntr
 	// Build materials for each tag
 	tagMaterials := make([]*config.Material, len(lwd.Tags))
 	for i, tagName := range lwd.Tags {
-		if materials != nil {
-			tagMaterials[i] = materials.CreateConfigMaterial(tagName)
+		if matDef := t.materials.Resolve(tagName); matDef != nil {
+			tagMaterials[i] = CreateConfigMaterial(matDef)
 		}
 		if tagMaterials[i] == nil {
 			tagMaterials[i] = config.NewConfigMaterial("lwo.part", []string{tagName}, config.MaterialKindSolid)
+		}
+		if surf, ok := lwd.Surfaces[tagName]; ok {
+			if surf.TexturePath != "" && (len(tagMaterials[i].Textures) == 0 || tagMaterials[i].Textures[0] == tagName) {
+				tagMaterials[i].Textures = []string{surf.TexturePath}
+			}
+			if surf.Specular > 0 {
+				tagMaterials[i].SpecularBoost = float64(surf.Specular)
+			}
+			if surf.Glossiness > 0 {
+				tagMaterials[i].Shininess = float64(surf.Glossiness * 128.0)
+			}
 		}
 	}
 

@@ -70,12 +70,12 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	}
 	fmt.Printf("Parsed %d models, %d portals from .proc\n", len(procFile.Models), len(procFile.Portals))
 
-	materials := NewMaterials()
+	materials := proc.NewMaterials()
 	_ = materials.LoadFromArchive(arc)
-	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.defs))
+	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.Defs))
 
 	texManager := textures.NewTextures()
-	imgLoader := NewImageLoader(arc, texManager, materials)
+	imgLoader := proc.NewImageLoader(arc, texManager, materials)
 	for _, model := range procFile.Models {
 		if !strings.HasPrefix(model.Name, "_area") {
 			continue
@@ -120,7 +120,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	thingsManager := NewThings(arc, materials, texManager, imgLoader)
 	if mf, err := arc.Open(mapPath); err == nil {
 		if mapData, err := io.ReadAll(mf); err == nil {
-			mapParser := NewMapParser(mapData)
+			mapParser := proc.NewMapParser(mapData)
 			if entities, err := mapParser.Parse(); err == nil {
 				for _, ent := range entities {
 					classname, _ := ent.GetProperty("classname")
@@ -137,7 +137,7 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 						if origin, err := ent.GetOrigin(); err == nil {
 							r, g, b := ent.GetColor()
 							radius := ent.GetLightRadius()
-							kind := ent.GetLightKind()
+							kind := p.ToLightKind(ent.GetLightKind())
 							light := config.NewConfigLight(origin, 1.0, kind, radius)
 							light.R, light.G, light.B = r, g, b
 							if kind == config.LightKindSpot {
@@ -223,4 +223,18 @@ func (p *Builder) Setup(res common.IResources, pk4Path string, lev int) (*config
 	root.Player.Bobbing.TiltAmp = 0.05
 
 	return root, nil
+}
+
+func (b *Builder) ToLightKind(tex, ambient, target string) config.LightKind {
+	texLower := strings.ToLower(tex)
+	if ambient == "1" || strings.Contains(texLower, "ambient") {
+		return config.LightKindAmbient
+	}
+	if len(target) > 0 {
+		return config.LightKindSpot
+	}
+	if strings.Contains(texLower, "spot") {
+		return config.LightKindSpot
+	}
+	return config.LightKindDiffuse
 }

@@ -173,6 +173,7 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 	triCounter := 0
 	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
 		if triCounter >= totalTriangles {
+			fmt.Println("max triangles reached", triCounter, "total", totalTriangles)
 			return
 		}
 		volIdx := clusterMap[triCounter]

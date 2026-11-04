@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GoProfileHistory">
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-121322-278.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791195191135" />
+        <option name="file" value="godoom-cpu-2026-10-05-121322-278.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-121901-093.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791195522916" />
+        <option name="file" value="godoom-cpu-2026-10-05-121901-093.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-123323-530.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791196373489" />
+        <option name="file" value="godoom-cpu-2026-10-05-123323-530.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-125406-865.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791197603713" />
+        <option name="file" value="godoom-cpu-2026-10-05-125406-865.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-125945-323.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791197951523" />
+        <option name="file" value="godoom-cpu-2026-10-05-125945-323.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-130646-139.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791198341452" />
+        <option name="file" value="godoom-cpu-2026-10-05-130646-139.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-130947-462.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791198533251" />
+        <option name="file" value="godoom-cpu-2026-10-05-130947-462.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-132931-474.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791199750104" />
+        <option name="file" value="godoom-cpu-2026-10-05-132931-474.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-133442-758.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791200049201" />
+        <option name="file" value="godoom-cpu-2026-10-05-133442-758.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-allocs-2026-10-05-142112-449.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1791202863509" />
+        <option name="file" value="godoom-allocs-2026-10-05-142112-449.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="ALLOCS" />
+      </GoProfileMapEntry>
+    </profile>
+  </component>
+</project>

@@ -185,12 +185,14 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 		case "func": //IMPLEMENT
 		case "trigger": //IMPLEMENT
 		case "speaker": //IMPLEMENT
+		case "sound": //IMPLEMENT
 		case "item":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				root.Things = append(root.Things, thing)
 			}
 		case "path": //IMPLEMENT
 		case "admin": //IMPLEMENT
+		case "powerup": //IMPLEMENT
 		case "monster":
 			if thing, err := thingsManager.Create(ent); err == nil {
 				monsters++
@@ -217,6 +219,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 		case "alphalabs1": //IMPLEMENT
 		case "hellhole": //IMPLEMENT
 		case "marscity": //IMPLEMENT
+		case "marscity2": //IMPLEMENT
 		case "ending": //IMPLEMENT
 		default:
 			fmt.Printf("Unhandled entity: %s\n", classname)

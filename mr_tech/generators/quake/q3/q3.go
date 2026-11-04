@@ -142,6 +142,7 @@ func (q3 *BSPReader) GetModelFileName(classname string) string {
 
 // Build processes entities and geometry from a BSPReader, organizing them into the root config structure.
 func (q3 *BSPReader) Build(root *config.Root) error {
+	const volumesCount = float64(128)
 	mIdx := 0
 	rawFaces, rfErr := q3.GetRawFaces(mIdx)
 	if rfErr != nil {
@@ -153,7 +154,7 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	}
 	things := NewThings(q3.arc, q3.shaders, q3.texManager)
 	lights := NewLights(entities)
-	volumes := NewVolumes(q3.shaders)
+	volumes := NewVolumes(q3.shaders, volumesCount)
 
 	playersIdx := 0
 	var playersBot []string

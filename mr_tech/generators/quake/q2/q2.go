@@ -99,7 +99,7 @@ func (q2 *BSPReader) GetModelFileName(classname string) string {
 
 // Build processes the Quake 2 BSP data and constructs the corresponding game world structure in the provided root configuration.
 func (q2 *BSPReader) Build(root *config.Root) error {
-	const chunkSize = float64(384)
+	const volumesCount = float64(128)
 	mIdx := 0
 	faces, rfErr := q2.GetRawFaces(mIdx)
 	if rfErr != nil {
@@ -112,7 +112,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 	}
 
 	lights := NewLights(entities)
-	volumes := NewVolumes(mIdx, chunkSize)
+	volumes := NewVolumes(mIdx, volumesCount)
 	things := NewThings(q2.arc, q2.texManager, q2.palette)
 
 	for _, ent := range entities {

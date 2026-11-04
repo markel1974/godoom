@@ -143,7 +143,7 @@ func (q1 *BSPReader) GetExternalBModelFileName(classname string) string {
 
 // Build processes the BSP file's data, including faces, entities, lights, and models, and populates the provided Root structure.
 func (q1 *BSPReader) Build(root *config.Root) error {
-	const chunkSize = float64(384)
+	const volumesCount = float64(128)
 	mIdx := 0
 	faces, rfErr := q1.GetRawFaces(mIdx)
 	if rfErr != nil {
@@ -156,7 +156,7 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 
 	things := NewThings(q1.arc, q1.texManager, q1.palette)
 	lights := NewLights(entities)
-	volumes := NewVolumes(mIdx, chunkSize)
+	volumes := NewVolumes(mIdx, volumesCount)
 
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")

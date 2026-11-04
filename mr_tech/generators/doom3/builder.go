@@ -136,8 +136,8 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	imgLoader.LoadMaterialMaps(DefaultMonitorTexture)
 	fmt.Printf("Loaded textures for world geometry\n")
 
-	const chunkSize = float64(512)
-	vol := NewVolumes(procFile, chunkSize, materials, entities, arc)
+	const volumesCount = float64(128)
+	vol := NewVolumes(procFile, volumesCount, materials, entities, arc)
 	volumes, err := vol.Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build volumes: %w", err)

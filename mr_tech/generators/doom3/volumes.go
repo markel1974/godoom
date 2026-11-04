@@ -3,6 +3,7 @@ package doom3
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -12,47 +13,36 @@ import (
 
 // Volumes represents a structure for managing chunks of 3D geometry parsed from a Doom 3 .proc file.
 type Volumes struct {
-	pFile       *proc.File
-	chunkSize   float64
-	materials   *proc.Materials
-	mapEntities []*proc.MapEntity
-	arc         proc.IPkArchive
+	pFile        *proc.File
+	volumesCount float64
+	materials    *proc.Materials
+	mapEntities  []*proc.MapEntity
+	arc          proc.IPkArchive
 }
 
 // NewVolumes initializes and returns a pointer to a Volumes instance with the provided proc.File, chunk size, materials, map entities, and pk archive.
-func NewVolumes(pFile *proc.File, chunkSize float64, materials *proc.Materials, mapEntities []*proc.MapEntity, arc proc.IPkArchive) *Volumes {
+func NewVolumes(pFile *proc.File, volumesCount float64, materials *proc.Materials, mapEntities []*proc.MapEntity, arc proc.IPkArchive) *Volumes {
 	return &Volumes{
-		pFile:       pFile,
-		chunkSize:   chunkSize,
-		materials:   materials,
-		mapEntities: mapEntities,
-		arc:         arc,
+		pFile:        pFile,
+		volumesCount: volumesCount,
+		materials:    materials,
+		mapEntities:  mapEntities,
+		arc:          arc,
 	}
 }
 
 // Build processes the surfaces of models from the associated proc file and map entities, creating and returning 3D volume configurations.
 func (vs *Volumes) Build() ([]*config.Volume, error) {
-	chunks := make(map[string]*config.Volume)
-	var volumes []*config.Volume
+	type point3D struct {
+		x, y, z float64
+	}
+	var centroids []point3D
 
-	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
 		cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 		cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
 		cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
-
-		gridX := int(math.Floor(cx / vs.chunkSize))
-		gridY := int(math.Floor(cy / vs.chunkSize))
-		gridZ := int(math.Floor(cz / vs.chunkSize))
-
-		chunkKey := fmt.Sprintf("%d_%d_%d", gridX, gridY, gridZ)
-		volume, exists := chunks[chunkKey]
-		if !exists {
-			chunkId := fmt.Sprintf("doom3_chunk_%s", chunkKey)
-			volume = config.NewConfigVolume(chunkId, "doom3_world_chunk")
-			chunks[chunkKey] = volume
-			volumes = append(volumes, volume)
-		}
-		volume.Faces = append(volume.Faces, config.NewConfigFace(tri, triUvs, material, matName))
+		centroids = append(centroids, point3D{x: cx, y: cy, z: cz})
 	}
 
 	entitiesMap := make(map[string]*proc.MapEntity)
@@ -65,6 +55,137 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 		}
 	}
 
+	vs.doBuild(entitiesMap, preFlight)
+
+	totalTriangles := len(centroids)
+	if totalTriangles == 0 {
+		return nil, nil
+	}
+
+	targetVolumes := int(vs.volumesCount)
+	if targetVolumes <= 0 {
+		targetVolumes = 100
+	}
+	if targetVolumes > totalTriangles {
+		targetVolumes = totalTriangles
+	}
+
+	type cluster struct {
+		indices    []int
+		dx, dy, dz float64
+	}
+
+	calcBBox := func(indices []int) (dx, dy, dz float64) {
+		if len(indices) == 0 {
+			return 0, 0, 0
+		}
+		minX, maxX := math.MaxFloat64, -math.MaxFloat64
+		minY, maxY := math.MaxFloat64, -math.MaxFloat64
+		minZ, maxZ := math.MaxFloat64, -math.MaxFloat64
+		for _, idx := range indices {
+			pt := centroids[idx]
+			if pt.x < minX {
+				minX = pt.x
+			}
+			if pt.x > maxX {
+				maxX = pt.x
+			}
+			if pt.y < minY {
+				minY = pt.y
+			}
+			if pt.y > maxY {
+				maxY = pt.y
+			}
+			if pt.z < minZ {
+				minZ = pt.z
+			}
+			if pt.z > maxZ {
+				maxZ = pt.z
+			}
+		}
+		return maxX - minX, maxY - minY, maxZ - minZ
+	}
+
+	allIndices := make([]int, totalTriangles)
+	for i := 0; i < totalTriangles; i++ {
+		allIndices[i] = i
+	}
+	dx, dy, dz := calcBBox(allIndices)
+	clusters := []*cluster{{indices: allIndices, dx: dx, dy: dy, dz: dz}}
+
+	for len(clusters) < targetVolumes {
+		bestIdx := 0
+		bestCount := len(clusters[0].indices)
+		for i := 1; i < len(clusters); i++ {
+			if len(clusters[i].indices) > bestCount {
+				bestCount = len(clusters[i].indices)
+				bestIdx = i
+			}
+		}
+
+		c := clusters[bestIdx]
+		if len(c.indices) <= 1 {
+			break
+		}
+
+		if c.dx >= c.dy && c.dx >= c.dz {
+			sort.Slice(c.indices, func(i, j int) bool {
+				return centroids[c.indices[i]].x < centroids[c.indices[j]].x
+			})
+		} else if c.dy >= c.dz {
+			sort.Slice(c.indices, func(i, j int) bool {
+				return centroids[c.indices[i]].y < centroids[c.indices[j]].y
+			})
+		} else {
+			sort.Slice(c.indices, func(i, j int) bool {
+				return centroids[c.indices[i]].z < centroids[c.indices[j]].z
+			})
+		}
+
+		mid := len(c.indices) / 2
+		leftIndices := c.indices[:mid]
+		rightIndices := c.indices[mid:]
+
+		ldx, ldy, ldz := calcBBox(leftIndices)
+		rdx, rdy, rdz := calcBBox(rightIndices)
+
+		clusters[bestIdx] = &cluster{indices: leftIndices, dx: ldx, dy: ldy, dz: ldz}
+		clusters = append(clusters, &cluster{indices: rightIndices, dx: rdx, dy: rdy, dz: rdz})
+	}
+
+	numVolumes := len(clusters)
+	fmt.Printf("Preflight: created exactly %d volumes for %d triangles (target: %d)\n", numVolumes, totalTriangles, targetVolumes)
+
+	clusterMap := make([]int, totalTriangles)
+	volumes := make([]*config.Volume, numVolumes)
+
+	for cIdx, c := range clusters {
+		chunkId := fmt.Sprintf("doom3_volume_%d", cIdx)
+		vol := config.NewConfigVolume(chunkId, "doom3_world_chunk")
+		vol.Faces = make([]*config.Face, 0, len(c.indices))
+		volumes[cIdx] = vol
+
+		for _, triIdx := range c.indices {
+			clusterMap[triIdx] = cIdx
+		}
+	}
+
+	triCounter := 0
+	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+		if triCounter >= totalTriangles {
+			return
+		}
+		volIdx := clusterMap[triCounter]
+		triCounter++
+		volumes[volIdx].Faces = append(volumes[volIdx].Faces, config.NewConfigFace(tri, triUvs, material, matName))
+	}
+
+	vs.doBuild(entitiesMap, addTriangle)
+
+	return volumes, nil
+}
+
+func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string)) {
 	for _, model := range vs.pFile.Models {
 		// In Doom 3 .proc files, _area* models contain the static world geometry in world coordinates.
 		// Other models (func_static, func_door, movers, fractures) are entity submodels in local coordinates.
@@ -222,6 +343,4 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 			}
 		}
 	}
-
-	return volumes, nil
 }

@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+func CleanMaterialName(matName string) string {
+	return strings.TrimSpace(strings.ToLower(matName))
+}
+
 // MaterialDef defines the properties of a material, including its name, texture maps, and material kind.
 type MaterialDef struct {
 	Name        string
@@ -17,7 +21,7 @@ type MaterialDef struct {
 
 // NewMaterialDef creates and initializes a new MaterialDef instance based on the provided material name.
 func NewMaterialDef(matName string) *MaterialDef {
-	nameLower := strings.ToLower(matName)
+	nameLower := CleanMaterialName(matName)
 	isDecal := strings.HasPrefix(nameLower, "textures/decals/") || strings.HasSuffix(nameLower, "_shadow")
 	mat := &MaterialDef{
 		Name:    matName,
@@ -217,7 +221,7 @@ func (m *Materials) parseMtrData(data []byte) {
 
 // Resolve returns a MaterialDef for the given material name, creating a new definition if it doesn't exist in the collection.
 func (m *Materials) Resolve(materialName string) *MaterialDef {
-	nameLower := strings.ToLower(materialName)
+	nameLower := CleanMaterialName(materialName)
 	if def, ok := m.Defs[nameLower]; ok {
 		return def
 	}
@@ -229,40 +233,3 @@ func (m *Materials) Resolve(materialName string) *MaterialDef {
 	m.Defs[nameLower] = def
 	return def
 }
-
-/*
-// ToMaterial determines the material kind based on the provided lowercase texture name string.
-func ToMaterial(texNameLC string) config.MaterialKind {
-	kind := config.MaterialKindSolid
-	if texNameLC == "translucent" {
-		kind = config.MaterialKindSolid //TODO config.MaterialKindTranslucent
-	} else if strings.Contains(texNameLC, "sky") {
-		kind = config.MaterialKindSky
-	} else if strings.Contains(texNameLC, "water") || strings.Contains(texNameLC, "liquid") {
-		kind = config.MaterialKindWater
-	} else if strings.Contains(texNameLC, "slime") {
-		kind = config.MaterialKindSlime
-	} else if strings.Contains(texNameLC, "common/collision") || strings.Contains(texNameLC, "common/nodraw") || strings.Contains(texNameLC, "common/caulk") || strings.Contains(texNameLC, "common/trig") {
-		kind = config.MaterialKindNone
-	}
-	return kind
-}
-
-// CreateConfigMaterial creates and returns a configured `config.Material` based on the provided material name.
-func (m *Materials) CreateConfigMaterial(materialName string) *config.Material {
-	def := m.Resolve(materialName)
-	textures := []string{def.DiffuseMap}
-	mat := config.NewConfigMaterial(def.Name, textures, ToMaterial(def.Kind2))
-	if def.NormalMap != "" {
-		mat.NormalMap = def.NormalMap
-	}
-	if def.SpecularMap != "" {
-		mat.SpecularMap = def.SpecularMap
-		mat.SpecularBoost = 0.4
-		mat.Shininess = 32.0
-	}
-	return mat
-}
-
-
-*/

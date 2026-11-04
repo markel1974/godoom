@@ -439,17 +439,6 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 		if tagMaterials[i] == nil {
 			tagMaterials[i] = config.NewConfigMaterial("lwo.part", []string{tagName}, config.MaterialKindSolid)
 		}
-		if surf, ok := lwd.Surfaces[tagName]; ok {
-			if surf.TexturePath != "" && (len(tagMaterials[i].Textures) == 0 || tagMaterials[i].Textures[0] == tagName) {
-				tagMaterials[i].Textures = []string{surf.TexturePath}
-			}
-			if surf.Specular > 0 {
-				tagMaterials[i].SpecularBoost = float64(surf.Specular)
-			}
-			if surf.Glossiness > 0 {
-				tagMaterials[i].Shininess = float64(surf.Glossiness * 128.0)
-			}
-		}
 	}
 
 	var triangles []config.Model3DEntryTriangle

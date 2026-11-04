@@ -21,6 +21,34 @@ func NewMapEntity() *MapEntity {
 	}
 }
 
+// Parse reads tokens from the lexer to populate the MapEntity's properties and skips sub-blocks if encountered.
+func (e *MapEntity) Parse(lexer *Lexer) error {
+	for {
+		tok, tErr := lexer.NextToken()
+		if tErr != nil {
+			return tErr
+		}
+		if tok == "}" {
+			break
+		}
+		// Sub-blocks such as brushDef3 { ... } or patchDef2 { ... }
+		if tok == "{" {
+			if err := lexer.SkipBlock(); err != nil {
+				return err
+			}
+			continue
+		}
+		// Property key
+		key := tok
+		val, err := lexer.NextToken()
+		if err != nil {
+			return err
+		}
+		e.Properties[strings.ToLower(key)] = val
+	}
+	return nil
+}
+
 // GetProperty retrieves a property value by key.
 func (e *MapEntity) GetProperty(key string) (string, bool) {
 	val, ok := e.Properties[key]

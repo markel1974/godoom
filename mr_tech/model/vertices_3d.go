@@ -29,8 +29,8 @@ type Vertices3D struct {
 	volsB           []*Volume
 	originsA        []geometry.XYZ
 	originsB        []geometry.XYZ
-	rotationsA      []*Axis
-	rotationsB      []*Axis
+	rotationsA      []*TagAxis
+	rotationsB      []*TagAxis
 }
 
 // NewVertices3D initializes and returns a new Vertices3D object based on the provided Thing configuration and materials.
@@ -233,11 +233,11 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		}
 	}
 
-	rotationsA := make([]*Axis, numParts)
-	rotationsB := make([]*Axis, numParts)
+	rotationsA := make([]*TagAxis, numParts)
+	rotationsB := make([]*TagAxis, numParts)
 	for i := 0; i < numParts; i++ {
-		rotationsA[i] = NewAxis(_im)
-		rotationsB[i] = NewAxis(_im)
+		rotationsA[i] = NewTagAxis(geometry.XYZ{}, _im)
+		rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
 	}
 
 	v := &Vertices3D{
@@ -431,10 +431,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 				tagIdx = v.linkTagIndices[i]
 			}
 			if tagIdx >= 0 {
-				tagOrigAX, tagOrigAY, tagOrigAZ, tagAxisA, okA := v.volsA[pIdx].GetVertexTag(tagIdx)
-				tagOrigBX, tagOrigBY, tagOrigBZ, tagAxisB, okB := v.volsB[pIdx].GetVertexTag(tagIdx)
-				if okA {
-					rotOrigAX, rotOrigAY, rotOrigAZ := v.rotationsA[pIdx].RotatePoint(tagOrigAX, tagOrigAY, tagOrigAZ)
+				if tagAxisA := v.volsA[pIdx].GetVertexTag(tagIdx); tagAxisA != nil {
+					rotOrigAX, rotOrigAY, rotOrigAZ := v.rotationsA[pIdx].RotatePointByTag(tagAxisA)
 					v.originsA[i].X = v.originsA[pIdx].X + rotOrigAX
 					v.originsA[i].Y = v.originsA[pIdx].Y + rotOrigAY
 					v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigAZ
@@ -444,8 +442,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 					v.originsA[i] = v.originsA[pIdx]
 					v.rotationsA[i] = v.rotationsA[pIdx]
 				}
-				if okB {
-					rotOrigBX, rotOrigBY, rotOrigBZ := v.rotationsB[pIdx].RotatePoint(tagOrigBX, tagOrigBY, tagOrigBZ)
+				if tagAxisB := v.volsB[pIdx].GetVertexTag(tagIdx); tagAxisB != nil {
+					rotOrigBX, rotOrigBY, rotOrigBZ := v.rotationsB[pIdx].RotatePointByTag(tagAxisB)
 					v.originsB[i].X = v.originsB[pIdx].X + rotOrigBX
 					v.originsB[i].Y = v.originsB[pIdx].Y + rotOrigBY
 					v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigBZ

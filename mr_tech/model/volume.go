@@ -23,7 +23,7 @@ type Volume struct {
 	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *sectors.Sector
-	vertexTags []*Tag
+	vertexTags []*TagAxis
 	marker     int
 	dirty      bool
 }
@@ -38,7 +38,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faceCount:  0,
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
-		vertexTags: make([]*Tag, 0),
+		vertexTags: make([]*TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
 	}
@@ -138,7 +138,7 @@ func (v *Volume) GetEntity() *physics.Entity {
 	return v.entity
 }
 
-// GetAABB returns the Axis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.
+// GetAABB returns the TagAxis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.
 func (v *Volume) GetAABB() *aabb.AABB {
 	return v.entity.GetAABB()
 }
@@ -210,11 +210,11 @@ func (v *Volume) SetSector(s *sectors.Sector) {
 // SetVertexTag associates the given tag index with the specified origin and orientation axes in the Volume's vertexTags array.
 func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ) {
 	if idx >= len(v.vertexTags) {
-		newTags := make([]*Tag, idx+1)
+		newTags := make([]*TagAxis, idx+1)
 		copy(newTags, v.vertexTags)
 		v.vertexTags = newTags
 	}
-	v.vertexTags[idx] = NewTag(origin, axis)
+	v.vertexTags[idx] = NewTagAxis(origin, axis)
 }
 
 // HasVertexTag checks if a vertex tag exists at the specified index within the Volume's vertexTags array.
@@ -223,11 +223,11 @@ func (v *Volume) HasVertexTag(idx int) bool {
 }
 
 // GetVertexTag retrieves the tag origin and orientation axes associated with a given tag index from the Volume's vertexTags array.
-func (v *Volume) GetVertexTag(idx int) (float64, float64, float64, *Axis, bool) {
+func (v *Volume) GetVertexTag(idx int) *TagAxis {
 	if idx >= 0 && idx < len(v.vertexTags) {
-		return v.vertexTags[idx].OriginX, v.vertexTags[idx].OriginY, v.vertexTags[idx].OriginZ, v.vertexTags[idx].Axis, true
+		return v.vertexTags[idx]
 	}
-	return 0, 0, 0, nil, false
+	return nil
 }
 
 // AddTag appends the specified tags to the location's existing tags, separated by a semicolon.

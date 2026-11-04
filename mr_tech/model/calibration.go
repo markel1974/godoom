@@ -9,17 +9,15 @@ import (
 
 // Calibration contains parameters for configuring the camera and map projection in a 3D engine.
 type Calibration struct {
-	OrthoSize  float64
-	MapCenterX float64
-	MapCenterZ float64
-	LightCamY  float64
-	ZNear      float64
-	ZFar       float64
-
-	ZLightFarFront float64
-	ZLightFarRear  float64
-	ZLightNear     float64
-
+	OrthoSize          float64
+	MapCenterX         float64
+	MapCenterZ         float64
+	LightCamY          float64
+	ZFarMax            float64
+	ZNear              float64
+	ZFar               float64
+	ZLightFarFront     float64
+	ZLightFarRear      float64
 	AspectRatio        float64
 	FovVerticalDegrees float64
 	BeamRatio          float64
@@ -39,8 +37,11 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		MapCenterX:         cfg.MapCenterX,
 		MapCenterZ:         cfg.MapCenterZ,
 		LightCamY:          cfg.LightCamY,
+		ZFarMax:            cfg.ZFarMax,
 		ZNear:              cfg.ZNear,
 		ZFar:               cfg.ZFar,
+		ZLightFarFront:     cfg.ZLightFarFront,
+		ZLightFarRear:      cfg.ZLightFarRear,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
 		BeamRatio:          cfg.BeamRatio,
@@ -65,8 +66,9 @@ func (c *Calibration) Setup() error {
 	} else {
 		c.OrthoSize = depth / 2.0
 	}
+
 	if math.IsNaN(c.OrthoSize) || math.IsInf(c.OrthoSize, 0) || c.OrthoSize <= 0 {
-		c.OrthoSize = 1024.0
+		return fmt.Errorf("invalid orthographic size")
 	}
 	c.MapCenterX = root.GetMinX() + (width / 2.0)
 	c.MapCenterZ = root.GetMinZ() + (depth / 2.0)
@@ -79,8 +81,13 @@ func (c *Calibration) Setup() error {
 	}
 	// Diagonale 3D della mappa: massima distanza euclidea teorica visibile
 	maxFar := math.Sqrt(width*width + h*h + depth*depth)
+	if c.ZFarMax > 0 {
+		if maxFar > c.ZFarMax {
+			maxFar = c.ZFarMax
+		}
+	}
 	if math.IsNaN(maxFar) || math.IsInf(maxFar, 0) || maxFar <= c.ZNear {
-		maxFar = 8192.0
+		return fmt.Errorf("invalid far plane")
 	}
 	if c.ZFar <= 0 {
 		c.ZFar = maxFar / 2
@@ -89,10 +96,10 @@ func (c *Calibration) Setup() error {
 		c.ZFar = c.ZFar / 4
 	}
 	if c.ZLightFarFront <= 0 {
-		c.ZLightFarFront = maxFar / 2
+		c.ZLightFarFront = maxFar / 4
 	}
 	if c.ZLightFarRear <= 0 {
-		c.ZLightFarRear = c.ZLightFarFront / 4
+		c.ZLightFarRear = c.ZLightFarFront / 3
 	}
 	fovY := c.FovVerticalDegrees
 	if fovY <= 0 || fovY >= 180 || math.IsNaN(fovY) || math.IsInf(fovY, 0) {

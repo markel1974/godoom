@@ -6,8 +6,11 @@ type Calibration struct {
 	MapCenterX         float64 `json:"mapCenterX"`
 	MapCenterZ         float64 `json:"mapCenterZ"`
 	LightCamY          float64 `json:"lightCamY"`
+	ZFarMax            float64 `json:"zFarMax"`
 	ZNear              float64 `json:"zNearFront"`
 	ZFar               float64 `json:"zFarFront"`
+	ZLightFarFront     float64 `json:"zLightFarFront"`
+	ZLightFarRear      float64 `json:"zLightFarRear"`
 	AspectRatio        float64 `json:"aspectRatio"`
 	FovVerticalDegrees float64 `json:"fovVerticalDegrees"`
 	BeamRatio          float64 `json:"beamRatio"`
@@ -23,5 +26,6 @@ func NewConfigCalibration() *Calibration {
 	c.BeamRatio = 0.05
 	c.VolSteps = 8
 	c.AoFactor = 0.8
+	c.ZFarMax = 4096.0
 	return c
 }

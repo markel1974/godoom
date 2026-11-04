@@ -6,10 +6,8 @@ type Calibration struct {
 	MapCenterX         float64 `json:"mapCenterX"`
 	MapCenterZ         float64 `json:"mapCenterZ"`
 	LightCamY          float64 `json:"lightCamY"`
-	ZNearFront         float64 `json:"zNearFront"`
-	ZNearRear          float64 `json:"zNearRear"`
-	ZFarFront          float64 `json:"zFarFront"`
-	ZFarRear           float64 `json:"zFarRear"`
+	ZNear              float64 `json:"zNearFront"`
+	ZFar               float64 `json:"zFarFront"`
 	AspectRatio        float64 `json:"aspectRatio"`
 	FovVerticalDegrees float64 `json:"fovVerticalDegrees"`
 	BeamRatio          float64 `json:"beamRatio"`

@@ -9,14 +9,17 @@ import (
 
 // Calibration contains parameters for configuring the camera and map projection in a 3D engine.
 type Calibration struct {
-	OrthoSize          float64
-	MapCenterX         float64
-	MapCenterZ         float64
-	LightCamY          float64
-	ZNearFront         float64
-	ZNearRear          float64
-	ZFarFront          float64
-	ZFarRear           float64
+	OrthoSize  float64
+	MapCenterX float64
+	MapCenterZ float64
+	LightCamY  float64
+	ZNear      float64
+	ZFar       float64
+
+	ZLightFarFront float64
+	ZLightFarRear  float64
+	ZLightNear     float64
+
 	AspectRatio        float64
 	FovVerticalDegrees float64
 	BeamRatio          float64
@@ -25,6 +28,7 @@ type Calibration struct {
 	EnableShadowLights bool
 	EnableShadows      bool
 	PrjScale           float64
+	PrjScaleLights     float64
 	volumes            *Volumes
 }
 
@@ -35,10 +39,8 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		MapCenterX:         cfg.MapCenterX,
 		MapCenterZ:         cfg.MapCenterZ,
 		LightCamY:          cfg.LightCamY,
-		ZNearFront:         cfg.ZNearFront,
-		ZNearRear:          cfg.ZNearRear,
-		ZFarFront:          cfg.ZFarFront,
-		ZFarRear:           cfg.ZFarRear,
+		ZNear:              cfg.ZNear,
+		ZFar:               cfg.ZFar,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
 		BeamRatio:          cfg.BeamRatio,
@@ -69,22 +71,28 @@ func (c *Calibration) Setup() error {
 	c.MapCenterX = root.GetMinX() + (width / 2.0)
 	c.MapCenterZ = root.GetMinZ() + (depth / 2.0)
 	c.LightCamY = root.GetMaxY()
-	if c.ZNearFront <= 0 {
-		c.ZNearFront = 0.1
+	if c.ZNear <= 0 {
+		c.ZNear = 0.1
 	}
-	if c.ZNearRear <= 0 {
-		c.ZNearRear = 0.1
+	if c.ZNear <= 0 {
+		c.ZNear = 0.1
 	}
 	// Diagonale 3D della mappa: massima distanza euclidea teorica visibile
 	maxFar := math.Sqrt(width*width + h*h + depth*depth)
-	if math.IsNaN(maxFar) || math.IsInf(maxFar, 0) || maxFar <= c.ZNearFront {
+	if math.IsNaN(maxFar) || math.IsInf(maxFar, 0) || maxFar <= c.ZNear {
 		maxFar = 8192.0
 	}
-	if c.ZFarFront <= 0 {
-		c.ZFarFront = maxFar / 2
+	if c.ZFar <= 0 {
+		c.ZFar = maxFar / 2
 	}
-	if c.ZFarRear <= 0 {
-		c.ZFarRear = c.ZFarFront / 4
+	if c.ZFar <= 0 {
+		c.ZFar = c.ZFar / 4
+	}
+	if c.ZLightFarFront <= 0 {
+		c.ZLightFarFront = maxFar / 2
+	}
+	if c.ZLightFarRear <= 0 {
+		c.ZLightFarRear = c.ZLightFarFront / 4
 	}
 	fovY := c.FovVerticalDegrees
 	if fovY <= 0 || fovY >= 180 || math.IsNaN(fovY) || math.IsInf(fovY, 0) {
@@ -98,6 +106,11 @@ func (c *Calibration) Setup() error {
 		prjScale = 1.0 * guardBand
 	}
 	c.PrjScale = prjScale
+
+	// Wide-angle projection scale for lights frustum to cover 360 degrees
+	const fovLights = 170.0
+	fovLightsRad := (fovLights * math.Pi) / 180.0
+	c.PrjScaleLights = 1.0 / math.Tan(fovLightsRad/2.0)
 
 	return nil
 }

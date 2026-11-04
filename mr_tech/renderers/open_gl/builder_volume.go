@@ -17,24 +17,26 @@ import (
 
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
-	ctx              api.IContext
-	tex              *Textures
-	fv               *FrameVertices
-	dcOpaque         *DrawCommands
-	dcAdditive       *DrawCommands
-	dcLiquid         *DrawCommands
-	fl               *FrameLights
-	dcRenderOpaque   *shaders.DrawCommandsRender
-	dcRenderAdditive *shaders.DrawCommandsRender
-	dcRenderLiquid   *shaders.DrawCommandsRender
-	cSky             *textures.Material
-	//cSkyU, cSkyV     float64
-	cal          *model.Calibration
-	visibleVol   *VisibleVolumes
-	modes        []*DrawCommands
-	occlusion    *OcclusionHW
-	frustumFront *metrics.Frustum
-	frustumRear  *metrics.Frustum
+	ctx               api.IContext
+	tex               *Textures
+	fv                *FrameVertices
+	dcOpaque          *DrawCommands
+	dcAdditive        *DrawCommands
+	dcLiquid          *DrawCommands
+	fl                *FrameLights
+	dcRenderOpaque    *shaders.DrawCommandsRender
+	dcRenderAdditive  *shaders.DrawCommandsRender
+	dcRenderLiquid    *shaders.DrawCommandsRender
+	cSky              *textures.Material
+	cal               *model.Calibration
+	visibleVol        *VisibleVolumes
+	modes             []*DrawCommands
+	occlusion         *OcclusionHW
+	frustumFront      *metrics.Frustum
+	frustumLightFront *metrics.Frustum
+	frustumLightRear  *metrics.Frustum
+	lightFrontFrustum *aabb.Frustum
+	lightRearFrustum  *aabb.Frustum
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -56,12 +58,19 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		modes:            make([]*DrawCommands, config.BlendModeLatest),
 		occlusion:        NewOcclusionHW(ctx, 4096),
 		frustumFront:     metrics.NewFrustum(),
-		frustumRear:      metrics.NewFrustum(),
-		//occBuffer:      NewOcclusionSW(640, 480),
+		//frustumRear:       metrics.NewFrustum(),
+		frustumLightFront: metrics.NewFrustum(),
+		frustumLightRear:  metrics.NewFrustum(),
+		lightFrontFrustum: aabb.NewFrustum(),
+		lightRearFrustum:  aabb.NewFrustum(),
 	}
 	prjScale := bv.cal.PrjScale
-	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFarFront), float32(bv.cal.ZNearFront), prjScale, prjScale)
-	bv.frustumRear.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFarRear), float32(bv.cal.ZNearRear), prjScale, prjScale)
+	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)
+
+	prjScaleLights := bv.cal.PrjScaleLights
+	bv.frustumLightFront.Setup(1.0, float32(bv.cal.ZLightFarFront), float32(bv.cal.ZLightNear), prjScaleLights, prjScaleLights)
+	bv.frustumLightRear.Setup(1.0, float32(bv.cal.ZLightFarRear), float32(bv.cal.ZLightNear), prjScaleLights, prjScaleLights)
+
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
 	bv.modes[bv.dcLiquid.GetBlendMode()] = bv.dcLiquid
@@ -99,10 +108,33 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()
 	rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll
 	w.frustumFront.Update(float32(px), float32(py), float32(pz), angle, pitch, roll)
-	w.frustumRear.Update(float32(px), float32(py), float32(pz), rAngle, rPitch, rRoll)
+	//w.frustumRear.Update(float32(px), float32(py), float32(pz), rAngle, rPitch, rRoll)
 
-	fm, fr := w.frustumFront.Get(), w.frustumRear.Get()
-	frustumFront, frustumRear := vi.GetFrustum(fm, fr)
+	cosY, sinY := math.Cos(angle), math.Sin(angle)
+	cosP, sinP := math.Cos(pitch), math.Sin(pitch)
+	fX := cosY * cosP
+	fY := sinY * cosP
+	fZ := sinP
+
+	// Offset light frustum origins backwards to completely envelop the player body
+	const playerOffset = 48.0
+	lpxFront := px - fX*playerOffset
+	lpyFront := py - fY*playerOffset
+	lpzFront := pz - fZ*playerOffset
+
+	lpxRear := px + fX*playerOffset
+	lpyRear := py + fY*playerOffset
+	lpzRear := pz + fZ*playerOffset
+
+	w.frustumLightFront.Update(float32(lpxFront), float32(lpyFront), float32(lpzFront), angle, pitch, roll)
+	w.frustumLightRear.Update(float32(lpxRear), float32(lpyRear), float32(lpzRear), rAngle, rPitch, rRoll)
+
+	fm := w.frustumFront.Get()
+	frustumFront := vi.GetFrontFrustum(fm)
+
+	flm, flr := w.frustumLightFront.Get(), w.frustumLightRear.Get()
+	frustumLightFront := w.lightFrontFrustum.Rebuild(flm)
+	frustumLightRear := w.lightRearFrustum.Rebuild(flr)
 
 	// Ripristina VBO e Comandi allo stato congelato
 	//w.fv.Reset()
@@ -118,7 +150,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 	//w.pushQVolumes(engine.GetVolumes(), frustumFront)
 	w.pushQVolumes(engine.GetVolumes(), frustumFront, px, py, pz)
-	w.pushQLights(engine.GetLights(), frustumFront, frustumRear, px, py, pz)
+	w.pushQLights(engine.GetLights(), frustumLightFront, frustumLightRear, px, py, pz)
 	w.pushQThings(engine.GetThings(), frustumFront)
 
 	w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
@@ -341,7 +373,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }
 
-/*
+// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
+// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
 func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare()
@@ -352,105 +385,16 @@ func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear
 		if light.GetKind() == config.LightKindNone {
 			return false
 		}
-
-		intensity := light.GetIntensityStyled(textures.GlobalTick())
-		if intensity <= 0.001 {
-			return false
-		}
-
 		posX, posY, posZ := light.GetPosXYZ()
 		dx := posX - pX
 		dy := posY - pY
 		dz := posZ - pZ
 		distSq := dx*dx + dy*dy + dz*dz
-
-		// Raggio di influenza effettivo reale (stessa formula di decadimento dello shader GLSL)
-		falloff := light.GetFalloff()
-		effectiveRadius := 4.605 * falloff * intensity
-		if effectiveRadius < 100.0 {
-			effectiveRadius = 100.0
-		}
-		// Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
-		// la luce illumina l'ambiente circostante il giocatore.
-		// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
-		nearRadius := effectiveRadius + 250.0
-		if distSq > nearRadius*nearRadius {
-			// Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
-			if !isFront {
-				return false
-			}
-			//b := light.GetAABB()
-			// Occlusion culling: culla le luci lontane nascoste dietro i muri
-			//occState := w.occlusion.GetState(light.GetId())
-			//if occState != nil && !occState.IsVisible {
-			//	w.occlusion.Add(b, occState)
-			//	return false
-			//}
-			//w.occlusion.Add(b, occState)
-		}
-
 		w.fl.Create(light, distSq, isFront)
 		counter++
 		return false
 	}
 	ls.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
-	//_, _, dynamicCount := w.fl.GetLights()
-	//_, shadowCount := w.fl.GetShadowLights()
-	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
-}
-*/
-
-// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
-// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
-	//TODO IMPLEMENTAZIONE CON FRUSTU
-	w.fl.DeepReset()
-	w.fl.Prepare()
-	counter := 0
-
-	for _, light := range ls.Get() {
-		if light.GetKind() == config.LightKindNone {
-			continue
-		}
-		posX, posY, posZ := light.GetPosXYZ()
-		dx := posX - pX
-		dy := posY - pY
-		dz := posZ - pZ
-		distSq := dx*dx + dy*dy + dz*dz
-
-		/*
-			// Raggio di influenza effettivo reale (stessa formula di decadimento dello shader GLSL)
-			falloff := light.GetFalloff()
-			effectiveRadius := light.GetRadius()
-			if r := 4.605 * falloff * intensity; r > effectiveRadius {
-				effectiveRadius = r
-			}
-			if effectiveRadius < 100.0 {
-				effectiveRadius = 100.0
-			}
-
-			b := light.GetAABB()
-			isFront := b.IntersectFrustum(frustumFront)
-
-			// Se la camera si trova entro la sfera di influenza della luce (+ margine di sicurezza 250),
-			// la luce illumina l'ambiente circostante il giocatore.
-			// Essendo distSq invariante rispetto agli angoli di rotazione, queste luci NON scompaiono mai girando la visuale.
-			nearRadius := effectiveRadius + 250.0
-			if distSq > nearRadius*nearRadius {
-				// Per luci lontane dalla camera: devono intersecare il frustum frontale visibile
-				if !isFront {
-					continue
-				}
-			}
-		*/
-		b := light.GetAABB()
-		isFront := b.IntersectFrustum(frustumFront)
-		w.fl.Create(light, distSq, isFront)
-		counter++
-	}
-	//_, _, dynamicCount := w.fl.GetLights()
-	//_, shadowCount := w.fl.GetShadowLights()
-	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
 }
 
 // GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.

@@ -93,13 +93,13 @@ func (c *Calibration) Setup() error {
 		c.ZFar = maxFar / 2
 	}
 	if c.ZFar <= 0 {
-		c.ZFar = c.ZFar / 4
+		c.ZFar = maxFar / 4
 	}
 	if c.ZLightFarFront <= 0 {
-		c.ZLightFarFront = maxFar / 4
+		c.ZLightFarFront = maxFar
 	}
 	if c.ZLightFarRear <= 0 {
-		c.ZLightFarRear = c.ZLightFarFront / 3
+		c.ZLightFarRear = maxFar / 4
 	}
 	fovY := c.FovVerticalDegrees
 	if fovY <= 0 || fovY >= 180 || math.IsNaN(fovY) || math.IsInf(fovY, 0) {

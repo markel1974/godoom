@@ -238,12 +238,30 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 
 	thingCfg := config.NewConfigThing(classname, origin, angle, spec.Kind, spec.Mass, radius, height, spec.Speed)
 	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
 
 	if spec.Kind == config.ThingEnemyDef {
+		var parts []*config.Model3DEntry
+		if cModel != nil {
+			parts = append(parts, cModel)
+		}
+		links := []config.Model3DLink{{Parent: -1, Tag: ""}}
+		md3 := config.NewMD3(parts, links)
+		if cModel != nil {
+			md3.ActionDefinitions = cModel.ActionDefinitions
+			md3.ActionIntervals = cModel.ActionIntervals
+			numActions := len(cModel.ActionDefinitions)
+			md3.ActionMaps = make([][]int, len(parts))
+			for i := range md3.ActionMaps {
+				md3.ActionMaps[i] = make([]int, numActions)
+				for a := 0; a < numActions; a++ {
+					md3.ActionMaps[i][a] = a
+				}
+			}
+		}
+
 		actions := config.NewEnemyAnimations()
-		if cModel != nil && len(cModel.ActionDefinitions) > 0 {
-			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
+		if md3 != nil && len(md3.ActionDefinitions) > 0 {
+			ConvertAnimation(actions, md3.ActionDefinitions, md3.ActionIntervals)
 		}
 		if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
 			actions.Add(config.EnemyStateIdle, 0, 1)
@@ -251,12 +269,16 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 			actions.Add(config.EnemyStateRun, 0, 1)
 		}
 
+		thingCfg.Model3D = md3
 		thingCfg.JumpForce = JumpForce
 		thingCfg.Impulse = 3.0
 		thingCfg.WakeupDistance = 300.0
 		_ = common.NewEnemy(thingCfg, actions)
 	} else if spec.Kind == config.ThingItemDef {
+		thingCfg.Model3DEntry = cModel
 		_ = common.NewItem(thingCfg)
+	} else {
+		thingCfg.Model3DEntry = cModel
 	}
 
 	return thingCfg, nil

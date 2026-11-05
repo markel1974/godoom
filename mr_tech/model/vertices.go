@@ -21,6 +21,8 @@ type IVertices interface {
 
 	GetVertices() (*Faces, *Faces, float64, float64)
 
+	GetVerticesCenter() (float64, float64, float64)
+
 	GetVolume() *Volume
 
 	GetAABB() *aabb.AABB
@@ -28,8 +30,6 @@ type IVertices interface {
 	GetEntity() *physics.Entity
 
 	SetAction(idx int)
-
-	GetVerticesCenter() (float64, float64, float64)
 
 	GetRenderMode() float64
 

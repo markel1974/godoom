@@ -22,13 +22,13 @@ type Vertices3DEntry struct {
 	currentAction   int
 	actionIntervals [][2]int
 	actionNames     []string
-	actionNamesC    map[string]int
-	actionClamps    []bool
-	clampAnim       bool
-	tagMap          map[string]int
-	volA            *Volume
-	volB            *Volume
-	lerpT           float64
+	//actionNamesC    map[string]int
+	actionClamps []bool
+	clampAnim    bool
+	tagMap       map[string]int
+	volA         *Volume
+	volB         *Volume
+	lerpT        float64
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
@@ -39,12 +39,12 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 
 	actionClamps := make([]bool, len(cfg.Model3DEntry.ActionDefinitions))
 	actionNames := make([]string, len(cfg.Model3DEntry.ActionDefinitions))
-	actionNamesC := make(map[string]int)
+	//actionNamesC := make(map[string]int)
 
 	for idx, name := range cfg.Model3DEntry.ActionDefinitions {
 		nameC := v3dCleanString(name)
 		actionNames[idx] = nameC
-		actionNamesC[nameC] = idx
+		//actionNamesC[nameC] = idx
 		for _, z := range cfg.Model3DEntry.ActionClamp {
 			if strings.Contains(nameC, v3dCleanString(z)) {
 				actionClamps[idx] = true
@@ -57,15 +57,15 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		volumes:         make([]*Volume, len(cfg.Model3DEntry.Frames)),
 		actionIntervals: cfg.Model3DEntry.ActionIntervals,
 		actionNames:     actionNames,
-		actionNamesC:    actionNamesC,
-		actionClamps:    actionClamps,
-		startFrame:      0,
-		endFrame:        len(cfg.Model3DEntry.Frames) - 1,
-		currentAction:   -1,
-		tagMap:          make(map[string]int),
-		volA:            nil,
-		volB:            nil,
-		lerpT:           0.0,
+		//actionNamesC:    actionNamesC,
+		actionClamps:  actionClamps,
+		startFrame:    0,
+		endFrame:      len(cfg.Model3DEntry.Frames) - 1,
+		currentAction: -1,
+		tagMap:        make(map[string]int),
+		volA:          nil,
+		volB:          nil,
+		lerpT:         0.0,
 	}
 
 	tagCounter := 0
@@ -150,12 +150,13 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 }
 
 // FindActionIndex searches for the index of the given action name in the actionNames list, ignoring case and returning success status.
-func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
-	nameLower := v3dCleanString(name)
-	n, k := v.actionNamesC[nameLower]
-	return n, k
-}
+//func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
+//	nameLower := v3dCleanString(name)
+//	n, k := v.actionNamesC[nameLower]
+//	return n, k
+//}
 
+// CompileVertices selects the active animation frame volumes for tick and stores their interpolation factor.
 func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 	if len(v.volumes) == 0 {
 		v.volA = nil

@@ -158,26 +158,32 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 
 // createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
 func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
-	const wakeupDistance = 300
-	var thingCfg *config.Thing
 	if kind == config.ThingEnemyDef {
-		actions := config.NewEnemyAnimations()
+		var parts []*config.Model3DEntry
 		if cModel != nil {
-			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
+			parts = append(parts, cModel)
 		}
-		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-		thingCfg.GForce = GForce
-		thingCfg.Model3DEntry = cModel
-		thingCfg.JumpForce = JumpForce
-		thingCfg.WakeupDistance = wakeupDistance
-		_ = common.NewEnemy(thingCfg, actions)
-	} else {
-		//cModel.DropToFloor()
-		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-		thingCfg.GForce = GForce
-		thingCfg.Model3DEntry = cModel
-		_ = common.NewItem(thingCfg)
+		links := []config.Model3DLink{{Parent: -1, Tag: ""}}
+		md3 := config.NewMD3(parts, links)
+		if cModel != nil {
+			md3.ActionDefinitions = cModel.ActionDefinitions
+			md3.ActionIntervals = cModel.ActionIntervals
+			numActions := len(cModel.ActionDefinitions)
+			md3.ActionMaps = make([][]int, len(parts))
+			for i := range md3.ActionMaps {
+				md3.ActionMaps[i] = make([]int, numActions)
+				for a := 0; a < numActions; a++ {
+					md3.ActionMaps[i][a] = a
+				}
+			}
+		}
+		return t.doCreateParts(classname, pos, kind, md3, angle, mass, radius, height, speed)
 	}
+	//cModel.DropToFloor()
+	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	_ = common.NewItem(thingCfg)
 	return thingCfg
 }
 

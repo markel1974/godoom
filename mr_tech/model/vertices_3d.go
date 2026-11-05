@@ -359,7 +359,7 @@ func (v *Vertices3D) SetThing(t IThing) {
 	}
 }
 
-func (v *Vertices3D) Compute(tick uint64) bool {
+func (v *Vertices3D) CompileVertices(tick uint64) bool {
 	reset := func(i int) {
 		v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
 		v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
@@ -379,8 +379,8 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 			resetFull(i)
 			continue
 		}
-		element.Compile(tick)
-		volA, volB, lerpT := element.CurrentVolumes()
+		element.CompileVertices(tick)
+		volA, volB, lerpT := element.GetVolumes()
 		if volA == nil || volB == nil {
 			if volA == nil && volB == nil {
 				resetFull(i)
@@ -508,8 +508,6 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 }
 
 // GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
-func (v *Vertices3D) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
-	v.Compute(tick)
-
+func (v *Vertices3D) GetVertices() (*Faces, *Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpTRet, v.GetRenderMode()
 }

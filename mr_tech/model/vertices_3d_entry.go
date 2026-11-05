@@ -156,7 +156,7 @@ func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
 	return n, k
 }
 
-func (v *Vertices3DEntry) Compile(tick uint64) bool {
+func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 	if len(v.volumes) == 0 {
 		v.volA = nil
 		v.volB = nil
@@ -212,8 +212,7 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *Vertices3DEntry) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
-	v.Compile(tick)
+func (v *Vertices3DEntry) GetVertices() (*Faces, *Faces, float64, float64) {
 	if v.volA == nil || v.volB == nil {
 		return nil, nil, 0.0, v.GetRenderMode()
 	}
@@ -222,8 +221,8 @@ func (v *Vertices3DEntry) GetVertices(tick uint64) (*Faces, *Faces, float64, flo
 	return facesA, facesB, v.lerpT, v.GetRenderMode()
 }
 
-// CurrentVolumes retrieves the precise start and end frames for interpolation at the given tick.
-func (v *Vertices3DEntry) CurrentVolumes() (*Volume, *Volume, float64) {
+// GetVolumes retrieves the precise start and end frames for interpolation at the given tick.
+func (v *Vertices3DEntry) GetVolumes() (*Volume, *Volume, float64) {
 	return v.volA, v.volB, v.lerpT
 }
 

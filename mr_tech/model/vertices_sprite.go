@@ -10,7 +10,8 @@ import (
 
 // VerticesSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
 type VerticesSprite struct {
-	volume *Volume
+	volume     *Volume
+	viewVolume *Volume
 }
 
 // NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
@@ -33,7 +34,10 @@ func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite 
 	halfY := w * 0.5
 
 	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	f := &VerticesSprite{volume: volume}
+	f := &VerticesSprite{
+		volume:     volume,
+		viewVolume: volume,
+	}
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
 	/*
@@ -113,10 +117,16 @@ func (v *VerticesSprite) GetAABB() *aabb.AABB {
 	return v.volume.GetEntity().GetAABB()
 }
 
+// CompileVertices prepares the sprite's current volume for rendering and reports no vertex changes.
+func (v *VerticesSprite) CompileVertices(tick uint64) bool {
+	v.viewVolume = v.volume
+	return false
+}
+
 // GetVertices retrieves the collection of visible faces for the specified simulation tick.
 // The returned faces represent the geometry of the vertex material at the given moment in time.
-func (v *VerticesSprite) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
-	f := v.volume.GetFaces()
+func (v *VerticesSprite) GetVertices() (*Faces, *Faces, float64, float64) {
+	f := v.viewVolume.GetFaces()
 	return f, f, 0.0, v.GetRenderMode()
 }
 

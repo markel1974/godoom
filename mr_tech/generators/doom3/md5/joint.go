@@ -10,6 +10,7 @@ type Joint struct {
 	Orient [4]float64 // (qx, qy, qz, qw)
 }
 
+// NewJoint creates a joint with the given name, parent index, position, and orientation.
 func NewJoint(name string, parent int, pos geometry.XYZ, orient [4]float64) *Joint {
 	return &Joint{name: name, parent: parent, Pos: pos, Orient: orient}
 }

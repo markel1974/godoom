@@ -46,7 +46,7 @@ func NewMesh() *Mesh {
 }
 
 // Parse reads an Mesh file from the provided reader and populates the mesh with parsed joints and sub-mesh data.
-func (mesh *Mesh) Parse(r io.Reader) error {
+func (mh *Mesh) Parse(r io.Reader) error {
 	scanner := bufio.NewScanner(r)
 	inJoints := false
 	inMesh := false
@@ -82,7 +82,7 @@ func (mesh *Mesh) Parse(r io.Reader) error {
 				inJoints = false
 			} else if inMesh {
 				if len(currentSubMesh.Vertices) > 0 && len(currentSubMesh.Tris) > 0 {
-					mesh.SubMeshes = append(mesh.SubMeshes, currentSubMesh)
+					mh.SubMeshes = append(mh.SubMeshes, currentSubMesh)
 				}
 				inMesh = false
 			}
@@ -137,7 +137,7 @@ func (mesh *Mesh) Parse(r io.Reader) error {
 				qw = -math.Sqrt(t)
 			}
 
-			mesh.Joints = append(mesh.Joints, NewJoint(name, parent, geometry.XYZ{X: px, Y: py, Z: pz}, [4]float64{qx, qy, qz, qw}))
+			mh.Joints = append(mh.Joints, NewJoint(name, parent, geometry.XYZ{X: px, Y: py, Z: pz}, [4]float64{qx, qy, qz, qw}))
 			continue
 		}
 
@@ -199,10 +199,10 @@ func (mesh *Mesh) Parse(r io.Reader) error {
 	}
 
 	if inMesh && len(currentSubMesh.Vertices) > 0 && len(currentSubMesh.Tris) > 0 {
-		mesh.SubMeshes = append(mesh.SubMeshes, currentSubMesh)
+		mh.SubMeshes = append(mh.SubMeshes, currentSubMesh)
 	}
 
-	if len(mesh.SubMeshes) == 0 {
+	if len(mh.SubMeshes) == 0 {
 		return fmt.Errorf("no valid sub-meshes parsed from md5mesh")
 	}
 

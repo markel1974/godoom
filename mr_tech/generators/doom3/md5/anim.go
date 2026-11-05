@@ -221,7 +221,12 @@ func (anim *Anim) BuildFrameSkeleton(frameIdx int) []Joint {
 		}
 
 		if h.parent < 0 {
-			skel[i] = Joint{name: h.name, parent: h.parent, Pos: pos, Orient: orient}
+			skel[i] = Joint{
+				name:   h.name,
+				parent: h.parent,
+				Pos:    pos,
+				Orient: orient,
+			}
 		} else {
 			parentJoint := skel[h.parent]
 			rPos := QuatRotate(parentJoint.Orient, pos)

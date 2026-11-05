@@ -110,8 +110,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 				// Cycle detected starting at path[pos] (curr) and closed by path[len(path)-1] -> curr.
 				// Disconnect exclusively the edge closing the cycle, preserving upstream links.
 				prev := path[len(path)-1]
-				fmt.Printf("[warning] Vertices3D %s: circular link detected (cycle start at part %d, closed by part %d -> %d), disconnecting link\n",
-					cfg.Id, curr, prev, links[prev].Parent)
+				fmt.Printf("[warning] Vertices3D %s: circular link detected (cycle start at part %d, closed by part %d -> %d), disconnecting link\n", cfg.Id, curr, prev, links[prev].Parent)
 				links[prev].Parent = -1
 				links[prev].Tag = ""
 				break
@@ -216,12 +215,10 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			return
 		}
 		dfsState[node] = dfsVisiting
-
 		pIdx := links[node].Parent
 		if pIdx >= 0 && pIdx < numParts && pIdx != node {
 			visit(pIdx)
 		}
-
 		dfsState[node] = dfsVisited
 		executionOrder = append(executionOrder, node)
 	}
@@ -231,13 +228,6 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		if dfsState[i] == dfsUnvisited {
 			visit(i)
 		}
-	}
-
-	rotationsA := make([]*TagAxis, numParts)
-	rotationsB := make([]*TagAxis, numParts)
-	for i := 0; i < numParts; i++ {
-		rotationsA[i] = NewTagAxis(geometry.XYZ{}, _im)
-		rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
 	}
 
 	v := &Vertices3D{
@@ -256,9 +246,15 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		volsB:           make([]*Volume, numParts),
 		originsA:        make([]geometry.XYZ, numParts),
 		originsB:        make([]geometry.XYZ, numParts),
-		rotationsA:      rotationsA,
-		rotationsB:      rotationsB,
+		rotationsA:      make([]*TagAxis, numParts),
+		rotationsB:      make([]*TagAxis, numParts),
 	}
+
+	for i := 0; i < numParts; i++ {
+		v.rotationsA[i] = NewTagAxis(geometry.XYZ{}, _im)
+		v.rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
+	}
+
 	v.facesAPtr = &v.facesA
 	v.facesBPtr = &v.facesB
 
@@ -267,24 +263,14 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		if el == nil || len(el.volumes) == 0 || el.volumes[0] == nil {
 			continue
 		}
-		//faces, count := el.volumes[0].GetFaces()
 		target := el.volumes[0]
 		count := target.GetFaceCount()
 		offset := v.partFaceOffsets[i]
 		for j := 0; j < count; j++ {
-			src := target.GetFace(j) //(*faces)[j]
+			src := target.GetFace(j)
 			idx := offset + j
-
-			v.facesA[idx] = &Face{
-				material: src.material,
-				u:        src.u,
-				v:        src.v,
-			}
-			v.facesB[idx] = &Face{
-				material: src.material,
-				u:        src.u,
-				v:        src.v,
-			}
+			v.facesA[idx] = &Face{material: src.material, u: src.u, v: src.v}
+			v.facesB[idx] = &Face{material: src.material, u: src.u, v: src.v}
 		}
 	}
 
@@ -401,16 +387,18 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			continue
 		}
 		volA, volB, lerpT := el.GetVolumesAt(tick)
-		if volA == nil && volB == nil {
-			resetFull(i)
-			continue
-		}
-		// Fallback to the available volume if one is nil
-		if volA == nil {
-			volA = volB
-		}
-		if volB == nil {
-			volB = volA
+		if volA == nil || volB == nil {
+			if volA == nil && volB == nil {
+				resetFull(i)
+				continue
+			}
+			// Fallback to the available volume if one is nil
+			if volA == nil {
+				volA = volB
+			}
+			if volB == nil {
+				volB = volA
+			}
 		}
 
 		v.volsA[i] = volA
@@ -491,9 +479,9 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			dstA := v.facesA[offset+j]
 			if isIdentA {
 				if origAX == 0 && origAY == 0 && origAZ == 0 {
-					v3dCopyFacePoints(dstA, srcA)
+					dstA.CopyPoints(srcA)
 				} else {
-					v3dTransformPoints(dstA, srcA, origAX, origAY, origAZ)
+					dstA.TransformPoints(srcA, origAX, origAY, origAZ)
 				}
 			} else {
 				rotA.TransformPointsWithMatrix(dstA, srcA, origAX, origAY, origAZ)
@@ -503,9 +491,9 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			dstB := v.facesB[offset+j]
 			if isIdentB {
 				if origBX == 0 && origBY == 0 && origBZ == 0 {
-					v3dCopyFacePoints(dstB, srcB)
+					dstB.CopyPoints(srcB)
 				} else {
-					v3dTransformPoints(dstB, srcB, origBX, origBY, origBZ)
+					dstB.TransformPoints(srcB, origBX, origBY, origBZ)
 				}
 			} else {
 				rotB.TransformPointsWithMatrix(dstB, srcB, origBX, origBY, origBZ)
@@ -514,52 +502,14 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 
 		// Zero out any leftover faces in this part's buffer slot to avoid displaying stale frame data
 		for j := count; j < partCount; j++ {
-			v3dZeroFace(v.facesA[offset+j])
-			v3dZeroFace(v.facesB[offset+j])
+			if faceA := v.facesA[offset+j]; faceA != nil {
+				faceA.Zero()
+			}
+			if faceB := v.facesB[offset+j]; faceB != nil {
+				faceB.Zero()
+			}
 		}
 	}
 
 	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpTRet, v.GetRenderMode()
-}
-
-// v3dTransformPoints transforms the points of src Face to a new position relative to origin, storing them in dst.
-func v3dTransformPoints(dst *Face, src *Face, originX, originY, originZ float64) {
-	dst.tri[0].X = src.tri[0].X + originX
-	dst.tri[0].Y = src.tri[0].Y + originY
-	dst.tri[0].Z = src.tri[0].Z + originZ
-	dst.tri[1].X = src.tri[1].X + originX
-	dst.tri[1].Y = src.tri[1].Y + originY
-	dst.tri[1].Z = src.tri[1].Z + originZ
-	dst.tri[2].X = src.tri[2].X + originX
-	dst.tri[2].Y = src.tri[2].Y + originY
-	dst.tri[2].Z = src.tri[2].Z + originZ
-}
-
-// v3dCopyFacePoints copies the vertex coordinates from the source Face to the destination Face.
-func v3dCopyFacePoints(dst *Face, src *Face) {
-	dst.tri[0].X = src.tri[0].X
-	dst.tri[0].Y = src.tri[0].Y
-	dst.tri[0].Z = src.tri[0].Z
-	dst.tri[1].X = src.tri[1].X
-	dst.tri[1].Y = src.tri[1].Y
-	dst.tri[1].Z = src.tri[1].Z
-	dst.tri[2].X = src.tri[2].X
-	dst.tri[2].Y = src.tri[2].Y
-	dst.tri[2].Z = src.tri[2].Z
-}
-
-// v3dZeroFace collapses a face to zero coordinates so that it produces no visible geometry.
-func v3dZeroFace(dst *Face) {
-	if dst == nil {
-		return
-	}
-	dst.tri[0].X = 0
-	dst.tri[0].Y = 0
-	dst.tri[0].Z = 0
-	dst.tri[1].X = 0
-	dst.tri[1].Y = 0
-	dst.tri[1].Z = 0
-	dst.tri[2].X = 0
-	dst.tri[2].Y = 0
-	dst.tri[2].Z = 0
 }

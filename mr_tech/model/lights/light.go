@@ -162,6 +162,15 @@ func (cl *Light) GetPosXYZ() (float64, float64, float64) {
 	return cl.pos.X, cl.pos.Y, cl.pos.Z
 }
 
+// GetDistSq returns the squared distance from the light's position to the given 3D point.
+func (cl *Light) GetDistSq(pX, pY, pZ float64) float64 {
+	dx := cl.pos.X - pX
+	dy := cl.pos.Y - pY
+	dz := cl.pos.Z - pZ
+	distSq := dx*dx + dy*dy + dz*dz
+	return distSq
+}
+
 // GetRed returns the red color component of the light.
 func (cl *Light) GetRed() float64 {
 	return cl.r

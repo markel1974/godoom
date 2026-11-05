@@ -152,6 +152,45 @@ func (fc *Face) GetAABB() *aabb.AABB {
 	return fc.aabb
 }
 
+// Zero resets all triangle vertex coordinates of the face to the origin.
+func (fc *Face) Zero() {
+	fc.tri[0].X = 0
+	fc.tri[0].Y = 0
+	fc.tri[0].Z = 0
+	fc.tri[1].X = 0
+	fc.tri[1].Y = 0
+	fc.tri[1].Z = 0
+	fc.tri[2].X = 0
+	fc.tri[2].Y = 0
+	fc.tri[2].Z = 0
+}
+
+// TransformPoints copies the source face points into this face, offset by the given origin coordinates.
+func (fc *Face) TransformPoints(src *Face, originX, originY, originZ float64) {
+	fc.tri[0].X = src.tri[0].X + originX
+	fc.tri[0].Y = src.tri[0].Y + originY
+	fc.tri[0].Z = src.tri[0].Z + originZ
+	fc.tri[1].X = src.tri[1].X + originX
+	fc.tri[1].Y = src.tri[1].Y + originY
+	fc.tri[1].Z = src.tri[1].Z + originZ
+	fc.tri[2].X = src.tri[2].X + originX
+	fc.tri[2].Y = src.tri[2].Y + originY
+	fc.tri[2].Z = src.tri[2].Z + originZ
+}
+
+// CopyPoints copies the coordinates of all triangle points from src into fc.
+func (fc *Face) CopyPoints(src *Face) {
+	fc.tri[0].X = src.tri[0].X
+	fc.tri[0].Y = src.tri[0].Y
+	fc.tri[0].Z = src.tri[0].Z
+	fc.tri[1].X = src.tri[1].X
+	fc.tri[1].Y = src.tri[1].Y
+	fc.tri[1].Z = src.tri[1].Z
+	fc.tri[2].X = src.tri[2].X
+	fc.tri[2].Y = src.tri[2].Y
+	fc.tri[2].Z = src.tri[2].Z
+}
+
 // computeNormal calculates and assigns the n vector (geometry.XYZ) for the Face based on its points and geometry.
 func (fc *Face) computeNormal() {
 	const snapToZero = 1e-15

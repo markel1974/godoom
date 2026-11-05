@@ -368,13 +368,8 @@ func (w *BuilderVolume) pushLights(ls *lights.Lights, frustumFront *aabb.Frustum
 		if light.GetKind() == config.LightKindNone {
 			continue
 		}
-		posX, posY, posZ := light.GetPosXYZ()
-		dx := posX - pX
-		dy := posY - pY
-		dz := posZ - pZ
-		distSq := dx*dx + dy*dy + dz*dz
-		b := light.GetAABB()
-		isFront := b.IntersectFrustum(frustumFront)
+		distSq := light.GetDistSq(pX, pY, pZ)
+		isFront := light.GetAABB().IntersectFrustum(frustumFront)
 		if isFront {
 			if distSq > maxDistFrontSq {
 				continue

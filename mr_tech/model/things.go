@@ -63,7 +63,6 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		materials:        materials,
 		event:            NewThingEvent(0, solverJitter),
 		statics:          make([]IThing, 0, 16),
-		//updated:          false,
 	}
 	e.pendingLen.Store(0)
 
@@ -126,10 +125,10 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
 			rFace := rEnt.(*Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
-			// 3. Query sul BVH del Self
+			// Query sul BVH del Self
 			lThing.GetVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
 				lFace := lEnt.(*Face)
-				// Integrazione nel Manifold (Assicurati che AddFace accetti/conosca i delta
+				// Integrazione nel Manifold (verificare che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
 				lCage.AddFace(rFace, lFace)
 				return false
@@ -280,7 +279,6 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		}
 		th.removablesLen = 0
 	}
-
 	if th.hasPending {
 		for x := 0; x < int(th.pendingLen.Load()); x++ {
 			th.addThing(th.pending[x])
@@ -288,35 +286,6 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.pendingLen.Store(0)
 		th.hasPending = false
 	}
-
-	/*
-		if !th.updated {
-			fmt.Println("UPDATED")
-			th.updated = true
-			//Rebuild ready and thinkers collections
-			th.readyLen = 0
-			th.thinkersLen = 0
-			for _, t2 := range th.entities {
-				//if t2.GetId() == "PLAYER" {
-				//	th.ready[th.readyLen] = t2
-				//	th.readyLen++
-				//	continue
-				//}
-				//const view = 700 * 700
-				//if t2.GetDistSq(pX, pY, pZ) > view {
-				//	continue
-				//}
-				th.ready[th.readyLen] = t2
-				th.readyLen++
-				if t2.HasThinking() {
-					th.thinkers[th.thinkersLen] = t2
-					th.thinkersLen++
-				}
-			}
-		}
-
-	*/
-
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen)
 	//}
 

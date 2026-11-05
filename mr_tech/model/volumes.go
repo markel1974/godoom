@@ -67,15 +67,23 @@ func (s *Volumes) Query(targetObj aabb.IObject) []*Volume {
 }
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-func (s *Volumes) QueryCollisionCage(cage *CollisionCage) {
+func (s *Volumes) QueryCollisionCage(cage *CollisionCage, maxOverlaps int) {
+	counter := 0
 	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
 		vol := object.(*Volume)
 		vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
 			rFace := otherEnt.(*Face)
 			cage.AddFace(rFace, nil)
+			counter++
+			if counter > maxOverlaps {
+				return true
+			}
 			return false
 		})
 		cage.Commit(nil)
+		if counter > maxOverlaps {
+			return true
+		}
 		return false
 	})
 }

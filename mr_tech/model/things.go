@@ -35,12 +35,20 @@ type Things struct {
 	solverIterations int
 	event            *ThingEvent
 	cfg              []*config.Thing
+	maxOverlaps      int
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
+func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
 	const defaultLen = 1024
+	if maxOverlaps <= 0 {
+		maxOverlaps = 100
+	}
+	if solverIterations <= 0 {
+		solverIterations = 10
+	}
 	e := &Things{
+		maxOverlaps:      maxOverlaps,
 		solverIterations: solverIterations,
 		cfg:              cfg,
 		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
@@ -103,8 +111,9 @@ func (th *Things) Len() int {
 }
 
 // QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
-func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
+func (th *Things) QueryCollisionCage(lCage *CollisionCage, maxOverlaps int) {
 	lThing := lCage.GetThing()
+	counter := 0
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(IThing)
 		if lThing == rThing {
@@ -126,11 +135,21 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage) {
 				// Integrazione nel Manifold (verificare che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
 				lCage.AddFace(rFace, lFace)
+				counter++
+				if counter > maxOverlaps {
+					return true
+				}
 				return false
 			})
+			if counter > maxOverlaps {
+				return true
+			}
 			return false
 		})
 		lCage.Commit(rCage)
+		if counter > maxOverlaps {
+			return true
+		}
 		return false
 	})
 }
@@ -305,8 +324,8 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		runningLen++
 
 		cage := t2.GetCage()
-		th.volumes.QueryCollisionCage(cage) //world collision
-		th.QueryCollisionCage(cage)         //things collision
+		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
+		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
 	if runningLen == 0 {

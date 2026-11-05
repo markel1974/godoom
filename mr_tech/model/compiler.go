@@ -85,7 +85,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return err
 	}
 
-	r.things = NewThings(cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
+	r.things = NewThings(cfg.Calibration.MaxOverlaps, cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
 	if err := r.things.Setup(); err != nil {
 		return err
 	}

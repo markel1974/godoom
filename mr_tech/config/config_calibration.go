@@ -17,6 +17,7 @@ type Calibration struct {
 	VolSteps           float64 `json:"volSteps"`
 	AoFactor           float64 `json:"aoFactor"`
 	SolverIterations   int     `json:"solverIterations"`
+	MaxOverlaps        int     `json:"maxOverlaps"`
 }
 
 // NewConfigCalibration initializes and returns a Calibration object with default configuration values.
@@ -29,5 +30,6 @@ func NewConfigCalibration() *Calibration {
 	c.AoFactor = 0.8
 	c.ZFarMax = 4096.0
 	c.SolverIterations = 10
+	c.MaxOverlaps = 512
 	return c
 }

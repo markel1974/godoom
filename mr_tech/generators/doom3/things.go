@@ -160,9 +160,9 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 
 	// In Doom 3, scripted monsters with teleport, hide, or trigger keys are dormant spawn events
 	// and are not physically active in the world at map start.
-	if ent.IsDormant() {
-		return nil, fmt.Errorf("dormant entity: %s", classname)
-	}
+	//if ent.IsDormant() {
+	//	return nil, fmt.Errorf("dormant entity: %s", classname)
+	//}
 
 	origin, err := ent.GetOrigin()
 	if err != nil {

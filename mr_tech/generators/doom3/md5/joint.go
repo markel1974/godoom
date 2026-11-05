@@ -9,3 +9,7 @@ type Joint struct {
 	Pos    geometry.XYZ
 	Orient [4]float64 // (qx, qy, qz, qw)
 }
+
+func NewJoint(name string, parent int, pos geometry.XYZ, orient [4]float64) *Joint {
+	return &Joint{name: name, parent: parent, Pos: pos, Orient: orient}
+}

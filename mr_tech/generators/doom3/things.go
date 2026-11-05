@@ -305,7 +305,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	var actionNames []string
 	var actionIntervals [][2]int
 
-	bakeFrameWithSkel := func(skel []md5.Joint) config.Model3DEntryFrame {
+	bakeFrameWithSkel := func(skel []*md5.Joint) config.Model3DEntryFrame {
 		var frameTriangles []config.Model3DEntryTriangle
 		// Bake body submeshes
 		for sIdx, sub := range mesh.SubMeshes {

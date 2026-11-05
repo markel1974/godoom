@@ -92,22 +92,17 @@ func NewHeadAttachment(bodyMesh *Mesh, headMesh *Mesh, attachJoint string) *Head
 }
 
 // BuildHeadSkeleton constructs a head skeleton by transforming and aligning it with the provided body skeleton joints.
-func (h *HeadAttachment) BuildHeadSkeleton(bodySkeleton []Joint) []Joint {
+func (h *HeadAttachment) BuildHeadSkeleton(bodySkeleton []*Joint) []*Joint {
 	if h == nil || h.mesh == nil || len(bodySkeleton) == 0 {
 		return nil
 	}
-	headSkeleton := make([]Joint, len(h.mesh.Joints))
+	headSkeleton := make([]*Joint, len(h.mesh.Joints))
 	for i, hj := range h.mesh.Joints {
 		b := h.bindings[i]
 		if b.kind == HeadTransformBody {
 			if b.bodyIdx >= 0 && b.bodyIdx < len(bodySkeleton) {
 				bj := bodySkeleton[b.bodyIdx]
-				headSkeleton[i] = Joint{
-					name:   hj.name,
-					parent: hj.parent,
-					Pos:    bj.Pos,
-					Orient: bj.Orient,
-				}
+				headSkeleton[i] = NewJoint(hj.name, hj.parent, bj.Pos, bj.Orient)
 			}
 		} else {
 			if b.parentIdx >= 0 && b.parentIdx < len(headSkeleton) {
@@ -115,7 +110,7 @@ func (h *HeadAttachment) BuildHeadSkeleton(bodySkeleton []Joint) []Joint {
 				rPos := QuatRotate(pEval.Orient, b.pLocal)
 				cPos := geometry.XYZ{X: pEval.Pos.X + rPos.X, Y: pEval.Pos.Y + rPos.Y, Z: pEval.Pos.Z + rPos.Z}
 				cOrient := QuatNormalize(QuatMultiplies(pEval.Orient, b.qLocal))
-				headSkeleton[i] = Joint{name: hj.name, parent: hj.parent, Pos: cPos, Orient: cOrient}
+				headSkeleton[i] = NewJoint(hj.name, hj.parent, cPos, cOrient)
 			}
 		}
 	}

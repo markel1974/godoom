@@ -36,7 +36,7 @@ type SubMesh struct {
 
 // Mesh represents a parsed MD5 mesh structure containing joints and sub-mesh data.
 type Mesh struct {
-	Joints    []Joint
+	Joints    []*Joint
 	SubMeshes []SubMesh
 }
 
@@ -137,12 +137,7 @@ func (mesh *Mesh) Parse(r io.Reader) error {
 				qw = -math.Sqrt(t)
 			}
 
-			mesh.Joints = append(mesh.Joints, Joint{
-				name:   name,
-				parent: parent,
-				Pos:    geometry.XYZ{X: px, Y: py, Z: pz},
-				Orient: [4]float64{qx, qy, qz, qw},
-			})
+			mesh.Joints = append(mesh.Joints, NewJoint(name, parent, geometry.XYZ{X: px, Y: py, Z: pz}, [4]float64{qx, qy, qz, qw}))
 			continue
 		}
 

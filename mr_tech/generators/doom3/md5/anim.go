@@ -162,8 +162,8 @@ func (anim *Anim) Parse(r io.Reader) error {
 }
 
 // BuildFrameSkeleton constructs the animated skeleton joints in model space for a specific frame index.
-func (anim *Anim) BuildFrameSkeleton(frameIdx int) []Joint {
-	skel := make([]Joint, len(anim.hierarchy))
+func (anim *Anim) BuildFrameSkeleton(frameIdx int) []*Joint {
+	skel := make([]*Joint, len(anim.hierarchy))
 	if frameIdx < 0 || frameIdx >= len(anim.Frames) {
 		return skel
 	}
@@ -221,21 +221,12 @@ func (anim *Anim) BuildFrameSkeleton(frameIdx int) []Joint {
 		}
 
 		if h.parent < 0 {
-			skel[i] = Joint{
-				name:   h.name,
-				parent: h.parent,
-				Pos:    pos,
-				Orient: orient,
-			}
+			skel[i] = NewJoint(h.name, h.parent, pos, orient)
 		} else {
 			parentJoint := skel[h.parent]
 			rPos := QuatRotate(parentJoint.Orient, pos)
-			skel[i] = Joint{
-				name:   h.name,
-				parent: h.parent,
-				Pos:    geometry.XYZ{X: parentJoint.Pos.X + rPos.X, Y: parentJoint.Pos.Y + rPos.Y, Z: parentJoint.Pos.Z + rPos.Z},
-				Orient: QuatNormalize(QuatMultiplies(parentJoint.Orient, orient)),
-			}
+			pk := geometry.XYZ{X: parentJoint.Pos.X + rPos.X, Y: parentJoint.Pos.Y + rPos.Y, Z: parentJoint.Pos.Z + rPos.Z}
+			skel[i] = NewJoint(h.name, h.parent, pk, QuatNormalize(QuatMultiplies(parentJoint.Orient, orient)))
 		}
 	}
 

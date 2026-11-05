@@ -150,7 +150,6 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 	return cModel, nil
 }
 
-/*
 // Create creates a new Thing entity based on the parsed MapEntity properties.
 func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	classname, ok := ent.GetProperty("classname")
@@ -256,77 +255,6 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 		_ = common.NewItem(thingCfg)
 	} else {
 		thingCfg.Model3DEntry = cModel
-		_ = common.NewItem(thingCfg)
-	}
-
-	return thingCfg, nil
-}
-*/
-
-// Create creates a new Thing entity based on the parsed MapEntity properties.
-func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
-	classname, ok := ent.GetProperty("classname")
-	if !ok {
-		return nil, fmt.Errorf("entity has no classname")
-	}
-
-	// In Doom 3, scripted monsters with teleport, hide, or trigger keys are dormant spawn events
-	// and are not physically active in the world at map start.
-	//if ent.IsDormant() {
-	//	return nil, fmt.Errorf("dormant entity: %s", classname)
-	//}
-
-	origin, err := ent.GetOrigin()
-	if err != nil {
-		return nil, fmt.Errorf("entity %s origin error: %w", classname, err)
-	}
-
-	angle := ent.GetAngle()
-
-	spec, hasSpec := GetDoom3EntitySpec(classname)
-	if !hasSpec {
-		return nil, fmt.Errorf("unhandled entity classname: %s", classname)
-	}
-
-	// Entity might override model explicitly
-	modelPath := spec.ModelPath
-	if explicitModel, hasModel := ent.GetProperty("model"); hasModel {
-		expLower := strings.ToLower(explicitModel)
-		if strings.HasSuffix(expLower, ".md5mesh") || strings.HasSuffix(expLower, ".lwo") {
-			modelPath = explicitModel
-		}
-	}
-
-	var cModel *config.Model3DEntry
-	if spec.Kind == config.ThingEnemyDef && strings.HasSuffix(strings.ToLower(modelPath), ".md5mesh") {
-		cModel, err = t.loadAnimatedMonster(spec)
-	} else {
-		cModel, err = t.loadModel(modelPath)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("loading model for %s (%s): %w", classname, modelPath, err)
-	}
-
-	thingCfg := config.NewConfigThing(classname, origin, angle, spec.Kind, spec.Mass, 0, 0, spec.Speed)
-	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
-
-	if spec.Kind == config.ThingEnemyDef {
-		actions := config.NewEnemyAnimations()
-		if cModel != nil && len(cModel.ActionDefinitions) > 0 {
-			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
-		}
-		if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
-			actions.Add(config.EnemyStateIdle, 0, 1)
-			actions.Add(config.EnemyStateWalk, 0, 1)
-			actions.Add(config.EnemyStateRun, 0, 1)
-		}
-
-		thingCfg.JumpForce = JumpForce
-		thingCfg.Impulse = 3.0
-		thingCfg.WakeupDistance = 300.0
-		_ = common.NewEnemy(thingCfg, actions)
-	} else if spec.Kind == config.ThingItemDef {
 		_ = common.NewItem(thingCfg)
 	}
 

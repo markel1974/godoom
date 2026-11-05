@@ -53,7 +53,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    24.0,
 		Height:    72.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    130.0,
 	},
 	"monster_demon_imp_crawler": {
@@ -65,7 +65,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    24.0,
 		Height:    48.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    130.0,
 	},
 	"monster_demon_imp_crawl_armdoor": {
@@ -77,7 +77,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    24.0,
 		Height:    48.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    130.0,
 	},
 	"monster_demon_pinky": {
@@ -89,7 +89,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      40.0,
 		Radius:    36.0,
 		Height:    64.0,
-		Speed:     220.0,
+		Speed:     1220.0,
 		Health:    220.0,
 	},
 	"monster_demon_trite": {
@@ -101,7 +101,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      15.0,
 		Radius:    20.0,
 		Height:    30.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    20.0,
 	},
 	"monster_demon_tick": {
@@ -113,7 +113,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      15.0,
 		Radius:    20.0,
 		Height:    30.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    20.0,
 	},
 	"monster_demon_maggot": {
@@ -125,7 +125,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     210.0,
+		Speed:     1210.0,
 		Health:    80.0,
 	},
 	"monster_demon_wraith": {
@@ -137,7 +137,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     190.0,
+		Speed:     1190.0,
 		Health:    130.0,
 	},
 	"monster_demon_cherub": {
@@ -149,7 +149,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      20.0,
 		Radius:    20.0,
 		Height:    40.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    50.0,
 	},
 	"monster_demon_mancubus": {
@@ -161,7 +161,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      60.0,
 		Radius:    48.0,
 		Height:    96.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    1000.0,
 	},
 	"monster_demon_archvile": {
@@ -173,7 +173,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      40.0,
 		Radius:    24.0,
 		Height:    72.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    425.0,
 	},
 	"monster_demon_sentry": {
@@ -185,7 +185,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    48.0,
-		Speed:     190.0,
+		Speed:     1190.0,
 		Health:    185.0,
 	},
 	"monster_demon_hellknight": {
@@ -197,7 +197,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      50.0,
 		Radius:    40.0,
 		Height:    96.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    900.0,
 	},
 	"monster_demon_revenant": {
@@ -209,7 +209,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    84.0,
-		Speed:     190.0,
+		Speed:     1190.0,
 		Health:    270.0,
 	},
 	"monster_flying_cacodemon": {
@@ -221,7 +221,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      40.0,
 		Radius:    32.0,
 		Height:    64.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    200.0,
 	},
 	"monster_flying_lostsoul": {
@@ -233,7 +233,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      20.0,
 		Radius:    16.0,
 		Height:    24.0,
-		Speed:     240.0,
+		Speed:     1240.0,
 		Health:    40.0,
 	},
 	"monster_boss_vagary": {
@@ -245,7 +245,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      60.0,
 		Radius:    40.0,
 		Height:    96.0,
-		Speed:     160.0,
+		Speed:     1160.0,
 		Health:    1300.0,
 	},
 	"monster_boss_cyberdemon": {
@@ -257,7 +257,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      150.0,
 		Radius:    50.0,
 		Height:    160.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    4000.0,
 	},
 	"monster_boss_guardian": {
@@ -269,7 +269,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      120.0,
 		Radius:    60.0,
 		Height:    100.0,
-		Speed:     200.0,
+		Speed:     1200.0,
 		Health:    800.0,
 	},
 	"monster_boss_guardian_seeker": {
@@ -281,7 +281,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      20.0,
 		Radius:    20.0,
 		Height:    30.0,
-		Speed:     220.0,
+		Speed:     1220.0,
 		Health:    70.0,
 	},
 	"monster_boss_sabaoth": {
@@ -293,7 +293,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      100.0,
 		Radius:    50.0,
 		Height:    100.0,
-		Speed:     150.0,
+		Speed:     1150.0,
 		Health:    1750.0,
 	},
 	"monster_boss_maledict_cinematic": {
@@ -302,7 +302,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      100.0,
 		Radius:    50.0,
 		Height:    100.0,
-		Speed:     150.0,
+		Speed:     1150.0,
 		Health:    2000.0,
 	},
 	"monster_turret": {
@@ -334,7 +334,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    75.0,
-		Speed:     210.0,
+		Speed:     1210.0,
 		Health:    170.0,
 	},
 	"monster_zombie_commando_cgun": {
@@ -346,7 +346,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      45.0,
 		Radius:    24.0,
 		Height:    75.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    225.0,
 	},
 	"monster_zombie_sawyer": {
@@ -358,7 +358,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    250.0,
 	},
 	"monster_zombie_chainsaw": {
@@ -370,7 +370,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    250.0,
 	},
 	"monster_zombie_bernie": {
@@ -382,7 +382,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    100.0,
 	},
 	"monster_zombie_boney": {
@@ -394,7 +394,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_morgue": {
@@ -406,7 +406,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    100.0,
 	},
 	"monster_zombie_fat": {
@@ -418,7 +418,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    100.0,
 	},
 	"monster_zombie_fat2": {
@@ -430,7 +430,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    100.0,
 	},
 	"monster_zombie_fat_eating": {
@@ -442,7 +442,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    100.0,
 	},
 	"monster_zombie_fat_wrench": {
@@ -454,7 +454,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      35.0,
 		Radius:    24.0,
 		Height:    68.0,
-		Speed:     120.0,
+		Speed:     1120.0,
 		Health:    100.0,
 	},
 	"monster_zombie_jumpsuit": {
@@ -467,7 +467,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_jumpsuit_influence": {
@@ -480,7 +480,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_jumpsuit_old": {
@@ -493,7 +493,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_labcoat_limb": {
@@ -506,7 +506,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_labcoat_pipe": {
@@ -519,7 +519,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_labcoat_skinny": {
@@ -532,7 +532,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_labcoat_neckstump": {
@@ -544,7 +544,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_labcoat_hanging": {
@@ -557,7 +557,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_suit_bloodymouth": {
@@ -570,7 +570,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_suit_neckstump": {
@@ -582,7 +582,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_suit_skinny": {
@@ -595,7 +595,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_tshirt_bald": {
@@ -608,7 +608,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_tshirt_blown": {
@@ -621,7 +621,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zsec_machinegun": {
@@ -634,7 +634,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    22.0,
 		Height:    70.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    110.0,
 	},
 	"monster_zsec_pistol": {
@@ -647,7 +647,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    22.0,
 		Height:    70.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    100.0,
 	},
 	"monster_zsec_pistol_slowfire": {
@@ -660,7 +660,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    22.0,
 		Height:    70.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    100.0,
 	},
 	"monster_zsec_shotgun": {
@@ -673,7 +673,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    22.0,
 		Height:    70.0,
-		Speed:     180.0,
+		Speed:     1180.0,
 		Health:    120.0,
 	},
 	"monster_zsec_shield": {
@@ -686,7 +686,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    22.0,
 		Height:    70.0,
-		Speed:     170.0,
+		Speed:     1170.0,
 		Health:    140.0,
 	},
 	"monster_zombie_maint": {
@@ -699,7 +699,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint2": {
@@ -712,7 +712,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_fast": {
@@ -725,7 +725,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     140.0,
+		Speed:     1140.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_flashlight": {
@@ -738,7 +738,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_bald": {
@@ -751,7 +751,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_wrench": {
@@ -764,7 +764,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_skinny": {
@@ -777,7 +777,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_nojaw": {
@@ -790,7 +790,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 	"monster_zombie_maint_no_jaw": {
@@ -803,7 +803,7 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 		Mass:      30.0,
 		Radius:    20.0,
 		Height:    68.0,
-		Speed:     110.0,
+		Speed:     1110.0,
 		Health:    90.0,
 	},
 
@@ -1031,7 +1031,7 @@ func GetDoom3EntitySpec(classname string) (Doom3ThingSpec, bool) {
 			Mass:      100.0,
 			Radius:    24.0,
 			Height:    72.0,
-			Speed:     180.0,
+			Speed:     1080.0,
 			Health:    100.0,
 		}, true
 	case "item":

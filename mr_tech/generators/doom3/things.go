@@ -3,7 +3,6 @@ package doom3
 import (
 	"fmt"
 	"io"
-	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -151,6 +150,7 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 	return cModel, nil
 }
 
+/*
 // Create creates a new Thing entity based on the parsed MapEntity properties.
 func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	classname, ok := ent.GetProperty("classname")
@@ -195,48 +195,25 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 		return nil, fmt.Errorf("loading model for %s (%s): %w", classname, modelPath, err)
 	}
 
-	height := spec.Height
-	radius := spec.Radius
-	if cModel != nil && len(cModel.Frames) > 0 {
-		minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
-		maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
-		hasV := false
-		for _, tri := range cModel.Frames[0].Triangles {
-			for _, v := range tri.Vertices {
-				hasV = true
-				if v.Pos.X < minX {
-					minX = v.Pos.X
-				}
-				if v.Pos.X > maxX {
-					maxX = v.Pos.X
-				}
-				if v.Pos.Y < minY {
-					minY = v.Pos.Y
-				}
-				if v.Pos.Y > maxY {
-					maxY = v.Pos.Y
-				}
-				if v.Pos.Z < minZ {
-					minZ = v.Pos.Z
-				}
-				if v.Pos.Z > maxZ {
-					maxZ = v.Pos.Z
-				}
-			}
-		}
-		if hasV {
-			modelH := maxZ - minZ
-			if modelH > 1.0 {
-				height = modelH
-			}
-			modelR := math.Max(maxX-minX, maxY-minY) * 0.5
-			if modelR > 1.0 {
-				radius = modelR
-			}
-		}
+	var radius, height float64
+	if cModel != nil {
+		radius, height = cModel.GetSize()
+	}
+	if radius <= 0 || height <= 0 {
+		height = spec.Height
+		radius = spec.Radius
 	}
 
-	thingCfg := config.NewConfigThing(classname, origin, angle, spec.Kind, spec.Mass, radius, height, spec.Speed)
+	// Presentation centers all objects around GetCenter() = bottomLeft + (radius, radius, height/2).
+	// In Doom 3, origin is at (centerX, centerY, floorZ).
+	// To align the bottom-left coordinate so center lands at (origin.X, origin.Y, origin.Z + height/2):
+	pos := geometry.XYZ{
+		X: origin.X - radius,
+		Y: origin.Y - radius,
+		Z: origin.Z,
+	}
+
+	thingCfg := config.NewConfigThing(classname, pos, angle, spec.Kind, spec.Mass, radius, height, spec.Speed)
 	thingCfg.GForce = GForce
 
 	if spec.Kind == config.ThingEnemyDef {
@@ -244,6 +221,7 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 		if cModel != nil {
 			parts = append(parts, cModel)
 		}
+
 		links := []config.Model3DLink{{Parent: -1, Tag: ""}}
 		md3 := config.NewMD3(parts, links)
 		if cModel != nil {
@@ -268,7 +246,6 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 			actions.Add(config.EnemyStateWalk, 0, 1)
 			actions.Add(config.EnemyStateRun, 0, 1)
 		}
-
 		thingCfg.Model3D = md3
 		thingCfg.JumpForce = JumpForce
 		thingCfg.Impulse = 3.0
@@ -279,6 +256,78 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 		_ = common.NewItem(thingCfg)
 	} else {
 		thingCfg.Model3DEntry = cModel
+		_ = common.NewItem(thingCfg)
+	}
+
+	return thingCfg, nil
+}
+*/
+
+// Create creates a new Thing entity based on the parsed MapEntity properties.
+func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
+	classname, ok := ent.GetProperty("classname")
+	if !ok {
+		return nil, fmt.Errorf("entity has no classname")
+	}
+
+	// In Doom 3, scripted monsters with teleport, hide, or trigger keys are dormant spawn events
+	// and are not physically active in the world at map start.
+	//if ent.IsDormant() {
+	//	return nil, fmt.Errorf("dormant entity: %s", classname)
+	//}
+
+	origin, err := ent.GetOrigin()
+	if err != nil {
+		return nil, fmt.Errorf("entity %s origin error: %w", classname, err)
+	}
+
+	angle := ent.GetAngle()
+
+	spec, hasSpec := GetDoom3EntitySpec(classname)
+	if !hasSpec {
+		return nil, fmt.Errorf("unhandled entity classname: %s", classname)
+	}
+
+	// Entity might override model explicitly
+	modelPath := spec.ModelPath
+	if explicitModel, hasModel := ent.GetProperty("model"); hasModel {
+		expLower := strings.ToLower(explicitModel)
+		if strings.HasSuffix(expLower, ".md5mesh") || strings.HasSuffix(expLower, ".lwo") {
+			modelPath = explicitModel
+		}
+	}
+
+	var cModel *config.Model3DEntry
+	if spec.Kind == config.ThingEnemyDef && strings.HasSuffix(strings.ToLower(modelPath), ".md5mesh") {
+		cModel, err = t.loadAnimatedMonster(spec)
+	} else {
+		cModel, err = t.loadModel(modelPath)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("loading model for %s (%s): %w", classname, modelPath, err)
+	}
+
+	thingCfg := config.NewConfigThing(classname, origin, angle, spec.Kind, spec.Mass, 0, 0, spec.Speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+
+	if spec.Kind == config.ThingEnemyDef {
+		actions := config.NewEnemyAnimations()
+		if cModel != nil && len(cModel.ActionDefinitions) > 0 {
+			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
+		}
+		if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
+			actions.Add(config.EnemyStateIdle, 0, 1)
+			actions.Add(config.EnemyStateWalk, 0, 1)
+			actions.Add(config.EnemyStateRun, 0, 1)
+		}
+
+		thingCfg.JumpForce = JumpForce
+		thingCfg.Impulse = 3.0
+		thingCfg.WakeupDistance = 300.0
+		_ = common.NewEnemy(thingCfg, actions)
+	} else if spec.Kind == config.ThingItemDef {
+		_ = common.NewItem(thingCfg)
 	}
 
 	return thingCfg, nil
@@ -434,8 +483,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	cModel.ActionIntervals = actionIntervals
 
 	// Center the model in X, Y, and Z so that its center is at (0, 0, 0).
-	// In Godoom, rendering places the model at (center.x, center.z, -center.y).
-	// Centering ensures that the feet touch the floor at pos.Z and the head reaches pos.Z + height.
+	// In Godoom, presentation aligns all objects to their center.
 	cModel.Center()
 
 	return cModel, nil
@@ -490,14 +538,10 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 			var u, v float32
 			if uv, ok := lwd.VMadUVs[proc.UVKey{Poly: polyIdx, Vert: vi}]; ok {
 				u, v = uv[0], uv[1]
-			} else if uv, ok := lwd.VMapUVs[vi]; ok {
+			} else if uv, ok = lwd.VMapUVs[vi]; ok {
 				u, v = uv[0], uv[1]
 			}
-			return config.Model3DEntryVertex{
-				Pos: p,
-				U:   u,
-				V:   v,
-			}
+			return config.Model3DEntryVertex{Pos: p, U: u, V: v}
 		}
 
 		// Triangulate convex polygons (triangle fan)

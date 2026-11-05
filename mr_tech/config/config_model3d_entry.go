@@ -187,6 +187,12 @@ func (m *Model3DEntry) DropToFloor() {
 				p.Z -= minZ
 			}
 		}
+		for tagName, tag := range m.Frames[frameIdx].Tags {
+			tag.Origin.X -= centerX
+			tag.Origin.Y -= centerY
+			tag.Origin.Z -= minZ
+			m.Frames[frameIdx].Tags[tagName] = tag
+		}
 	}
 }
 
@@ -238,5 +244,54 @@ func (m *Model3DEntry) Center() {
 				p.Z -= centerZ
 			}
 		}
+		for tagName, tag := range m.Frames[frameIdx].Tags {
+			tag.Origin.X -= centerX
+			tag.Origin.Y -= centerY
+			tag.Origin.Z -= centerZ
+			m.Frames[frameIdx].Tags[tagName] = tag
+		}
 	}
+}
+
+func (m *Model3DEntry) GetSize() (float64, float64) {
+	var radius, height float64
+	if len(m.Frames) > 0 {
+		minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
+		maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+		hasV := false
+		for _, tri := range m.Frames[0].Triangles {
+			for _, v := range tri.Vertices {
+				hasV = true
+				if v.Pos.X < minX {
+					minX = v.Pos.X
+				}
+				if v.Pos.X > maxX {
+					maxX = v.Pos.X
+				}
+				if v.Pos.Y < minY {
+					minY = v.Pos.Y
+				}
+				if v.Pos.Y > maxY {
+					maxY = v.Pos.Y
+				}
+				if v.Pos.Z < minZ {
+					minZ = v.Pos.Z
+				}
+				if v.Pos.Z > maxZ {
+					maxZ = v.Pos.Z
+				}
+			}
+		}
+		if hasV {
+			modelH := maxZ - minZ
+			if modelH > 1.0 {
+				height = modelH
+			}
+			modelR := math.Max(maxX-minX, maxY-minY) * 0.5
+			if modelR > 1.0 {
+				radius = modelR
+			}
+		}
+	}
+	return radius, height
 }

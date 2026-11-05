@@ -175,40 +175,51 @@ func (anim *Anim) BuildFrameSkeleton(frameIdx int) []Joint {
 		orient := base.orient
 		k := 0
 
-		if h.flags&1 != 0 {
-			if h.startIndex+k < len(frameData) {
-				pos.X = frameData[h.startIndex+k]
-				k++
+		// In Doom 3 (id Tech 4) MD5 animations, root joints (e.g. "origin") contain
+		// animated world translation intended for physics root motion.
+		// For in-place rendering (where Godoom's physics engine drives entity movement),
+		// this translation must be stripped (locked to baseFrame, usually (0, 0, 0))
+		// so the character animates in place without drifting and snapping back to the origin
+		// at the end of each animation cycle.
+		isRoot := h.parent < 0 && (strings.EqualFold(h.name, "origin") || i == 0)
+		isRoot = false
+
+		if !isRoot {
+			if h.flags&1 != 0 {
+				if h.startIndex+k < len(frameData) {
+					pos.X = frameData[h.startIndex+k]
+					k++
+				}
 			}
-		}
-		if h.flags&2 != 0 {
-			if h.startIndex+k < len(frameData) {
-				pos.Y = frameData[h.startIndex+k]
-				k++
+			if h.flags&2 != 0 {
+				if h.startIndex+k < len(frameData) {
+					pos.Y = frameData[h.startIndex+k]
+					k++
+				}
 			}
-		}
-		if h.flags&4 != 0 {
-			if h.startIndex+k < len(frameData) {
-				pos.Z = frameData[h.startIndex+k]
-				k++
+			if h.flags&4 != 0 {
+				if h.startIndex+k < len(frameData) {
+					pos.Z = frameData[h.startIndex+k]
+					k++
+				}
 			}
-		}
-		if h.flags&8 != 0 {
-			if h.startIndex+k < len(frameData) {
-				orient[0] = frameData[h.startIndex+k]
-				k++
+			if h.flags&8 != 0 {
+				if h.startIndex+k < len(frameData) {
+					orient[0] = frameData[h.startIndex+k]
+					k++
+				}
 			}
-		}
-		if h.flags&16 != 0 {
-			if h.startIndex+k < len(frameData) {
-				orient[1] = frameData[h.startIndex+k]
-				k++
+			if h.flags&16 != 0 {
+				if h.startIndex+k < len(frameData) {
+					orient[1] = frameData[h.startIndex+k]
+					k++
+				}
 			}
-		}
-		if h.flags&32 != 0 {
-			if h.startIndex+k < len(frameData) {
-				orient[2] = frameData[h.startIndex+k]
-				k++
+			if h.flags&32 != 0 {
+				if h.startIndex+k < len(frameData) {
+					orient[2] = frameData[h.startIndex+k]
+					k++
+				}
 			}
 		}
 

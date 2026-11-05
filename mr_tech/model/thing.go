@@ -14,6 +14,8 @@ type IThing interface {
 
 	GetCage() *CollisionCage
 
+	GetDistSq(pX, pY, pZ float64) float64
+
 	IsActive() bool
 
 	SetActive(active bool)

@@ -119,6 +119,17 @@ func (t *ThingBase) GetSpeed() float64 {
 	return t.speed
 }
 
+// GetDistSq returns the squared distance from the light's position to the given 3D point.
+func (t *ThingBase) GetDistSq(pX, pY, pZ float64) float64 {
+	entity := t.GetEntity()
+	tx, ty, tz := entity.GetCenter()
+	dx := tx - pX
+	dy := ty - pY
+	dz := tz - pZ
+	distSq := dx*dx + dy*dy + dz*dz
+	return distSq
+}
+
 // GetImpulse returns the
 func (t *ThingBase) GetImpulse() float64 {
 	return t.impulse

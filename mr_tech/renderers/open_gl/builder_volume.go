@@ -249,11 +249,13 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
 	//counter := 0
+	things.StagePrepare()
+
 	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
 		if !thing.IsVisible() {
 			return
 		}
-
+		//thing.SetVisible()
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetVerticesCenter()
@@ -333,6 +335,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false
 		}
 
+		things.StageAdd(thing)
+
 		pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
 		//counter++
 		return false
@@ -349,6 +353,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	things.QueryStatic(qStatic) //UI Objects
 	things.QueryFrustum(frustumFront, qOcclusion)
+
+	things.StageCommit()
 
 	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
 }

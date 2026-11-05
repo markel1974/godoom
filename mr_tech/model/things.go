@@ -23,7 +23,7 @@ type Things struct {
 	player           *ThingPlayer
 	entities         map[uint64]IThing
 	running          []IThing
-	inactives        []IThing
+	removables       []IThing
 	pending          []IThing
 	ready            []IThing
 	thinkers         []IThing
@@ -31,13 +31,13 @@ type Things struct {
 	runningLen       int
 	readyLen         int
 	thinkersLen      int
-	inactivesLen     int
+	removablesLen    int
 	pendingLen       atomic.Int32
 	hasPending       bool
 	solverIterations int
 	event            *ThingEvent
-	updated          bool
-	cfg              []*config.Thing
+	//updated          bool
+	cfg []*config.Thing
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -56,14 +56,14 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		runningLen:       0,
 		readyLen:         0,
 		thinkersLen:      0,
-		inactivesLen:     0,
+		removablesLen:    0,
 		hasPending:       false,
 		config:           cfg,
 		volumes:          volumes,
 		materials:        materials,
 		event:            NewThingEvent(0, solverJitter),
 		statics:          make([]IThing, 0, 16),
-		updated:          false,
+		//updated:          false,
 	}
 	e.pendingLen.Store(0)
 
@@ -83,6 +83,17 @@ func (th *Things) Setup() error {
 		}
 		t2 := th.Create(ct, volume)
 		th.addThing(t2)
+	}
+
+	th.readyLen = 0
+	th.thinkersLen = 0
+	for _, t2 := range th.entities {
+		th.ready[th.readyLen] = t2
+		th.readyLen++
+		if t2.HasThinking() {
+			th.thinkers[th.thinkersLen] = t2
+			th.thinkersLen++
+		}
 	}
 	return nil
 }
@@ -240,27 +251,36 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 	th.hasPending = true
 }
 
-// Compute updates the state of all managed entities by computing their active state and processing collisions.
-func (th *Things) Compute(pX float64, pY float64, pZ float64) {
-	if !th.updated || th.hasPending || th.inactivesLen > 0 {
-		th.updated = true
-		th.updateCollections()
-	}
-	th.computeActive(pX, pY, pZ)
-	th.processCollision()
+// StagePrepare resets staging state before collecting ready things and thinkers.
+func (th *Things) StagePrepare() {
+	th.readyLen = 0
+	th.thinkersLen = 0
 }
 
-// updateCollections restructures and updates the internal collections of entities based on their current state and activity.
-func (th *Things) updateCollections() {
-	//Remove inactive entities
-	if th.inactivesLen > 0 {
-		for x := 0; x < th.inactivesLen; x++ {
-			th.removeThing(th.inactives[x])
+// StageAdd queues t2 as ready and tracks it as a thinker when it supports thinking.
+func (th *Things) StageAdd(t2 IThing) {
+	th.ready[th.readyLen] = t2
+	th.readyLen++
+	if t2.HasThinking() {
+		th.thinkers[th.thinkersLen] = t2
+		th.thinkersLen++
+	}
+}
+
+// StageCommit stages pending changes for commit.
+func (th *Things) StageCommit() {
+
+}
+
+// Compute updates the state of all managed entities by computing their active state and processing collisions.
+func (th *Things) Compute(pX float64, pY float64, pZ float64) {
+	if th.removablesLen > 0 {
+		for x := 0; x < th.removablesLen; x++ {
+			th.removeThing(th.removables[x])
 		}
-		th.inactivesLen = 0
+		th.removablesLen = 0
 	}
 
-	//Adding Pending entities
 	if th.hasPending {
 		for x := 0; x < int(th.pendingLen.Load()); x++ {
 			th.addThing(th.pending[x])
@@ -269,17 +289,39 @@ func (th *Things) updateCollections() {
 		th.hasPending = false
 	}
 
-	//Rebuild ready and thinkers collections
-	th.readyLen = 0
-	th.thinkersLen = 0
-	for _, t2 := range th.entities {
-		th.ready[th.readyLen] = t2
-		th.readyLen++
-		if t2.HasThinking() {
-			th.thinkers[th.thinkersLen] = t2
-			th.thinkersLen++
+	/*
+		if !th.updated {
+			fmt.Println("UPDATED")
+			th.updated = true
+			//Rebuild ready and thinkers collections
+			th.readyLen = 0
+			th.thinkersLen = 0
+			for _, t2 := range th.entities {
+				//if t2.GetId() == "PLAYER" {
+				//	th.ready[th.readyLen] = t2
+				//	th.readyLen++
+				//	continue
+				//}
+				//const view = 700 * 700
+				//if t2.GetDistSq(pX, pY, pZ) > view {
+				//	continue
+				//}
+				th.ready[th.readyLen] = t2
+				th.readyLen++
+				if t2.HasThinking() {
+					th.thinkers[th.thinkersLen] = t2
+					th.thinkersLen++
+				}
+			}
 		}
-	}
+
+	*/
+
+	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen)
+	//}
+
+	th.computeActive(pX, pY, pZ)
+	th.processCollision()
 }
 
 // Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
@@ -301,8 +343,8 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 	for x := 0; x < th.readyLen; x++ {
 		t2 := th.ready[x]
 		if !t2.IsActive() {
-			th.inactives[th.inactivesLen] = t2
-			th.inactivesLen++
+			th.removables[th.removablesLen] = t2
+			th.removablesLen++
 			continue
 		}
 		if !t2.StagePrepare() {
@@ -367,7 +409,7 @@ func (th *Things) addThing(ent IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
 	if len(th.entities) > cap(th.running) {
 		th.running = make([]IThing, len(th.entities)*4)
-		th.inactives = make([]IThing, len(th.entities)*4)
+		th.removables = make([]IThing, len(th.entities)*4)
 		th.pending = make([]IThing, len(th.entities)*4)
 	}
 	th.tree.InsertObject(ent)

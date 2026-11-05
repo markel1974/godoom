@@ -15,7 +15,6 @@ const solverJitter = 1e-6
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	gScale           geometry.XYZ
 	config           []*config.Thing
 	volumes          *Volumes
 	materials        *Materials
@@ -28,7 +27,6 @@ type Things struct {
 	ready            []IThing
 	thinkers         []IThing
 	statics          []IThing
-	runningLen       int
 	readyLen         int
 	thinkersLen      int
 	removablesLen    int
@@ -36,15 +34,13 @@ type Things struct {
 	hasPending       bool
 	solverIterations int
 	event            *ThingEvent
-	//updated          bool
-	cfg []*config.Thing
+	cfg              []*config.Thing
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
+func NewThings(solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
 	const defaultLen = 1024
 	e := &Things{
-		gScale:           gScale,
 		solverIterations: solverIterations,
 		cfg:              cfg,
 		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
@@ -53,7 +49,6 @@ func NewThings(gScale geometry.XYZ, solverIterations int, cfg []*config.Thing, v
 		ready:            make([]IThing, defaultLen),
 		thinkers:         make([]IThing, defaultLen),
 		pending:          make([]IThing, defaultLen),
-		runningLen:       0,
 		readyLen:         0,
 		thinkersLen:      0,
 		removablesLen:    0,
@@ -166,11 +161,6 @@ func (th *Things) GetPlayer() *ThingPlayer {
 func (th *Things) SetPlayer(p *ThingPlayer) {
 	th.player = p
 	th.addThing(p)
-}
-
-// GetGlobalScale retrieves the global scaling factor applied to all objects managed by the Things instance.
-func (th *Things) GetGlobalScale() geometry.XYZ {
-	return th.gScale
 }
 
 // GetTextures fetches the ITextures instance from the associated Materials object.
@@ -286,16 +276,8 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.pendingLen.Store(0)
 		th.hasPending = false
 	}
-	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen)
-	//}
 
-	th.computeActive(pX, pY, pZ)
-	th.processCollision()
-}
-
-// Compute updates the state of all IThing objects in the collection using the provided position coordinates (pX, pY).
-func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
-	//Apply thinking
+	// Apply Thinking
 	if th.thinkersLen > 0 {
 		th.event.SetStage(StageThinking)
 		th.event.SetCoords(pX, pY, pZ)
@@ -308,7 +290,7 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 	}
 
 	//Apply Physics
-	th.runningLen = 0
+	runningLen := 0
 	for x := 0; x < th.readyLen; x++ {
 		t2 := th.ready[x]
 		if !t2.IsActive() {
@@ -319,32 +301,24 @@ func (th *Things) computeActive(pX float64, pY float64, pZ float64) {
 		if !t2.StagePrepare() {
 			continue
 		}
-		th.running[th.runningLen] = t2
-		th.runningLen++
-	}
-}
+		th.running[runningLen] = t2
+		runningLen++
 
-// Compute updates the state of all entities, processes collisions, resolves contacts, and integrates final positions.
-func (th *Things) processCollision() {
-	if th.runningLen == 0 {
+		cage := t2.GetCage()
+		th.volumes.QueryCollisionCage(cage) //world collision
+		th.QueryCollisionCage(cage)         //things collision
+	}
+
+	if runningLen == 0 {
 		return
 	}
-	//th.event.SetStage(StageCompute)
-	for x := 0; x < th.runningLen; x++ {
-		t2 := th.running[x]
-		// Collisioni Statiche (Mondo/Mappa)
-		th.volumes.QueryCollisionCage(t2.GetCage())
-		// Collisioni Dinamiche (Entità)
-		th.QueryCollisionCage(t2.GetCage())
-		//t2.StageCompute()
-		//th.event.wg.Add(1)
-		//t2.PostMessage(th.event)
-	}
+
+	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)
 	//th.event.wg.Wait()
 	for si := 0; si < th.solverIterations; si++ {
 		//th.event.SetSolver(si, solverJitter)
 		//th.event.SetStage(StageResolve)
-		for x := 0; x < th.runningLen; x++ {
+		for x := 0; x < runningLen; x++ {
 			t2 := th.running[x]
 			//th.event.wg.Add(1)
 			//t2.PostMessage(th.event)
@@ -353,16 +327,18 @@ func (th *Things) processCollision() {
 		}
 		//th.event.wg.Wait()
 	}
-	th.event.SetStage(StageApply)
+
 	// PHYSYCS APPLY
-	for x := 0; x < th.runningLen; x++ {
+	th.event.SetStage(StageApply)
+	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
 		th.event.wg.Add(1)
 		t2.PostMessage(th.event)
 	}
 	th.event.wg.Wait()
+
 	// COMMIT SPAZIALE E INTEGRAZIONE
-	for x := 0; x < th.runningLen; x++ {
+	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
 		th.tree.UpdateObject(t2)
 	}

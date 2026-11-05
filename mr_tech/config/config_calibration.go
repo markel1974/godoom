@@ -16,6 +16,7 @@ type Calibration struct {
 	BeamRatio          float64 `json:"beamRatio"`
 	VolSteps           float64 `json:"volSteps"`
 	AoFactor           float64 `json:"aoFactor"`
+	SolverIterations   int     `json:"solverIterations"`
 }
 
 // NewConfigCalibration initializes and returns a Calibration object with default configuration values.
@@ -27,5 +28,6 @@ func NewConfigCalibration() *Calibration {
 	c.VolSteps = 8
 	c.AoFactor = 0.8
 	c.ZFarMax = 4096.0
+	c.SolverIterations = 10
 	return c
 }

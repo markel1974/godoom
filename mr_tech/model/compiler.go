@@ -85,7 +85,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return err
 	}
 
-	r.things = NewThings(r.gScale, 10, cfg.Things, r.volumes, materials)
+	r.things = NewThings(cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
 	if err := r.things.Setup(); err != nil {
 		return err
 	}
@@ -97,7 +97,6 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 
 	for _, i := range cfg.UI {
 		e := NewThingInterface(r.things, i)
-		//e := r.things.Create(i, nil)
 		r.things.AddStaticThing(e)
 		r.ui = append(r.ui, e)
 	}

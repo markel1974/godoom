@@ -10,13 +10,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// Volume represents a 3D navigable space (a region, brush, or room), defined by geometric faces, materials, and associated properties.
+// Volume represents a spatial model element that groups geometry, lighting, physics, and sector data.
 type Volume struct {
 	modelId    int
 	id         string
-	faces      []*Face
-	facesPtr   *[]*Face
-	faceCount  int
+	faces      *Faces
 	tag        string
 	light      *lights.Light
 	entity     *physics.Entity
@@ -28,25 +26,21 @@ type Volume struct {
 	dirty      bool
 }
 
-// NewVolume creates a new 3D Volume instance with specified properties, including position, size, and physics attributes.
 func NewVolume(modelId int, id string, tag string, mass, restitution, friction, gForce float64) *Volume {
 	v := &Volume{
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
-		faces:      make([]*Face, 128),
-		faceCount:  0,
+		faces:      NewFaces(128, false),
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
 		vertexTags: make([]*TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
 	}
-	v.facesPtr = &v.faces
 	return v
 }
 
-// NewVolumeConcrete creates a new Volume instance configured with concrete-specific physics properties like mass, friction, and restitution.
 func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	const concreteMass = 0.0
 	const concreteRestitution = 0.0
@@ -55,15 +49,15 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	return NewVolume(modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, concreteGForce)
 }
 
-// Rebuild recalculates the axis-aligned bounding box (AABB) for the location based on its faces and dimensions.
+// Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.
 func (v *Volume) Rebuild() bool {
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 
 	v.facesTree.Clear()
 
-	for x := 0; x < v.faceCount; x++ {
-		face := v.faces[x]
+	for x := 0; x < v.faces.Len(); x++ {
+		face := v.faces.container[x]
 		face.Rebuild()
 		v.facesTree.InsertObject(face)
 
@@ -99,115 +93,108 @@ func (v *Volume) Rebuild() bool {
 	return true
 }
 
-// IsDirty checks whether the Volume has been marked as dirty, indicating that modifications are pending.
+// IsDirty reports whether the volume has been marked dirty.
 func (v *Volume) IsDirty() bool {
 	return v.dirty
 }
 
-// SetDirty sets the dirty flag of the Volume, indicating whether it needs re-staging.
+// SetDirty sets whether the volume is marked dirty.
 func (v *Volume) SetDirty(dirty bool) {
 	v.dirty = dirty
 }
 
-// ClearDirty resets the dirty flag of the Volume to false, indicating no pending modifications need to be handled.
+// ClearDirty clears the dirty flag.
 func (v *Volume) ClearDirty() {
 	v.dirty = false
 }
 
-// SetMarker sets the marker value for the Volume instance, which can be used to distinguish or track it.
+// SetMarker sets the marker identifier used to track staged volume data.
 func (v *Volume) SetMarker(marker int) {
 	v.marker = marker
 }
 
-// GetMarker retrieves the marker value associated with the Volume instance.
+// GetMarker returns the marker identifier assigned to the volume.
 func (v *Volume) GetMarker() int {
 	return v.marker
 }
 
-// SetThing sets the IThing instance associated with the Volume.
+// SetThing assigns the specified IThing instance to the volume.
 func (v *Volume) SetThing(thing IThing) {
 	v.thing = thing
 }
 
-// GetThing retrieves the IThing object associated with the Volume instance.
+// GetThing returns the thing associated with the volume.
 func (v *Volume) GetThing() IThing {
 	return v.thing
 }
 
+// GetEntity returns the physics entity associated with the volume.
 func (v *Volume) GetEntity() *physics.Entity {
 	return v.entity
 }
 
-// GetAABB returns the TagAxis-Aligned Bounding Box (AABB) of the location, representing its 3D bounds.
+// GetAABB returns the axis-aligned bounding box associated with the volume's entity.
 func (v *Volume) GetAABB() *aabb.AABB {
 	return v.entity.GetAABB()
 }
 
-// GetModelId retrieves the model ID associated with the Volume instance.
+// GetModelId returns the model identifier assigned to the volume.
 func (v *Volume) GetModelId() int {
 	return v.modelId
 }
 
-// GetId retrieves the unique identifier of the location.
 func (v *Volume) GetId() string {
 	return v.id
 }
 
-// GetLight retrieves the Light object associated with the Volume, or nil if no Light is assigned.
+// GetLight returns the light associated with the volume.
 func (v *Volume) GetLight() *lights.Light {
 	return v.light
 }
 
-// AddFace adds a new face to the location and sets the location as the parent of the face.
+// AddFace adds face to the volume and sets its parent to the volume.
 func (v *Volume) AddFace(face *Face) {
 	face.SetParent(v)
-	if v.faceCount >= len(v.faces) {
-		newFaces := make([]*Face, v.faceCount*2)
-		copy(newFaces, v.faces)
-		v.faces = newFaces
-		v.facesPtr = &v.faces
-	}
-	v.faces[v.faceCount] = face
-	v.faceCount++
+	v.faces.Add(face)
 }
 
-// ClearFaces resets the face count of the Volume to zero, effectively removing all associated faces.
+// ClearFaces removes all faces from the volume.
 func (v *Volume) ClearFaces() {
-	v.faceCount = 0
+	v.faces.Clear()
 }
 
-// GetFace returns the Face at the specified index within the Volume's faces array.
+// GetFace returns the face at the specified index.
 func (v *Volume) GetFace(index int) *Face {
-	return v.faces[index]
+	return v.faces.At(index)
 }
 
-// GetFaceCount returns the number of faces currently associated with the Volume instance.
+// GetFaceCount returns the number of faces in the volume.
 func (v *Volume) GetFaceCount() int {
-	return v.faceCount
+	return v.faces.Len()
 }
 
-// GetFaces returns the list of all faces and the total count of faces associated with the Volume.
-func (v *Volume) GetFaces() (*[]*Face, int) {
-	return v.facesPtr, v.faceCount
+// GetFaces returns the face collection associated with the volume.
+func (v *Volume) GetFaces() *Faces {
+	return v.faces
 }
 
-// SetLight assigns a Light object to the Volume and establishes the Volume as the parent of the Light instance.
+// SetLight assigns the light to the volume and sets the volume as the light's parent.
 func (v *Volume) SetLight(light *lights.Light) {
 	v.light = light
 	v.light.SetParent(v)
 }
 
-// GetSector retrieves the Sector associated with the Volume instance.
+// GetSector returns the sector associated with the volume.
 func (v *Volume) GetSector() *sectors.Sector {
 	return v.sector
 }
 
-// SetSector assigns the specified Sector to the Volume instance.
+// SetSector assigns the sector associated with the volume.
 func (v *Volume) SetSector(s *sectors.Sector) {
 	v.sector = s
 }
 
-// SetVertexTag associates the given tag index with the specified origin and orientation axes in the Volume's vertexTags array.
+// SetVertexTag sets the vertex tag at idx with the given origin and axis, growing storage as needed.
 func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ) {
 	if idx >= len(v.vertexTags) {
 		newTags := make([]*TagAxis, idx+1)
@@ -217,12 +204,12 @@ func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ
 	v.vertexTags[idx] = NewTagAxis(origin, axis)
 }
 
-// HasVertexTag checks if a vertex tag exists at the specified index within the Volume's vertexTags array.
+// HasVertexTag reports whether idx is a valid vertex tag index.
 func (v *Volume) HasVertexTag(idx int) bool {
 	return idx >= 0 && idx < len(v.vertexTags)
 }
 
-// GetVertexTag retrieves the tag origin and orientation axes associated with a given tag index from the Volume's vertexTags array.
+// GetVertexTag returns the vertex tag at idx, or nil if idx is out of range.
 func (v *Volume) GetVertexTag(idx int) *TagAxis {
 	if idx >= 0 && idx < len(v.vertexTags) {
 		return v.vertexTags[idx]
@@ -230,23 +217,24 @@ func (v *Volume) GetVertexTag(idx int) *TagAxis {
 	return nil
 }
 
-// AddTag appends the specified tags to the location's existing tags, separated by a semicolon.
+// AddTag appends non-empty tags to the volume's tag list.
 func (v *Volume) AddTag(tags string) {
 	if len(tags) > 0 {
 		v.tag += ";" + tags
 	}
 }
 
-// GetTag retrieves the tag string associated with the Volume instance.
+// GetTag returns the volume tag string.
 func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// GetCentroid calculates and returns the geometric centroid of the location based on its faces and 3D mode.
+// GetCentroid returns the average position of all points across the volume's faces.
+// GetCentroid returns a zero XYZ when the volume has no face points.
 func (v *Volume) GetCentroid() geometry.XYZ {
 	var cx, cy, cz, count float64
-	for x := 0; x < v.faceCount; x++ {
-		face := v.faces[x]
+	for x := 0; x < v.faces.Len(); x++ {
+		face := v.faces.At(x)
 		for _, p := range face.GetPoints() {
 			cx += p.X
 			cy += p.Y
@@ -260,11 +248,12 @@ func (v *Volume) GetCentroid() geometry.XYZ {
 	return geometry.XYZ{}
 }
 
-// QueryOverlaps checks for overlaps between the Volume's AABB and the provided object, invoking a callback for each overlap.
+// QueryOverlaps searches the volume's face tree for objects whose AABB overlaps the given object's AABB.
 func (v *Volume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.facesTree.QueryOverlaps(object, callback)
 }
 
+// QueryPoint calls callback for each face whose bounding box contains the given 3D point.
 func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IObject) bool) {
 	v.facesTree.QueryPoint3d(px, py, pz, callback)
 }

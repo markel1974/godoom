@@ -34,10 +34,10 @@ func (t *ThingInterface) StageThinking(playerX float64, playerY float64, playerZ
 
 // GetVertices overrides the default GetVertices to use the HUD render mode.
 // The vertex shader will bypass the view matrix completely and place it in screen space.
-func (t *ThingInterface) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+func (t *ThingInterface) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
 	//TODO posizione assoluta e' un pezzo dell'interfaccia
 	t.GetEntity().MoveTo(0, 0, 0)
-	f1, c1, f2, c2, lp, _ := t.ThingBase.GetVertices(tick)
+	f1, f2, lp, _ := t.ThingBase.GetVertices(tick)
 	// Usiamo 1.1 (Spherical Billboard) in modo che lo shader originale lo processi correttamente
-	return f1, c1, f2, c2, lp, RenderModeInterface
+	return f1, f2, lp, RenderModeInterface
 }

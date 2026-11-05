@@ -83,9 +83,9 @@ func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 }
 
 // GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
-func (v *VerticesMultiSprite) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	f, c := v.actionVolume.GetFaces()
-	return f, c, f, c, 0.0, v.GetRenderMode()
+func (v *VerticesMultiSprite) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
+	f := v.actionVolume.GetFaces()
+	return f, f, 0.0, v.GetRenderMode()
 }
 
 // SetAction updates the current action index for the sprite if the provided index is within valid bounds.
@@ -96,9 +96,9 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	}
 
 	// Restart animation for all faces in the new action volume
-	if faces, count := v.actionVolume.GetFaces(); faces != nil {
-		for i := 0; i < count; i++ {
-			f := (*faces)[i]
+	if faces := v.actionVolume.GetFaces(); faces != nil {
+		for i := 0; i < faces.Len(); i++ {
+			f := faces.At(i)
 			if f == nil {
 				continue
 			}

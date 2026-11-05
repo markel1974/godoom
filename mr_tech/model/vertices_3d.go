@@ -11,10 +11,8 @@ import (
 
 // Vertices3D represents a 3D structure composed of faces, volumes, origins, and associated metadata for spatial modeling.
 type Vertices3D struct {
-	facesA          []*Face
-	facesB          []*Face
-	facesAPtr       *[]*Face
-	facesBPtr       *[]*Face
+	facesA          *Faces
+	facesB          *Faces
 	totalFaces      int
 	partFaceOffsets []int
 	partFaceCounts  []int
@@ -238,8 +236,8 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		partFaceCounts:  partFaceCounts,
 		currentAction:   -1,
 		actionMaps:      actionMaps,
-		facesA:          make([]*Face, totalFaces),
-		facesB:          make([]*Face, totalFaces),
+		facesA:          NewFaces(totalFaces, true),
+		facesB:          NewFaces(totalFaces, true),
 		links:           links,
 		linkTagIndices:  linkTagIndices,
 		executionOrder:  executionOrder,
@@ -256,9 +254,6 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		v.rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
 	}
 
-	v.facesAPtr = &v.facesA
-	v.facesBPtr = &v.facesB
-
 	// Initialize face buffers using partFaceOffsets to decouple buffer layout from execution order
 	for i, el := range v.elements {
 		if el == nil || len(el.volumes) == 0 || el.volumes[0] == nil {
@@ -270,8 +265,8 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		for j := 0; j < count; j++ {
 			src := target.GetFace(j)
 			idx := offset + j
-			v.facesA[idx] = &Face{material: src.material, u: src.u, v: src.v}
-			v.facesB[idx] = &Face{material: src.material, u: src.u, v: src.v}
+			v.facesA.Set(idx, &Face{material: src.material, u: src.u, v: src.v})
+			v.facesB.Set(idx, &Face{material: src.material, u: src.u, v: src.v})
 		}
 	}
 
@@ -379,13 +374,13 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 	}
 
 	for _, i := range v.executionOrder {
-		el := v.elements[i]
-		if el == nil {
+		element := v.elements[i]
+		if element == nil {
 			resetFull(i)
 			continue
 		}
-		el.Compile(tick)
-		volA, volB, lerpT := el.CurrentVolumes()
+		element.Compile(tick)
+		volA, volB, lerpT := element.CurrentVolumes()
 		if volA == nil || volB == nil {
 			if volA == nil && volB == nil {
 				resetFull(i)
@@ -475,7 +470,7 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 
 		for j := 0; j < count; j++ {
 			srcA := volA.GetFace(j)
-			dstA := v.facesA[offset+j]
+			dstA := v.facesA.At(offset + j)
 			if isIdentA {
 				if origAX == 0 && origAY == 0 && origAZ == 0 {
 					dstA.CopyPoints(srcA)
@@ -487,7 +482,7 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 			}
 
 			srcB := volB.GetFace(j)
-			dstB := v.facesB[offset+j]
+			dstB := v.facesB.At(offset + j)
 			if isIdentB {
 				if origBX == 0 && origBY == 0 && origBZ == 0 {
 					dstB.CopyPoints(srcB)
@@ -501,10 +496,10 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 
 		// Zero out any leftover faces in this part's buffer slot to avoid displaying stale frame data
 		for j := count; j < partCount; j++ {
-			if faceA := v.facesA[offset+j]; faceA != nil {
+			if faceA := v.facesA.At(offset + j); faceA != nil {
 				faceA.Zero()
 			}
-			if faceB := v.facesB[offset+j]; faceB != nil {
+			if faceB := v.facesB.At(offset + j); faceB != nil {
 				faceB.Zero()
 			}
 		}
@@ -513,7 +508,8 @@ func (v *Vertices3D) Compute(tick uint64) bool {
 }
 
 // GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
-func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+func (v *Vertices3D) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
 	v.Compute(tick)
-	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, v.lerpTRet, v.GetRenderMode()
+
+	return v.facesA, v.facesB, v.lerpTRet, v.GetRenderMode()
 }

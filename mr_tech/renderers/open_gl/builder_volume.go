@@ -175,12 +175,12 @@ func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.
 
 			fv.DeepReset()
 			hasAnim := false
-			faces, faceCount := vol.GetFaces()
+			faces := vol.GetFaces()
 			startIdx := fv.GetIndicesLen()
 			//added := false
 			//var added int
-			for x := 0; x < faceCount; x++ {
-				face := (*faces)[x]
+			for x := 0; x < faces.Len(); x++ {
+				face := faces.At(x)
 				mat := face.GetMaterial()
 				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 					continue
@@ -251,7 +251,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//counter := 0
 	things.StagePrepare()
 
-	pushPassThing := func(thing model.IThing, pFaces *[]*model.Face, faceCount int, pNextFaces *[]*model.Face, _ int, lp float64, renderMode float64) {
+	pushPassThing := func(thing model.IThing, faces *model.Faces, nextFaces *model.Faces, lp float64, renderMode float64) {
 		if !thing.IsVisible() {
 			return
 		}
@@ -260,15 +260,13 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		yaw := float32(thing.GetAngle())
 		tPosX, tPosY, zBot := thing.GetVerticesCenter()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-		faces := *pFaces
-		nextFaces := *pNextFaces
 
 		var currentMat *textures.Material
 		var currentTargetDc *DrawCommands
 		batchStart := w.fv.GetIndicesLen()
 
-		for fx := 0; fx < faceCount; fx++ {
-			face := faces[fx]
+		for fx := 0; fx < faces.Len(); fx++ {
+			face := faces.At(fx)
 			mat := face.GetMaterial()
 			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 				continue
@@ -304,7 +302,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			u0, v0 := face.GetUV0()
 			u1, v1 := face.GetUV1()
 			u2, v2 := face.GetUV2()
-			nf := nextFaces[fx]
+			nf := nextFaces.At(fx)
 			np0X, np0Y, np0Z := nf.GetPoint0()
 			np1X, np1Y, np1Z := nf.GetPoint1()
 			np2X, np2Y, np2Z := nf.GetPoint2()
@@ -329,24 +327,24 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false                               // CULLATO! Non generiamo i vertici
 		}
 		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
-		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-		if faceCount == 0 {
+		pFaces, pNextFaces, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		if pFaces.Len() == 0 {
 			// Anche se non ha facce, teniamo vivo occlusion test
 			return false
 		}
 
 		things.StageAdd(thing)
 
-		pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
+		pushPassThing(thing, pFaces, pNextFaces, lp, renderMode)
 		//counter++
 		return false
 	}
 
 	qStatic := func(object aabb.IObject) bool {
 		thing := object.(model.IThing)
-		pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode := thing.GetVertices(textures.GlobalTick())
-		if faceCount > 0 {
-			pushPassThing(thing, pFaces, faceCount, pNextFaces, nFaceCount, lp, renderMode)
+		faces, nextFaces, lp, renderMode := thing.GetVertices(textures.GlobalTick())
+		if faces.Len() > 0 {
+			pushPassThing(thing, faces, nextFaces, lp, renderMode)
 		}
 		return false
 	}

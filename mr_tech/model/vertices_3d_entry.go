@@ -212,14 +212,14 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+func (v *Vertices3DEntry) GetVertices(tick uint64) (*Faces, *Faces, float64, float64) {
 	v.Compile(tick)
 	if v.volA == nil || v.volB == nil {
-		return nil, 0, nil, 0, 0.0, v.GetRenderMode()
+		return nil, nil, 0.0, v.GetRenderMode()
 	}
-	facesA, count := v.volA.GetFaces()
-	facesB, _ := v.volB.GetFaces()
-	return facesA, count, facesB, count, v.lerpT, v.GetRenderMode()
+	facesA := v.volA.GetFaces()
+	facesB := v.volB.GetFaces()
+	return facesA, facesB, v.lerpT, v.GetRenderMode()
 }
 
 // CurrentVolumes retrieves the precise start and end frames for interpolation at the given tick.

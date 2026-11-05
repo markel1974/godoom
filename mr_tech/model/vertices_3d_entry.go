@@ -26,6 +26,9 @@ type Vertices3DEntry struct {
 	actionClamps    []bool
 	clampAnim       bool
 	tagMap          map[string]int
+	volA            *Volume
+	volB            *Volume
+	lerpT           float64
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
@@ -60,6 +63,9 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		endFrame:        len(cfg.Model3DEntry.Frames) - 1,
 		currentAction:   -1,
 		tagMap:          make(map[string]int),
+		volA:            nil,
+		volB:            nil,
+		lerpT:           0.0,
 	}
 
 	tagCounter := 0
@@ -150,25 +156,21 @@ func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
 	return n, k
 }
 
-// GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	volA, volB, lerpT := v.GetVolumesAt(tick)
-	if volA == nil || volB == nil {
-		return nil, 0, nil, 0, 0.0, v.GetRenderMode()
-	}
-	facesA, count := volA.GetFaces()
-	facesB, _ := volB.GetFaces()
-	return facesA, count, facesB, count, lerpT, v.GetRenderMode()
-}
-
-// GetVolumesAt retrieves the precise start and end frames for interpolation at the given tick.
-func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume, float64) {
+func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	if len(v.volumes) == 0 {
-		return nil, nil, 0.0
+		v.volA = nil
+		v.volB = nil
+		v.lerpT = 0.0
+		return false
 	}
+
 	if v.startFrame == v.endFrame {
-		return v.volumes[v.startFrame], v.volumes[v.startFrame], 0.0
+		v.volA = v.volumes[v.startFrame]
+		v.volB = v.volumes[v.startFrame]
+		v.lerpT = 0.0
+		return false
 	}
+
 	const groupSize = 6.0
 	var frameFloat float64
 	if v.clampAnim {
@@ -180,16 +182,13 @@ func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume, float64) 
 	} else {
 		frameFloat = textures.TickGrouped(tick, int(groupSize))
 	}
-
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {
 		animLength = 1
 	}
-
 	relativeFrameA := int(frameFloat)
 	relativeFrameB := relativeFrameA + 1
 	lerpT := frameFloat - math.Floor(frameFloat)
-
 	if v.clampAnim {
 		if relativeFrameA >= animLength-1 {
 			relativeFrameA = animLength - 1
@@ -203,11 +202,29 @@ func (v *Vertices3DEntry) GetVolumesAt(tick uint64) (*Volume, *Volume, float64) 
 		relativeFrameA = relativeFrameA % animLength
 		relativeFrameB = relativeFrameB % animLength
 	}
-
 	frameA := v.startFrame + relativeFrameA
 	frameB := v.startFrame + relativeFrameB
+	v.volA = v.volumes[frameA]
+	v.volB = v.volumes[frameB]
+	v.lerpT = lerpT
 
-	return v.volumes[frameA], v.volumes[frameB], lerpT
+	return false
+}
+
+// GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
+func (v *Vertices3DEntry) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+	v.Compile(tick)
+	if v.volA == nil || v.volB == nil {
+		return nil, 0, nil, 0, 0.0, v.GetRenderMode()
+	}
+	facesA, count := v.volA.GetFaces()
+	facesB, _ := v.volB.GetFaces()
+	return facesA, count, facesB, count, v.lerpT, v.GetRenderMode()
+}
+
+// CurrentVolumes retrieves the precise start and end frames for interpolation at the given tick.
+func (v *Vertices3DEntry) CurrentVolumes() (*Volume, *Volume, float64) {
+	return v.volA, v.volB, v.lerpT
 }
 
 // GetVerticesCenter retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.

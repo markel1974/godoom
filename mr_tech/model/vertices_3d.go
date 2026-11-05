@@ -31,6 +31,7 @@ type Vertices3D struct {
 	originsB        []geometry.XYZ
 	rotationsA      []*TagAxis
 	rotationsB      []*TagAxis
+	lerpTRet        float64
 }
 
 // NewVertices3D initializes and returns a new Vertices3D object based on the provided Thing configuration and materials.
@@ -363,10 +364,7 @@ func (v *Vertices3D) SetThing(t IThing) {
 	}
 }
 
-// GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
-func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
-	var lerpTRet float64
-
+func (v *Vertices3D) Compute(tick uint64) bool {
 	reset := func(i int) {
 		v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
 		v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
@@ -386,7 +384,8 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			resetFull(i)
 			continue
 		}
-		volA, volB, lerpT := el.GetVolumesAt(tick)
+		el.Compile(tick)
+		volA, volB, lerpT := el.CurrentVolumes()
 		if volA == nil || volB == nil {
 			if volA == nil && volB == nil {
 				resetFull(i)
@@ -405,7 +404,7 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 		v.volsB[i] = volB
 
 		if i == 0 {
-			lerpTRet = lerpT
+			v.lerpTRet = lerpT
 		}
 
 		pIdx := -1
@@ -510,6 +509,11 @@ func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, flo
 			}
 		}
 	}
+	return false
+}
 
-	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, lerpTRet, v.GetRenderMode()
+// GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
+func (v *Vertices3D) GetVertices(tick uint64) (*[]*Face, int, *[]*Face, int, float64, float64) {
+	v.Compute(tick)
+	return v.facesAPtr, v.totalFaces, v.facesBPtr, v.totalFaces, v.lerpTRet, v.GetRenderMode()
 }

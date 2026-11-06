@@ -212,13 +212,14 @@ func (t *ThingBase) StageApply() {
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 
+	if t.cage.HasFloor() {
+		entity.SetOnGround(true)
+	}
+
 	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
-		if slot.GetBucket() == BucketFloor {
-			entity.SetOnGround(true)
-		}
 		iMode := slot.GetImpactMode()
 		if iMode == ImpactStep {
 			entity.MoveToZ(slot.GetMaxZ())

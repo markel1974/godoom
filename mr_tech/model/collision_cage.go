@@ -484,10 +484,6 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
 
-		if b == BucketFloor {
-			s.hasFloor = true
-		}
-
 		// Volume Priority per le mesh statiche
 		iMode := ImpactElastic
 		if rCage == nil {
@@ -526,7 +522,12 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 				iMode = ImpactStep
 			}
 		}
-		s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
+
+		if s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode) {
+			if b == BucketFloor {
+				s.hasFloor = true
+			}
+		}
 	}
 	s.facesIdx = 0
 }
@@ -1053,12 +1054,14 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 */
 
 // addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
-func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
+func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) bool {
 	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
 		s.slotsLen++
+		return true
 	}
+	return false
 }
 
 // TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.

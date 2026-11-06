@@ -5,28 +5,28 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	textures2 "github.com/markel1974/godoom/mr_tech/textures"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
 	id       int
 	parent   *Volume
-	tag      string
+	label    string
 	aabb     *aabb.AABB
 	tri      [3]geometry.XYZ
 	n        geometry.XYZ
 	nAbs     geometry.XYZ
-	material *textures2.Material
+	material *textures.Material
 	u        [3]float64
 	v        [3]float64
 	lockUV   bool
 }
 
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
-func NewFace(tri [3]geometry.XYZ, tag string, material *textures2.Material) *Face {
+func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Face {
 	out := &Face{
-		tag:      tag,
+		label:    label,
 		material: material,
 		aabb:     aabb.NewAABB(),
 		tri:      tri,
@@ -83,14 +83,14 @@ func (fc *Face) SetParent(parent *Volume) {
 	fc.parent = parent
 }
 
-// GetTag returns the tag associated with the segment.
-func (fc *Face) GetTag() string {
-	return fc.tag
+// GetLabel returns the label associated with the face.
+func (fc *Face) GetLabel() string {
+	return fc.label
 }
 
-// SetTag sets the tag field of the Face to the specified string value.
-func (fc *Face) SetTag(tag string) {
-	fc.tag = tag
+// SetLabel sets the label for the face.
+func (fc *Face) SetLabel(label string) {
+	fc.label = label
 }
 
 // GetNormal retrieves the normalized vector components (X, Y, Z) representing the face's orientation in 3D space.
@@ -104,7 +104,7 @@ func (fc *Face) GetNormalAbs() (float64, float64, float64) {
 }
 
 // GetMaterial retrieves the material object associated with the Face or nil if no material is set.
-func (fc *Face) GetMaterial() *textures2.Material {
+func (fc *Face) GetMaterial() *textures.Material {
 	return fc.material
 }
 

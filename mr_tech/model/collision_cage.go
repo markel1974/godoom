@@ -684,7 +684,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	// Scartiamo solo i piani visivi interni privi di tag fisico (es. quad billboard centrale a Y=0).
 	outDot := (p0x-rTx)*nX + (p0y-rTy)*nY + (p0z-rTz)*nZ
 	if math.Abs(outDot) <= planeEpsilon {
-		if len(rFace.GetTag()) == 0 {
+		if len(rFace.GetLabel()) == 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		if relX*nX+relY*nY+relZ*nZ < 0 {

@@ -62,6 +62,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64) {
 	const defaultPenetrationSlop = 0.02
 	const defaultPositionalPercent = 0.3
+	const defaultPenetrationDepth = 0.7
 
 	if other != nil {
 		depth := penetration - defaultPenetrationSlop
@@ -78,17 +79,17 @@ func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz f
 		p1 := correction * (invMass1 / invMassSum)
 		p2 := correction * (invMass2 / invMassSum)
 
-		if nz > 0 {
+		if nz > defaultPenetrationDepth {
 			// 'other' è sotto 'e': se 'other' poggia a terra, non può scendere verso il basso
-			if otherFloor {
-				p1 = correction
+			if otherFloor || other.IsOnGround() {
+				p1 = depth
 				p2 = 0.0
 			}
-		} else if nz < 0 {
+		} else if nz < -defaultPenetrationDepth {
 			// 'other' è sopra 'e': se 'e' poggia a terra, non deve essere compresso in basso
 			if e.IsOnGround() {
 				p1 = 0.0
-				p2 = correction
+				p2 = depth
 			}
 		}
 

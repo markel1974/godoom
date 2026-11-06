@@ -323,14 +323,17 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		//}
 		th.running[runningLen] = t2
 		runningLen++
-
-		cage := t2.GetCage()
-		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
-		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
 	if runningLen == 0 {
 		return
+	}
+
+	for x := 0; x < runningLen; x++ {
+		t2 := th.running[x]
+		cage := t2.GetCage()
+		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
+		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)

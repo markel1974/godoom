@@ -262,6 +262,9 @@ func (e *Cinematic) Update() {
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
+	if e.onGround && math.Abs(e.vz) < e.vMin {
+		e.vz = 0.0
+	}
 	// terminal velocity clamping
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
@@ -293,9 +296,9 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 
 	invMass1 := e.invMass
 	invMass2 := e2.invMass
-	if e2.onGround && nz > 0 {
+	if e2.onGround && nz > 0.7 {
 		invMass2 = 0.0
-	} else if e.onGround && nz < 0 {
+	} else if e.onGround && nz < -0.7 {
 		invMass1 = 0.0
 	}
 

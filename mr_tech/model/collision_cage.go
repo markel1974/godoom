@@ -467,12 +467,6 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		rFace := faces.rFace
 		lFace := faces.lFace
 
-		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
-		if mat := rFace.GetMaterial(); mat != nil && !mat.IsSolid() {
-			//fmt.Println("Liquid material detected")
-			continue
-		}
-
 		var b BucketType
 		var dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ float64
 
@@ -496,9 +490,13 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 			}
 		}
 
+		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
 		if mat := rFace.GetMaterial(); mat != nil {
 			if mat.GetKind() == int(config.MaterialKindSky) {
 				continue // Skybox/transparent: ignore collision
+			}
+			if !mat.IsSolid() {
+				continue
 			}
 		}
 
@@ -524,8 +522,13 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		}
 
 		if s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode) {
-			if b == BucketFloor {
+			switch b {
+			case BucketFloor:
 				s.hasFloor = true
+			case BucketCeiling:
+				if rCage != nil {
+					rCage.hasFloor = true
+				}
 			}
 		}
 	}
@@ -865,9 +868,6 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 		if nZ > 0 {
 			bucket = BucketFloor
 		} else {
-			if impZ <= planeEpsilon {
-				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-			}
 			bucket = BucketCeiling
 		}
 	}

@@ -227,10 +227,12 @@ func (t *ThingBase) StageApply() {
 		penetration := slot.GetPenetration()
 		nX, nY, nZ := slot.GetNormal()
 		var rEnt *physics.Entity = nil
+		var rFloor bool
 		if iMode == ImpactElastic && slot.rCage != nil {
+			rFloor = slot.rCage.HasFloor()
 			rEnt = slot.rCage.object.GetEntity()
 		}
-		entity.ResolvePenetration(rEnt, nX, nY, nZ, penetration)
+		entity.ResolvePenetration(rEnt, rFloor, nX, nY, nZ, penetration)
 
 		if slot.rCage != nil {
 			t.onCollision(slot.rCage.object)

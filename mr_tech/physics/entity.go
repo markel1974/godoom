@@ -56,10 +56,11 @@ func (e *Entity) GetId() uint64 {
 // ResolveImpact resolves a collision between two entities by applying impact forces based on their cinematic properties.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz)
+
 }
 
 // ResolvePenetration resolves positional overlap between two entities or against a static obstacle.
-func (e *Entity) ResolvePenetration(other *Entity, nx, ny, nz float64, penetration float64) {
+func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64) {
 	const defaultPenetrationSlop = 0.02
 	const defaultPositionalPercent = 0.3
 
@@ -78,7 +79,7 @@ func (e *Entity) ResolvePenetration(other *Entity, nx, ny, nz float64, penetrati
 		p1 := correction * (invMass1 / invMassSum)
 		p2 := correction * (invMass2 / invMassSum)
 		// Se l'entità sottostante è appoggiata al suolo e stiamo sopra di essa (+Z), scarichiamo l'intera correzione verso l'alto evitando di spingerla nel pavimento.
-		if other.IsOnGround() && nz > 0 {
+		if otherFloor && nz > 0 {
 			p1 = correction
 			p2 = 0.0
 		}

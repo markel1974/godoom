@@ -359,6 +359,7 @@ type CollisionCage struct {
 	maxStep             float64
 	faces               []*CageFaces
 	facesIdx            int
+	hasFloor            bool
 }
 
 // NewCollisionCage creates and returns a new instance of CollisionCage initialized with the specified IThing object.
@@ -372,6 +373,7 @@ func NewCollisionCage(object IThing) *CollisionCage {
 		slotsLen:  0,
 		faces:     make([]*CageFaces, 8),
 		facesIdx:  0,
+		hasFloor:  false,
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = &CageFaces{} // Inizializzazione puntatori per zero-allocation
@@ -416,6 +418,7 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 	s.distance = math.MaxFloat64
 
 	s.slotsLen = 0
+	s.hasFloor = false
 
 	for k := range s.seen {
 		delete(s.seen, k)
@@ -479,6 +482,10 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rCage, rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
+		}
+
+		if b == BucketFloor {
+			s.hasFloor = true
 		}
 
 		// Volume Priority per le mesh statiche
@@ -1122,6 +1129,16 @@ func (s *CollisionCage) Seen(rCage *CollisionCage) {
 // GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.
 func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
 
+// HasBucket reports whether the collision cage contains a bucket of the specified type.
+func (s *CollisionCage) HasBucket(t BucketType) bool {
+	for z := 0; z < s.slotsLen; z++ {
+		if s.slots[z].bucket == t {
+			return true
+		}
+	}
+	return false
+}
+
 // GetSlotsLen returns the current number of active slots in the CollisionCage.
 func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
 
@@ -1151,3 +1168,13 @@ func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Coun
 
 // GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.
 func (s *CollisionCage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
+
+// HasFloor reports whether the collision cage has a floor.
+func (s *CollisionCage) HasFloor() bool {
+	return s.hasFloor
+}
+
+// GetEntity returns the physics entity associated with the collision cage.
+func (s *CollisionCage) GetEntity() *physics.Entity {
+	return s.object.GetEntity()
+}

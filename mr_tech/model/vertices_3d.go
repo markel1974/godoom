@@ -18,7 +18,7 @@ type Vertices3D struct {
 	partFaceCounts  []int
 	entity          *physics.Entity
 	currentAction   int
-	actionMaps      [][]int
+	actions         [][]int
 	elements        []*Vertices3DEntry
 	links           []config.Model3DLink
 	linkTagIndices  []int
@@ -29,7 +29,7 @@ type Vertices3D struct {
 	originsB        []geometry.XYZ
 	rotationsA      []*TagAxis
 	rotationsB      []*TagAxis
-	lerpTRet        float64
+	lerpT           float64
 }
 
 // NewVertices3D initializes and returns a new Vertices3D object based on the provided Thing configuration and materials.
@@ -137,38 +137,38 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	} else if len(rawActionMaps) > 0 && len(rawActionMaps[0]) > 0 {
 		expectedActions = len(rawActionMaps[0])
 	} else if len(elements) > 0 && elements[0] != nil {
-		expectedActions = len(elements[0].actionIntervals)
+		expectedActions = len(elements[0].actions)
 	}
 
-	actionMaps := make([][]int, numParts)
+	actions := make([][]int, numParts)
 	for i := 0; i < numParts; i++ {
-		var aMap []int
+		var action []int
 		if i < len(rawActionMaps) && rawActionMaps[i] != nil {
-			aMap = make([]int, len(rawActionMaps[i]))
-			copy(aMap, rawActionMaps[i])
-			if expectedActions > 0 && len(aMap) < expectedActions {
+			action = make([]int, len(rawActionMaps[i]))
+			copy(action, rawActionMaps[i])
+			if expectedActions > 0 && len(action) < expectedActions {
 				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d, falling back to action 0 for missing entries\n",
-					cfg.Id, i, len(aMap), expectedActions)
+					cfg.Id, i, len(action), expectedActions)
 				padded := make([]int, expectedActions)
-				copy(padded, aMap)
-				aMap = padded
+				copy(padded, action)
+				action = padded
 			}
 		} else {
 			fmt.Printf("[warning] Vertices3D %s: missing action map for part %d, falling back to action 0\n", cfg.Id, i)
-			aMap = make([]int, expectedActions)
+			action = make([]int, expectedActions)
 		}
 
 		if elements[i] != nil {
-			numActions := len(elements[i].actionIntervals)
-			for actionIdx, targetIdx := range aMap {
+			numActions := len(elements[i].actions)
+			for actionIdx, targetIdx := range action {
 				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {
 					fmt.Printf("[warning] Vertices3D %s: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n",
 						cfg.Id, i, actionIdx, targetIdx, numActions-1)
-					aMap[actionIdx] = 0
+					action[actionIdx] = 0
 				}
 			}
 		}
-		actionMaps[i] = aMap
+		actions[i] = action
 	}
 
 	// Resolve link tag indices
@@ -235,7 +235,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		partFaceOffsets: partFaceOffsets,
 		partFaceCounts:  partFaceCounts,
 		currentAction:   -1,
-		actionMaps:      actionMaps,
+		actions:         actions,
 		facesA:          NewFaces(totalFaces, true),
 		facesB:          NewFaces(totalFaces, true),
 		links:           links,
@@ -328,13 +328,13 @@ func (v *Vertices3D) SetAction(idx int) {
 		if el == nil {
 			continue
 		}
-		if i < len(v.actionMaps) && idx < len(v.actionMaps[i]) {
-			targetAction := v.actionMaps[i][idx]
-			if targetAction >= 0 && targetAction < len(el.actionIntervals) {
+		if i < len(v.actions) && idx < len(v.actions[i]) {
+			targetAction := v.actions[i][idx]
+			if targetAction >= 0 && targetAction < len(el.actions) {
 				el.SetAction(targetAction)
 			} else {
 				fmt.Printf("[warning] Vertices3D: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n",
-					i, idx, targetAction, len(el.actionIntervals)-1)
+					i, idx, targetAction, len(el.actions)-1)
 				el.SetAction(0)
 			}
 		} else {
@@ -369,30 +369,34 @@ func (v *Vertices3D) SetThing(t IThing) {
 	}
 }
 
+// CompileVertices updates element volumes for tick, applies linked transforms, and rebuilds face buffers.
 func (v *Vertices3D) CompileVertices(tick uint64) bool {
 	for _, i := range v.executionOrder {
 		element := v.elements[i]
-		element.CompileVertices(tick)
-		volA, volB, lerpT2 := element.GetVolumes()
+		_ = element.CompileVertices(tick)
+		volA, volB, lerpT := element.GetVolumes()
 		if i == 0 {
-			v.lerpTRet = lerpT2
+			v.lerpT = lerpT
 		}
+		//TODO
 		//if !updated {
 		//	continue
 		//}
-		if volA == nil || volB == nil {
-			if volA == nil && volB == nil {
-				v.deepReset(i)
-				continue
+		/*
+			if volA == nil || volB == nil {
+				if volA == nil && volB == nil {
+					v.deepReset(i)
+					continue
+				}
+				// Fallback to the available volume if one is nil
+				if volA == nil {
+					volA = volB
+				}
+				if volB == nil {
+					volB = volA
+				}
 			}
-			// Fallback to the available volume if one is nil
-			if volA == nil {
-				volA = volB
-			}
-			if volB == nil {
-				volB = volA
-			}
-		}
+		*/
 
 		v.volsA[i] = volA
 		v.volsB[i] = volB
@@ -504,9 +508,10 @@ func (v *Vertices3D) CompileVertices(tick uint64) bool {
 
 // GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
 func (v *Vertices3D) GetVertices() (*Faces, *Faces, float64, float64) {
-	return v.facesA, v.facesB, v.lerpTRet, v.GetRenderMode()
+	return v.facesA, v.facesB, v.lerpT, v.GetRenderMode()
 }
 
+// reset clears the origins and restores rotations for the vertex entry at index i.
 func (v *Vertices3D) reset(i int) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
@@ -514,6 +519,7 @@ func (v *Vertices3D) reset(i int) {
 	v.rotationsB[i].Reset()
 }
 
+// deepReset clears cached volumes and resets transform state for the element at index i.
 func (v *Vertices3D) deepReset(i int) {
 	v.volsA[i] = nil
 	v.volsB[i] = nil

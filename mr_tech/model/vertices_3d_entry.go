@@ -12,45 +12,61 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+type VAction struct {
+	Name  string
+	Start int
+	End   int
+	Clamp bool
+}
+
+func NewVAction(name string, start int, end int) *VAction {
+	return &VAction{
+		Name:  name,
+		Start: start,
+		End:   end,
+		Clamp: false,
+	}
+}
+
 // Vertices3DEntry represents a structured collection of 3D model data, including frames, actions, and volume association.
 type Vertices3DEntry struct {
-	viewVolume      *Volume
-	volumes         []*Volume
-	startFrame      int
-	endFrame        int
-	startTick       uint64
-	currentAction   int
-	actionIntervals [][2]int
-	actionNames     []string
-	actionClamps    []bool
-	clampAnim       bool
-	tagMap          map[string]int
-	volA            *Volume
-	volB            *Volume
-	lerpT           float64
-	singleFrame     bool
-	lastVolA        *Volume
-	groupSize       float64
+	viewVolume    *Volume
+	volumes       []*Volume
+	startFrame    int
+	endFrame      int
+	startTick     uint64
+	currentAction int
+	actions       []*VAction
+	clampAnim     bool
+	tagMap        map[string]int
+	volA          *Volume
+	volB          *Volume
+	lerpT         float64
+	singleFrame   bool
+	lastVolA      *Volume
+	groupSize     float64
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
 func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntry {
-	if len(cfg.Model3DEntry.Frames) <= 0 {
+	model := cfg.Model3DEntry
+	if len(model.Frames) <= 0 {
 		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
 	}
-	if cfg.Model3DEntry.GroupSize <= 0 {
+	if len(model.ActionDefinitions) != len(model.ActionIntervals) {
+		panic("action definitions and intervals must be the same length")
+	}
+	if model.GroupSize <= 0 {
 		panic("groupSize must be greater than 0")
 	}
 
-	actionClamps := make([]bool, len(cfg.Model3DEntry.ActionDefinitions))
-	actionNames := make([]string, len(cfg.Model3DEntry.ActionDefinitions))
-
-	for idx, name := range cfg.Model3DEntry.ActionDefinitions {
+	actions := make([]*VAction, len(model.ActionDefinitions))
+	for idx, name := range model.ActionDefinitions {
 		nameC := v3dCleanString(name)
-		actionNames[idx] = nameC
-		for _, z := range cfg.Model3DEntry.ActionClamp {
+		actions[idx] = NewVAction(nameC, model.ActionIntervals[idx][0], model.ActionIntervals[idx][1])
+		for _, z := range model.ActionClamp {
 			if strings.Contains(nameC, v3dCleanString(z)) {
-				actionClamps[idx] = true
+				actions[idx].Clamp = true
 				break
 			}
 		}
@@ -58,7 +74,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 
 	tagCounter := 0
 	tagMap := make(map[string]int)
-	for _, cfgFrame := range cfg.Model3DEntry.Frames {
+	for _, cfgFrame := range model.Frames {
 		for tagName := range cfgFrame.Tags {
 			if _, exists := tagMap[tagName]; !exists {
 				tagMap[tagName] = tagCounter
@@ -67,8 +83,8 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		}
 	}
 
-	volumes := make([]*Volume, len(cfg.Model3DEntry.Frames))
-	for frameIdx, cfgFrame := range cfg.Model3DEntry.Frames {
+	volumes := make([]*Volume, len(model.Frames))
+	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
 		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
@@ -92,22 +108,20 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 	}
 
 	v := &Vertices3DEntry{
-		volumes:         volumes,
-		groupSize:       float64(cfg.Model3DEntry.GroupSize),
-		actionIntervals: cfg.Model3DEntry.ActionIntervals,
-		actionNames:     actionNames,
-		actionClamps:    actionClamps,
-		startFrame:      0,
-		endFrame:        len(cfg.Model3DEntry.Frames) - 1,
-		currentAction:   -1,
-		tagMap:          tagMap,
-		volA:            nil,
-		volB:            nil,
-		lerpT:           0.0,
-		lastVolA:        nil,
+		volumes:       volumes,
+		groupSize:     float64(model.GroupSize),
+		actions:       actions,
+		startFrame:    0,
+		endFrame:      len(model.Frames) - 1,
+		currentAction: -1,
+		tagMap:        tagMap,
+		volA:          nil,
+		volB:          nil,
+		lerpT:         0.0,
+		lastVolA:      nil,
 	}
 
-	if len(v.actionIntervals) > 0 {
+	if len(v.actions) > 0 {
 		v.SetAction(0)
 	}
 
@@ -127,11 +141,6 @@ func (v *Vertices3DEntry) GetVolume() *Volume {
 	return v.viewVolume
 }
 
-// GetActions returns the list of action names associated with the Vertices3DEntry instance.
-func (v *Vertices3DEntry) GetActions() []string {
-	return v.actionNames
-}
-
 // GetEntity returns the physics.Entity instance associated with the Vertices3DEntry viewVolume.
 func (v *Vertices3DEntry) GetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
@@ -144,20 +153,18 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 
 // SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
 func (v *Vertices3DEntry) SetAction(idx int) {
-	if idx < 0 || idx >= len(v.actionIntervals) {
+	if idx < 0 || idx >= len(v.actions) {
 		return
 	}
 	if v.currentAction == idx {
 		return
 	}
 	v.currentAction = idx
-	v.startFrame = v.actionIntervals[idx][0]
-	v.endFrame = v.actionIntervals[idx][1]
+	action := v.actions[idx]
 	v.startTick = textures.GlobalTick()
-	v.clampAnim = false
-	if idx < len(v.actionClamps) {
-		v.clampAnim = v.actionClamps[idx]
-	}
+	v.startFrame = action.Start
+	v.endFrame = action.End
+	v.clampAnim = action.Clamp
 }
 
 // CompileVertices selects the active animation frame volumes for tick and stores their interpolation factor.
@@ -213,12 +220,7 @@ func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
 func (v *Vertices3DEntry) GetVertices() (*Faces, *Faces, float64, float64) {
-	if v.volA == nil || v.volB == nil {
-		return nil, nil, 0.0, v.GetRenderMode()
-	}
-	facesA := v.volA.GetFaces()
-	facesB := v.volB.GetFaces()
-	return facesA, facesB, v.lerpT, v.GetRenderMode()
+	return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
 }
 
 // GetVolumes retrieves the precise start and end frames for interpolation at the given tick.

@@ -53,6 +53,7 @@ type Thing struct {
 	Model3D        *Model3D      `json:"md3"`
 	MultiSprite    *MultiSprite  `json:"multiSprite"`
 	Sprite         *Sprite       `json:"sprite"`
+	MaxStepFactor  float64       `json:"maxStep"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc
@@ -71,6 +72,7 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Radius:         radius,
 		Height:         height,
 		Speed:          speed,
+		MaxStepFactor:  0.5,
 		Restitution:    0.0,
 		Impulse:        3.0,
 		WakeupDistance: 300.0,

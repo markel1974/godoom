@@ -267,7 +267,7 @@ func (e *Cinematic) Update() {
 }
 
 // ResolveImpact resolves a collision between two Cinematic objects by applying normal and tangential impulses for both.
-func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, _ float64) {
+func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 	// safe normalization (anti-explosion)
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen > 0.0 {

@@ -42,11 +42,10 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		panic("mass is zero for thing:" + cfg.Id)
 	}
 
-	//const cageMargin = 0.001
 	t := &ThingBase{
 		IVertices:      VerticesFactory(thing, cfg, things.GetMaterials()),
 		id:             cfg.Id,
-		angle:          cfg.Angle, // * (math.Pi / 180.0),
+		angle:          cfg.Angle,
 		kind:           cfg.Kind,
 		speed:          cfg.Speed,
 		impulse:        cfg.Impulse,
@@ -66,9 +65,8 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 
 	entity := t.GetEntity()
 	entity.SetOnGround(false)
-	//TODO FROM CONFIG
-	t.maxStep = entity.GetDepth() * 0.5 //cfg.Height * 0.5,
-	t.cage = NewCollisionCage(thing)    //, cageMargin),
+	t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
+	t.cage = NewCollisionCage(thing)
 
 	cfg.OnBind(t)
 
@@ -194,9 +192,7 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 		}
 
 		// Risoluzione Impulsi e Attrito (Fase Cinetica).
-		// Forziamo penetration = 0.0 per inibire la stabilizzazione Baumgarte interna
-		// al metodo ResolveImpact, evitando di iniettare energia cinetica fittizia.
-		entity.ResolveImpact(rParentEnt, nX, nY, nZ, 0.0)
+		entity.ResolveImpact(rParentEnt, nX, nY, nZ)
 
 		//if thing := rParent.GetThing(); thing != nil {
 		//	t.onCollision(t, thing)

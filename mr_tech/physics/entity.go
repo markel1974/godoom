@@ -31,9 +31,6 @@ func init() {
 	SetFps(120)
 }
 
-const defaultPenetrationSlop = 0.02
-const defaultPositionalPercent = 0.3
-
 // Entity represents a game object with a unique identifier, bounding box, and cinematic behaviors.
 type Entity struct {
 	id uint64
@@ -64,7 +61,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.
 // It honors penetration slop and avoids pushing grounded entities downward.
 func (e *Entity) ResolveElasticPenetration(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64) {
-	p1, p2, ok := e.Cinematic.ResolvePenetration(other.Cinematic, otherFloor, nx, ny, nz, penetration)
+	p1, p2, ok := e.Cinematic.ResolveElasticPenetration(other.Cinematic, otherFloor, nx, ny, nz, penetration)
 	if !ok {
 		return
 	}

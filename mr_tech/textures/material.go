@@ -3,6 +3,7 @@ package textures
 import (
 	"fmt"
 	"math"
+	"math/rand"
 )
 
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
@@ -63,11 +64,11 @@ type Material struct {
 	// Pipeline Flags
 	vertexLitGeneric bool
 
-	isSolid   bool
-	amplitude float64
-	packed    float32
-	// _tickInterval defines the number of ticks required to form one logical interval for animation or updates.
+	isSolid      bool
+	amplitude    float64
+	packed       float32
 	tickInterval uint64
+	salt         uint64
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
@@ -87,6 +88,7 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		tickInterval: 32,
 		isSolid:      true,
 		amplitude:    0.0,
+		salt:         uint64(rand.Intn(100)),
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -244,7 +246,7 @@ func (m *Material) IsBacksided() bool { return m.isBacksided }
 
 // RestartAnim resets the animation by setting the start tick to the current global tick.
 func (m *Material) RestartAnim() {
-	m.startTick = GlobalTick()
+	m.startTick = m.tick()
 }
 
 // GetHeadFrame returns the first frame of the material's texture sequence, or nil if no frames are available.
@@ -266,7 +268,8 @@ func (m *Material) GetCurrentFrame() *Texture {
 		if m.clampAnim {
 			return m.GetClampedFrame()
 		}
-		currentTick := GlobalTick() / m.tickInterval
+		tick := m.tick()
+		currentTick := tick / m.tickInterval
 		return m.frames[currentTick%m.totalFrames]
 	}
 	return m.frame
@@ -275,8 +278,9 @@ func (m *Material) GetCurrentFrame() *Texture {
 // GetClampedFrame calculates and returns the appropriate texture frame based on clamped animation logic and elapsed time.
 func (m *Material) GetClampedFrame() *Texture {
 	elapsed := uint64(0)
-	if _globalTick > m.startTick {
-		elapsed = _globalTick - m.startTick
+	tick := m.tick()
+	if tick > m.startTick {
+		elapsed = tick - m.startTick
 	}
 	elapsedTick := elapsed / m.tickInterval
 	if elapsedTick >= m.totalFrames-1 {
@@ -303,9 +307,6 @@ func (m *Material) SetUV(u float64, v float64) {
 
 // SetShader sets the name of the shader associated with this material.
 func (m *Material) SetShader(shader string) { m.shader = shader }
-
-// SetStartTick sets the tick at which the clamped animation starts.
-func (m *Material) SetStartTick(tick uint64) { m.startTick = tick }
 
 // SetTickInterval sets the number of ticks required to form one logical interval for animation or updates.
 // A zero value is ignored to avoid division by zero.
@@ -471,4 +472,8 @@ func (m *Material) updatePacked() {
 	const exponentBias = uint32(127) << 23
 	raw := (uint32(m.kind) & 0xFF) | ((isSolid & 0xFF) << 8) | (amplitude << 16) | exponentBias
 	m.packed = math.Float32frombits(raw)
+}
+
+func (m *Material) tick() uint64 {
+	return GlobalTick() + m.salt
 }

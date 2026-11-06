@@ -30,6 +30,10 @@ const (
 	safetyMargin float64 = 0.90
 
 	defaultPenetrationDepth = 0.7
+
+	defaultPenetrationSlop = 0.02
+
+	defaultPositionalPercent = 0.3
 )
 
 // Cinematic represents the physical state and behavior of an object in a simulation with forces and motion dynamics.
@@ -377,9 +381,9 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 	}
 }
 
-// ResolvePenetration computes positional correction for overlapping cinematic bodies along a collision normal.
+// ResolveElasticPenetration computes positional correction for overlapping cinematic bodies along a collision normal.
 // It returns each body's correction amount and whether a correction should be applied.
-func (e *Cinematic) ResolvePenetration(other *Cinematic, otherFloor bool, nx, ny, nz float64, penetration float64) (float64, float64, bool) {
+func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool, nx, ny, nz float64, penetration float64) (float64, float64, bool) {
 	depth := penetration - defaultPenetrationSlop
 	if depth <= 0.0 {
 		return 0, 0, false

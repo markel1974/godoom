@@ -64,42 +64,43 @@ func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz f
 	const defaultPositionalPercent = 0.3
 	const defaultPenetrationDepth = 0.7
 
-	if other != nil {
-		depth := penetration - defaultPenetrationSlop
-		if depth <= 0.0 {
-			return
-		}
-		correction := depth * defaultPositionalPercent
-		invMass1 := e.GetInvMass()
-		invMass2 := other.GetInvMass()
-		invMassSum := invMass1 + invMass2
-		if invMassSum <= 0.0 {
-			return
-		}
-		p1 := correction * (invMass1 / invMassSum)
-		p2 := correction * (invMass2 / invMassSum)
-
-		if nz > defaultPenetrationDepth {
-			// 'other' è sotto 'e': se 'other' poggia a terra, non può scendere verso il basso
-			if otherFloor || other.IsOnGround() {
-				p1 = depth
-				p2 = 0.0
-			}
-		} else if nz < -defaultPenetrationDepth {
-			// 'other' è sopra 'e': se 'e' poggia a terra, non deve essere compresso in basso
-			if e.IsOnGround() {
-				p1 = 0.0
-				p2 = depth
-			}
-		}
-
-		e.AddTo(nx*p1, ny*p1, nz*p1)
-		other.AddTo(-nx*p2, -ny*p2, -nz*p2)
-	} else {
+	if other == nil {
+		// Contro ostacoli statici (mondo), la correzione deve essere del 100% per evitare tunneling ad alta velocità
 		if penetration <= 0.0 {
 			return
 		}
-		// Contro ostacoli statici (mondo), la correzione deve essere del 100% per evitare tunneling ad alta velocità
 		e.AddTo(nx*penetration, ny*penetration, nz*penetration)
+		return
 	}
+
+	depth := penetration - defaultPenetrationSlop
+	if depth <= 0.0 {
+		return
+	}
+	correction := depth * defaultPositionalPercent
+	invMass1 := e.GetInvMass()
+	invMass2 := other.GetInvMass()
+	invMassSum := invMass1 + invMass2
+	if invMassSum <= 0.0 {
+		return
+	}
+	p1 := correction * (invMass1 / invMassSum)
+	p2 := correction * (invMass2 / invMassSum)
+
+	if nz > defaultPenetrationDepth {
+		// 'other' è sotto 'e': se 'other' poggia a terra, non può scendere verso il basso
+		if otherFloor || other.IsOnGround() {
+			p1 = depth
+			p2 = 0.0
+		}
+	} else if nz < -defaultPenetrationDepth {
+		// 'other' è sopra 'e': se 'e' poggia a terra, non deve essere compresso in basso
+		if e.IsOnGround() {
+			p1 = 0.0
+			p2 = depth
+		}
+	}
+
+	e.AddTo(nx*p1, ny*p1, nz*p1)
+	other.AddTo(-nx*p2, -ny*p2, -nz*p2)
 }

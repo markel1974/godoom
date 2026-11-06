@@ -246,7 +246,6 @@ func (m *Model3DEntry) Center() {
 	}
 }
 
-// GetSize returns the model radius and height computed from the first frame's vertex bounds.
 // GetSize returns zero values when no vertices are present or computed dimensions do not exceed 1.0.
 func (m *Model3DEntry) GetSize() (float64, float64) {
 	var radius, height float64

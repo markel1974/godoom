@@ -29,24 +29,25 @@ type Vertices3DEntry struct {
 	volB            *Volume
 	lerpT           float64
 	singleFrame     bool
-	relativeFrameA  int
+	lastVolA        *Volume
 	groupSize       float64
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
 func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntry {
-	if len(cfg.Model3DEntry.Frames) == 0 {
+	if len(cfg.Model3DEntry.Frames) <= 0 {
 		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
+	}
+	if cfg.Model3DEntry.GroupSize <= 0 {
+		panic("groupSize must be greater than 0")
 	}
 
 	actionClamps := make([]bool, len(cfg.Model3DEntry.ActionDefinitions))
 	actionNames := make([]string, len(cfg.Model3DEntry.ActionDefinitions))
-	//actionNamesC := make(map[string]int)
 
 	for idx, name := range cfg.Model3DEntry.ActionDefinitions {
 		nameC := v3dCleanString(name)
 		actionNames[idx] = nameC
-		//actionNamesC[nameC] = idx
 		for _, z := range cfg.Model3DEntry.ActionClamp {
 			if strings.Contains(nameC, v3dCleanString(z)) {
 				actionClamps[idx] = true
@@ -55,43 +56,18 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		}
 	}
 
-	v := &Vertices3DEntry{
-		volumes:         make([]*Volume, len(cfg.Model3DEntry.Frames)),
-		groupSize:       float64(cfg.Model3DEntry.GroupSize),
-		actionIntervals: cfg.Model3DEntry.ActionIntervals,
-		actionNames:     actionNames,
-		//actionNamesC:    actionNamesC,
-		actionClamps:   actionClamps,
-		startFrame:     0,
-		endFrame:       len(cfg.Model3DEntry.Frames) - 1,
-		currentAction:  -1,
-		tagMap:         make(map[string]int),
-		volA:           nil,
-		volB:           nil,
-		lerpT:          0.0,
-		relativeFrameA: -1,
-	}
-
-	if v.groupSize <= 0 {
-		panic("groupSize must be greater than 0")
-	}
-
 	tagCounter := 0
+	tagMap := make(map[string]int)
 	for _, cfgFrame := range cfg.Model3DEntry.Frames {
 		for tagName := range cfgFrame.Tags {
-			if _, exists := v.tagMap[tagName]; !exists {
-				v.tagMap[tagName] = tagCounter
+			if _, exists := tagMap[tagName]; !exists {
+				tagMap[tagName] = tagCounter
 				tagCounter++
 			}
 		}
 	}
-	if v.endFrame < 0 {
-		v.endFrame = 0
-	}
-	if len(v.actionIntervals) > 0 {
-		v.SetAction(0)
-	}
-	//entity := physics.NewEntity(x, y, z, w, h, d, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+
+	volumes := make([]*Volume, len(cfg.Model3DEntry.Frames))
 	for frameIdx, cfgFrame := range cfg.Model3DEntry.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
 		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
@@ -109,10 +85,30 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		}
 		// Copy tags to volume
 		for tagName, tagData := range cfgFrame.Tags {
-			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
+			volume.SetVertexTag(tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
-		v.volumes[frameIdx] = volume
+		volumes[frameIdx] = volume
+	}
+
+	v := &Vertices3DEntry{
+		volumes:         volumes,
+		groupSize:       float64(cfg.Model3DEntry.GroupSize),
+		actionIntervals: cfg.Model3DEntry.ActionIntervals,
+		actionNames:     actionNames,
+		actionClamps:    actionClamps,
+		startFrame:      0,
+		endFrame:        len(cfg.Model3DEntry.Frames) - 1,
+		currentAction:   -1,
+		tagMap:          tagMap,
+		volA:            nil,
+		volB:            nil,
+		lerpT:           0.0,
+		lastVolA:        nil,
+	}
+
+	if len(v.actionIntervals) > 0 {
+		v.SetAction(0)
 	}
 
 	if v.startFrame == v.endFrame {
@@ -170,47 +166,49 @@ func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 		return false
 	}
 
-	var frameFloat float64
-	if v.clampAnim {
-		if tick > v.startTick {
-			frameFloat = float64(tick-v.startTick) / v.groupSize
-		} else {
-			frameFloat = 0.0
-		}
-	} else {
-		// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
-		frameFloat = float64(tick) / v.groupSize
-	}
-	relativeFrameA := int(frameFloat)
-	relativeFrameB := relativeFrameA + 1
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {
 		animLength = 1
 	}
-	lerpT := frameFloat - math.Floor(frameFloat)
+
+	lerpT := 0.0
+	var relativeFrameA int
+	var relativeFrameB int
 	if v.clampAnim {
-		if relativeFrameA >= animLength-1 {
-			relativeFrameA = animLength - 1
-			relativeFrameB = animLength - 1
+		frameFloat := 0.0
+		if tick > v.startTick {
+			frameFloat = float64(tick-v.startTick) / v.groupSize
+		}
+		lastAnim := animLength - 1
+		if relativeFrameA = int(frameFloat); relativeFrameA >= lastAnim {
+			v.singleFrame = true
+			relativeFrameA = lastAnim
+			relativeFrameB = lastAnim
 			lerpT = 0.0 // Fermo sull'ultimo frame
-		} else if relativeFrameB >= animLength-1 {
-			relativeFrameB = animLength - 1
+		} else {
+			lerpT = frameFloat - math.Floor(frameFloat)
+			if relativeFrameB = relativeFrameA + 1; relativeFrameB >= lastAnim {
+				relativeFrameB = lastAnim
+			}
 		}
 	} else {
-		// Looping animation
-		relativeFrameA = relativeFrameA % animLength
-		relativeFrameB = relativeFrameB % animLength
+		// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
+		frameFloat := float64(tick) / v.groupSize
+		lerpT = frameFloat - math.Floor(frameFloat)
+		relativeFrameA = int(frameFloat) % animLength
+		relativeFrameB = (int(frameFloat) + 1) % animLength
 	}
+
 	v.volA = v.volumes[v.startFrame+relativeFrameA]
 	v.volB = v.volumes[v.startFrame+relativeFrameB]
 	v.lerpT = lerpT
 
-	if relativeFrameA != v.relativeFrameA {
-		v.relativeFrameA = relativeFrameA
+	if v.lastVolA != v.volA {
+		v.lastVolA = v.volA
 		return true
 	}
 
-	return false
+	return true
 }
 
 // GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.

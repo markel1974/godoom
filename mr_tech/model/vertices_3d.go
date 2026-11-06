@@ -372,14 +372,14 @@ func (v *Vertices3D) SetThing(t IThing) {
 func (v *Vertices3D) CompileVertices(tick uint64) bool {
 	for _, i := range v.executionOrder {
 		element := v.elements[i]
-		updated := element.CompileVertices(tick)
+		element.CompileVertices(tick)
 		volA, volB, lerpT2 := element.GetVolumes()
 		if i == 0 {
 			v.lerpTRet = lerpT2
 		}
-		if !updated {
-			continue
-		}
+		//if !updated {
+		//	continue
+		//}
 		if volA == nil || volB == nil {
 			if volA == nil && volB == nil {
 				v.deepReset(i)

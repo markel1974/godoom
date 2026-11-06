@@ -220,7 +220,7 @@ func (s *CageEntry) Penetrable() bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.object.GetEntity().GetId())
+	return v.Penetrable(s.lCage.object.VerticesGetEntity().GetId())
 }
 
 // CollisionBucket holds collision data for a specific bucket, including spare and active cage entries and counters.
@@ -264,7 +264,7 @@ func (b *CollisionBucket) Penetrable(from uint64) bool {
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.object.GetEntity().GetId() == from {
+		if entry.rCage != nil && entry.rCage.object.VerticesGetEntity().GetId() == from {
 			continue
 		}
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
@@ -285,7 +285,7 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		// DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
-			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
+			if rCage.object.VerticesGetEntity().GetId() == existing.rCage.object.VerticesGetEntity().GetId() {
 				if penetration > existing.penetration {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}
@@ -294,25 +294,27 @@ func (b *CollisionBucket) Add(bucket BucketType, lCage *CollisionCage, rCage *Co
 		}
 		// DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)
 		// Se il dot product è ~1.0, i due triangoli formano un piano continuo (Triangle Soup statica)
-		if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
-			planeDistance := math.Abs(
-				(p0x-existing.p0X)*existing.nX +
-					(p0y-existing.p0Y)*existing.nY +
-					(p0z-existing.p0Z)*existing.nZ,
-			)
-			if planeDistance < planeEpsilon {
-				// Un vincolo anelastico (muro solido) ha sempre priorità su uno scalino (ImpactStep) coplanare
-				if existing.iMode == ImpactStep && iMode == ImpactInelastic {
-					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		if rCage == nil && existing.rCage == nil {
+			if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
+				planeDistance := math.Abs(
+					(p0x-existing.p0X)*existing.nX +
+						(p0y-existing.p0Y)*existing.nY +
+						(p0z-existing.p0Z)*existing.nZ,
+				)
+				if planeDistance < planeEpsilon {
+					// Un vincolo anelastico (muro solido) ha sempre priorità su uno scalino (ImpactStep) coplanare
+					if existing.iMode == ImpactStep && iMode == ImpactInelastic {
+						existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+						return nil
+					}
+					if existing.iMode == ImpactInelastic && iMode == ImpactStep {
+						return nil
+					}
+					if penetration > existing.penetration || (iMode == ImpactStep && math.Abs(penetration-existing.penetration) <= planeEpsilon && maxZ > existing.maxZ) {
+						existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+					}
 					return nil
 				}
-				if existing.iMode == ImpactInelastic && iMode == ImpactStep {
-					return nil
-				}
-				if penetration > existing.penetration || (iMode == ImpactStep && math.Abs(penetration-existing.penetration) <= planeEpsilon && maxZ > existing.maxZ) {
-					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
-				}
-				return nil
 			}
 		}
 	}
@@ -360,6 +362,7 @@ type CollisionCage struct {
 	faces               []*CageFaces
 	facesIdx            int
 	hasFloor            bool
+	applied             bool
 }
 
 // NewCollisionCage creates and returns a new instance of CollisionCage initialized with the specified IThing object.
@@ -389,7 +392,7 @@ func NewCollisionCage(object IThing) *CollisionCage {
 
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
 func (s *CollisionCage) Rebuild(maxStep float64) {
-	entity := s.object.GetEntity()
+	entity := s.object.VerticesGetEntity()
 	// Calculate Half-Extents
 	s.eRadX, s.eRadY, s.eRadZ = entity.GetSizeCenter()
 	// Calculate center for Broad-Phase
@@ -419,6 +422,7 @@ func (s *CollisionCage) Rebuild(maxStep float64) {
 
 	s.slotsLen = 0
 	s.hasFloor = false
+	s.applied = false
 
 	for k := range s.seen {
 		delete(s.seen, k)
@@ -450,13 +454,13 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rOffX, rOffY, rOffZ = rCage.object.GetVerticesCenter()
-		rDX, rDY, rDZ := rCage.object.GetEntity().GetFrameDisplacement()
+		rOffX, rOffY, rOffZ = rCage.object.VerticesGetCenter()
+		rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
 		rOffX += rDX
 		rOffY += rDY
 		rOffZ += rDZ
 
-		lOffX, lOffY, lOffZ = s.object.GetVerticesCenter()
+		lOffX, lOffY, lOffZ = s.object.VerticesGetCenter()
 		lOffX += s.dX
 		lOffY += s.dY
 		lOffZ += s.dZ
@@ -512,23 +516,22 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 
 		if b.IsWall() {
 			baseZ := s.GetBaseZ()
-			if rMaxZ <= baseZ { // down-hill (going downhill)
+			if rMaxZ <= baseZ+satFilterEpsilon { // down-hill (going downhill) or within floor penetration slop
 				continue
 			}
 			stepZ := baseZ + s.maxStep
-			if rMaxZ <= stepZ { // up-hill (climbable step)
+			if s.maxStep > 0 && rMaxZ <= stepZ { // up-hill (climbable step)
 				iMode = ImpactStep
 			}
 		}
 
-		if s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode) {
-			switch b {
-			case BucketFloor:
-				s.hasFloor = true
-			case BucketCeiling:
-				if rCage != nil {
-					rCage.hasFloor = true
-				}
+		s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
+		switch b {
+		case BucketFloor:
+			s.hasFloor = true
+		case BucketCeiling:
+			if rCage != nil {
+				rCage.hasFloor = true
 			}
 		}
 	}
@@ -621,36 +624,25 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 	}
 
 	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).
-	// Un piano infinito è fantasma solo se pen0 (a t = 0) eccede l'overlap tangenziale con l'AABB della faccia;
-	// l'affondamento deltaPen accumulato nel frame e il transito sulle cuciture tra triangoli adiacenti restano preservati.
+	// Un piano infinito è fantasma se la compenetrazione proiettata eccede l'overlap fisico effettivo dell'AABB
+	// lungo l'asse principale della normale del piano.
 	pen0 := math.Max(0.0, rayEff-distStart)
 	deltaPen := math.Max(0.0, penetration-pen0)
 
 	var minOverlap float64
 	if solidWE {
-		var normOX float64
-		if nX > 0 {
-			normOX = math.Max(oX, rMaxX-(s.tX-s.eRadX))
-		} else {
-			normOX = math.Max(oX, (s.tX+s.eRadX)-rMinX)
-		}
-		minOverlap = math.Min(normOX+deltaPen, math.Min(oY, oZ)+deltaPen)
+		minOverlap = oX + deltaPen
 	} else if solidNS {
-		var normOY float64
-		if nY > 0 {
-			normOY = math.Max(oY, rMaxY-(s.tY-s.eRadY))
-		} else {
-			normOY = math.Max(oY, (s.tY+s.eRadY)-rMinY)
-		}
-		minOverlap = math.Min(normOY+deltaPen, math.Min(oX, oZ)+deltaPen)
+		minOverlap = oY + deltaPen
 	} else {
-		var normOZ float64
-		if nZ > 0 {
-			normOZ = math.Max(oZ, rMaxZ-(s.tZ-s.eRadZ))
-		} else {
-			normOZ = math.Max(oZ, (s.tZ+s.eRadZ)-rMinZ)
-		}
-		minOverlap = math.Min(normOZ+deltaPen, math.Min(oX, oY)+deltaPen)
+		minOverlap = oZ + deltaPen
+	}
+
+	if penetration > minOverlap+satFilterEpsilon {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+	if penetration > minOverlap {
+		penetration = minOverlap
 	}
 
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
@@ -808,21 +800,23 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 		return ov
 	}
 
-	if activeX && nAbsX > planeEpsilon && relX*nX > 0 && (!sweptMode || impX*nX < -planeEpsilon) {
-		axisOverlap = pickOverlap(entryOX, boxOX, nAbsX)
-		matchedAxis = true
-	}
-	if activeY && nAbsY > planeEpsilon && relY*nY > 0 && (!sweptMode || impY*nY < -planeEpsilon) {
-		ov := pickOverlap(entryOY, boxOY, nAbsY)
-		if !matchedAxis || ov > axisOverlap {
-			axisOverlap = ov
+	// Classificazione dell'asse dominante della faccia remota
+	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	solidNS := nAbsY > nAbsZ
+
+	if solidWE {
+		if activeX && nAbsX > planeEpsilon && relX*nX > 0 && (!sweptMode || impX*nX < -planeEpsilon) {
+			axisOverlap = pickOverlap(entryOX, boxOX, nAbsX)
 			matchedAxis = true
 		}
-	}
-	if activeZ && nAbsZ > planeEpsilon && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
-		ov := pickOverlap(entryOZ, boxOZ, nAbsZ)
-		if !matchedAxis || ov > axisOverlap {
-			axisOverlap = ov
+	} else if solidNS {
+		if activeY && nAbsY > planeEpsilon && relY*nY > 0 && (!sweptMode || impY*nY < -planeEpsilon) {
+			axisOverlap = pickOverlap(entryOY, boxOY, nAbsY)
+			matchedAxis = true
+		}
+	} else {
+		if activeZ && nAbsZ > planeEpsilon && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
+			axisOverlap = pickOverlap(entryOZ, boxOZ, nAbsZ)
 			matchedAxis = true
 		}
 	}
@@ -846,10 +840,11 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 	if maxPenetration <= 0 || maxPenetration > axisOverlap+satFilterEpsilon {
 		return 0, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
+	if maxPenetration > axisOverlap {
+		maxPenetration = axisOverlap
+	}
 
 	// Classificazione finale del Bucket sulla normale di contatto già determinata e orientata
-	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
-	solidNS := nAbsY > nAbsZ
 
 	var bucket BucketType
 	if solidWE {
@@ -1080,12 +1075,12 @@ func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ f
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
 func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IObject, float64, float64, float64) {
-	lOx, lOy, lOz := s.object.GetVerticesCenter()
+	lOx, lOy, lOz := s.object.VerticesGetCenter()
 	lOx += s.dX
 	lOy += s.dY
 	lOz += s.dZ
-	rOx, rOy, rOz := rCage.object.GetVerticesCenter()
-	rDX, rDY, rDZ := rCage.object.GetEntity().GetFrameDisplacement()
+	rOx, rOy, rOz := rCage.object.VerticesGetCenter()
+	rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
 	rOx += rDX
 	rOy += rDY
 	rOz += rDZ
@@ -1179,5 +1174,5 @@ func (s *CollisionCage) HasFloor() bool {
 
 // GetEntity returns the physics entity associated with the collision cage.
 func (s *CollisionCage) GetEntity() *physics.Entity {
-	return s.object.GetEntity()
+	return s.object.VerticesGetEntity()
 }

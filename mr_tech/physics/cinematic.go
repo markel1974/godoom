@@ -424,13 +424,11 @@ func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool,
 
 // ResolveInelasticPenetration computes positional correction for an inelastic collision with static geometry.
 func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float64, bool) {
+	pen -= defaultPenetrationSlop
 	if pen <= 0.0 {
 		return 0, false
 	}
 	if nz > defaultPenetrationDepth {
-		if pen -= defaultPenetrationSlop; pen <= 0.0 {
-			return 0, false
-		}
 		if e.vz < 0.0 {
 			e.vz = 0.0
 		}

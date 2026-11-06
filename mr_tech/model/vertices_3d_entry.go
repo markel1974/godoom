@@ -13,6 +13,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// VAction defines a named animation action with frame bounds and optional clamping behavior.
 type VAction struct {
 	Name  string
 	Start int
@@ -20,6 +21,7 @@ type VAction struct {
 	Clamp bool
 }
 
+// NewVAction creates a vertex action with the given name and frame interval, with clamping disabled.
 func NewVAction(name string, start int, end int) *VAction {
 	return &VAction{
 		Name:  name,
@@ -29,7 +31,7 @@ func NewVAction(name string, start int, end int) *VAction {
 	}
 }
 
-// Vertices3DEntry represents a structured collection of 3D model data, including frames, actions, and volume association.
+// Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
 	viewVolume    *Volume
 	volumes       []*Volume
@@ -49,8 +51,9 @@ type Vertices3DEntry struct {
 	salt          uint64
 }
 
-// NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
-func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntry {
+// NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
+// It panics if required frame, action interval, or group size configuration is invalid.
+func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *Materials) *Vertices3DEntry {
 	model := cfg.Model3DEntry
 	if len(model.Frames) <= 0 {
 		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
@@ -125,7 +128,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 	}
 
 	if len(v.actions) > 0 {
-		v.SetAction(0)
+		v.VerticesSetAction(0)
 	}
 
 	if v.startFrame == v.endFrame {
@@ -136,26 +139,31 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 	}
 
 	v.viewVolume = v.volumes[0]
+
+	for _, f := range v.volumes {
+		f.SetThing(thing)
+	}
+
 	return v
 }
 
-// GetVolume retrieves the Volume instance associated with the VertexMD2.
-func (v *Vertices3DEntry) GetVolume() *Volume {
-	return v.viewVolume
-}
-
-// GetEntity returns the physics.Entity instance associated with the Vertices3DEntry viewVolume.
-func (v *Vertices3DEntry) GetEntity() *physics.Entity {
-	return v.viewVolume.GetEntity()
-}
-
-// GetAABB returns the axis-aligned bounding box (AABB) of the associated entity in the view volume.
+// GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 	return v.viewVolume.GetEntity().GetAABB()
 }
 
-// SetAction updates the start and end frame of the VertexMD2 based on the action index provided.
-func (v *Vertices3DEntry) SetAction(idx int) {
+// VerticesGetVolume returns the current view volume for this vertices entry.
+func (v *Vertices3DEntry) VerticesGetVolume() *Volume {
+	return v.viewVolume
+}
+
+// VerticesGetEntity returns the physics entity associated with the current view volume.
+func (v *Vertices3DEntry) VerticesGetEntity() *physics.Entity {
+	return v.viewVolume.GetEntity()
+}
+
+// VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
+func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		return
 	}
@@ -170,8 +178,8 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 	v.clampAnim = action.Clamp
 }
 
-// CompileVertices selects the active animation frame volumes for tick and stores their interpolation factor.
-func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
+// VerticesCompile updates the active animation frames and interpolation factor for the given tick.
+func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	if v.singleFrame {
 		return false
 	}
@@ -222,34 +230,22 @@ func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 	return true
 }
 
-// GetVertices computes and retrieves two animation frames and a lerp factor at the given tick for interpolating vertices.
-func (v *Vertices3DEntry) GetVertices() (*Faces, *Faces, float64, float64) {
+// VerticesGet returns the two face sets, interpolation factor, and model 3D render mode.
+func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
 }
 
-// GetVolumes retrieves the precise start and end frames for interpolation at the given tick.
+// GetVolumes returns the current source and target volumes with the interpolation factor between them.
 func (v *Vertices3DEntry) GetVolumes() (*Volume, *Volume, float64) {
 	return v.volA, v.volB, v.lerpT
 }
 
-// GetVerticesCenter retrieves the displacement vector (dx, dy, dz) by getting the center position of the associated entity.
-func (v *Vertices3DEntry) GetVerticesCenter() (float64, float64, float64) {
+// VerticesGetCenter returns the x, y, and z coordinates of the view volume entity's center.
+func (v *Vertices3DEntry) VerticesGetCenter() (float64, float64, float64) {
 	return v.viewVolume.GetEntity().GetCenter()
 }
 
-// GetRenderMode returns a constant value, typically used to represent the renderMode distance for the Vertices3DEntry instance.
-func (v *Vertices3DEntry) GetRenderMode() float64 {
-	return RenderModeModel3D
-}
-
-// SetThing sets the IThing instance associated with the Vertices3DEntry volume.
-func (v *Vertices3DEntry) SetThing(t IThing) {
-	for _, f := range v.volumes {
-		f.SetThing(t)
-	}
-}
-
-// GetTagIndex returns the internal index of a tag by its name, or -1 if not found.
+// GetTagIndex returns the index for the named tag, or -1 if the tag is not found.
 func (v *Vertices3DEntry) GetTagIndex(name string) int {
 	if idx, ok := v.tagMap[name]; ok {
 		return idx
@@ -258,7 +254,7 @@ func (v *Vertices3DEntry) GetTagIndex(name string) int {
 	return -1
 }
 
-// v3dCleanString normalizes a string by converting it to lowercase and trimming leading and trailing whitespace.
+// v3dCleanString normalizes s by trimming surrounding whitespace and converting it to lowercase.
 func v3dCleanString(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }

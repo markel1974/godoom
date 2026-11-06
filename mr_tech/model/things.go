@@ -126,11 +126,11 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage, maxOverlaps int) {
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
-		rThing.GetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
+		rThing.VerticesGetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
 			rFace := rEnt.(*Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
 			// Query sul BVH del Self
-			lThing.GetVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
+			lThing.VerticesGetVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
 				lFace := lEnt.(*Face)
 				// Integrazione nel Manifold (verificare che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
@@ -227,7 +227,7 @@ func (th *Things) Create(ct *config.Thing, volume *Volume) IThing {
 	default:
 		thing = NewThingItem(th, ct, volume)
 	}
-	entity := thing.GetEntity()
+	entity := thing.VerticesGetEntity()
 	entity.SetOnGround(false)
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	return thing
@@ -254,7 +254,7 @@ func (th *Things) CreateThrowable(throwableIndex int, onCollision config.Collisi
 		return
 	}
 	throwable := th.Create(dst, volume)
-	throwable.GetEntity().SetOnGround(false)
+	throwable.VerticesGetEntity().SetOnGround(false)
 	th.pending[slot] = throwable
 	th.hasPending = true
 }
@@ -372,7 +372,7 @@ func (th *Things) AddStaticThing(ent IThing) {
 
 // addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
 func (th *Things) addThing(ent IThing) {
-	th.entities[ent.GetEntity().GetId()] = ent
+	th.entities[ent.VerticesGetEntity().GetId()] = ent
 	if len(th.entities) > cap(th.running) {
 		th.running = make([]IThing, len(th.entities)*4)
 		th.removables = make([]IThing, len(th.entities)*4)
@@ -385,5 +385,5 @@ func (th *Things) addThing(ent IThing) {
 // removeThing removes an IThing instance from the spatial tree and the entities map.
 func (th *Things) removeThing(ent IThing) {
 	th.tree.RemoveObject(ent)
-	delete(th.entities, ent.GetEntity().GetId())
+	delete(th.entities, ent.VerticesGetEntity().GetId())
 }

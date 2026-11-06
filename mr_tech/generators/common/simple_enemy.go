@@ -80,8 +80,8 @@ func (e *Enemy) OnCollision(other config.IThingConfig) {
 	if e.state == EnemyStateDead {
 		return
 	}
-	otherEntity := other.GetEntity()
-	selfEntity := e.self.GetEntity()
+	otherEntity := other.VerticesGetEntity()
+	selfEntity := e.self.VerticesGetEntity()
 	ovx, ovy, ovz := otherEntity.GetVelocity()
 	svx, svy, svz := selfEntity.GetVelocity()
 	otherMass := otherEntity.GetMass()
@@ -143,7 +143,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStateIdle:
-		selfX, selfY, selfZ := e.self.GetEntity().GetCenter()
+		selfX, selfY, selfZ := e.self.VerticesGetEntity().GetCenter()
 		_, _, _, _, dist3dSq := getPlayerDistance(selfX, selfY, selfZ)
 		wakeDistance := e.self.GetWakeUpDistance()
 		if dist3dSq < (wakeDistance * wakeDistance) {
@@ -153,7 +153,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStateChase:
-		entity := e.self.GetEntity()
+		entity := e.self.VerticesGetEntity()
 		selfX, selfY, selfZ := entity.GetCenter()
 		dx, dy, _, dist2dSq, dist3dSq := getPlayerDistance(selfX, selfY, selfZ)
 		wakeDistance := e.self.GetWakeUpDistance()
@@ -191,7 +191,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		dt := 1.0 / float64(physics.GetFps())
 		e.shootTimer -= dt
 		if e.shootTimer <= 0 {
-			selfX, selfY, selfZ := e.self.GetEntity().GetCenter()
+			selfX, selfY, selfZ := e.self.VerticesGetEntity().GetCenter()
 			dx, dy, dz, dist2dSq, _ := getPlayerDistance(selfX, selfY, selfZ)
 			e.shootTimer = 0
 			angle := math.Atan2(dy, dx)
@@ -304,7 +304,7 @@ func (e *Enemy) playAnimation(category config.EnemyState, eAnim *config.EnemyAni
 	if !ok {
 		return 0, 0, false
 	}
-	e.self.SetAction(action)
+	e.self.VerticesSetAction(action)
 	return durationFrames, action, true
 }
 
@@ -319,7 +319,7 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 	//e.shootTimer = framesToSeconds(durationFrames)
 	//e.shootCooldown = e.shotIntervalMin
 
-	entity := self.GetEntity()
+	entity := self.VerticesGetEntity()
 
 	weaponForward := entity.GetWidth()
 	spawnX := selfX + math.Cos(angle)*weaponForward
@@ -335,7 +335,7 @@ func (e *Enemy) handleLaunch(self config.IThingConfig, selfX, selfY, selfZ float
 
 // doShoot sets the enemy to a shooting state, computes projectile trajectory, and performs a hitscan-based weapon attack.
 func (e *Enemy) doShoot(self config.IThingConfig, selfX, selfY, selfZ, dz, angle, playerDist2d float64) {
-	entity := self.GetEntity()
+	entity := self.VerticesGetEntity()
 	weaponForward := entity.GetWidth()
 	spawnX := selfX + math.Cos(angle)*weaponForward
 	spawnY := selfY + math.Sin(angle)*weaponForward
@@ -354,7 +354,7 @@ func (e *Enemy) doShoot(self config.IThingConfig, selfX, selfY, selfZ, dz, angle
 
 // handleJump checks and handles the jump behavior of the enemy based on ground status, player position, and movement constraints.
 func (e *Enemy) handleJump(self config.IThingConfig, playerZ, thingZ, playerDist2d, nx, ny float64) {
-	entity := self.GetEntity()
+	entity := self.VerticesGetEntity()
 	if !entity.IsOnGround() {
 		return
 	}

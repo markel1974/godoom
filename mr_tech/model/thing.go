@@ -10,7 +10,7 @@ type IThing interface {
 
 	IVertices
 
-	GetBase() *ThingBase
+	IsEqual(other IThing) bool
 
 	GetCage() *CollisionCage
 

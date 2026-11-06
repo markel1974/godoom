@@ -37,6 +37,14 @@ func NewThingEffect(things *Things, cfg *config.Thing, volume *Volume) *ThingEff
 	return thing
 }
 
+// IsEqual reports whether other is the same ThingEffect instance.
+func (t *ThingEffect) IsEqual(other IThing) bool {
+	if v, ok := other.(*ThingEffect); ok && t == v {
+		return true
+	}
+	return false
+}
+
 // PostMessage sends an ThingEvent instance to the ThingEffect's inbox channel for processing.
 func (t *ThingEffect) PostMessage(ec *ThingEvent) {
 	t.inbox <- ec

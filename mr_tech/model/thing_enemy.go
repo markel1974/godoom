@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // ThingEnemy represents an enemy entity that extends ThingBase and defines behavior through a custom thinking function.
@@ -27,7 +28,31 @@ func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnem
 		onThinking: cfg.OnThinking,
 	}
 	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
+	cfg.OnBind(thing)
 	return thing
+}
+
+// IsEqual reports whether other is the same ThingEnemy instance.
+func (t *ThingEnemy) IsEqual(other IThing) bool {
+	if v, ok := other.(*ThingEnemy); ok && t == v {
+		return true
+	}
+	return false
+}
+
+// Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
+func (t *ThingEnemy) Jump(leapX float64, leapY float64, zFactor float64) bool {
+	return t.ThingBase.jump(leapX, leapY, zFactor)
+}
+
+// FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
+func (t *ThingEnemy) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+	t.ThingBase.fireHitscan(t, id, pos, force, dirX, dirY, dirZ)
+}
+
+// LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
+func (t *ThingEnemy) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+	t.things.CreateThrowable(throwableIndex, onCollision, onImpact, t.location, pos, angle, pitch, speed)
 }
 
 // PostMessage sends a ThingEvent instance to the inbox channel of ThingEnemy for processing.

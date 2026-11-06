@@ -23,9 +23,9 @@ type IThingConfig interface {
 
 	GetKind() ThingType
 
-	GetEntity() *physics.Entity
+	VerticesGetEntity() *physics.Entity
 
-	SetAction(idx int)
+	VerticesSetAction(idx int)
 
 	GetAngle() float64
 

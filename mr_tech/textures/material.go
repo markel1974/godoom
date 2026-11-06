@@ -474,6 +474,7 @@ func (m *Material) updatePacked() {
 	m.packed = math.Float32frombits(raw)
 }
 
+// tick returns the material-specific current tick value.
 func (m *Material) tick() uint64 {
 	return GlobalTick() + m.salt
 }

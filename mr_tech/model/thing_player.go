@@ -59,7 +59,8 @@ func (pr *ThingPlayer) Setup() error {
 		return fmt.Errorf("can't find 3d player location at X: %f Y: %f Z: %f\n", pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	}
 	pr.ThingBase = NewThingBase(pr, pr.things, pr.cfg.Thing, location)
-	entity := pr.GetEntity()
+	pr.cfg.Thing.OnBind(pr)
+	entity := pr.VerticesGetEntity()
 	entity.SetOnGround(false)
 	entity.MoveTo(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	pr.SetAngle(pr.cfg.Angle)
@@ -76,6 +77,29 @@ func (pr *ThingPlayer) IsActive() bool {
 // IsVisible determines whether the ThingPlayer instance is currently visible.
 func (pr *ThingPlayer) IsVisible() bool {
 	return pr.visible
+}
+
+// IsEqual reports whether other is the same ThingPlayer instance.
+func (pr *ThingPlayer) IsEqual(other IThing) bool {
+	if v, ok := other.(*ThingPlayer); ok && pr == v {
+		return true
+	}
+	return false
+}
+
+// Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
+func (pr *ThingPlayer) Jump(leapX float64, leapY float64, zFactor float64) bool {
+	return pr.ThingBase.jump(leapX, leapY, zFactor)
+}
+
+// FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
+func (pr *ThingPlayer) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+	pr.ThingBase.fireHitscan(pr, id, pos, force, dirX, dirY, dirZ)
+}
+
+// LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
+func (pr *ThingPlayer) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+	pr.things.CreateThrowable(throwableIndex, onCollision, onImpact, pr.location, pos, angle, pitch, speed)
 }
 
 // PostMessage sends the provided ThingEvent to the ThingPlayer's inbox channel for processing.
@@ -183,7 +207,7 @@ func (pr *ThingPlayer) SetJump(multi bool) {
 	factor := 1.0
 	if multi {
 		factor = 0.2
-		pr.GetEntity().SetOnGround(true)
+		pr.VerticesGetEntity().SetOnGround(true)
 	}
 	if pr.Jump(0, 0, factor) {
 		pr.bobbing.InjectVerticalImpulse(1.5)
@@ -192,7 +216,7 @@ func (pr *ThingPlayer) SetJump(multi bool) {
 
 // SetDucking toggles the player's ducking state between true and false.
 func (pr *ThingPlayer) SetDucking() {
-	entity := pr.GetEntity()
+	entity := pr.VerticesGetEntity()
 	pr.ducking = !pr.ducking
 	if pr.ducking {
 		entity.SetSize(entity.GetWidth(), entity.GetHeight(), entity.GetDepth()*0.5)
@@ -223,7 +247,7 @@ func (pr *ThingPlayer) GetTilt() float64 {
 	//	return 0.0
 	//}
 
-	entity := pr.GetEntity()
+	entity := pr.VerticesGetEntity()
 	rawTilt := pr.bobbing.GetTilt()
 	// 3. Calcoliamo la velocità reale sul piano
 	vx := entity.GetVx()
@@ -245,7 +269,7 @@ func (pr *ThingPlayer) GetTilt() float64 {
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (pr *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
-	visualX, visualY, visualZ := pr.GetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
+	visualX, visualY, visualZ := pr.VerticesGetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
 	angleSin, angleCos := pr.GetAngleFull()
 	bobX, bobY, _ := pr.GetBob()
 	visualZ += pr.getEyeHeight() + bobY + pr.bobbing.GetJump()
@@ -283,7 +307,7 @@ func (pr *ThingPlayer) StageThinking(playerX float64, playerY float64, playerZ f
 
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
 func (pr *ThingPlayer) StageApply() {
-	entity := pr.GetEntity()
+	entity := pr.VerticesGetEntity()
 	wasGrounded := entity.IsOnGround()
 	prevVz := entity.GetVz()
 	pr.ThingBase.StageApply()
@@ -298,7 +322,7 @@ func (pr *ThingPlayer) StageApply() {
 
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.
 func (pr *ThingPlayer) getEyeHeight() float64 {
-	entity := pr.GetEntity()
+	entity := pr.VerticesGetEntity()
 	if pr.ducking {
 		return entity.GetDepth() * 0.25
 	}
@@ -308,7 +332,7 @@ func (pr *ThingPlayer) getEyeHeight() float64 {
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
 func (pr *ThingPlayer) Throw(throwableIndex int, speed float64) {
 	camX, camY, camZ := pr.GetVisualPosition()
-	entity := pr.GetEntity()
+	entity := pr.VerticesGetEntity()
 	diameter := entity.GetWidth()
 	spawnX := camX + (pr.angleCos * diameter)
 	spawnY := camY + (pr.angleSin * diameter)
@@ -329,7 +353,7 @@ func (pr *ThingPlayer) Fire(id string) {
 	dirZ := math.Sin(pitchRad)
 	// Punto di spawn fuori dalla hitbox del player
 	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
-	weaponForward := pr.GetEntity().GetWidth()
+	weaponForward := pr.VerticesGetEntity().GetWidth()
 	const weaponForce = 50000.0 * 10.0 // TODO CONFIG
 	spawnX := camX + (pr.angleCos * weaponForward)
 	spawnY := camY + (pr.angleSin * weaponForward)

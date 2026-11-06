@@ -63,12 +63,10 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		onCollision:    cfg.OnCollision,
 	}
 
-	entity := t.GetEntity()
+	entity := t.VerticesGetEntity()
 	entity.SetOnGround(false)
 	t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
 	t.cage = NewCollisionCage(thing)
-
-	cfg.OnBind(t)
 
 	return t
 }
@@ -120,7 +118,7 @@ func (t *ThingBase) GetSpeed() float64 {
 
 // GetDistSq returns the squared distance from the light's position to the given 3D point.
 func (t *ThingBase) GetDistSq(pX, pY, pZ float64) float64 {
-	entity := t.GetEntity()
+	entity := t.VerticesGetEntity()
 	tx, ty, tz := entity.GetCenter()
 	dx := tx - pX
 	dy := ty - pY
@@ -156,7 +154,7 @@ func (t *ThingBase) IsVisible() bool {
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *ThingBase) StagePrepare() bool {
-	entity := t.GetEntity()
+	entity := t.VerticesGetEntity()
 	entity.Update()
 	t.cage.Rebuild(t.maxStep)
 	return entity.IsMoving()
@@ -169,7 +167,7 @@ func (t *ThingBase) StageResolve() {
 		return
 	}
 
-	entity := t.GetEntity()
+	entity := t.VerticesGetEntity()
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
@@ -198,7 +196,7 @@ func (t *ThingBase) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
-	entity := t.GetEntity()
+	entity := t.VerticesGetEntity()
 	entity.SetOnGround(t.cage.HasFloor())
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
@@ -229,7 +227,7 @@ func (t *ThingBase) StageApply() {
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *ThingBase) MoveTowards(dirX, dirY, speed, accelForce float64) {
-	entity := t.GetEntity()
+	entity := t.VerticesGetEntity()
 	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * speed
 	desiredVy := dirY * speed
@@ -244,8 +242,8 @@ func (t *ThingBase) GetBase() *ThingBase {
 }
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
-func (t *ThingBase) Jump(leapX float64, leapY float64, zFactor float64) bool {
-	entity := t.GetEntity()
+func (t *ThingBase) jump(leapX float64, leapY float64, zFactor float64) bool {
+	entity := t.VerticesGetEntity()
 	if !entity.IsOnGround() {
 		return false
 	}
@@ -255,13 +253,8 @@ func (t *ThingBase) Jump(leapX float64, leapY float64, zFactor float64) bool {
 	return true
 }
 
-// LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
-func (t *ThingBase) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
-	t.things.CreateThrowable(throwableIndex, onCollision, onImpact, t.location, pos, angle, pitch, speed)
-}
-
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *ThingBase) fireHitscan(self IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 	var closestDist = maxDistance
 	var closestThing IThing
@@ -274,7 +267,7 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 		if !ok {
 			return maxDistance, false
 		}
-		if t == other.GetBase() {
+		if self.IsEqual(other) {
 			return maxDistance, false
 		}
 		//if object == sender {
@@ -292,7 +285,7 @@ func (t *ThingBase) FireHitscan(id string, pos geometry.XYZ, force float64, dirX
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
 
-		closestThing.GetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
+		closestThing.VerticesGetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
 		closestThing.Impact(closestThing, id, force, closestDist, impactX, impactY, impactZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}

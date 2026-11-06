@@ -8,14 +8,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VerticesSprite represents a 2D or 3D graphical object tied to a Volume, used for rendering and spatial interactions.
+// VerticesSprite represents sprite data backed by a source volume and a view-specific volume.
 type VerticesSprite struct {
 	volume     *Volume
 	viewVolume *Volume
 }
 
-// NewVerticesSprite creates a new VerticesSprite with 3D physical geometry.
-func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite {
+// NewVerticesSprite creates a billboard-rendered vertex sprite for thing from cfg and optional sprite material.
+func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *Materials) *VerticesSprite {
 	w := cfg.Radius * 2
 	d := cfg.Height
 
@@ -99,54 +99,46 @@ func NewVerticesSprite(cfg *config.Thing, materials *Materials) *VerticesSprite 
 	// Ora Rebuild itera su un volume 3D reale. minY e maxY non sono più 0.
 	f.volume.Rebuild()
 
+	f.volume.SetThing(thing)
+
 	return f
 }
 
-// GetVolume returns the Volume instance associated with the VerticesSprite.
-func (v *VerticesSprite) GetVolume() *Volume {
+// VerticesGetVolume returns the volume associated with the vertices sprite.
+func (v *VerticesSprite) VerticesGetVolume() *Volume {
 	return v.volume
 }
 
-// GetEntity retrieves the physics.Entity instance associated with the underlying Volume of the VerticesSprite.
-func (v *VerticesSprite) GetEntity() *physics.Entity {
+// VerticesGetEntity returns the physics entity associated with the sprite's volume.
+func (v *VerticesSprite) VerticesGetEntity() *physics.Entity {
 	return v.volume.GetEntity()
 }
 
-// GetAABB returns the axis-aligned bounding box (AABB) of the VerticesSprite, represented by its associated entity.
+// GetAABB returns the axis-aligned bounding box of the sprite's underlying entity.
 func (v *VerticesSprite) GetAABB() *aabb.AABB {
 	return v.volume.GetEntity().GetAABB()
 }
 
-// CompileVertices prepares the sprite's current volume for rendering and reports no vertex changes.
-func (v *VerticesSprite) CompileVertices(tick uint64) bool {
+// VerticesCompile updates the sprite's view volume from its current volume.
+// It ignores tick and returns false because no geometry is rebuilt.
+func (v *VerticesSprite) VerticesCompile(tick uint64) bool {
 	v.viewVolume = v.volume
 	return false
 }
 
-// GetVertices retrieves the collection of visible faces for the specified simulation tick.
-// The returned faces represent the geometry of the vertex material at the given moment in time.
-func (v *VerticesSprite) GetVertices() (*Faces, *Faces, float64, float64) {
+// VerticesGet returns the view volume faces for both face sets, zero offset, and the render mode.
+func (v *VerticesSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
 	f := v.viewVolume.GetFaces()
-	return f, f, 0.0, v.GetRenderMode()
+	return f, f, 0.0, RenderModeBillboard
 }
 
-// SetAction sets the action index for the VerticesSprite, modifying its behavior or state based on the specified index.
-func (v *VerticesSprite) SetAction(idx int) {
+// VerticesSetAction applies the vertex action identified by idx.
+func (v *VerticesSprite) VerticesSetAction(idx int) {
 	//TODO IMPLEMENT
 	return
 }
 
-// GetVerticesCenter retrieves the bottom-left coordinates of the entity associated with the VerticesSprite's Volume.
-func (v *VerticesSprite) GetVerticesCenter() (float64, float64, float64) {
+// VerticesGetCenter returns the x, y, and z coordinates of the sprite volume's center.
+func (v *VerticesSprite) VerticesGetCenter() (float64, float64, float64) {
 	return v.volume.entity.GetCenter()
-}
-
-// GetRenderMode retrieves the renderMode value associated with the Face instance.
-func (v *VerticesSprite) GetRenderMode() float64 {
-	return RenderModeBillboard
-}
-
-// SetThing assigns an IThing instance to the underlying Volume of the VerticesSprite.
-func (v *VerticesSprite) SetThing(t IThing) {
-	v.volume.SetThing(t)
 }

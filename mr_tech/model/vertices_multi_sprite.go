@@ -10,7 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VerticesMultiSprite represents a sprite with multiple views composed of 3D volumes, enabling dynamic angle adjustments.
+// VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
 	//currentAngle  int
 	volumes       []*Volume
@@ -22,8 +22,10 @@ type VerticesMultiSprite struct {
 	clampAnim     []bool
 }
 
-// NewVerticesMultiSprite initializes and returns a VerticesMultiSprite with volumes and faces based on the given configuration.
-func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMultiSprite {
+// NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
+// It initializes per-view volumes, rendering mode, animation clamps, and binds each volume to thing.
+// It panics if a view is nil, has no textures, or face creation fails.
+func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
 		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
@@ -65,39 +67,44 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *Materials) *VerticesMu
 			f.clampAnim[viewIdx] = true
 		}
 	}
+
+	for _, volume := range f.volumes {
+		volume.SetThing(thing)
+	}
 	return f
 }
 
-// GetVolume retrieves the current active volume associated with the VerticesMultiSprite instance.
-func (v *VerticesMultiSprite) GetVolume() *Volume {
+// VerticesGetVolume returns the currently active action volume.
+func (v *VerticesMultiSprite) VerticesGetVolume() *Volume {
 	return v.actionVolume
 }
 
-// GetEntity returns the physics entity associated with the current view volume of the VerticesMultiSprite.
-func (v *VerticesMultiSprite) GetEntity() *physics.Entity {
+// VerticesGetEntity returns the entity associated with the current action volume.
+func (v *VerticesMultiSprite) VerticesGetEntity() *physics.Entity {
 	return v.actionVolume.GetEntity()
 }
 
-// GetAABB returns the axis-aligned bounding box (AABB) of the current view volume's associated physics entity.
+// GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
 	return v.physicsVolume.GetEntity().GetAABB()
 }
 
-// CompileVertices updates the view volume to match the active action volume and reports no change.
-func (v *VerticesMultiSprite) CompileVertices(tick uint64) bool {
+// VerticesCompile updates the view volume to the current action volume.
+// It returns false because no rebuild is performed.
+func (v *VerticesMultiSprite) VerticesCompile(tick uint64) bool {
 	v.viewVolume = v.actionVolume
 	return false
 }
 
-// GetVertices retrieves the vertices and face count of the current view volume and duplicates, along with a default value.
-func (v *VerticesMultiSprite) GetVertices() (*Faces, *Faces, float64, float64) {
+// VerticesGet returns the current view volume faces twice, a zero value, and the active render mode.
+func (v *VerticesMultiSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
 	f := v.viewVolume.GetFaces()
-	return f, f, 0.0, v.GetRenderMode()
+	return f, f, 0.0, v.renderMode
 }
 
-// SetAction updates the current action index for the sprite if the provided index is within valid bounds.
-func (v *VerticesMultiSprite) SetAction(idx int) {
+// VerticesSetAction switches to the action volume at idx and restarts its face material animations.
+func (v *VerticesMultiSprite) VerticesSetAction(idx int) {
 	//return
 	if !v.computeAction(idx, 0) {
 		return
@@ -120,24 +127,13 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	}
 }
 
-// GetVerticesCenter retrieves the bottom-left coordinates (x, y, z) of the entity associated with the current view volume.
-func (v *VerticesMultiSprite) GetVerticesCenter() (float64, float64, float64) {
+// VerticesGetCenter returns the x, y, and z coordinates of the center of the first volume's entity.
+func (v *VerticesMultiSprite) VerticesGetCenter() (float64, float64, float64) {
 	return v.volumes[0].GetEntity().GetCenter()
 }
 
-// GetRenderMode returns a constant value of 1.0, typically used to represent a uniform scaling factor for renderModes.
-func (v *VerticesMultiSprite) GetRenderMode() float64 {
-	return v.renderMode
-}
-
-// SetThing assigns the specified IThing instance to all volumes in the VerticesMultiSprite object.
-func (v *VerticesMultiSprite) SetThing(t IThing) {
-	for _, volume := range v.volumes {
-		volume.SetThing(t)
-	}
-}
-
-// compute updates the current view volume based on the current angle, ensuring it is valid or falls back to a default volume.
+// computeAction selects the action volume for action and reports whether the active volume changed.
+// Invalid actions fall back to the default volume; angle is currently unused.
 func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	if action < 0 || action >= len(v.volumes) {
 		action = 0
@@ -155,7 +151,8 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	return true
 }
 
-// createFaces constructs 3D box geometry with optional visual material and returns its set of face objects for rendering and physics.
+// createFaces builds render and physics faces from the material's head frame texture.
+// It returns an error when the material or texture is nil.
 func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face, error) {
 	if material == nil {
 		return nil, fmt.Errorf("material is nil")

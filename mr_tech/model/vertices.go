@@ -17,37 +17,32 @@ const (
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
 type IVertices interface {
-	CompileVertices(uint64) bool
-
-	GetVertices() (*Faces, *Faces, float64, float64)
-
-	GetVerticesCenter() (float64, float64, float64)
-
-	GetVolume() *Volume
-
 	GetAABB() *aabb.AABB
 
-	GetEntity() *physics.Entity
+	VerticesCompile(uint64) bool
 
-	SetAction(idx int)
+	VerticesGet() (*Faces, *Faces, float64, float64)
 
-	GetRenderMode() float64
+	VerticesGetCenter() (float64, float64, float64)
 
-	SetThing(t IThing)
+	VerticesGetVolume() *Volume
+
+	VerticesGetEntity() *physics.Entity
+
+	VerticesSetAction(idx int)
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
 func VerticesFactory(thing IThing, cfg *config.Thing, materials *Materials) IVertices {
 	var out IVertices
 	if cfg.Model3D != nil {
-		out = NewVertices3D(cfg, materials)
+		out = NewVertices3D(thing, cfg, materials)
 	} else if cfg.Model3DEntry != nil {
-		out = NewVertices3DEntry(cfg, materials)
+		out = NewVertices3DEntry(thing, cfg, materials)
 	} else if cfg.MultiSprite != nil {
-		out = NewVerticesMultiSprite(cfg, materials)
+		out = NewVerticesMultiSprite(thing, cfg, materials)
 	} else {
-		out = NewVerticesSprite(cfg, materials)
+		out = NewVerticesSprite(thing, cfg, materials)
 	}
-	out.SetThing(thing)
 	return out
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// Vertices3D represents a 3D structure composed of faces, volumes, origins, and associated metadata for spatial modeling.
+// Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and physics state.
 type Vertices3D struct {
 	facesA          *Faces
 	facesB          *Faces
@@ -32,8 +32,9 @@ type Vertices3D struct {
 	lerpT           float64
 }
 
-// NewVertices3D initializes and returns a new Vertices3D object based on the provided Thing configuration and materials.
-func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
+// NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
+// It validates model parts, links, action maps, and initializes face and transform buffers.
+func NewVertices3D(thing IThing, cfg *config.Thing, materials *Materials) *Vertices3D {
 	if cfg.Model3D == nil {
 		panic(fmt.Sprintf("no Model3D for thing %s", cfg.Id))
 	}
@@ -54,7 +55,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 		c := cfg.Clone()
 		c.Model3DEntry = part
 		c.Model3D = nil
-		entry := NewVertices3DEntry(c, materials)
+		entry := NewVertices3DEntry(thing, c, materials)
 		elements[i] = entry
 
 		if len(entry.volumes) > 0 && entry.volumes[0] != nil {
@@ -147,8 +148,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			action = make([]int, len(rawActionMaps[i]))
 			copy(action, rawActionMaps[i])
 			if expectedActions > 0 && len(action) < expectedActions {
-				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d, falling back to action 0 for missing entries\n",
-					cfg.Id, i, len(action), expectedActions)
+				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d, falling back to action 0 for missing entries\n", cfg.Id, i, len(action), expectedActions)
 				padded := make([]int, expectedActions)
 				copy(padded, action)
 				action = padded
@@ -162,8 +162,7 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			numActions := len(elements[i].actions)
 			for actionIdx, targetIdx := range action {
 				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {
-					fmt.Printf("[warning] Vertices3D %s: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n",
-						cfg.Id, i, actionIdx, targetIdx, numActions-1)
+					fmt.Printf("[warning] Vertices3D %s: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n", cfg.Id, i, actionIdx, targetIdx, numActions-1)
 					action[actionIdx] = 0
 				}
 			}
@@ -179,14 +178,12 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 			tagIdx := elements[link.Parent].GetTagIndex(link.Tag)
 			linkTagIndices[i] = tagIdx
 			if tagIdx < 0 {
-				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
-					cfg.Id, link.Tag, link.Parent, i)
+				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.Tag, link.Parent, i)
 			} else {
 				for frameIdx, vol := range elements[link.Parent].volumes {
 					if vol != nil {
 						if !vol.HasVertexTag(tagIdx) {
-							fmt.Printf("[warning] Vertices3D %s: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n",
-								cfg.Id, link.Tag, tagIdx, frameIdx, link.Parent, i)
+							fmt.Printf("[warning] Vertices3D %s: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.Tag, tagIdx, frameIdx, link.Parent, i)
 						}
 					}
 				}
@@ -281,38 +278,38 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 	}
 
 	if len(v.elements) > 0 && v.elements[0] != nil {
-		v.entity = v.elements[0].GetEntity()
+		v.entity = v.elements[0].VerticesGetEntity()
 	}
 
 	return v
 }
 
-// GetVolume retrieves the first Volume instance associated with the Vertices3D object.
-func (v *Vertices3D) GetVolume() *Volume {
+// VerticesGetVolume returns the view volume of the first vertex entry, or nil if unavailable.
+func (v *Vertices3D) VerticesGetVolume() *Volume {
 	if len(v.elements) > 0 && v.elements[0] != nil {
 		return v.elements[0].viewVolume
 	}
 	return nil
 }
 
-// GetEntity retrieves the associated physics.Entity instance of the Vertices3D object.
-func (v *Vertices3D) GetEntity() *physics.Entity {
+// VerticesGetEntity returns the physics entity for the first element, or this model's entity if none is present.
+func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
 	if len(v.elements) > 0 && v.elements[0] != nil {
-		return v.elements[0].GetEntity()
+		return v.elements[0].VerticesGetEntity()
 	}
 	return v.entity
 }
 
-// GetAABB returns the axis-aligned bounding box (AABB) of the Vertices3D instance by delegating to its associated entity.
+// GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	if e := v.GetEntity(); e != nil {
+	if e := v.VerticesGetEntity(); e != nil {
 		return e.GetAABB()
 	}
 	return nil
 }
 
-// SetAction updates the current action of Vertices3D and propagates the action change to all associated elements.
-func (v *Vertices3D) SetAction(idx int) {
+// VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
+func (v *Vertices3D) VerticesSetAction(idx int) {
 	if idx < 0 {
 		return
 	}
@@ -331,49 +328,33 @@ func (v *Vertices3D) SetAction(idx int) {
 		if i < len(v.actions) && idx < len(v.actions[i]) {
 			targetAction := v.actions[i][idx]
 			if targetAction >= 0 && targetAction < len(el.actions) {
-				el.SetAction(targetAction)
+				el.VerticesSetAction(targetAction)
 			} else {
 				fmt.Printf("[warning] Vertices3D: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n",
 					i, idx, targetAction, len(el.actions)-1)
-				el.SetAction(0)
+				el.VerticesSetAction(0)
 			}
 		} else {
 			fmt.Printf("[warning] Vertices3D: part %d has no mapping for action %d, falling back to action 0\n", i, idx)
-			el.SetAction(0)
+			el.VerticesSetAction(0)
 		}
 	}
 }
 
-// GetVerticesCenter returns the displacement vector (dx, dy, dz) of the first element in the Vertices3D instance.
-func (v *Vertices3D) GetVerticesCenter() (float64, float64, float64) {
+// VerticesGetCenter returns the center coordinates of the first element, or zero coordinates if none is available.
+func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
 	if len(v.elements) > 0 && v.elements[0] != nil {
-		return v.elements[0].GetVerticesCenter()
+		return v.elements[0].VerticesGetCenter()
 	}
 	return 0, 0, 0
 }
 
-// GetRenderMode returns the current render mode as a float64, used to determine how the 3D model is rendered.
-func (v *Vertices3D) GetRenderMode() float64 {
-	return RenderModeModel3D
-}
-
-// SetThing assigns the provided IThing instance to all non-nil entries in the elements slice of Vertices3D and updates cached entity.
-func (v *Vertices3D) SetThing(t IThing) {
-	for _, e := range v.elements {
-		if e != nil {
-			e.SetThing(t)
-		}
-	}
-	if len(v.elements) > 0 && v.elements[0] != nil {
-		v.entity = v.elements[0].GetEntity()
-	}
-}
-
-// CompileVertices updates element volumes for tick, applies linked transforms, and rebuilds face buffers.
-func (v *Vertices3D) CompileVertices(tick uint64) bool {
+// VerticesCompile updates all model parts for the tick and writes transformed frame data into render buffers.
+// It resolves parent tag links, stores interpolation state, clears stale faces, and reports no change.
+func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	for _, i := range v.executionOrder {
 		element := v.elements[i]
-		_ = element.CompileVertices(tick)
+		_ = element.VerticesCompile(tick)
 		volA, volB, lerpT := element.GetVolumes()
 		if i == 0 {
 			v.lerpT = lerpT
@@ -506,12 +487,12 @@ func (v *Vertices3D) CompileVertices(tick uint64) bool {
 	return false
 }
 
-// GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
-func (v *Vertices3D) GetVertices() (*Faces, *Faces, float64, float64) {
-	return v.facesA, v.facesB, v.lerpT, v.GetRenderMode()
+// VerticesGet returns the current face sets, interpolation factor, and render mode.
+func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
+	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 
-// reset clears the origins and restores rotations for the vertex entry at index i.
+// reset clears the origin offsets and restores the rotation axes at index i to identity.
 func (v *Vertices3D) reset(i int) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
@@ -519,7 +500,7 @@ func (v *Vertices3D) reset(i int) {
 	v.rotationsB[i].Reset()
 }
 
-// deepReset clears cached volumes and resets transform state for the element at index i.
+// deepReset clears cached volumes and resets origin and rotation state for the part at i.
 func (v *Vertices3D) deepReset(i int) {
 	v.volsA[i] = nil
 	v.volsB[i] = nil

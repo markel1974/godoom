@@ -222,6 +222,8 @@ func (anim *Anim) BuildFrameSkeleton(frameIdx int) []*Joint {
 		}
 
 		if h.parent < 0 {
+			// Strip root motion translation so the animation plays in-place while physics drives world movement.
+			pos = geometry.XYZ{}
 			skel[i] = NewJoint(h.name, h.parent, pos, orient)
 		} else {
 			parentJoint := skel[h.parent]

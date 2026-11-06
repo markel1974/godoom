@@ -413,7 +413,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 
 	// Center the model in X, Y, and Z so that its center is at (0, 0, 0).
 	// In Godoom, presentation aligns all objects to their center.
-	cModel.Center()
+	cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 
 	return cModel, nil
 }
@@ -497,7 +497,7 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 	cModel.ActionDefinitions = []string{"idle"}
 	cModel.ActionIntervals = [][2]int{{0, 0}}
 
-	cModel.Center()
+	cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 
 	return cModel, nil
 }

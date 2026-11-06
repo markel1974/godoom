@@ -263,7 +263,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
 	const wakeupDistance = 300.0
 	if cModel != nil {
-		cModel.Center()
+		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 	}
 	var thingCfg *config.Thing
 	if kind == config.ThingEnemyDef {

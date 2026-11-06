@@ -159,7 +159,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 // createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
 func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
 	if cModel != nil {
-		cModel.Center()
+		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 	}
 	if kind == config.ThingEnemyDef {
 		var parts []*config.Model3DEntry
@@ -322,7 +322,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 
 	md3.ActionDefinitions = globalActionNames
 	md3.ActionIntervals = globalActionIntervals
-	md3.Parts[0].Center()
+	md3.Parts[0].Center([]string{"stand", "idle", "legs_idle", "hover"})
 
 	defaultLegsIdle := 0
 	for li, lName := range md3.Parts[0].ActionDefinitions {

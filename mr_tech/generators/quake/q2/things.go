@@ -205,7 +205,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 // doCreateConfigThing creates a Thing configuration with specified attributes, initializing logic based on its type.
 func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
 	if cModel != nil {
-		cModel.Center()
+		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 	}
 	var thingCfg *config.Thing
 	if kind == config.ThingEnemyDef {

@@ -149,7 +149,7 @@ func (m *Model3DEntry) GetBaseName(fn string) (string, int) {
 }
 
 // Center repositions the 3D model by centering its vertices around the origin of the coordinate system.
-func (m *Model3DEntry) Center() {
+func (m *Model3DEntry) Center(referenceFrames []string) {
 	if m == nil || len(m.Frames) == 0 {
 		return
 	}
@@ -187,14 +187,14 @@ func (m *Model3DEntry) Center() {
 		return
 	}
 
-	idle := []string{"stand", "idle", "legs_idle", "hover"}
+	//idle := []string{"stand", "idle", "legs_idle", "hover"}
 
 	referenceFrame := 0
 	if len(m.ActionDefinitions) > 0 && len(m.ActionIntervals) == len(m.ActionDefinitions) {
 		for i, name := range m.ActionDefinitions {
 			base, _ := m.GetBaseName(strings.ToLower(strings.TrimSpace(name)))
 			found := false
-			for _, t := range idle {
+			for _, t := range referenceFrames {
 				if strings.Contains(base, t) {
 					if idx := m.ActionIntervals[i][0]; idx >= 0 && idx < len(m.Frames) {
 						referenceFrame = idx

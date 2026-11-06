@@ -28,9 +28,9 @@ type IThing interface {
 
 	//StageCompute()
 
-	StageResolve(solverIndex int, solverJitter float64)
+	StageResolve()
 
-	StageApply(solverJitter float64)
+	StageApply()
 
 	StartLoop()
 

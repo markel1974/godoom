@@ -163,7 +163,7 @@ func (t *ThingBase) StagePrepare() bool {
 }
 
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.
-func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
+func (t *ThingBase) StageResolve() {
 	slotsLen := t.cage.GetSlotsLen()
 	if slotsLen == 0 {
 		return
@@ -201,16 +201,14 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 }
 
 // StageApply applies physical and geometrical adjustments to the entity based on collision resolution and position corrections.
-func (t *ThingBase) StageApply(solverJitter float64) {
+func (t *ThingBase) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
 	entity := t.GetEntity()
 	entity.SetOnGround(false)
 
-	// INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
-	// spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB
-	// esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
+	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 

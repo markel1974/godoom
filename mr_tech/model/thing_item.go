@@ -33,9 +33,9 @@ func (t *ThingItem) StartLoop() {
 				case StageCompute:
 					//t.StageCompute()
 				case StageResolve:
-					t.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
+					t.StageResolve()
 				case StageApply:
-					t.StageApply(evt.GetSolverJitter())
+					t.StageApply()
 				}
 				evt.Done()
 			case <-t.done:

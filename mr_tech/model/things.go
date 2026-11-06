@@ -335,14 +335,12 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)
 	//th.event.wg.Wait()
 	for si := 0; si < th.solverIterations; si++ {
-		//th.event.SetSolver(si, solverJitter)
-		//th.event.SetStage(StageResolve)
 		for x := 0; x < runningLen; x++ {
 			t2 := th.running[x]
 			//th.event.wg.Add(1)
 			//t2.PostMessage(th.event)
 			//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
-			t2.StageResolve(si, solverJitter)
+			t2.StageResolve()
 		}
 		//th.event.wg.Wait()
 	}

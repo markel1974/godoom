@@ -101,9 +101,9 @@ func (pr *ThingPlayer) StartLoop() {
 				case StageCompute:
 					//p.StageCompute()
 				case StageResolve:
-					pr.StageResolve(evt.GetSolverIndex(), evt.GetSolverJitter())
+					pr.StageResolve()
 				case StageApply:
-					pr.StageApply(evt.GetSolverJitter())
+					pr.StageApply()
 				}
 				evt.Done()
 			case <-pr.done:
@@ -282,11 +282,11 @@ func (pr *ThingPlayer) StageThinking(playerX float64, playerY float64, playerZ f
 }
 
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
-func (pr *ThingPlayer) StageApply(solverJitter float64) {
+func (pr *ThingPlayer) StageApply() {
 	entity := pr.GetEntity()
 	wasGrounded := entity.IsOnGround()
 	prevVz := entity.GetVz()
-	pr.ThingBase.StageApply(solverJitter)
+	pr.ThingBase.StageApply()
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := entity.IsOnGround()
 	if !wasGrounded && isGrounded {

@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+func cleanAssetPath(p string) string {
+	return strings.TrimSpace(strings.ToLower(strings.ReplaceAll(p, "\\", Pak4Separator)))
+}
+
 // EntityDef represents a parsed Doom 3 entityDef block from a .def file.
 type EntityDef struct {
 	Name       string
@@ -40,24 +44,26 @@ type ResolvedEntityDef struct {
 
 // Defs manages all entityDef and model declarations parsed from Doom 3 .def files in the PK4 archive.
 type Defs struct {
+	arc        IPkArchive
 	EntityDefs map[string]*EntityDef
 	ModelDefs  map[string]*ModelDef
 }
 
 // NewDefs creates and returns a new empty Defs registry.
-func NewDefs() *Defs {
+func NewDefs(arc IPkArchive) *Defs {
 	return &Defs{
+		arc:        arc,
 		EntityDefs: make(map[string]*EntityDef),
 		ModelDefs:  make(map[string]*ModelDef),
 	}
 }
 
 // LoadFromArchive scans the "def" directory of the PK4 archive using ReadDirFilter and parses all .def files.
-func (d *Defs) LoadFromArchive(arc IPkArchive) error {
-	defFiles, _ := arc.ReadDirFilter("def", "\\.def$")
+func (d *Defs) LoadFromArchive() error {
+	defFiles, _ := d.arc.ReadDirFilter("def", "\\.def$")
 	for _, defName := range defFiles {
 		fullPath := "def" + Pak4Separator + defName
-		f, err := arc.Open(fullPath)
+		f, err := d.arc.Open(fullPath)
 		if err != nil {
 			continue
 		}
@@ -132,10 +138,7 @@ func (d *Defs) parseDefData(data []byte) {
 			_ = lexer.Expect("{")
 			md, ok := d.ModelDefs[name]
 			if !ok {
-				md = &ModelDef{
-					Name:  name,
-					Anims: make(map[string]string),
-				}
+				md = &ModelDef{Name: name, Anims: make(map[string]string)}
 				d.ModelDefs[name] = md
 			}
 			depth := 1
@@ -201,10 +204,6 @@ func (d *Defs) parseDefData(data []byte) {
 	}
 }
 
-func cleanAssetPath(p string) string {
-	return strings.TrimSpace(strings.ToLower(strings.ReplaceAll(p, "\\", Pak4Separator)))
-}
-
 // GetEntityProperty resolves a property key on an entityDef following its "inherit" chain.
 func (d *Defs) GetEntityProperty(classname, key string) (string, bool) {
 	return d.getEntityPropertyVisited(strings.ToLower(classname), strings.ToLower(key), make(map[string]bool))
@@ -264,18 +263,18 @@ func (d *Defs) resolveModelVisited(modelName string, visited map[string]bool) (s
 }
 
 // DiscoverModelAnimsFromDir scans the PK4 directory of a .md5mesh using ReadDirFilter and merges discovered .md5anim files.
-func DiscoverModelAnimsFromDir(arc IPkArchive, meshPath string, anims map[string]string) map[string]string {
+func (d *Defs) DiscoverModelAnimsFromDir(meshPath string, anims map[string]string) map[string]string {
 	if anims == nil {
 		anims = make(map[string]string)
 	}
-	if arc == nil || len(meshPath) == 0 {
+	if d.arc == nil || len(meshPath) == 0 {
 		return anims
 	}
 	meshDir := path.Dir(cleanAssetPath(meshPath))
 	if len(meshDir) == 0 || meshDir == "." {
 		return anims
 	}
-	files, err := arc.ReadDirFilter(meshDir, "\\.md5anim$")
+	files, err := d.arc.ReadDirFilter(meshDir, "\\.md5anim$")
 	if err != nil {
 		return anims
 	}
@@ -293,18 +292,17 @@ func DiscoverModelAnimsFromDir(arc IPkArchive, meshPath string, anims map[string
 	return anims
 }
 
-func pickAnim(arc IPkArchive, anims map[string]string, exactKeys []string, substrings []string) string {
+func (d *Defs) pickAnim(anims map[string]string, exactKeys []string, substrings []string) string {
 	fileExists := func(p string) bool {
 		if len(p) == 0 {
 			return false
 		}
-		if arc == nil {
+		if d.arc == nil {
 			return true
 		}
-		_, err := arc.Open(p)
+		_, err := d.arc.Open(p)
 		return err == nil
 	}
-
 	for _, k := range exactKeys {
 		if p, ok := anims[k]; ok && fileExists(p) {
 			return p
@@ -321,7 +319,7 @@ func pickAnim(arc IPkArchive, anims map[string]string, exactKeys []string, subst
 }
 
 // ResolveEntity reconstructs all model, head, animation, and physical dependencies for a classname from .def files and PK4 directory scanning.
-func (d *Defs) ResolveEntity(arc IPkArchive, classname string) (*ResolvedEntityDef, bool) {
+func (d *Defs) ResolveEntity(classname string) (*ResolvedEntityDef, bool) {
 	cn := strings.ToLower(strings.TrimSpace(classname))
 	if _, ok := d.EntityDefs[cn]; !ok {
 		return nil, false
@@ -379,21 +377,18 @@ func (d *Defs) ResolveEntity(arc IPkArchive, classname string) (*ResolvedEntityD
 
 	// If it's an MD5 mesh, enrich animations via ReadDirFilter on the mesh directory in the PK4
 	if strings.HasSuffix(res.ModelPath, ".md5mesh") {
-		anims = DiscoverModelAnimsFromDir(arc, res.ModelPath, anims)
-		res.IdleAnim = pickAnim(
-			arc,
+		anims = d.DiscoverModelAnimsFromDir(res.ModelPath, anims)
+		res.IdleAnim = d.pickAnim(
 			anims,
 			[]string{"idle", "idle1", "idle2", "stand", "alert_idle", "crawl_idle", "on4_idle", "idle_stand1", "zidle1", "zctidle", "chaingun_idle", "machinegun_stand", "shield_stand", "playdead"},
 			[]string{"idle", "stand"},
 		)
-		res.WalkAnim = pickAnim(
-			arc,
+		res.WalkAnim = d.pickAnim(
 			anims,
 			[]string{"walk", "walk1", "walk2", "walk3", "walk4", "walk7", "walk1_r", "zwalk1", "fastwalk", "crawl1", "travel", "travel3", "chaingun_walk", "machinegun_walk", "shield_walk", "run"},
 			[]string{"walk", "crawl", "travel"},
 		)
-		res.RunAnim = pickAnim(
-			arc,
+		res.RunAnim = d.pickAnim(
 			anims,
 			[]string{"run", "run1", "run2", "run3", "run_r", "faster_walk", "fastwalk", "zctrun5", "crawl2", "chaingun_run", "machinegun_run", "shield_run", "walk", "walk1", "walk2"},
 			[]string{"run", "fastwalk", "faster_walk"},
@@ -404,8 +399,7 @@ func (d *Defs) ResolveEntity(arc IPkArchive, classname string) (*ResolvedEntityD
 		if len(res.WalkAnim) == 0 {
 			res.WalkAnim = res.RunAnim
 		}
-		res.AttackAnim = pickAnim(
-			arc,
+		res.AttackAnim = d.pickAnim(
 			anims,
 			[]string{
 				"range_attack1", "range_attack2", "range1", "attack", "attack1", "attack2", "attack3",
@@ -415,8 +409,7 @@ func (d *Defs) ResolveEntity(arc IPkArchive, classname string) (*ResolvedEntityD
 			},
 			[]string{"attack", "fire", "melee", "range", "swing", "slash"},
 		)
-		res.PainAnim = pickAnim(
-			arc,
+		res.PainAnim = d.pickAnim(
 			anims,
 			[]string{
 				"pain", "pain_chest", "pain_chest1", "pain_chest2", "chest_pain", "chest_pain1", "chestpain", "chestpain1",
@@ -426,8 +419,7 @@ func (d *Defs) ResolveEntity(arc IPkArchive, classname string) (*ResolvedEntityD
 			},
 			[]string{"pain"},
 		)
-		res.DeathAnim = pickAnim(
-			arc,
+		res.DeathAnim = d.pickAnim(
 			anims,
 			[]string{"death", "die", "playdead", "death1_pose", "death_pose"},
 			[]string{"death", "die", "playdead"},

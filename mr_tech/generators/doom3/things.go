@@ -41,7 +41,7 @@ func NewThings(arc proc.IPkArchive, materials *proc.Materials, defs *proc.Defs, 
 // dynamic .def inheritance and ReadDirFilter discovery on the PK4 archive.
 func (t *Things) resolveSpec(classname string) (Doom3ThingSpec, bool) {
 	spec, hasSpec := GetDoom3EntitySpec(classname)
-	if resolved, ok := t.defs.ResolveEntity(t.arc, classname); ok {
+	if resolved, ok := t.defs.ResolveEntity(classname); ok {
 		if !hasSpec {
 			prefix := strings.Split(strings.ToLower(classname), "_")[0]
 			kind := config.ThingItemDef

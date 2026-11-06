@@ -74,8 +74,8 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	_ = materials.LoadFromArchive(arc)
 	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.Defs))
 
-	defs := proc.NewDefs()
-	_ = defs.LoadFromArchive(arc)
+	defs := proc.NewDefs(arc)
+	_ = defs.LoadFromArchive()
 	fmt.Printf("Loaded %d entityDefs, %d models from .def files\n", len(defs.EntityDefs), len(defs.ModelDefs))
 
 	// Parse corresponding .map file to extract entities (lights, player start, func_static, items)

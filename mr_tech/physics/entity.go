@@ -80,7 +80,7 @@ func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz f
 
 		if nz > 0 {
 			// 'other' è sotto 'e': se 'other' poggia a terra, non può scendere verso il basso
-			if otherFloor || other.IsOnGround() {
+			if otherFloor {
 				p1 = correction
 				p2 = 0.0
 			}

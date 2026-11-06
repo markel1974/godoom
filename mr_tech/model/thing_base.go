@@ -206,15 +206,11 @@ func (t *ThingBase) StageApply() {
 		t.location = location
 	}
 	entity := t.GetEntity()
-	entity.SetOnGround(false)
+	entity.SetOnGround(t.cage.HasFloor())
 
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
-
-	if t.cage.HasFloor() {
-		entity.SetOnGround(true)
-	}
 
 	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.

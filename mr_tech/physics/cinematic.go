@@ -376,3 +376,60 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 		e2.vz -= (jt * tz) * invMass2
 	}
 }
+
+// ResolvePenetration computes positional correction for overlapping cinematic bodies along a collision normal.
+// It returns each body's correction amount and whether a correction should be applied.
+func (e *Cinematic) ResolvePenetration(other *Cinematic, otherFloor bool, nx, ny, nz float64, penetration float64) (float64, float64, bool) {
+	depth := penetration - defaultPenetrationSlop
+	if depth <= 0.0 {
+		return 0, 0, false
+	}
+	invMass1 := e.GetInvMass()
+	invMass2 := other.GetInvMass()
+	// Se il corpo di appoggio poggia a terra lungo la verticale, non può scendere verso il basso (massa infinita -> invMass = 0)
+	if (otherFloor || other.IsOnGround()) && nz > defaultPenetrationDepth {
+		invMass2 = 0.0
+	} else if e.IsOnGround() && nz < -defaultPenetrationDepth {
+		invMass1 = 0.0
+	}
+	invMassSum := invMass1 + invMass2
+	if invMassSum <= 0.0 {
+		return 0, 0, false
+	}
+	// Lungo la verticale (supporto di gravità) correggiamo al 100% per evitare affondamenti;
+	// lungo gli assi orizzontali applichiamo la percentuale standard (30%)
+	correction := depth
+	if math.Abs(nz) <= defaultPenetrationDepth {
+		correction *= defaultPositionalPercent
+	}
+	p1 := correction * (invMass1 / invMassSum)
+	p2 := correction * (invMass2 / invMassSum)
+
+	if nz > defaultPenetrationDepth && (otherFloor || other.IsOnGround()) {
+		if e.vz < 0.0 {
+			e.vz = 0.0
+		}
+	} else if nz < -defaultPenetrationDepth && e.IsOnGround() {
+		if other.vz < 0.0 {
+			other.vz = 0.0
+		}
+	}
+
+	return p1, p2, true
+}
+
+// ResolveInelasticPenetration computes positional correction for an inelastic collision with static geometry.
+func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float64, bool) {
+	if pen <= 0.0 {
+		return 0, false
+	}
+	if nz > defaultPenetrationDepth {
+		if pen -= defaultPenetrationSlop; pen <= 0.0 {
+			return 0, false
+		}
+		if e.vz < 0.0 {
+			e.vz = 0.0
+		}
+	}
+	return pen, true
+}

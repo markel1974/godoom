@@ -39,6 +39,11 @@ func NewAnim() *Anim {
 	return &Anim{}
 }
 
+// NumJoints returns the number of joints in the animation's hierarchy.
+func (anim *Anim) NumJoints() int {
+	return len(anim.hierarchy)
+}
+
 // Parse parses an .md5anim file.
 func (anim *Anim) Parse(r io.Reader) error {
 	scanner := bufio.NewScanner(r)

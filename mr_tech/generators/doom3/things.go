@@ -3,6 +3,7 @@ package doom3
 import (
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -18,20 +19,82 @@ import (
 type Things struct {
 	arc        proc.IPkArchive
 	materials  *proc.Materials
+	defs       *proc.Defs
 	texManager *textures.Textures
 	imgLoader  *proc.ImageLoader
 	modelCache map[string]*config.Model3DEntry
 }
 
 // NewThings initializes and returns a new Things manager.
-func NewThings(arc proc.IPkArchive, materials *proc.Materials, texManager *textures.Textures, imgLoader *proc.ImageLoader) *Things {
+func NewThings(arc proc.IPkArchive, materials *proc.Materials, defs *proc.Defs, texManager *textures.Textures, imgLoader *proc.ImageLoader) *Things {
 	return &Things{
 		arc:        arc,
 		materials:  materials,
+		defs:       defs,
 		texManager: texManager,
 		imgLoader:  imgLoader,
 		modelCache: make(map[string]*config.Model3DEntry),
 	}
+}
+
+// resolveSpec reconstructs the Doom3ThingSpec for a classname by combining static mappings with
+// dynamic .def inheritance and ReadDirFilter discovery on the PK4 archive.
+func (t *Things) resolveSpec(classname string) (Doom3ThingSpec, bool) {
+	spec, hasSpec := GetDoom3EntitySpec(classname)
+	if resolved, ok := t.defs.ResolveEntity(t.arc, classname); ok {
+		if !hasSpec {
+			prefix := strings.Split(strings.ToLower(classname), "_")[0]
+			kind := config.ThingItemDef
+			speed := 0.0
+			mass := 15.0
+			if prefix == "monster" || strings.Contains(strings.ToLower(resolved.Spawnclass), "idai") {
+				kind = config.ThingEnemyDef
+				speed = 1150.0
+				mass = 35.0
+			}
+			spec = Doom3ThingSpec{
+				Kind:   kind,
+				Mass:   mass,
+				Speed:  speed,
+				Health: 100.0,
+			}
+			hasSpec = true
+		}
+		if len(spec.ModelPath) == 0 && len(resolved.ModelPath) > 0 {
+			spec.ModelPath = resolved.ModelPath
+		}
+		if len(spec.HeadMesh) == 0 && len(resolved.HeadMesh) > 0 {
+			spec.HeadMesh = resolved.HeadMesh
+		}
+		if len(spec.HeadJoint) == 0 && len(resolved.HeadJoint) > 0 {
+			spec.HeadJoint = resolved.HeadJoint
+		}
+		if len(spec.IdleAnim) == 0 && len(resolved.IdleAnim) > 0 {
+			spec.IdleAnim = resolved.IdleAnim
+		}
+		if len(spec.WalkAnim) == 0 && len(resolved.WalkAnim) > 0 {
+			spec.WalkAnim = resolved.WalkAnim
+		}
+		if len(spec.RunAnim) == 0 && len(resolved.RunAnim) > 0 {
+			spec.RunAnim = resolved.RunAnim
+		}
+		if len(spec.AttackAnim) == 0 && len(resolved.AttackAnim) > 0 {
+			spec.AttackAnim = resolved.AttackAnim
+		}
+		if len(spec.PainAnim) == 0 && len(resolved.PainAnim) > 0 {
+			spec.PainAnim = resolved.PainAnim
+		}
+		if len(spec.DeathAnim) == 0 && len(resolved.DeathAnim) > 0 {
+			spec.DeathAnim = resolved.DeathAnim
+		}
+		if spec.Mass <= 0 && resolved.Mass > 0 {
+			spec.Mass = resolved.Mass
+		}
+		if spec.Health <= 0 && resolved.Health > 0 {
+			spec.Health = resolved.Health
+		}
+	}
+	return spec, hasSpec
 }
 
 // loadAnimatedMonster loads and caches a skinned, animated MD5 model with idle, walk, and run cycles.
@@ -76,7 +139,7 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 		if af, err := t.arc.Open(cAnimPath); err == nil {
 			//defer af.Close()
 			anim := md5.NewAnim()
-			if err := anim.Parse(af); err == nil {
+			if err := anim.Parse(af); err == nil && anim.NumJoints() == len(mesh.Joints) {
 				anims[actionKey] = anim
 			}
 		}
@@ -85,6 +148,9 @@ func (t *Things) loadAnimatedMonster(spec Doom3ThingSpec) (*config.Model3DEntry,
 	loadAnim("idle", spec.IdleAnim)
 	loadAnim("walk", spec.WalkAnim)
 	loadAnim("run", spec.RunAnim)
+	loadAnim("attack", spec.AttackAnim)
+	loadAnim("pain", spec.PainAnim)
+	loadAnim("death", spec.DeathAnim)
 
 	cModel, err := t.bakeMD5Model(mesh, headMesh, spec.HeadJoint, anims)
 	if err != nil {
@@ -171,7 +237,7 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 
 	angle := ent.GetAngle()
 
-	spec, hasSpec := GetDoom3EntitySpec(classname)
+	spec, hasSpec := t.resolveSpec(classname)
 	if !hasSpec {
 		return nil, fmt.Errorf("unhandled entity classname: %s", classname)
 	}
@@ -182,7 +248,16 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 		expLower := strings.ToLower(explicitModel)
 		if strings.HasSuffix(expLower, ".md5mesh") || strings.HasSuffix(expLower, ".lwo") {
 			modelPath = explicitModel
+			spec.ModelPath = explicitModel
+		} else if t.defs != nil {
+			if mMesh, _, mOk := t.defs.ResolveModel(explicitModel); mOk && len(mMesh) > 0 {
+				modelPath = mMesh
+				spec.ModelPath = mMesh
+			}
 		}
+	}
+	if len(modelPath) == 0 {
+		return nil, fmt.Errorf("no model specified for entity %s", classname)
 	}
 
 	var cModel *config.Model3DEntry
@@ -195,25 +270,16 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 		return nil, fmt.Errorf("loading model for %s (%s): %w", classname, modelPath, err)
 	}
 
-	var radius, height float64
+	var radius float64
 	if cModel != nil {
-		radius, height = cModel.GetSize()
+		radius, _ = cModel.GetSize()
 	}
-	if radius <= 0 || height <= 0 {
-		height = spec.Height
-		radius = spec.Radius
-	}
-
 	// Presentation centers all objects around GetCenter() = bottomLeft + (radius, radius, height/2).
 	// In Doom 3, origin is at (centerX, centerY, floorZ).
 	// To align the bottom-left coordinate so center lands at (origin.X, origin.Y, origin.Z + height/2):
-	pos := geometry.XYZ{
-		X: origin.X - radius,
-		Y: origin.Y - radius,
-		Z: origin.Z,
-	}
+	pos := geometry.XYZ{X: origin.X - radius, Y: origin.Y - radius, Z: origin.Z}
 
-	thingCfg := config.NewConfigThing(classname, pos, angle, spec.Kind, spec.Mass, radius, height, spec.Speed)
+	thingCfg := config.NewConfigThing(classname, pos, angle, spec.Kind, spec.Mass, 0, 0, spec.Speed)
 	thingCfg.GForce = GForce
 
 	if spec.Kind == config.ThingEnemyDef {
@@ -378,11 +444,14 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 		return config.NewModel3DEntryFrame(frameTriangles)
 	}
 
-	// Process actions in standard order: idle, walk, run
-	actionKeys := []string{"idle", "walk", "run"}
+	// Process actions in standard order: idle, walk, run, attack, pain, death
+	actionKeys := []string{"idle", "walk", "run", "attack", "pain", "death"}
 	for _, aKey := range actionKeys {
 		anim, hasAnim := anims[aKey]
 		if !hasAnim || anim == nil || len(anim.Frames) == 0 {
+			continue
+		}
+		if aKey == "death" && len(anim.Frames) <= 1 {
 			continue
 		}
 		startFrame := len(allFrames)
@@ -402,6 +471,87 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 		allFrames = append(allFrames, frame)
 		actionNames = []string{"idle"}
 		actionIntervals = [][2]int{{0, 0}}
+	}
+
+	// In Doom 3 (id Tech 4), regular monsters do not have keyframed death.md5anim files
+	// because id Tech 4 switches them to Ragdoll physics (.af) upon death.
+	// When no multi-frame death animation exists in the PK4, synthesize a collapse death
+	// sequence from the pain/idle skeleton pitching onto the floor.
+	hasDeath := false
+	for _, aName := range actionNames {
+		if aName == "death" {
+			hasDeath = true
+			break
+		}
+	}
+	if !hasDeath && len(anims) > 0 && len(allFrames) > 0 {
+		floorZ := math.MaxFloat64
+		for _, tri := range allFrames[0].Triangles {
+			for k := 0; k < 3; k++ {
+				if tri.Vertices[k].Pos.Z < floorZ {
+					floorZ = tri.Vertices[k].Pos.Z
+				}
+			}
+		}
+		if floorZ == math.MaxFloat64 {
+			floorZ = 0
+		}
+
+		baseAnim := anims["pain"]
+		if baseAnim == nil || len(baseAnim.Frames) == 0 {
+			baseAnim = anims["idle"]
+		}
+
+		const deathFrames = 16
+		startFrame := len(allFrames)
+		for f := 0; f < deathFrames; f++ {
+			var skel []*md5.Joint
+			if baseAnim != nil && len(baseAnim.Frames) > 0 {
+				srcIdx := (f * len(baseAnim.Frames)) / deathFrames
+				if srcIdx >= len(baseAnim.Frames) {
+					srcIdx = len(baseAnim.Frames) - 1
+				}
+				skel = baseAnim.BuildFrameSkeleton(srcIdx)
+			} else {
+				skel = make([]*md5.Joint, len(mesh.Joints))
+				for jIdx, j := range mesh.Joints {
+					cp := *j
+					skel[jIdx] = &cp
+				}
+			}
+
+			tNorm := float64(f) / float64(deathFrames-1)
+			theta := -(math.Pi * 0.5) * (tNorm * tNorm)
+			half := theta * 0.5
+			qFall := [4]float64{0, math.Sin(half), 0, math.Cos(half)}
+
+			for _, j := range skel {
+				j.Pos = physics.QuatRotate(qFall, j.Pos)
+				j.Orient = physics.QuatNormalize(physics.QuatMultiplies(qFall, j.Orient))
+			}
+
+			frame := bakeFrameWithSkel(skel)
+			minZ := math.MaxFloat64
+			for _, tri := range frame.Triangles {
+				for k := 0; k < 3; k++ {
+					if tri.Vertices[k].Pos.Z < minZ {
+						minZ = tri.Vertices[k].Pos.Z
+					}
+				}
+			}
+			if minZ < math.MaxFloat64 {
+				dz := floorZ - minZ
+				for tIdx := range frame.Triangles {
+					for k := 0; k < 3; k++ {
+						frame.Triangles[tIdx].Vertices[k].Pos.Z += dz
+					}
+				}
+			}
+			allFrames = append(allFrames, frame)
+		}
+		endFrame := len(allFrames) - 1
+		actionNames = append(actionNames, "death")
+		actionIntervals = append(actionIntervals, [2]int{startFrame, endFrame})
 	}
 
 	cModel := config.NewModel3DEntry(len(allFrames), actionNames, []string{"death", "die"})

@@ -74,6 +74,10 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	_ = materials.LoadFromArchive(arc)
 	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.Defs))
 
+	defs := proc.NewDefs()
+	_ = defs.LoadFromArchive(arc)
+	fmt.Printf("Loaded %d entityDefs, %d models from .def files\n", len(defs.EntityDefs), len(defs.ModelDefs))
+
 	// Parse corresponding .map file to extract entities (lights, player start, func_static, items)
 	mapName := strings.TrimSuffix(maps[levelIndex], ".proc")
 	mapPath := "maps" + proc.Pak4Separator + mapName + ".map"
@@ -155,7 +159,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	playerAngle := 0.0
 	monsters := 0
 
-	thingsManager := NewThings(arc, materials, texManager, imgLoader)
+	thingsManager := NewThings(arc, materials, defs, texManager, imgLoader)
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
 		base := strings.Split(classname, "_")[0]

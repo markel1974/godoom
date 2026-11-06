@@ -336,6 +336,11 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
+	for x := 0; x < runningLen; x++ {
+		t2 := th.running[x]
+		t2.VerticesGetEntity().SetOnGround(t2.GetCage().HasFloor())
+	}
+
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)
 	//th.event.wg.Wait()
 	for si := 0; si < th.solverIterations; si++ {
@@ -350,13 +355,10 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	}
 
 	// PHYSYCS APPLY
-	th.event.SetStage(StageApply)
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		th.event.wg.Add(1)
-		t2.PostMessage(th.event)
+		t2.StageApply()
 	}
-	th.event.wg.Wait()
 
 	// COMMIT SPAZIALE E INTEGRAZIONE
 	for x := 0; x < runningLen; x++ {

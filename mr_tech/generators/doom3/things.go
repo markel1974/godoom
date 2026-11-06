@@ -404,7 +404,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 		actionIntervals = [][2]int{{0, 0}}
 	}
 
-	cModel := config.NewModel3DEntry(len(allFrames), actionNames)
+	cModel := config.NewModel3DEntry(len(allFrames), actionNames, []string{"death", "die"})
 	for i, f := range allFrames {
 		cModel.Frames[i] = f
 	}
@@ -492,7 +492,7 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 		return nil, fmt.Errorf("no triangles generated from LWO")
 	}
 
-	cModel := config.NewModel3DEntry(1, []string{"idle"})
+	cModel := config.NewModel3DEntry(1, []string{"idle"}, []string{"death", "die"})
 	cModel.Frames[0] = config.NewModel3DEntryFrame(triangles)
 	cModel.ActionDefinitions = []string{"idle"}
 	cModel.ActionIntervals = [][2]int{{0, 0}}

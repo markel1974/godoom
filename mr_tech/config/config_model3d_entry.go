@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
@@ -67,14 +68,14 @@ type Model3DEntry struct {
 }
 
 // NewModel3DEntry creates a new Model3DEntry instance with the specified number of frames and initializes it using the provided frame names.
-func NewModel3DEntry(numFrames int, frameNames []string) *Model3DEntry {
+func NewModel3DEntry(numFrames int, frameNames []string, actionClamp []string) *Model3DEntry {
 	m := &Model3DEntry{
 		Frames: make([]Model3DEntryFrame, numFrames),
 	}
 	for i := 0; i < numFrames; i++ {
 		m.Frames[i].Tags = make(map[string]Model3DTag)
 	}
-	m.ActionClamp = []string{"death", "die"}
+	m.ActionClamp = actionClamp
 	m.GroupSize = 6
 	m.compute(frameNames)
 	return m
@@ -147,57 +148,6 @@ func (m *Model3DEntry) GetBaseName(fn string) (string, int) {
 	return a, val
 }
 
-// DropToFloor repositions the 3D model so that its lowest point aligns with the floor and is centered on the X-Y plane.
-func (m *Model3DEntry) DropToFloor() {
-	if m == nil || len(m.Frames) == 0 {
-		return
-	}
-
-	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
-	maxX, maxY := math.Inf(-1), math.Inf(-1)
-	hasVertices := false
-
-	for _, frame := range m.Frames {
-		for _, tri := range frame.Triangles {
-			for _, vertex := range tri.Vertices {
-				p := vertex.Pos
-				hasVertices = true
-
-				minX = math.Min(minX, p.X)
-				maxX = math.Max(maxX, p.X)
-				minY = math.Min(minY, p.Y)
-				maxY = math.Max(maxY, p.Y)
-				minZ = math.Min(minZ, p.Z)
-			}
-		}
-	}
-
-	if !hasVertices {
-		return
-	}
-
-	centerX := (minX + maxX) / 2
-	centerY := (minY + maxY) / 2
-
-	for frameIdx := range m.Frames {
-		for triIdx := range m.Frames[frameIdx].Triangles {
-			for vertexIdx := range m.Frames[frameIdx].Triangles[triIdx].Vertices {
-				p := &m.Frames[frameIdx].Triangles[triIdx].Vertices[vertexIdx].Pos
-
-				p.X -= centerX
-				p.Y -= centerY
-				p.Z -= minZ
-			}
-		}
-		for tagName, tag := range m.Frames[frameIdx].Tags {
-			tag.Origin.X -= centerX
-			tag.Origin.Y -= centerY
-			tag.Origin.Z -= minZ
-			m.Frames[frameIdx].Tags[tagName] = tag
-		}
-	}
-}
-
 // Center repositions the 3D model by centering its vertices around the origin of the coordinate system.
 func (m *Model3DEntry) Center() {
 	if m == nil || len(m.Frames) == 0 {
@@ -206,36 +156,77 @@ func (m *Model3DEntry) Center() {
 
 	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
 	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
+	hasVertices := false
 
-	for _, frame := range m.Frames {
-		for _, tri := range frame.Triangles {
-			for _, vertex := range tri.Vertices {
-				p := vertex.Pos
-				if p.X < minX {
-					minX = p.X
-				}
-				if p.X > maxX {
-					maxX = p.X
-				}
-				if p.Y < minY {
-					minY = p.Y
-				}
-				if p.Y > maxY {
-					maxY = p.Y
-				}
-				if p.Z < minZ {
-					minZ = p.Z
-				}
-				if p.Z > maxZ {
-					maxZ = p.Z
+	for _, tri := range m.Frames[0].Triangles {
+		for _, vertex := range tri.Vertices {
+			p := vertex.Pos
+			hasVertices = true
+			if p.X < minX {
+				minX = p.X
+			}
+			if p.X > maxX {
+				maxX = p.X
+			}
+			if p.Y < minY {
+				minY = p.Y
+			}
+			if p.Y > maxY {
+				maxY = p.Y
+			}
+			if p.Z < minZ {
+				minZ = p.Z
+			}
+			if p.Z > maxZ {
+				maxZ = p.Z
+			}
+		}
+	}
+
+	if !hasVertices {
+		return
+	}
+
+	idle := []string{"stand", "idle", "legs_idle", "hover"}
+
+	referenceFrame := 0
+	if len(m.ActionDefinitions) > 0 && len(m.ActionIntervals) == len(m.ActionDefinitions) {
+		for i, name := range m.ActionDefinitions {
+			base, _ := m.GetBaseName(strings.ToLower(strings.TrimSpace(name)))
+			found := false
+			for _, t := range idle {
+				if strings.Contains(base, t) {
+					if idx := m.ActionIntervals[i][0]; idx >= 0 && idx < len(m.Frames) {
+						referenceFrame = idx
+						found = true
+						break
+					}
 				}
 			}
+			if found {
+				break
+			}
+		}
+	}
+
+	minZIdle := minZ
+	if referenceFrame != 0 {
+		fMinZ := math.Inf(1)
+		for _, tri := range m.Frames[referenceFrame].Triangles {
+			for _, vertex := range tri.Vertices {
+				if vertex.Pos.Z < fMinZ {
+					fMinZ = vertex.Pos.Z
+				}
+			}
+		}
+		if !math.IsInf(fMinZ, 1) {
+			minZIdle = fMinZ
 		}
 	}
 
 	centerX := (minX + maxX) / 2
 	centerY := (minY + maxY) / 2
-	centerZ := (minZ + maxZ) / 2
+	centerZ := minZIdle + (maxZ-minZ)/2
 
 	for frameIdx := range m.Frames {
 		for triIdx := range m.Frames[frameIdx].Triangles {
@@ -255,6 +246,8 @@ func (m *Model3DEntry) Center() {
 	}
 }
 
+// GetSize returns the model radius and height computed from the first frame's vertex bounds.
+// GetSize returns zero values when no vertices are present or computed dimensions do not exceed 1.0.
 func (m *Model3DEntry) GetSize() (float64, float64) {
 	var radius, height float64
 	if len(m.Frames) > 0 {

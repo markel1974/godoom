@@ -84,7 +84,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 	anim := config.NewConfigMaterial("thing", []string{skinName}, config.MaterialKindSolid)
 	ConfigureThingMaterial(anim, classname)
 
-	cModel := config.NewModel3DEntry(int(md1.Header.NumFrames), md1.FrameNames)
+	cModel := config.NewModel3DEntry(int(md1.Header.NumFrames), md1.FrameNames, []string{"death", "die"})
 	for idx, f := range md1.Frames {
 		triangles := make([]config.Model3DEntryTriangle, int(md1.Header.NumTris))
 		skinW := float32(md1.Header.SkinWidth)
@@ -161,7 +161,7 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
-	model3d := config.NewModel3DEntry(1, []string{"default"})
+	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
@@ -253,7 +253,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
-	model3d := config.NewModel3DEntry(1, []string{"default"})
+	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 	return thingCfg, nil

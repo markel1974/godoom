@@ -361,7 +361,7 @@ func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geom
 	}
 
 	// Create a single-frame Model3DEntry
-	cModel := config.NewModel3DEntry(1, []string{"stand"})
+	cModel := config.NewModel3DEntry(1, []string{"stand"}, []string{"death", "die"})
 	cModel.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
 	cThing := b.createConfigThing(id, pos, kind, 0, 40, 10, 50, 0)

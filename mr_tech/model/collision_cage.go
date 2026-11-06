@@ -465,7 +465,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		lFace := faces.lFace
 
 		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
-		if mat := rFace.GetMaterial(); mat == nil || !mat.IsSolid() {
+		if mat := rFace.GetMaterial(); mat != nil && !mat.IsSolid() {
 			//fmt.Println("Liquid material detected")
 			continue
 		}
@@ -476,7 +476,7 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane
 		if lFace != nil && rCage != nil {
 			//b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeManifold(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
-			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
+			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rCage, rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
@@ -647,7 +647,7 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 
 // computeFaceMeshVsMesh determines the intersection and response between two mesh faces in 3D space with offsets.
 // It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.
-func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	// Dati del piano remoto (Il Muro/Ostacolo)
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
@@ -659,17 +659,10 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	// poiché rOffX, rOffY, rOffZ includono già lo spostamento rDX, rDY, rDZ.
 	p0x, p0y, p0z := rFace.Translate(0, rOffX, rOffY, rOffZ)
 
-	rParent := rFace.GetParent()
-	if rParent == nil {
-		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-	}
-	rEnt := rParent.GetEntity()
-	rCx0, rCy0, rCz0 := rEnt.GetCenter()
-	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
-	rTx := rCx0 + rDX
-	rTy := rCy0 + rDY
-	rTz := rCz0 + rDZ
-	rRadX, rRadY, rRadZ := rEnt.GetSizeCenter()
+	rCx0, rCy0, rCz0 := rCage.GetC()
+	rDX, rDY, rDZ := rCage.GetDisplacement()
+	rTx, rTy, rTz := rCage.GetT()
+	rRadX, rRadY, rRadZ := rCage.GetRad()
 
 	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)
 	p0x0 := p0x - rDX
@@ -684,9 +677,6 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	// Scartiamo solo i piani visivi interni privi di tag fisico (es. quad billboard centrale a Y=0).
 	outDot := (p0x-rTx)*nX + (p0y-rTy)*nY + (p0z-rTz)*nZ
 	if math.Abs(outDot) <= planeEpsilon {
-		if len(rFace.GetLabel()) == 0 {
-			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-		}
 		if relX*nX+relY*nY+relZ*nZ < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 		}
@@ -834,7 +824,7 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rFace *Face, lFace *Face, rOffX, r
 	var hitDist float64
 
 	for i := 0; i < 3; i++ {
-		vx, vy, vz := rFace.Translate(i, lOffX, lOffY, lOffZ)
+		vx, vy, vz := lFace.Translate(i, lOffX, lOffY, lOffZ)
 		vDist := (vx-p0x)*nX + (vy-p0y)*nY + (vz-p0z)*nZ
 		if pen := -vDist; pen > maxPenetration {
 			maxPenetration = pen

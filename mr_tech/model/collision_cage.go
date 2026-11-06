@@ -629,14 +629,11 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 	pen0 := math.Max(0.0, rayEff-distStart)
 	deltaPen := math.Max(0.0, penetration-pen0)
 
-	var minOverlap float64
-	if solidWE {
-		minOverlap = oX + deltaPen
-	} else if solidNS {
-		minOverlap = oY + deltaPen
-	} else {
-		minOverlap = oZ + deltaPen
+	normOX := oX
+	if nAbsX > 1e-5 && nAbsX < 1.0 {
+		normOX = oX / nAbsX
 	}
+	minOverlap := math.Min(normOX, math.Min(oY, oZ)) + deltaPen
 
 	if penetration > minOverlap+satFilterEpsilon {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
@@ -667,11 +664,6 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 	rTx, rTy, rTz := rCage.GetT()
 	rRadX, rRadY, rRadZ := rCage.GetRad()
 
-	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)
-	p0x0 := p0x - rDX
-	p0y0 := p0y - rDY
-	p0z0 := p0z - rDZ
-
 	relX := s.cX - rCx0
 	relY := s.cY - rCy0
 	relZ := s.cZ - rCz0
@@ -686,6 +678,44 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 	} else if outDot < 0 {
 		nX, nY, nZ = -nX, -nY, -nZ
 	}
+
+	// Classificazione dell'asse dominante della faccia remota e canonizzazione sul volume AABB
+	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
+	solidNS := nAbsY > nAbsZ
+
+	if solidWE {
+		if nX < 0 {
+			nX = -1.0
+		} else {
+			nX = 1.0
+		}
+		nY, nZ = 0.0, 0.0
+		nAbsX, nAbsY, nAbsZ = 1.0, 0.0, 0.0
+		p0x, p0y, p0z = rTx+nX*rRadX, rTy, rTz
+	} else if solidNS {
+		if nY < 0 {
+			nY = -1.0
+		} else {
+			nY = 1.0
+		}
+		nX, nZ = 0.0, 0.0
+		nAbsX, nAbsY, nAbsZ = 0.0, 1.0, 0.0
+		p0x, p0y, p0z = rTx, rTy+nY*rRadY, rTz
+	} else {
+		if nZ < 0 {
+			nZ = -1.0
+		} else {
+			nZ = 1.0
+		}
+		nX, nY = 0.0, 0.0
+		nAbsX, nAbsY, nAbsZ = 0.0, 0.0, 1.0
+		p0x, p0y, p0z = rTx, rTy, rTz+nZ*rRadZ
+	}
+
+	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)
+	p0x0 := p0x - rDX
+	p0y0 := p0y - rDY
+	p0z0 := p0z - rDZ
 
 	// La faccia remota deve essere rivolta verso il centro relativo iniziale dell'entità locale
 	if relX*nX+relY*nY+relZ*nZ <= 0 {
@@ -789,34 +819,26 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 	var axisOverlap float64
 	matchedAxis := false
 
-	pickOverlap := func(entryO, boxO, nComp float64) float64 {
-		ov := boxO
+	pickOverlap := func(entryO, boxO float64) float64 {
 		if sweptMode {
-			ov = entryO
+			return entryO
 		}
-		if nComp > planeEpsilon && nComp < 1.0 {
-			return ov / nComp
-		}
-		return ov
+		return boxO
 	}
 
-	// Classificazione dell'asse dominante della faccia remota
-	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
-	solidNS := nAbsY > nAbsZ
-
 	if solidWE {
-		if activeX && nAbsX > planeEpsilon && relX*nX > 0 && (!sweptMode || impX*nX < -planeEpsilon) {
-			axisOverlap = pickOverlap(entryOX, boxOX, nAbsX)
+		if activeX && relX*nX > 0 && (!sweptMode || impX*nX < -planeEpsilon) {
+			axisOverlap = pickOverlap(entryOX, boxOX)
 			matchedAxis = true
 		}
 	} else if solidNS {
-		if activeY && nAbsY > planeEpsilon && relY*nY > 0 && (!sweptMode || impY*nY < -planeEpsilon) {
-			axisOverlap = pickOverlap(entryOY, boxOY, nAbsY)
+		if activeY && relY*nY > 0 && (!sweptMode || impY*nY < -planeEpsilon) {
+			axisOverlap = pickOverlap(entryOY, boxOY)
 			matchedAxis = true
 		}
 	} else {
-		if activeZ && nAbsZ > planeEpsilon && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
-			axisOverlap = pickOverlap(entryOZ, boxOZ, nAbsZ)
+		if activeZ && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
+			axisOverlap = pickOverlap(entryOZ, boxOZ)
 			matchedAxis = true
 		}
 	}
@@ -824,25 +846,8 @@ func (s *CollisionCage) computeFaceMeshVsMesh(rCage *CollisionCage, rFace *Face,
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// Calcolo Penetrazione Esatta Vertice-Piano (valutata a t = 1 per il push-out di StageApply)
-	maxPenetration := -math.MaxFloat64
-	var hitDist float64
-
-	for i := 0; i < 3; i++ {
-		vx, vy, vz := lFace.Translate(i, lOffX, lOffY, lOffZ)
-		vDist := (vx-p0x)*nX + (vy-p0y)*nY + (vz-p0z)*nZ
-		if pen := -vDist; pen > maxPenetration {
-			maxPenetration = pen
-			hitDist = vDist
-		}
-	}
-
-	if maxPenetration <= 0 || maxPenetration > axisOverlap+satFilterEpsilon {
-		return 0, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, 0, 0
-	}
-	if maxPenetration > axisOverlap {
-		maxPenetration = axisOverlap
-	}
+	maxPenetration := axisOverlap
+	hitDist := -axisOverlap
 
 	// Classificazione finale del Bucket sulla normale di contatto già determinata e orientata
 
@@ -1175,4 +1180,18 @@ func (s *CollisionCage) HasFloor() bool {
 // GetEntity returns the physics entity associated with the collision cage.
 func (s *CollisionCage) GetEntity() *physics.Entity {
 	return s.object.VerticesGetEntity()
+}
+
+// SetApplied marks the collision cage as having applied its frame displacement.
+func (s *CollisionCage) SetApplied() {
+	s.applied = true
+}
+
+// GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
+func (s *CollisionCage) GetPushOffset() (float64, float64, float64) {
+	curX, curY, curZ := s.object.VerticesGetEntity().GetCenter()
+	if s.applied {
+		return curX - s.tX, curY - s.tY, curZ - s.tZ
+	}
+	return curX - s.cX, curY - s.cY, curZ - s.cZ
 }

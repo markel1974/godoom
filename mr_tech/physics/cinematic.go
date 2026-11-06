@@ -239,14 +239,7 @@ func (e *Cinematic) Update() {
 	const sleepEpsilon = 0.005
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
-	gForce := e.gForce
-	if e.onGround {
-		gForce = 0.0
-		if e.vz < 0.0 {
-			e.vz = 0.0
-		}
-	}
-	e.vz += (e.az - gForce) * e.dt // gravity always acts unconditionally
+	e.vz += (e.az - e.gForce) * e.dt // gravity always acts unconditionally
 
 	// reset accumulator
 	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
@@ -271,7 +264,7 @@ func (e *Cinematic) Update() {
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-	if e.onGround && (math.Abs(e.vz) < e.vMin || e.vz < 0.0) {
+	if e.onGround && math.Abs(e.vz) < e.vMin {
 		e.vz = 0.0
 	}
 	// terminal velocity clamping
@@ -400,12 +393,7 @@ func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool,
 	if invMassSum <= 0.0 {
 		return 0, 0, false
 	}
-	// Lungo la verticale (supporto di gravità) correggiamo al 100% per evitare affondamenti;
-	// lungo gli assi orizzontali applichiamo la percentuale standard (30%)
 	correction := depth
-	if math.Abs(nz) <= defaultPenetrationDepth {
-		correction *= defaultPositionalPercent
-	}
 	p1 := correction * (invMass1 / invMassSum)
 	p2 := correction * (invMass2 / invMassSum)
 

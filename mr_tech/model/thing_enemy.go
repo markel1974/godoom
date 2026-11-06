@@ -40,6 +40,11 @@ func (t *ThingEnemy) IsEqual(other IThing) bool {
 	return false
 }
 
+// HasThinking determines if the ThingEnemy instance has a thinking function assigned. Returns true if it is set.
+func (t *ThingEnemy) HasThinking() bool {
+	return t.onThinking != nil
+}
+
 // Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
 func (t *ThingEnemy) Jump(leapX float64, leapY float64, zFactor float64) bool {
 	return t.ThingBase.jump(leapX, leapY, zFactor)
@@ -82,11 +87,6 @@ func (t *ThingEnemy) StartLoop() {
 			}
 		}
 	}()
-}
-
-// HasThinking determines if the ThingEnemy instance has a thinking function assigned. Returns true if it is set.
-func (t *ThingEnemy) HasThinking() bool {
-	return t.onThinking != nil
 }
 
 // StageThinking processes the enemy's thinking phase using the player's coordinates (X, Y, Z) as input.

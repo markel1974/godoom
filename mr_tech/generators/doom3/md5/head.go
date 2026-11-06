@@ -2,6 +2,7 @@ package md5
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // HeadJointTransform represents different types of transformations applied to head joints in a 3D space.
@@ -78,12 +79,12 @@ func NewHeadAttachment(bodyMesh *Mesh, headMesh *Mesh, attachJoint string) *Head
 				continue
 			}
 			pj := headMesh.Joints[pIdx]
-			invQ := QuatConjugate(pj.Orient)
+			invQ := physics.QuatConjugate(pj.Orient)
 			dPos := geometry.XYZ{X: hj.Pos.X - pj.Pos.X, Y: hj.Pos.Y - pj.Pos.Y, Z: hj.Pos.Z - pj.Pos.Z}
 			hb := NewHeadJointBinding(HeadTransformChild, 0)
 			hb.parentIdx = pIdx
-			hb.pLocal = QuatRotate(invQ, dPos)
-			hb.qLocal = QuatMultiplies(invQ, hj.Orient)
+			hb.pLocal = physics.QuatRotate(invQ, dPos)
+			hb.qLocal = physics.QuatMultiplies(invQ, hj.Orient)
 			bindings[i] = hb
 		}
 	}
@@ -107,9 +108,9 @@ func (h *HeadAttachment) BuildHeadSkeleton(bodySkeleton []*Joint) []*Joint {
 		} else {
 			if b.parentIdx >= 0 && b.parentIdx < len(headSkeleton) {
 				pEval := headSkeleton[b.parentIdx]
-				rPos := QuatRotate(pEval.Orient, b.pLocal)
+				rPos := physics.QuatRotate(pEval.Orient, b.pLocal)
 				cPos := geometry.XYZ{X: pEval.Pos.X + rPos.X, Y: pEval.Pos.Y + rPos.Y, Z: pEval.Pos.Z + rPos.Z}
-				cOrient := QuatNormalize(QuatMultiplies(pEval.Orient, b.qLocal))
+				cOrient := physics.QuatNormalize(physics.QuatMultiplies(pEval.Orient, b.qLocal))
 				headSkeleton[i] = NewJoint(hj.name, hj.parent, cPos, cOrient)
 			}
 		}

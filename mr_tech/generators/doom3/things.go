@@ -11,6 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // Things manages the loading, caching, and instantiation of 3D entities (monsters, items, weapons, ammo) in Doom 3.
@@ -317,7 +318,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 					weight := sub.Weights[vert.WeightIdx+w]
 					joint := skel[weight.JointId]
 
-					rotated := md5.QuatRotate(joint.Orient, weight.Pos)
+					rotated := physics.QuatRotate(joint.Orient, weight.Pos)
 					p.X += (joint.Pos.X + rotated.X) * weight.Bias
 					p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
 					p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
@@ -350,7 +351,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 					for w := 0; w < vert.WeightSpan; w++ {
 						weight := sub.Weights[vert.WeightIdx+w]
 						joint := headSkel[weight.JointId]
-						rotated := md5.QuatRotate(joint.Orient, weight.Pos)
+						rotated := physics.QuatRotate(joint.Orient, weight.Pos)
 						p.X += (joint.Pos.X + rotated.X) * weight.Bias
 						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
 						p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias

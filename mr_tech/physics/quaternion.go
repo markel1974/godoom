@@ -1,4 +1,4 @@
-package md5
+package physics
 
 import (
 	"math"
@@ -9,23 +9,19 @@ import (
 // QuatRotate rotates a 3D vector v by a quaternion q and returns the resulting vector as a new geometry.XYZ.
 func QuatRotate(q [4]float64, v geometry.XYZ) geometry.XYZ {
 	qx, qy, qz, qw := q[0], q[1], q[2], q[3]
-
 	tx := 2.0 * (qy*v.Z - qz*v.Y)
 	ty := 2.0 * (qz*v.X - qx*v.Z)
 	tz := 2.0 * (qx*v.Y - qy*v.X)
-
 	rx := v.X + qw*tx + (qy*tz - qz*ty)
 	ry := v.Y + qw*ty + (qz*tx - qx*tz)
 	rz := v.Z + qw*tz + (qx*ty - qy*tx)
-
 	return geometry.XYZ{X: rx, Y: ry, Z: rz}
 }
 
 // QuatMultiplies computes the product of two quaternions q1 and q2, returning the resulting quaternion.
-func QuatMultiplies(q1, q2 [4]float64) [4]float64 {
+func QuatMultiplies(q1 [4]float64, q2 [4]float64) [4]float64 {
 	x1, y1, z1, w1 := q1[0], q1[1], q1[2], q1[3]
 	x2, y2, z2, w2 := q2[0], q2[1], q2[2], q2[3]
-
 	return [4]float64{
 		w1*x2 + x1*w2 + y1*z2 - z1*y2,
 		w1*y2 - x1*z2 + y1*w2 + z1*x2,

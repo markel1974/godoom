@@ -68,7 +68,6 @@ func (e *Entity) ResolvePenetration(other *Entity, nx, ny, nz float64, penetrati
 		return
 	}
 	correction := depth * defaultPositionalPercent
-
 	if other != nil {
 		invMass1 := e.GetInvMass()
 		invMass2 := other.GetInvMass()
@@ -76,17 +75,13 @@ func (e *Entity) ResolvePenetration(other *Entity, nx, ny, nz float64, penetrati
 		if invMassSum <= 0.0 {
 			return
 		}
-
 		p1 := correction * (invMass1 / invMassSum)
 		p2 := correction * (invMass2 / invMassSum)
-
-		// Se l'entità sottostante è appoggiata al suolo e stiamo sopra di essa (+Z),
-		// scarichiamo l'intera correzione verso l'alto evitando di spingerla nel pavimento.
+		// Se l'entità sottostante è appoggiata al suolo e stiamo sopra di essa (+Z), scarichiamo l'intera correzione verso l'alto evitando di spingerla nel pavimento.
 		if other.IsOnGround() && nz > 0 {
 			p1 = correction
 			p2 = 0.0
 		}
-
 		e.AddTo(nx*p1, ny*p1, nz*p1)
 		other.AddTo(-nx*p2, -ny*p2, -nz*p2)
 	} else {

@@ -206,8 +206,6 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 		t.location = location
 	}
 	entity := t.GetEntity()
-
-	//onGround := t.cage.BucketCount(BucketFloor) > 0
 	entity.SetOnGround(false)
 
 	// INTEGRAZIONE ORIGINALE (Sostituisce GetDisplacement)
@@ -216,32 +214,25 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 
-	//fmt.Println("-------------------")
-
 	// RISOLUZIONE GEOMETRICA (Push-out)
-	// Ora che siamo nel punto di impatto, le correzioni spingeranno
-	// l'entità esattamente sulla superficie dell'ostacolo.
+	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 		if slot.GetBucket() == BucketFloor {
 			entity.SetOnGround(true)
 		}
-
 		iMode := slot.GetImpactMode()
 		if iMode == ImpactStep {
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
 		}
-
 		penetration := slot.GetPenetration()
 		nX, nY, nZ := slot.GetNormal()
-
+		var rEnt *physics.Entity = nil
 		if iMode == ImpactElastic && slot.rCage != nil {
-			rEnt := slot.rCage.object.GetEntity()
-			entity.ResolvePenetration(rEnt, nX, nY, nZ, penetration)
-		} else {
-			entity.ResolvePenetration(nil, nX, nY, nZ, penetration)
+			rEnt = slot.rCage.object.GetEntity()
 		}
+		entity.ResolvePenetration(rEnt, nX, nY, nZ, penetration)
 
 		if slot.rCage != nil {
 			t.onCollision(slot.rCage.object)

@@ -1,6 +1,7 @@
 package physics
 
 import (
+	"math"
 	"sync/atomic"
 )
 
@@ -68,31 +69,27 @@ func (e *Entity) ResolveElasticPenetration(other *Entity, otherFloor bool, nx, n
 	if depth <= 0.0 {
 		return
 	}
-	if nz > defaultPenetrationDepth {
-		// 'other' è sotto 'e': se 'other' poggia a terra, non può scendere verso il basso
-		if otherFloor || other.IsOnGround() {
-			e.AddTo(nx*depth, ny*depth, nz*depth)
-			//other.AddTo(-nx*0.0, -ny*0.0, -nz*0.0)
-			return
-		}
-	} else if nz < -defaultPenetrationDepth {
-		// 'other' è sopra 'e': se 'e' poggia a terra, non deve essere compresso in basso
-		if e.IsOnGround() {
-			//e.AddTo(nx*0.0, ny*0.0, nz*0.0
-			other.AddTo(-nx*depth, -ny*depth, -nz*depth)
-			return
-		}
-	}
-	correction := depth * defaultPositionalPercent
 	invMass1 := e.GetInvMass()
 	invMass2 := other.GetInvMass()
+	// Se il corpo di appoggio poggia a terra lungo la verticale, non può scendere verso il basso (massa infinita -> invMass = 0)
+	if (otherFloor || other.IsOnGround()) && nz > defaultPenetrationDepth {
+		invMass2 = 0.0
+	} else if e.IsOnGround() && nz < -defaultPenetrationDepth {
+		invMass1 = 0.0
+	}
 	invMassSum := invMass1 + invMass2
 	if invMassSum <= 0.0 {
 		return
 	}
+	// Lungo la verticale (supporto di gravità) correggiamo al 100% per evitare affondamenti;
+	// lungo gli assi orizzontali applichiamo la percentuale standard (30%)
+	correction := depth
+	if math.Abs(nz) <= defaultPenetrationDepth {
+		correction *= defaultPositionalPercent
+	}
 	p1 := correction * (invMass1 / invMassSum)
-	e.AddTo(nx*p1, ny*p1, nz*p1)
 	p2 := correction * (invMass2 / invMassSum)
+	e.AddTo(nx*p1, ny*p1, nz*p1)
 	other.AddTo(-nx*p2, -ny*p2, -nz*p2)
 }
 

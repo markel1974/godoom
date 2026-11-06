@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 )
 
 // Doom3ThingSpec holds the default physical and rendering configuration for a Doom 3 entity type.
@@ -17,6 +18,8 @@ type Doom3ThingSpec struct {
 	DeathAnim  string
 	HeadMesh   string
 	HeadJoint  string
+	Ragdoll    string
+	AFBodies   []proc.AFBody
 	Kind       config.ThingType
 	Mass       float64
 	Speed      float64

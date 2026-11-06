@@ -25,6 +25,19 @@ type ModelDef struct {
 	Anims   map[string]string
 }
 
+// AFBody represents a single rigid body segment from a Doom 3 .af (Articulated Figure) ragdoll file.
+type AFBody struct {
+	Name            string
+	Joint           string
+	ContainedJoints string
+}
+
+// AFDecl represents a parsed articulatedFigure declaration from an .af file.
+type AFDecl struct {
+	Name   string
+	Bodies []AFBody
+}
+
 // ResolvedEntityDef holds the fully resolved model, head, animation, and physical dependencies for a Doom 3 entity.
 type ResolvedEntityDef struct {
 	Classname  string
@@ -32,6 +45,8 @@ type ResolvedEntityDef struct {
 	ModelPath  string
 	HeadMesh   string
 	HeadJoint  string
+	Ragdoll    string
+	AFBodies   []AFBody
 	IdleAnim   string
 	WalkAnim   string
 	RunAnim    string
@@ -42,11 +57,12 @@ type ResolvedEntityDef struct {
 	Health     float64
 }
 
-// Defs manages all entityDef and model declarations parsed from Doom 3 .def files in the PK4 archive.
+// Defs manages all entityDef, model, and articulatedFigure declarations parsed from Doom 3 .def and .af files in the PK4 archive.
 type Defs struct {
 	arc        IPkArchive
 	EntityDefs map[string]*EntityDef
 	ModelDefs  map[string]*ModelDef
+	AFDecls    map[string]*AFDecl
 }
 
 // NewDefs creates and returns a new empty Defs registry.
@@ -55,10 +71,11 @@ func NewDefs(arc IPkArchive) *Defs {
 		arc:        arc,
 		EntityDefs: make(map[string]*EntityDef),
 		ModelDefs:  make(map[string]*ModelDef),
+		AFDecls:    make(map[string]*AFDecl),
 	}
 }
 
-// LoadFromArchive scans the "def" directory of the PK4 archive using ReadDirFilter and parses all .def files.
+// LoadFromArchive scans the "def" and "af" directories of the PK4 archive using ReadDirFilter and parses all .def and .af files.
 func (d *Defs) LoadFromArchive() error {
 	defFiles, _ := d.arc.ReadDirFilter("def", "\\.def$")
 	for _, defName := range defFiles {
@@ -72,6 +89,21 @@ func (d *Defs) LoadFromArchive() error {
 			continue
 		}
 		d.parseDefData(data)
+	}
+
+	afFiles, _ := d.arc.ReadDirFilter("af", "\\.af$")
+	for _, afName := range afFiles {
+		fullPath := "af" + Pak4Separator + afName
+		f, err := d.arc.Open(fullPath)
+		if err != nil {
+			continue
+		}
+		data, err := io.ReadAll(f)
+		if err != nil {
+			continue
+		}
+		stem := strings.TrimSuffix(strings.ToLower(path.Base(afName)), ".af")
+		d.parseAFData(stem, data)
 	}
 	return nil
 }
@@ -202,6 +234,108 @@ func (d *Defs) parseDefData(data []byte) {
 			}
 		}
 	}
+}
+
+// parseAFData parses articulatedFigure and body blocks from raw .af file bytes.
+func (d *Defs) parseAFData(fileStem string, data []byte) {
+	lexer := NewLexer(data)
+	declName := fileStem
+	var bodies []AFBody
+
+	for {
+		tok, err := lexer.NextToken()
+		if err != nil {
+			break
+		}
+		tokLower := strings.ToLower(StripQuotes(tok))
+		if tokLower == "articulatedfigure" {
+			if nameTok, err := lexer.NextToken(); err == nil && nameTok != "{" {
+				declName = strings.ToLower(StripQuotes(nameTok))
+			}
+			continue
+		}
+		if tokLower == "body" {
+			nameTok, err := lexer.NextToken()
+			if err != nil {
+				break
+			}
+			if peek, err := lexer.PeekToken(); err != nil || peek != "{" {
+				continue
+			}
+			_ = lexer.Expect("{")
+			body := AFBody{
+				Name: strings.ToLower(StripQuotes(nameTok)),
+			}
+			depth := 1
+			parenDepth := 0
+			for depth > 0 {
+				bTok, err := lexer.NextToken()
+				if err != nil {
+					break
+				}
+				if bTok == "{" {
+					depth++
+					continue
+				}
+				if bTok == "}" {
+					depth--
+					continue
+				}
+				if bTok == "(" {
+					parenDepth++
+					continue
+				}
+				if bTok == ")" {
+					if parenDepth > 0 {
+						parenDepth--
+					}
+					continue
+				}
+				if depth != 1 || parenDepth > 0 {
+					continue
+				}
+				bLower := strings.ToLower(StripQuotes(bTok))
+				switch bLower {
+				case "joint":
+					if peek, err := lexer.PeekToken(); err == nil && peek != "(" && peek != "{" && peek != "}" {
+						if jTok, err := lexer.NextToken(); err == nil {
+							body.Joint = StripQuotes(jTok)
+						}
+					}
+				case "containedjoints":
+					if cjTok, err := lexer.NextToken(); err == nil && cjTok != "{" && cjTok != "}" {
+						body.ContainedJoints = StripQuotes(cjTok)
+					}
+				}
+			}
+			bodies = append(bodies, body)
+		}
+	}
+
+	if len(bodies) > 0 {
+		afDecl := &AFDecl{
+			Name:   declName,
+			Bodies: bodies,
+		}
+		d.AFDecls[declName] = afDecl
+		if len(fileStem) > 0 {
+			d.AFDecls[fileStem] = afDecl
+		}
+	}
+}
+
+// ResolveAFBodies looks up the parsed AFBody slice for an articulated figure name or .af path.
+func (d *Defs) ResolveAFBodies(ragdoll string) ([]AFBody, bool) {
+	if len(ragdoll) == 0 {
+		return nil, false
+	}
+	clean := strings.ToLower(strings.TrimSpace(StripQuotes(ragdoll)))
+	clean = strings.TrimPrefix(clean, "af/")
+	clean = strings.TrimSuffix(clean, ".af")
+	if decl, ok := d.AFDecls[clean]; ok && len(decl.Bodies) > 0 {
+		return decl.Bodies, true
+	}
+	return nil, false
 }
 
 // GetEntityProperty resolves a property key on an entityDef following its "inherit" chain.
@@ -373,6 +507,15 @@ func (d *Defs) ResolveEntity(classname string) (*ResolvedEntityDef, bool) {
 	}
 	if hj, ok := d.GetEntityProperty(cn, "head_joint"); ok && len(hj) > 0 {
 		res.HeadJoint = hj
+	}
+	if rag, ok := d.GetEntityProperty(cn, "ragdoll"); ok && len(rag) > 0 {
+		res.Ragdoll = rag
+		if bodies, bOk := d.ResolveAFBodies(rag); bOk {
+			res.AFBodies = bodies
+		}
+	} else if bodies, bOk := d.ResolveAFBodies(cn); bOk {
+		res.Ragdoll = cn
+		res.AFBodies = bodies
 	}
 
 	// If it's an MD5 mesh, enrich animations via ReadDirFilter on the mesh directory in the PK4

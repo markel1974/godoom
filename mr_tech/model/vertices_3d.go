@@ -16,6 +16,7 @@ type Vertices3D struct {
 	totalFaces      int
 	partFaceOffsets []int
 	partFaceCounts  []int
+	viewVolume      *Volume
 	entity          *physics.Entity
 	currentAction   int
 	actions         [][]int
@@ -56,6 +57,9 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *Materials) *Verti
 		c.Model3DEntry = part
 		c.Model3D = nil
 		entry := NewVertices3DEntry(thing, c, materials)
+		if i > 0 && elements[0] != nil {
+			entry.salt = elements[0].salt
+		}
 		elements[i] = entry
 
 		if len(entry.volumes) > 0 && entry.volumes[0] != nil {
@@ -277,27 +281,55 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *Materials) *Verti
 		}
 	}
 
-	if len(v.elements) > 0 && v.elements[0] != nil {
+	if numParts == 1 && v.elements[0] != nil {
+		v.viewVolume = v.elements[0].viewVolume
 		v.entity = v.elements[0].VerticesGetEntity()
+	} else if numParts > 1 {
+		v.VerticesCompile(0)
+		compVol := NewVolume(0, fmt.Sprintf("%s_md3_composite", cfg.Id), "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+		for idx := 0; idx < v.facesA.Len(); idx++ {
+			src := v.facesA.At(idx)
+			if src == nil {
+				continue
+			}
+			pts := src.GetPoints()
+			fCopy := NewFace(pts, fmt.Sprintf("%s_md3_f_%d", cfg.Id, idx), src.material)
+			u0, v0 := src.GetUV0()
+			u1, v1 := src.GetUV1()
+			u2, v2 := src.GetUV2()
+			fCopy.SetUV(u0, v0, u1, v1, u2, v2)
+			fCopy.LockUV(true)
+			compVol.AddFace(fCopy)
+		}
+		compVol.Rebuild()
+		compVol.SetThing(thing)
+		v.viewVolume = compVol
+		v.entity = compVol.GetEntity()
 	}
 
 	return v
 }
 
-// VerticesGetVolume returns the view volume of the first vertex entry, or nil if unavailable.
+// VerticesGetVolume returns the composite view volume of the model, or nil if unavailable.
 func (v *Vertices3D) VerticesGetVolume() *Volume {
+	if v.viewVolume != nil {
+		return v.viewVolume
+	}
 	if len(v.elements) > 0 && v.elements[0] != nil {
 		return v.elements[0].viewVolume
 	}
 	return nil
 }
 
-// VerticesGetEntity returns the physics entity for the first element, or this model's entity if none is present.
+// VerticesGetEntity returns the physics entity for the composite model, or the first element's entity if unset.
 func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
+	if v.entity != nil {
+		return v.entity
+	}
 	if len(v.elements) > 0 && v.elements[0] != nil {
 		return v.elements[0].VerticesGetEntity()
 	}
-	return v.entity
+	return nil
 }
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
@@ -341,8 +373,11 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 	}
 }
 
-// VerticesGetCenter returns the center coordinates of the first element, or zero coordinates if none is available.
+// VerticesGetCenter returns the center coordinates of the composite entity, or zero coordinates if none is available.
 func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
+	if v.entity != nil {
+		return v.entity.GetCenter()
+	}
 	if len(v.elements) > 0 && v.elements[0] != nil {
 		return v.elements[0].VerticesGetCenter()
 	}

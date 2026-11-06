@@ -317,9 +317,10 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 			th.removablesLen++
 			continue
 		}
-		if !t2.StagePrepare() {
-			continue
-		}
+		_ = t2.StagePrepare()
+		//if !moving {
+		//	continue
+		//}
 		th.running[runningLen] = t2
 		runningLen++
 

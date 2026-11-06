@@ -57,3 +57,39 @@ func (e *Entity) GetId() uint64 {
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, penetration float64) {
 	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, penetration)
 }
+
+const defaultPenetrationSlop = 0.02
+const defaultPositionalPercent = 0.3
+
+// ResolvePenetration resolves positional overlap between two entities or against a static obstacle.
+func (e *Entity) ResolvePenetration(other *Entity, nx, ny, nz float64, penetration float64) {
+	depth := penetration - defaultPenetrationSlop
+	if depth <= 0.0 {
+		return
+	}
+	correction := depth * defaultPositionalPercent
+
+	if other != nil {
+		invMass1 := e.GetInvMass()
+		invMass2 := other.GetInvMass()
+		invMassSum := invMass1 + invMass2
+		if invMassSum <= 0.0 {
+			return
+		}
+
+		p1 := correction * (invMass1 / invMassSum)
+		p2 := correction * (invMass2 / invMassSum)
+
+		// Se l'entità sottostante è appoggiata al suolo e stiamo sopra di essa (+Z),
+		// scarichiamo l'intera correzione verso l'alto evitando di spingerla nel pavimento.
+		if other.IsOnGround() && nz > 0 {
+			p1 = correction
+			p2 = 0.0
+		}
+
+		e.AddTo(nx*p1, ny*p1, nz*p1)
+		other.AddTo(-nx*p2, -ny*p2, -nz*p2)
+	} else {
+		e.AddTo(nx*correction, ny*correction, nz*correction)
+	}
+}

@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
@@ -181,18 +182,21 @@ func (t *ThingBase) StageResolve(solverIndex int, solverJitter float64) {
 			continue
 		}
 
-		penetration := slot.GetPenetration() + solverJitter
 		nX, nY, nZ := slot.GetNormal()
 
-		rFace := slot.GetRemoteFace()
-		rParent := rFace.GetParent()
-		rParentEnt := rParent.GetEntity()
+		var rParentEnt *physics.Entity
+		if slot.rCage != nil {
+			rParentEnt = slot.rCage.object.GetEntity()
+		} else {
+			rFace := slot.GetRemoteFace()
+			rParent := rFace.GetParent()
+			rParentEnt = rParent.GetEntity()
+		}
 
 		// Risoluzione Impulsi e Attrito (Fase Cinetica).
 		// Forziamo penetration = 0.0 per inibire la stabilizzazione Baumgarte interna
 		// al metodo ResolveImpact, evitando di iniettare energia cinetica fittizia.
-		penetration = 0.0
-		entity.ResolveImpact(rParentEnt, nX, nY, nZ, penetration)
+		entity.ResolveImpact(rParentEnt, nX, nY, nZ, 0.0)
 
 		//if thing := rParent.GetThing(); thing != nil {
 		//	t.onCollision(t, thing)
@@ -227,72 +231,30 @@ func (t *ThingBase) StageApply(solverJitter float64) {
 			entity.SetOnGround(true)
 		}
 
-		rMovable := true
 		iMode := slot.GetImpactMode()
-		switch iMode {
-		case ImpactStep:
+		if iMode == ImpactStep {
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
-		case ImpactElastic:
-			rMovable = true
-			//rMovable = slot.Penetrable()
-		case ImpactInelastic:
-			rMovable = false
 		}
 
-		const slop = 0.01
-		const positionalPercent = 1.0
+		penetration := slot.GetPenetration()
+		nX, nY, nZ := slot.GetNormal()
 
-		//TODO verifica il bucket ceiling non dovrebbe arrivare nei test!
-		//if slot.GetBucket() == BucketCeiling {
-		//	continue
-		//}
-
-		if rMovable {
-			//if slot.GetBucket() == BucketCeiling {
-			//	continue
-			//}
-			//if t.GetId() == "PLAYER" && slot.rCage != nil {
-			//	nX, nY, nZ := slot.GetNormal()
-			//	fmt.Println("Player collision detected", nX, nY, nZ, slot.GetBucket().String())
-			//}
-			penetration := slot.GetPenetration()
-			if penetration <= slop {
-				continue
-			}
-			correction := ((penetration - slop) * positionalPercent) + solverJitter
-			if correction <= 0.0 {
-				continue
-			}
-			rEnt := slot.GetRemoteFace().GetParent().GetEntity()
-			invMass1 := entity.GetInvMass()
-			invMass2 := rEnt.GetInvMass()
-			invMassSum := invMass1 + invMass2
-
-			ratio1 := invMass1 / invMassSum
-			ratio2 := invMass2 / invMassSum
-			p1 := correction * ratio1
-			p2 := correction * ratio2
-
-			nX, nY, nZ := slot.GetNormal()
-			entity.AddTo(nX*p1, nY*p1, nZ*p1)
-			rEnt.AddTo(-nX*p2, -nY*p2, -nZ*p2)
+		if iMode == ImpactElastic && slot.rCage != nil {
+			rEnt := slot.rCage.object.GetEntity()
+			entity.ResolvePenetration(rEnt, nX, nY, nZ, penetration)
 		} else {
-			penetration := slot.GetPenetration()
-			depth := penetration - slop
-			// Applichiamo la correzione SOLO se siamo fisicamente oltre la zona di quiete
-			if depth > 0.0 {
-				correction := depth * positionalPercent
-				correction += solverJitter
-				nX, nY, nZ := slot.GetNormal()
-				entity.AddTo(nX*correction, nY*correction, nZ*correction) //0.0453) //nZ*correction)
-			}
+			entity.ResolvePenetration(nil, nX, nY, nZ, penetration)
 		}
 
-		rFace := slot.GetRemoteFace()
-		rParent := rFace.GetParent()
-		if thing := rParent.GetThing(); thing != nil {
-			t.onCollision(thing)
+		if slot.rCage != nil {
+			t.onCollision(slot.rCage.object)
+		} else {
+			rFace := slot.GetRemoteFace()
+			rParent := rFace.GetParent()
+			if thing := rParent.GetThing(); thing != nil {
+				t.onCollision(thing)
+			}
 		}
 	}
 }

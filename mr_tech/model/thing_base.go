@@ -179,24 +179,17 @@ func (t *ThingBase) StageResolve() {
 		case ImpactStep:
 			continue
 		}
-
-		nX, nY, nZ := slot.GetNormal()
-
 		var rParentEnt *physics.Entity
 		if slot.rCage != nil {
-			rParentEnt = slot.rCage.object.GetEntity()
+			rParentEnt = slot.rCage.GetEntity()
 		} else {
 			rFace := slot.GetRemoteFace()
 			rParent := rFace.GetParent()
 			rParentEnt = rParent.GetEntity()
 		}
-
 		// Risoluzione Impulsi e Attrito (Fase Cinetica).
+		nX, nY, nZ := slot.GetNormal()
 		entity.ResolveImpact(rParentEnt, nX, nY, nZ)
-
-		//if thing := rParent.GetThing(); thing != nil {
-		//	t.onCollision(t, thing)
-		//}
 	}
 }
 
@@ -227,7 +220,7 @@ func (t *ThingBase) StageApply() {
 		var rFloor bool
 		if iMode == ImpactElastic && slot.rCage != nil {
 			rFloor = slot.rCage.HasFloor()
-			rEnt = slot.rCage.object.GetEntity()
+			rEnt = slot.rCage.GetEntity()
 		}
 		entity.ResolvePenetration(rEnt, rFloor, nX, nY, nZ, penetration)
 

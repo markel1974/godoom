@@ -56,7 +56,6 @@ func (e *Entity) GetId() uint64 {
 // ResolveImpact resolves a collision between two entities by applying impact forces based on their cinematic properties.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz)
-
 }
 
 // ResolvePenetration resolves positional overlap between two entities or against a static obstacle.
@@ -64,12 +63,12 @@ func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz f
 	const defaultPenetrationSlop = 0.02
 	const defaultPositionalPercent = 0.3
 
-	depth := penetration - defaultPenetrationSlop
-	if depth <= 0.0 {
-		return
-	}
-	correction := depth * defaultPositionalPercent
 	if other != nil {
+		depth := penetration - defaultPenetrationSlop
+		if depth <= 0.0 {
+			return
+		}
+		correction := depth * defaultPositionalPercent
 		invMass1 := e.GetInvMass()
 		invMass2 := other.GetInvMass()
 		invMassSum := invMass1 + invMass2
@@ -78,14 +77,28 @@ func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz f
 		}
 		p1 := correction * (invMass1 / invMassSum)
 		p2 := correction * (invMass2 / invMassSum)
-		// Se l'entità sottostante è appoggiata al suolo e stiamo sopra di essa (+Z), scarichiamo l'intera correzione verso l'alto evitando di spingerla nel pavimento.
-		if otherFloor && nz > 0 {
-			p1 = correction
-			p2 = 0.0
+
+		if nz > 0 {
+			// 'other' è sotto 'e': se 'other' poggia a terra, non può scendere verso il basso
+			if otherFloor || other.IsOnGround() {
+				p1 = correction
+				p2 = 0.0
+			}
+		} else if nz < 0 {
+			// 'other' è sopra 'e': se 'e' poggia a terra, non deve essere compresso in basso
+			if e.IsOnGround() {
+				p1 = 0.0
+				p2 = correction
+			}
 		}
+
 		e.AddTo(nx*p1, ny*p1, nz*p1)
 		other.AddTo(-nx*p2, -ny*p2, -nz*p2)
 	} else {
-		e.AddTo(nx*correction, ny*correction, nz*correction)
+		if penetration <= 0.0 {
+			return
+		}
+		// Contro ostacoli statici (mondo), la correzione deve essere del 100% per evitare tunneling ad alta velocità
+		e.AddTo(nx*penetration, ny*penetration, nz*penetration)
 	}
 }

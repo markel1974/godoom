@@ -119,7 +119,9 @@ func (e *Cinematic) SetOnGround(onGround bool) {
 	if e.onGround {
 		e.frictionActive = e.groundFriction
 		e.dampingActive = e.groundDamping
-		//e.vz = 0.0
+		if e.vz < 0.0 {
+			e.vz = 0.0
+		}
 	} else {
 		e.frictionActive = e.airFriction
 		e.dampingActive = e.airDamping
@@ -289,7 +291,15 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 		return
 	}
 
-	invMassSum := e.invMass + e2.invMass
+	invMass1 := e.invMass
+	invMass2 := e2.invMass
+	if e2.onGround && nz > 0 {
+		invMass2 = 0.0
+	} else if e.onGround && nz < 0 {
+		invMass1 = 0.0
+	}
+
+	invMassSum := invMass1 + invMass2
 	if invMassSum == 0.0 {
 		return
 	}
@@ -313,12 +323,12 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 	j := impulse / invMassSum
 
 	// apply normal impulse
-	e.vx += (j * nx) * e.invMass
-	e.vy += (j * ny) * e.invMass
-	e.vz += (j * nz) * e.invMass
-	e2.vx -= (j * nx) * e2.invMass
-	e2.vy -= (j * ny) * e2.invMass
-	e2.vz -= (j * nz) * e2.invMass
+	e.vx += (j * nx) * invMass1
+	e.vy += (j * ny) * invMass1
+	e.vz += (j * nz) * invMass1
+	e2.vx -= (j * nx) * invMass2
+	e2.vy -= (j * ny) * invMass2
+	e2.vz -= (j * nz) * invMass2
 
 	// tangential impulse (friction)
 	// recalculates relative velocity after normal impulse
@@ -350,11 +360,11 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 		}
 
 		// apply friction impulse
-		e.vx += (jt * tx) * e.invMass
-		e.vy += (jt * ty) * e.invMass
-		e.vz += (jt * tz) * e.invMass
-		e2.vx -= (jt * tx) * e2.invMass
-		e2.vy -= (jt * ty) * e2.invMass
-		e2.vz -= (jt * tz) * e2.invMass
+		e.vx += (jt * tx) * invMass1
+		e.vy += (jt * ty) * invMass1
+		e.vz += (jt * tz) * invMass1
+		e2.vx -= (jt * tx) * invMass2
+		e2.vy -= (jt * ty) * invMass2
+		e2.vz -= (jt * tz) * invMass2
 	}
 }

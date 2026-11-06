@@ -631,7 +631,7 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 		} else {
 			normOX = math.Max(oX, (s.tX+s.eRadX)-rMinX)
 		}
-		minOverlap = math.Min(normOX, math.Min(oY, oZ)+deltaPen)
+		minOverlap = math.Min(normOX+deltaPen, math.Min(oY, oZ)+deltaPen)
 	} else if solidNS {
 		var normOY float64
 		if nY > 0 {
@@ -639,7 +639,7 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 		} else {
 			normOY = math.Max(oY, (s.tY+s.eRadY)-rMinY)
 		}
-		minOverlap = math.Min(normOY, math.Min(oX, oZ)+deltaPen)
+		minOverlap = math.Min(normOY+deltaPen, math.Min(oX, oZ)+deltaPen)
 	} else {
 		var normOZ float64
 		if nZ > 0 {
@@ -647,7 +647,7 @@ func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, o
 		} else {
 			normOZ = math.Max(oZ, (s.tZ+s.eRadZ)-rMinZ)
 		}
-		minOverlap = math.Min(normOZ, math.Min(oX, oY)+deltaPen)
+		minOverlap = math.Min(normOZ+deltaPen, math.Min(oX, oY)+deltaPen)
 	}
 
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ

@@ -204,6 +204,9 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 
 // doCreateConfigThing creates a Thing configuration with specified attributes, initializing logic based on its type.
 func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
+	if cModel != nil {
+		cModel.Center()
+	}
 	var thingCfg *config.Thing
 	if kind == config.ThingEnemyDef {
 		const wakeupDistance = 400
@@ -219,7 +222,6 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 		thingCfg.WakeupDistance = wakeupDistance
 		_ = common.NewEnemy(thingCfg, actions)
 	} else {
-		cModel.DropToFloor()
 		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 		thingCfg.GForce = GForce
 		thingCfg.Model3DEntry = cModel

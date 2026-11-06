@@ -158,6 +158,9 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 
 // createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
 func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
+	if cModel != nil {
+		cModel.Center()
+	}
 	if kind == config.ThingEnemyDef {
 		var parts []*config.Model3DEntry
 		if cModel != nil {
@@ -179,7 +182,6 @@ func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingT
 		}
 		return t.doCreateParts(classname, pos, kind, md3, angle, mass, radius, height, speed)
 	}
-	//cModel.DropToFloor()
 	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel

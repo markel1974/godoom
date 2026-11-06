@@ -28,6 +28,8 @@ const (
 
 	// safetyMargin defines a proportional buffer value, typically used to ensure numerical stability in calculations.
 	safetyMargin float64 = 0.90
+
+	defaultPenetrationDepth = 0.7
 )
 
 // Cinematic represents the physical state and behavior of an object in a simulation with forces and motion dynamics.
@@ -296,9 +298,9 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64) {
 
 	invMass1 := e.invMass
 	invMass2 := e2.invMass
-	if e2.onGround && nz > 0.7 {
+	if e2.onGround && nz > defaultPenetrationDepth {
 		invMass2 = 0.0
-	} else if e.onGround && nz < -0.7 {
+	} else if e.onGround && nz < -defaultPenetrationDepth {
 		invMass1 = 0.0
 	}
 

@@ -103,6 +103,9 @@ func (r *BoundingBox) AddSize(w, h, d float64) {
 
 // AddTo adjusts the position of the BoundingBox by adding the specified x, y, and z offsets to its bottom left corner.
 func (r *BoundingBox) AddTo(x, y, z float64) {
+	if x == 0.0 && y == 0.0 && z == 0.0 {
+		return
+	}
 	r.bottomLeft.x += x
 	r.bottomLeft.y += y
 	r.bottomLeft.z += z

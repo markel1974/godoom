@@ -53,25 +53,14 @@ func (e *Entity) GetId() uint64 {
 	return e.id
 }
 
-// ResolveImpact resolves a collision between two entities by applying impact forces based on their cinematic properties.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
 	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz)
 }
 
-// ResolvePenetration resolves positional overlap between two entities or against a static obstacle.
-func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64) {
+func (e *Entity) ResolveElasticPenetration(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64) {
 	const defaultPenetrationSlop = 0.02
 	const defaultPositionalPercent = 0.3
 	const defaultPenetrationDepth = 0.7
-
-	if other == nil {
-		// Contro ostacoli statici (mondo), la correzione deve essere del 100% per evitare tunneling ad alta velocità
-		if penetration <= 0.0 {
-			return
-		}
-		e.AddTo(nx*penetration, ny*penetration, nz*penetration)
-		return
-	}
 
 	depth := penetration - defaultPenetrationSlop
 	if depth <= 0.0 {
@@ -103,4 +92,12 @@ func (e *Entity) ResolvePenetration(other *Entity, otherFloor bool, nx, ny, nz f
 
 	e.AddTo(nx*p1, ny*p1, nz*p1)
 	other.AddTo(-nx*p2, -ny*p2, -nz*p2)
+}
+
+func (e *Entity) ResolveInelasticPenetration(nx, ny, nz float64, penetration float64) {
+	if penetration <= 0.0 {
+		return
+	}
+	e.AddTo(nx*penetration, ny*penetration, nz*penetration)
+	return
 }

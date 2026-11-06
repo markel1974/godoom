@@ -200,35 +200,26 @@ func (t *ThingBase) StageApply() {
 	}
 	entity := t.GetEntity()
 	entity.SetOnGround(t.cage.HasFloor())
-
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
-
 	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 		iMode := slot.GetImpactMode()
-		if iMode == ImpactStep {
+		switch iMode {
+		case ImpactStep:
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
-		}
-		penetration := slot.GetPenetration()
-		nX, nY, nZ := slot.GetNormal()
-		var rEnt *physics.Entity = nil
-		var rFloor bool
-		if iMode == ImpactElastic && slot.rCage != nil {
-			rFloor = slot.rCage.HasFloor()
-			rEnt = slot.rCage.GetEntity()
-		}
-		entity.ResolvePenetration(rEnt, rFloor, nX, nY, nZ, penetration)
-
-		if slot.rCage != nil {
+		case ImpactElastic:
+			nX, nY, nZ := slot.GetNormal()
+			entity.ResolveElasticPenetration(slot.rCage.GetEntity(), slot.rCage.HasFloor(), nX, nY, nZ, slot.GetPenetration())
 			t.onCollision(slot.rCage.object)
-		} else {
-			rFace := slot.GetRemoteFace()
-			rParent := rFace.GetParent()
+		case ImpactInelastic:
+			nX, nY, nZ := slot.GetNormal()
+			entity.ResolveInelasticPenetration(nX, nY, nZ, slot.GetPenetration())
+			rParent := slot.GetRemoteFace().GetParent()
 			if thing := rParent.GetThing(); thing != nil {
 				t.onCollision(thing)
 			}

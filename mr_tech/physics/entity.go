@@ -91,6 +91,16 @@ func (e *Entity) ResolveElasticPenetration(other *Entity, otherFloor bool, nx, n
 	p2 := correction * (invMass2 / invMassSum)
 	e.AddTo(nx*p1, ny*p1, nz*p1)
 	other.AddTo(-nx*p2, -ny*p2, -nz*p2)
+
+	if nz > defaultPenetrationDepth && (otherFloor || other.IsOnGround()) {
+		if e.GetVz() < 0.0 {
+			e.SetVz(0.0)
+		}
+	} else if nz < -defaultPenetrationDepth && e.IsOnGround() {
+		if other.GetVz() < 0.0 {
+			other.SetVz(0.0)
+		}
+	}
 }
 
 // ResolveInelasticPenetration moves the entity along the collision normal to clear an inelastic overlap.
@@ -102,6 +112,9 @@ func (e *Entity) ResolveInelasticPenetration(nx, ny, nz float64, pen float64) {
 	if nz > defaultPenetrationDepth {
 		if pen -= defaultPenetrationSlop; pen <= 0.0 {
 			return
+		}
+		if e.GetVz() < 0.0 {
+			e.SetVz(0.0)
 		}
 	}
 	e.AddTo(nx*pen, ny*pen, nz*pen)

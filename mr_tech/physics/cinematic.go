@@ -238,6 +238,9 @@ func (e *Cinematic) Update() {
 	gForce := e.gForce
 	if e.onGround {
 		gForce = 0.0
+		if e.vz < 0.0 {
+			e.vz = 0.0
+		}
 	}
 	e.vz += (e.az - gForce) * e.dt // gravity always acts unconditionally
 
@@ -264,7 +267,7 @@ func (e *Cinematic) Update() {
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-	if e.onGround && math.Abs(e.vz) < e.vMin {
+	if e.onGround && (math.Abs(e.vz) < e.vMin || e.vz < 0.0) {
 		e.vz = 0.0
 	}
 	// terminal velocity clamping

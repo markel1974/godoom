@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -45,6 +46,7 @@ type Vertices3DEntry struct {
 	singleFrame   bool
 	lastVolA      *Volume
 	groupSize     float64
+	salt          uint64
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
@@ -119,6 +121,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		volB:          nil,
 		lerpT:         0.0,
 		lastVolA:      nil,
+		salt:          uint64(rand.Intn(len(model.Frames))),
 	}
 
 	if len(v.actions) > 0 {
@@ -172,6 +175,7 @@ func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 	if v.singleFrame {
 		return false
 	}
+	tick += v.salt
 
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {

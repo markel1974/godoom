@@ -256,9 +256,19 @@ func NewVertices3D(cfg *config.Thing, materials *Materials) *Vertices3D {
 
 	// Initialize face buffers using partFaceOffsets to decouple buffer layout from execution order
 	for i, el := range v.elements {
-		if el == nil || len(el.volumes) == 0 || el.volumes[0] == nil {
-			continue
+		if el == nil {
+			panic("nil element found in vertices_3d")
 		}
+		if len(el.volumes) == 0 {
+			panic("nil volumes found in vertices_3d")
+		}
+
+		if el.volumes[0] == nil {
+			panic("nil volumes[0] found in vertices_3d")
+		}
+		//if el == nil || len(el.volumes) == 0 || el.volumes[0] == nil {
+		//	continue
+		//}
 		target := el.volumes[0]
 		count := target.GetFaceCount()
 		offset := v.partFaceOffsets[i]
@@ -360,30 +370,19 @@ func (v *Vertices3D) SetThing(t IThing) {
 }
 
 func (v *Vertices3D) CompileVertices(tick uint64) bool {
-	reset := func(i int) {
-		v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
-		v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
-		v.rotationsA[i].Reset()
-		v.rotationsB[i].Reset()
-	}
-
-	resetFull := func(i int) {
-		v.volsA[i] = nil
-		v.volsB[i] = nil
-		reset(i)
-	}
-
 	for _, i := range v.executionOrder {
 		element := v.elements[i]
-		if element == nil {
-			resetFull(i)
+		updated := element.CompileVertices(tick)
+		volA, volB, lerpT2 := element.GetVolumes()
+		if i == 0 {
+			v.lerpTRet = lerpT2
+		}
+		if !updated {
 			continue
 		}
-		element.CompileVertices(tick)
-		volA, volB, lerpT := element.GetVolumes()
 		if volA == nil || volB == nil {
 			if volA == nil && volB == nil {
-				resetFull(i)
+				v.deepReset(i)
 				continue
 			}
 			// Fallback to the available volume if one is nil
@@ -397,10 +396,6 @@ func (v *Vertices3D) CompileVertices(tick uint64) bool {
 
 		v.volsA[i] = volA
 		v.volsB[i] = volB
-
-		if i == 0 {
-			v.lerpTRet = lerpT
-		}
 
 		pIdx := -1
 		if i < len(v.links) {
@@ -443,7 +438,7 @@ func (v *Vertices3D) CompileVertices(tick uint64) bool {
 				v.rotationsB[i] = v.rotationsB[pIdx]
 			}
 		} else {
-			reset(i)
+			v.reset(i)
 		}
 
 		offset := v.partFaceOffsets[i]
@@ -510,4 +505,17 @@ func (v *Vertices3D) CompileVertices(tick uint64) bool {
 // GetVertices computes and returns transformed vertex data for a specified tick, including faces, counts, interpolation, and render mode.
 func (v *Vertices3D) GetVertices() (*Faces, *Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpTRet, v.GetRenderMode()
+}
+
+func (v *Vertices3D) reset(i int) {
+	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
+	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
+	v.rotationsA[i].Reset()
+	v.rotationsB[i].Reset()
+}
+
+func (v *Vertices3D) deepReset(i int) {
+	v.volsA[i] = nil
+	v.volsB[i] = nil
+	v.reset(i)
 }

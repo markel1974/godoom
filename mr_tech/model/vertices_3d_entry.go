@@ -22,13 +22,15 @@ type Vertices3DEntry struct {
 	currentAction   int
 	actionIntervals [][2]int
 	actionNames     []string
-	//actionNamesC    map[string]int
-	actionClamps []bool
-	clampAnim    bool
-	tagMap       map[string]int
-	volA         *Volume
-	volB         *Volume
-	lerpT        float64
+	actionClamps    []bool
+	clampAnim       bool
+	tagMap          map[string]int
+	volA            *Volume
+	volB            *Volume
+	lerpT           float64
+	singleFrame     bool
+	relativeFrameA  int
+	groupSize       float64
 }
 
 // NewVertices3DEntry creates a new Vertices3DEntry instance with frames, actions, and volume based on the provided configuration.
@@ -55,17 +57,23 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 
 	v := &Vertices3DEntry{
 		volumes:         make([]*Volume, len(cfg.Model3DEntry.Frames)),
+		groupSize:       float64(cfg.Model3DEntry.GroupSize),
 		actionIntervals: cfg.Model3DEntry.ActionIntervals,
 		actionNames:     actionNames,
 		//actionNamesC:    actionNamesC,
-		actionClamps:  actionClamps,
-		startFrame:    0,
-		endFrame:      len(cfg.Model3DEntry.Frames) - 1,
-		currentAction: -1,
-		tagMap:        make(map[string]int),
-		volA:          nil,
-		volB:          nil,
-		lerpT:         0.0,
+		actionClamps:   actionClamps,
+		startFrame:     0,
+		endFrame:       len(cfg.Model3DEntry.Frames) - 1,
+		currentAction:  -1,
+		tagMap:         make(map[string]int),
+		volA:           nil,
+		volB:           nil,
+		lerpT:          0.0,
+		relativeFrameA: -1,
+	}
+
+	if v.groupSize <= 0 {
+		panic("groupSize must be greater than 0")
 	}
 
 	tagCounter := 0
@@ -106,8 +114,15 @@ func NewVertices3DEntry(cfg *config.Thing, materials *Materials) *Vertices3DEntr
 		volume.Rebuild()
 		v.volumes[frameIdx] = volume
 	}
+
+	if v.startFrame == v.endFrame {
+		v.singleFrame = true
+		v.volA = v.volumes[v.startFrame]
+		v.volB = v.volumes[v.startFrame]
+		v.lerpT = 0.0
+	}
+
 	v.viewVolume = v.volumes[0]
-	//v.rootEntity = v.viewVolume.GetEntity()
 	return v
 }
 
@@ -149,46 +164,29 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 	}
 }
 
-// FindActionIndex searches for the index of the given action name in the actionNames list, ignoring case and returning success status.
-//func (v *Vertices3DEntry) FindActionIndex(name string) (int, bool) {
-//	nameLower := v3dCleanString(name)
-//	n, k := v.actionNamesC[nameLower]
-//	return n, k
-//}
-
 // CompileVertices selects the active animation frame volumes for tick and stores their interpolation factor.
 func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
-	if len(v.volumes) == 0 {
-		v.volA = nil
-		v.volB = nil
-		v.lerpT = 0.0
+	if v.singleFrame {
 		return false
 	}
 
-	if v.startFrame == v.endFrame {
-		v.volA = v.volumes[v.startFrame]
-		v.volB = v.volumes[v.startFrame]
-		v.lerpT = 0.0
-		return false
-	}
-
-	const groupSize = 6.0
 	var frameFloat float64
 	if v.clampAnim {
-		elapsed := uint64(0)
 		if tick > v.startTick {
-			elapsed = tick - v.startTick
+			frameFloat = float64(tick-v.startTick) / v.groupSize
+		} else {
+			frameFloat = 0.0
 		}
-		frameFloat = float64(elapsed) / groupSize
 	} else {
-		frameFloat = textures.TickGrouped(tick, int(groupSize))
+		// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
+		frameFloat = float64(tick) / v.groupSize
 	}
+	relativeFrameA := int(frameFloat)
+	relativeFrameB := relativeFrameA + 1
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {
 		animLength = 1
 	}
-	relativeFrameA := int(frameFloat)
-	relativeFrameB := relativeFrameA + 1
 	lerpT := frameFloat - math.Floor(frameFloat)
 	if v.clampAnim {
 		if relativeFrameA >= animLength-1 {
@@ -203,11 +201,14 @@ func (v *Vertices3DEntry) CompileVertices(tick uint64) bool {
 		relativeFrameA = relativeFrameA % animLength
 		relativeFrameB = relativeFrameB % animLength
 	}
-	frameA := v.startFrame + relativeFrameA
-	frameB := v.startFrame + relativeFrameB
-	v.volA = v.volumes[frameA]
-	v.volB = v.volumes[frameB]
+	v.volA = v.volumes[v.startFrame+relativeFrameA]
+	v.volB = v.volumes[v.startFrame+relativeFrameB]
 	v.lerpT = lerpT
+
+	if relativeFrameA != v.relativeFrameA {
+		v.relativeFrameA = relativeFrameA
+		return true
+	}
 
 	return false
 }

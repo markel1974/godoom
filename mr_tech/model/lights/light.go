@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 const defaultFalloff = 10.0
@@ -143,7 +142,7 @@ func (cl *Light) GetIntensityStyled(tick uint64) float64 {
 	if cl.intensityDefault > 0 {
 		return cl.intensityDefault
 	}
-	frameFloat := textures.TickGrouped(tick, int(groupSize))
+	frameFloat := float64(tick) / groupSize //textures.TickGrouped(tick, int(groupSize))
 	return cl.GetFrame(frameFloat)
 }
 

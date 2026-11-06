@@ -44,9 +44,3 @@ func GlobalTick() uint64 {
 func TickF() float64 {
 	return _tickF
 }
-
-// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
-func TickGrouped(tick uint64, groupSize int) float64 {
-	frameFloat := float64(tick) / float64(groupSize)
-	return frameFloat
-}

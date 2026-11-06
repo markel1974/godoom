@@ -63,6 +63,7 @@ type Model3DEntry struct {
 	ActionClamp       []string
 	ActionDefinitions []string
 	ActionIntervals   [][2]int
+	GroupSize         int
 }
 
 // NewModel3DEntry creates a new Model3DEntry instance with the specified number of frames and initializes it using the provided frame names.
@@ -74,6 +75,7 @@ func NewModel3DEntry(numFrames int, frameNames []string) *Model3DEntry {
 		m.Frames[i].Tags = make(map[string]Model3DTag)
 	}
 	m.ActionClamp = []string{"death", "die"}
+	m.GroupSize = 6
 	m.compute(frameNames)
 	return m
 }

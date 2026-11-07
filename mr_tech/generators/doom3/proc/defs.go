@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"fmt"
 	"io"
 	"path"
 	"strings"
@@ -77,73 +78,19 @@ func (d *Defs) EntityLen() int {
 }
 
 // ResolveEntity reconstructs all model, head, animation, and physical dependencies for a classname from .def files and PK4 directory scanning.
-func (d *Defs) ResolveEntity(classname string) (*ResolvedEntity, bool) {
+func (d *Defs) ResolveEntity(classname string) (*ResolvedEntity, error) {
 	cn := strings.ToLower(strings.TrimSpace(classname))
 	if !d.def.HasEntity(cn) {
-		return nil, false
+		return nil, fmt.Errorf("entity %q not found", classname)
 	}
-
 	res := NewResolvedEntity(cn)
-
 	if err := res.Resolve(d.def, d.af); err != nil {
-		return nil, false
+		return nil, err
 	}
-
-	// If it's an MD5 mesh, enrich animations via ReadDirFilter on the mesh directory in the PK4
-	if strings.HasSuffix(res.ModelPath, ".md5mesh") {
-		res.Anims = d.discoverModelAnims(res.ModelPath, res.Anims)
-		res.IdleAnim = d.pickAnim(
-			res.Anims,
-			[]string{"idle", "idle1", "idle2", "stand", "alert_idle", "crawl_idle", "on4_idle", "idle_stand1", "zidle1", "zctidle", "chaingun_idle", "machinegun_stand", "shield_stand", "playdead"},
-			[]string{"idle", "stand"},
-		)
-		res.WalkAnim = d.pickAnim(
-			res.Anims,
-			[]string{"walk", "walk1", "walk2", "walk3", "walk4", "walk7", "walk1_r", "zwalk1", "fastwalk", "crawl1", "travel", "travel3", "chaingun_walk", "machinegun_walk", "shield_walk", "run"},
-			[]string{"walk", "crawl", "travel"},
-		)
-		res.RunAnim = d.pickAnim(
-			res.Anims,
-			[]string{"run", "run1", "run2", "run3", "run_r", "faster_walk", "fastwalk", "zctrun5", "crawl2", "chaingun_run", "machinegun_run", "shield_run", "walk", "walk1", "walk2"},
-			[]string{"run", "fastwalk", "faster_walk"},
-		)
-		if len(res.RunAnim) == 0 {
-			res.RunAnim = res.WalkAnim
-		}
-		if len(res.WalkAnim) == 0 {
-			res.WalkAnim = res.RunAnim
-		}
-		res.AttackAnim = d.pickAnim(
-			res.Anims,
-			[]string{
-				"range_attack1", "range_attack2", "range1", "attack", "attack1", "attack2", "attack3",
-				"melee_attack1", "melee_attack2", "melee1", "melee_left", "melee1_walk", "on4_melee1",
-				"stand_fire", "fire1", "chaingun_stand_fire", "machinegun_stand_fire", "shield_stand_fire",
-				"oneshot", "attack_bfg", "range_tentacle", "leftclawattack", "slash1", "swing1", "mocapswing1", "pipeattack1",
-			},
-			[]string{"attack", "fire", "melee", "range", "swing", "slash"},
-		)
-		res.PainAnim = d.pickAnim(
-			res.Anims,
-			[]string{
-				"pain", "pain_chest", "pain_chest1", "pain_chest2", "chest_pain", "chest_pain1", "chestpain", "chestpain1",
-				"chaingun_pain_chest", "machinegun_chest_pain", "shield_chest_pain", "crawl_pain_chest", "pain_chest_on4",
-				"pain1", "pain3", "pain_big1", "pain_head", "pain_head1", "pain_head3", "head_pain", "headpain", "headpain1",
-				"bellypain", "leftarmpain", "walk1_pain",
-			},
-			[]string{"pain"},
-		)
-		res.DeathAnim = d.pickAnim(
-			res.Anims,
-			[]string{"death", "die", "playdead", "death1_pose", "death_pose"},
-			[]string{"death", "die", "playdead"},
-		)
-	}
-
-	return res, true
+	return res, nil
 }
 
-func (d *Defs) pickAnim(anims map[string]string, exactKeys []string, substrings []string) string {
+func (d *Defs) PickAnim(anims map[string]string, exactKeys []string, substrings []string) string {
 	fileExists := func(p string) bool {
 		if len(p) == 0 {
 			return false
@@ -169,8 +116,8 @@ func (d *Defs) pickAnim(anims map[string]string, exactKeys []string, substrings 
 	return ""
 }
 
-// discoverModelAnims scans the PK4 directory of a .md5mesh using ReadDirFilter and merges discovered .md5anim files.
-func (d *Defs) discoverModelAnims(meshPath string, anims map[string]string) map[string]string {
+// DiscoverModelAnims scans the PK4 directory of a .md5mesh using ReadDirFilter and merges discovered .md5anim files.
+func (d *Defs) DiscoverModelAnims(meshPath string, anims map[string]string) map[string]string {
 	if anims == nil {
 		anims = make(map[string]string)
 	}

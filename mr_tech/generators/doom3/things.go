@@ -45,80 +45,64 @@ func NewThings(arc proc.IPkArchive, materials *proc.Materials, defs *proc.Defs, 
 	}
 }
 
-// resolveSpec reconstructs the Doom3ThingSpec for a classname by combining static mappings with
-// dynamic .def inheritance and ReadDirFilter discovery on the PK4 archive.
-func (t *Things) resolveSpec(classname string) (Doom3ThingSpec, bool) {
-	spec, hasSpec := GetDoom3EntitySpec(classname)
-	if resolved, ok := t.defs.ResolveEntity(classname); ok {
-		if !hasSpec {
-			prefix := strings.Split(strings.ToLower(classname), "_")[0]
-			kind := config.ThingItemDef
-			speed := 0.0
-			mass := 15.0
-			if prefix == "monster" || strings.Contains(strings.ToLower(resolved.SpawnClass), "idai") {
-				kind = config.ThingEnemyDef
-				speed = 1150.0
-				mass = 35.0
-			}
-			spec = Doom3ThingSpec{
-				Kind:   kind,
-				Mass:   mass,
-				Speed:  speed,
-				Health: 100.0,
-			}
-			hasSpec = true
+/*
+func (t *Things) resolveMeshSpec(res *proc.ResolvedEntity) {
+	// If it's an MD5 mesh, enrich animations via ReadDirFilter on the mesh directory in the PK4
+	if strings.HasSuffix(res.ModelPath, ".md5mesh") {
+		res.Anims = t.defs.DiscoverModelAnims(res.ModelPath, res.Anims)
+		res.IdleAnim = t.defs.PickAnim(
+			res.Anims,
+			[]string{"idle", "idle1", "idle2", "stand", "alert_idle", "crawl_idle", "on4_idle", "idle_stand1", "zidle1", "zctidle", "chaingun_idle", "machinegun_stand", "shield_stand", "playdead"},
+			[]string{"idle", "stand"},
+		)
+		res.WalkAnim = t.defs.PickAnim(
+			res.Anims,
+			[]string{"walk", "walk1", "walk2", "walk3", "walk4", "walk7", "walk1_r", "zwalk1", "fastwalk", "crawl1", "travel", "travel3", "chaingun_walk", "machinegun_walk", "shield_walk", "run"},
+			[]string{"walk", "crawl", "travel"},
+		)
+		res.RunAnim = t.defs.PickAnim(
+			res.Anims,
+			[]string{"run", "run1", "run2", "run3", "run_r", "faster_walk", "fastwalk", "zctrun5", "crawl2", "chaingun_run", "machinegun_run", "shield_run", "walk", "walk1", "walk2"},
+			[]string{"run", "fastwalk", "faster_walk"},
+		)
+		if len(res.RunAnim) == 0 {
+			res.RunAnim = res.WalkAnim
 		}
-		if len(spec.ModelPath) == 0 && len(resolved.ModelPath) > 0 {
-			spec.ModelPath = resolved.ModelPath
+		if len(res.WalkAnim) == 0 {
+			res.WalkAnim = res.RunAnim
 		}
-		if len(spec.HeadMesh) == 0 && len(resolved.HeadMesh) > 0 {
-			spec.HeadMesh = resolved.HeadMesh
-		}
-		if len(spec.HeadJoint) == 0 && len(resolved.HeadJoint) > 0 {
-			spec.HeadJoint = resolved.HeadJoint
-		}
-		if len(spec.IdleAnim) == 0 && len(resolved.IdleAnim) > 0 {
-			spec.IdleAnim = resolved.IdleAnim
-		}
-		if len(spec.WalkAnim) == 0 && len(resolved.WalkAnim) > 0 {
-			spec.WalkAnim = resolved.WalkAnim
-		}
-		if len(spec.RunAnim) == 0 && len(resolved.RunAnim) > 0 {
-			spec.RunAnim = resolved.RunAnim
-		}
-		if len(spec.AttackAnim) == 0 && len(resolved.AttackAnim) > 0 {
-			spec.AttackAnim = resolved.AttackAnim
-		}
-		if len(spec.PainAnim) == 0 && len(resolved.PainAnim) > 0 {
-			spec.PainAnim = resolved.PainAnim
-		}
-		if len(spec.DeathAnim) == 0 && len(resolved.DeathAnim) > 0 {
-			spec.DeathAnim = resolved.DeathAnim
-		}
-		if len(spec.Ragdoll) == 0 && len(resolved.Ragdoll) > 0 {
-			spec.Ragdoll = resolved.Ragdoll
-		}
-		if len(spec.AFBodies) == 0 && len(resolved.AFBodies) > 0 {
-			spec.AFBodies = resolved.AFBodies
-		}
-		if spec.Mass <= 0 && resolved.Mass > 0 {
-			spec.Mass = resolved.Mass
-		}
-		if spec.Health <= 0 && resolved.Health > 0 {
-			spec.Health = resolved.Health
-		}
+		res.AttackAnim = t.defs.PickAnim(
+			res.Anims,
+			[]string{
+				"range_attack1", "range_attack2", "range1", "attack", "attack1", "attack2", "attack3",
+				"melee_attack1", "melee_attack2", "melee1", "melee_left", "melee1_walk", "on4_melee1",
+				"stand_fire", "fire1", "chaingun_stand_fire", "machinegun_stand_fire", "shield_stand_fire",
+				"oneshot", "attack_bfg", "range_tentacle", "leftclawattack", "slash1", "swing1", "mocapswing1", "pipeattack1",
+			},
+			[]string{"attack", "fire", "melee", "range", "swing", "slash"},
+		)
+		res.PainAnim = t.defs.PickAnim(
+			res.Anims,
+			[]string{
+				"pain", "pain_chest", "pain_chest1", "pain_chest2", "chest_pain", "chest_pain1", "chestpain", "chestpain1",
+				"chaingun_pain_chest", "machinegun_chest_pain", "shield_chest_pain", "crawl_pain_chest", "pain_chest_on4",
+				"pain1", "pain3", "pain_big1", "pain_head", "pain_head1", "pain_head3", "head_pain", "headpain", "headpain1",
+				"bellypain", "leftarmpain", "walk1_pain",
+			},
+			[]string{"pain"},
+		)
+		res.DeathAnim = t.defs.PickAnim(
+			res.Anims,
+			[]string{"death", "die", "playdead", "death1_pose", "death_pose"},
+			[]string{"death", "die", "playdead"},
+		)
 	}
-	if len(spec.AFBodies) == 0 && t.defs != nil {
-		if bodies, ok := t.defs.ResolveAFBodies(classname); ok {
-			spec.AFBodies = bodies
-		}
-	}
-	return spec, hasSpec
 }
+*/
 
 // loadAnimatedMonsterMD3 loads and caches a multi-part articulated MD5 model decomposed into ragdoll limbs
 // connected via hierarchical Model3DLink and joint attachment tags.
-func (t *Things) loadAnimatedMonsterMD3(spec Doom3ThingSpec) (*config.Model3D, float64, error) {
+func (t *Things) loadAnimatedMonsterMD3(spec *ThingSpec) (*config.Model3D, float64, error) {
 	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.ModelPath, "\\", "/")))
 	cacheKey := cleanPath
 	if len(spec.HeadMesh) > 0 {
@@ -277,7 +261,8 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 
 	angle := ent.GetAngle()
 
-	spec, hasSpec := t.resolveSpec(classname)
+	spec := NewThingSpec()
+	hasSpec := spec.ResolveEntity(classname, t.defs)
 	if !hasSpec {
 		return nil, fmt.Errorf("unhandled entity classname: %s", classname)
 	}

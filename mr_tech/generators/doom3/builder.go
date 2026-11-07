@@ -125,6 +125,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 			}
 		}
 	}
+
 	for _, ent := range entities {
 		if modelPath, ok := ent.GetProperty("model"); ok && strings.HasSuffix(strings.ToLower(modelPath), ".lwo") {
 			cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(modelPath, "\\", "/")))

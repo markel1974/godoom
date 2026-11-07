@@ -7,8 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 )
 
-// Doom3ThingSpec holds the default physical and rendering configuration for a Doom 3 entity type.
-type Doom3ThingSpec struct {
+type ConfigSpec struct {
 	ModelPath  string
 	IdleAnim   string
 	WalkAnim   string
@@ -51,8 +50,8 @@ func ConvertAnimation(r *config.EnemyAnimations, animations []string, intervals 
 	}
 }
 
-// _doom3DictModelFilename maps Doom 3 entity classnames to their corresponding 3D model paths in PK4 archives.
-var _doom3DictModelFilename = map[string]Doom3ThingSpec{
+// _configModelFilename maps Doom 3 entity classnames to their corresponding 3D model paths in PK4 archives.
+var _configModelFilename = map[string]*ConfigSpec{
 	// Monsters (MD5 animated models)
 	"monster_demon_imp": {
 		ModelPath:  "models/md5/monsters/imp/imp.md5mesh",
@@ -1548,8 +1547,8 @@ var _doom3DictModelFilename = map[string]Doom3ThingSpec{
 	},
 }
 
-// GetDoom3EntitySpec resolves an entity classname or model name to its Doom3ThingSpec.
-func GetDoom3EntitySpec(classname string) (Doom3ThingSpec, bool) {
-	spec, ok := _doom3DictModelFilename[classname]
+// GetEntitySpec resolves an entity classname or model name to its Doom3ThingSpec.
+func GetEntitySpec(classname string) (*ConfigSpec, bool) {
+	spec, ok := _configModelFilename[classname]
 	return spec, ok
 }

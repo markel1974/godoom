@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	volumes2 "github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // Calibration contains parameters for configuring the camera and map projection in a 3D engine.
@@ -28,11 +27,11 @@ type Calibration struct {
 	EnableShadows      bool
 	PrjScale           float64
 	PrjScaleLights     float64
-	volumes            *volumes2.Volumes
+	volumes            *Volumes
 }
 
 // NewCalibration creates and initializes a new Calibration instance using the provided configuration and volume data.
-func NewCalibration(cfg *config.Calibration, volumes *volumes2.Volumes) *Calibration {
+func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 	c := &Calibration{
 		OrthoSize:          cfg.OrthoSize,
 		MapCenterX:         cfg.MapCenterX,

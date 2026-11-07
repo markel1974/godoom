@@ -12,7 +12,7 @@ type ThingInterface struct {
 }
 
 // NewThingInterface creates a new ThingInterface instance.
-func NewThingInterface(things *Things, cfg *config.Thing) *ThingInterface {
+func NewThingInterface(things IThingHandler, cfg *config.Thing) *ThingInterface {
 	inter := &ThingInterface{}
 	inter.ThingBase = NewThingBase(inter, things, cfg, nil)
 	cfg.OnBind(inter)

@@ -12,7 +12,7 @@ type ThingItem struct {
 }
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
-func NewThingItem(things *Things, cfg *config.Thing, volume *volumes.Volume) *ThingItem {
+func NewThingItem(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *ThingItem {
 	item := &ThingItem{}
 	item.ThingBase = NewThingBase(item, things, cfg, volume)
 	cfg.OnBind(item)

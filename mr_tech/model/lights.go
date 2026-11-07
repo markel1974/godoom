@@ -1,19 +1,20 @@
-package lights
+package model
 
 import (
+	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Lights represents a collection of Light instances managed within a spatial partitioning structure (AABBTree).
 type Lights struct {
-	container []*Light
+	container []*lights.Light
 	tree      *aabb.Tree
 }
 
 // NewLights initializes and returns a new Lights object with an empty container and a new AABBTree with a capacity of 1024.
-func NewLights(e []*Light) *Lights {
+func NewLights(e []*lights.Light) *Lights {
 	l := &Lights{
-		container: make([]*Light, len(e)),
+		container: make([]*lights.Light, len(e)),
 		tree:      aabb.NewTree(1024, 4.0),
 	}
 	for idx, light := range e {
@@ -34,13 +35,13 @@ func (l *Lights) Len() int {
 }
 
 // AddLight appends a Light object to the container and inserts it into the spatial tree for spatial partitioning.
-func (l *Lights) AddLight(e *Light) {
+func (l *Lights) AddLight(e *lights.Light) {
 	l.container = append(l.container, e)
 	l.tree.InsertObject(e)
 }
 
 // Get retrieves all Light objects stored in the Lights container.
-func (l *Lights) Get() []*Light {
+func (l *Lights) Get() []*lights.Light {
 	return l.container
 }
 

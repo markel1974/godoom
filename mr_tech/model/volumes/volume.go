@@ -93,6 +93,11 @@ func (v *Volume) Rebuild() bool {
 	return true
 }
 
+// GetFacesTree returns the spatial tree containing the volume's faces.
+func (v *Volume) GetFacesTree() *aabb.Tree {
+	return v.facesTree
+}
+
 // IsDirty reports whether the volume has been marked dirty.
 func (v *Volume) IsDirty() bool {
 	return v.dirty

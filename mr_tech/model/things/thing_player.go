@@ -25,8 +25,8 @@ type ThingPlayer struct {
 	flash          *Flash
 	visible        bool
 	debug          bool
-	volumes        *volumes.Volumes
-	things         *Things
+	volumes        IVolumeHandler
+	things         IThingHandler
 	cfg            *config.Player
 	*ThingBase
 }
@@ -34,7 +34,7 @@ type ThingPlayer struct {
 // NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(volumes *volumes.Volumes, things *Things, c *config.Player, debug bool) *ThingPlayer {
+func NewThingPlayer(volumes IVolumeHandler, things IThingHandler, c *config.Player, debug bool) *ThingPlayer {
 	player := &ThingPlayer{
 		volumes:        volumes,
 		things:         things,
@@ -65,7 +65,7 @@ func (pr *ThingPlayer) Setup() error {
 	entity.MoveTo(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	pr.SetAngle(pr.cfg.Angle)
 
-	pr.things.SetPlayer(pr)
+	//pr.things.SetPlayer(pr)
 	return nil
 }
 

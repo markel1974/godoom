@@ -15,7 +15,7 @@ type ThingEnemy struct {
 // NewThingEnemy initializes and returns a new instance of ThingEnemy with the specified configuration and parameters.
 // It ensures that default values are set for speed and acceleration if not provided.
 // The function panics if the OnThinking callback in the config is nil.
-func NewThingEnemy(things *Things, cfg *config.Thing, volume *volumes.Volume) *ThingEnemy {
+func NewThingEnemy(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *ThingEnemy {
 	if cfg.OnThinking == nil {
 		panic("onThinking is nil for enemy:" + cfg.Id)
 	}

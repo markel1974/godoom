@@ -1,21 +1,22 @@
-package volumes
+package model
 
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
 type Volumes struct {
-	container []*Volume
+	container []*volumes.Volume
 	tree      *aabb.Tree
-	cache     map[string]*Volume
+	cache     map[string]*volumes.Volume
 }
 
 // NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
-func NewVolumes(container []*Volume) *Volumes {
-	cache := make(map[string]*Volume)
+func NewVolumes(container []*volumes.Volume) *Volumes {
+	cache := make(map[string]*volumes.Volume)
 	for _, sec := range container {
 		cache[sec.GetId()] = sec
 	}
@@ -42,12 +43,12 @@ func (s *Volumes) GetRoot() (*aabb.AABB, bool) {
 }
 
 // GetVolume retrieves a Volume from the cache using the provided unique identifier.
-func (s *Volumes) GetVolume(id string) *Volume {
+func (s *Volumes) GetVolume(id string) *volumes.Volume {
 	return s.cache[id]
 }
 
 // GetVolumes returns all Volume objects managed by the Volumes instance.
-func (s *Volumes) GetVolumes() []*Volume {
+func (s *Volumes) GetVolumes() []*volumes.Volume {
 	return s.container
 }
 
@@ -57,10 +58,10 @@ func (s *Volumes) Len() int {
 }
 
 // Query retrieves a list of world that overlap with the specified axis-aligned bounding box (AABB).
-func (s *Volumes) Query(targetObj aabb.IObject) []*Volume {
-	var target []*Volume
+func (s *Volumes) Query(targetObj aabb.IObject) []*volumes.Volume {
+	var target []*volumes.Volume
 	s.tree.QueryOverlaps(targetObj, func(object aabb.IObject) bool {
-		sector, ok := object.(*Volume)
+		sector, ok := object.(*volumes.Volume)
 		if !ok {
 			return false
 		}
@@ -71,12 +72,12 @@ func (s *Volumes) Query(targetObj aabb.IObject) []*Volume {
 }
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-func (s *Volumes) QueryCollisionCage(cage *CollisionCage, maxOverlaps int) {
+func (s *Volumes) QueryCollisionCage(cage *volumes.CollisionCage, maxOverlaps int) {
 	counter := 0
 	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
-		vol := object.(*Volume)
+		vol := object.(*volumes.Volume)
 		vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-			rFace := otherEnt.(*Face)
+			rFace := otherEnt.(*volumes.Face)
 			cage.AddFace(rFace, nil)
 			counter++
 			if counter > maxOverlaps {
@@ -109,19 +110,19 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 }
 
 // QueryPoint identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.
-func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
-	var bestVol *Volume
-	var bestFace *Face
+func (s *Volumes) QueryPoint(px, py, pz float64) (*volumes.Volume, *volumes.Face) {
+	var bestVol *volumes.Volume
+	var bestFace *volumes.Face
 	var minZDist = math.MaxFloat64
 	// Broad-Phase Globale: troviamo i volumi il cui AABB 3D contiene il punto
 	s.tree.QueryPoint3d(px, py, pz, func(object aabb.IObject) bool {
-		volume := object.(*Volume)
+		volume := object.(*volumes.Volume)
 		if bestVol == nil {
 			bestVol = volume
 		}
 		// Broad-Phase Locale
-		volume.facesTree.QueryPoint2d(px, py, func(object aabb.IObject) bool {
-			face := object.(*Face)
+		volume.GetFacesTree().QueryPoint2d(px, py, func(object aabb.IObject) bool {
+			face := object.(*volumes.Face)
 			if bestFace == nil {
 				bestFace = face
 			}
@@ -134,8 +135,8 @@ func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 			if face.PointInside2d(px, py) {
 				// CALCOLO Z ESATTO SUL TRIANGOLO (Plane Equation)
 				// Z = V.z - (Nx*(Px - V.x) + Ny*(Py - V.y)) / Nz
-				v0 := face.tri[0]
-				floorZ := v0.Z - (normX*(px-v0.X)+normY*(py-v0.Y))/normZ
+				v0X, v0Y, v0Z := face.Get0()
+				floorZ := v0Z - (normX*(px-v0X)+normY*(py-v0Y))/normZ
 				// Distanza verticale al pavimento
 				zDist := pz - floorZ
 				// Se il pavimento è SOTTO il player (o entro un piccolo margine di compenetrazione/step)
@@ -157,9 +158,9 @@ func (s *Volumes) QueryPoint(px, py, pz float64) (*Volume, *Face) {
 }
 
 // QueryAABB performs a spatial query, invoking the callback for each Volume that overlaps with the specified AABB.
-func (s *Volumes) QueryAABB(targetObj aabb.IObject, callback func(vol *Volume)) {
+func (s *Volumes) QueryAABB(targetObj aabb.IObject, callback func(vol *volumes.Volume)) {
 	s.tree.QueryOverlaps(targetObj, func(object aabb.IObject) bool {
-		if vol, ok := object.(*Volume); ok {
+		if vol, ok := object.(*volumes.Volume); ok {
 			callback(vol)
 		}
 		return false

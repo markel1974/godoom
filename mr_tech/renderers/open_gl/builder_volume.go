@@ -8,7 +8,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
-	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -142,7 +141,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
-func (w *BuilderVolume) pushQVolumes(vols *volumes.Volumes, frustumFront *aabb.Frustum, camX, camY, camZ float64) {
+func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, camX, camY, camZ float64) {
 	//w.occBuffer.Clear()
 
 	w.visibleVol.Reset(vols.Len(), camX, camY, camZ)
@@ -249,7 +248,7 @@ func (w *BuilderVolume) pushQVolumes(vols *volumes.Volumes, frustumFront *aabb.F
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
-func (w *BuilderVolume) pushQThings(things *things.Things, frustumFront *aabb.Frustum) {
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
 	//counter := 0
 	things.StagePrepare()
 
@@ -363,7 +362,7 @@ func (w *BuilderVolume) pushQThings(things *things.Things, frustumFront *aabb.Fr
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
 // It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushLights(ls *lights.Lights, frustumFront *aabb.Frustum, pX, pY, pZ float64) {
+func (w *BuilderVolume) pushLights(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, pZ float64) {
 	//TODO IMPLEMENTAZIONE CON FRUSTUM
 	w.fl.DeepReset()
 	w.fl.Prepare()
@@ -397,7 +396,7 @@ func (w *BuilderVolume) pushLights(ls *lights.Lights, frustumFront *aabb.Frustum
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
 // It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushQLights(ls *lights.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
+func (w *BuilderVolume) pushQLights(ls *model.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
 	w.fl.DeepReset()
 	w.fl.Prepare()
 	counter := 0

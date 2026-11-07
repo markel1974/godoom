@@ -20,10 +20,10 @@ type ICompiler interface {
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
 type Compiler struct {
 	gScale      geometry.XYZ
-	volumes     *volumes.Volumes
+	volumes     *Volumes
 	player      *things.ThingPlayer
-	lights      *lights.Lights
-	things      *things.Things
+	lights      *Lights
+	things      *Things
 	ui          []volumes.IThing
 	calibration *Calibration
 }
@@ -83,19 +83,19 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 	fmt.Printf("pipeline compiled in %s \n", time.Since(now))
 
-	r.volumes = volumes.NewVolumes(allVolumes)
+	r.volumes = NewVolumes(allVolumes)
 	if err := r.volumes.Setup(); err != nil {
 		return err
 	}
 	fmt.Printf("volumes initialized in %s \n", time.Since(now))
 
-	r.lights = lights.NewLights(allLights)
+	r.lights = NewLights(allLights)
 	if err := r.lights.Setup(); err != nil {
 		return err
 	}
 	fmt.Printf("lights initialized in %s \n", time.Since(now))
 
-	r.things = things.NewThings(cfg.Calibration.MaxOverlaps, cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
+	r.things = NewThings(cfg.Calibration.MaxOverlaps, cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
 	if err := r.things.Setup(); err != nil {
 		return err
 	}
@@ -105,6 +105,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	if err := r.player.Setup(); err != nil {
 		return err
 	}
+	r.things.SetPlayer(r.player)
 
 	for _, i := range cfg.UI {
 		e := things.NewThingInterface(r.things, i)
@@ -122,7 +123,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 }
 
 // GetThings returns the Things instance managed by the Compiler.
-func (r *Compiler) GetThings() *things.Things {
+func (r *Compiler) GetThings() *Things {
 	return r.things
 }
 
@@ -132,7 +133,7 @@ func (r *Compiler) GetUI() []volumes.IThing {
 }
 
 // GetVolumes retrieves the Volumes instance associated with the current Compiler object.
-func (r *Compiler) GetVolumes() *volumes.Volumes {
+func (r *Compiler) GetVolumes() *Volumes {
 	return r.volumes
 }
 
@@ -142,7 +143,7 @@ func (r *Compiler) GetPlayer() *things.ThingPlayer {
 }
 
 // GetLights retrieves the list of Light objects managed by the Compiler.
-func (r *Compiler) GetLights() *lights.Lights {
+func (r *Compiler) GetLights() *Lights {
 	return r.lights
 }
 

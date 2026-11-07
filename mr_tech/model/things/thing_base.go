@@ -3,10 +3,23 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
+
+type IThingHandler interface {
+	GetMaterials() *materials.Materials
+
+	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
+
+	CreateThrowable(self volumes.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
+}
+
+type IVolumeHandler interface {
+	QueryPoint(px, py, pz float64) (*volumes.Volume, *volumes.Face)
+}
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
@@ -21,18 +34,17 @@ type ThingBase struct {
 	acceleration   float64
 	jumpForce      float64
 	location       *volumes.Volume
-	things         *Things
+	things         IThingHandler
 	isActive       bool
 	cage           *volumes.CollisionCage
-
-	inbox       chan *volumes.ThingEvent
-	onCollision config.CollisionFunc
-	onImpact    config.ImpactFunc
-	done        chan struct{}
+	inbox          chan *volumes.ThingEvent
+	onCollision    config.CollisionFunc
+	onImpact       config.ImpactFunc
+	done           chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase(thing volumes.IThing, things *Things, cfg *config.Thing, location *volumes.Volume) *ThingBase {
+func NewThingBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, location *volumes.Volume) *ThingBase {
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}

@@ -14,7 +14,7 @@ type ThingThrowable struct {
 }
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
-func NewThingThrowable(things *Things, cfg *config.Thing, volume *volumes.Volume) *ThingThrowable {
+func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *ThingThrowable {
 	throwable := &ThingThrowable{}
 	throwable.ThingBase = NewThingBase(throwable, things, cfg, volume)
 	cfg.OnBind(throwable)

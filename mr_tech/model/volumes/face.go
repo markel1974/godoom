@@ -40,6 +40,10 @@ func (fc *Face) GetTri() [3]geometry.XYZ {
 	return fc.tri
 }
 
+func (fc *Face) Get0() (float64, float64, float64) {
+	return fc.tri[0].X, fc.tri[0].Y, fc.tri[0].Z
+}
+
 // Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.
 func (fc *Face) Translate(idx int, offX, offY, offZ float64) (float64, float64, float64) {
 	p0x, p0y, p0z := fc.tri[idx].X+offX, fc.tri[idx].Y+offY, fc.tri[idx].Z+offZ

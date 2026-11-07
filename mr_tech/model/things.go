@@ -1,4 +1,4 @@
-package things
+package model
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -18,10 +19,10 @@ const solverJitter = 1e-6
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
 	config           []*config.Thing
-	volumes          *volumes.Volumes
+	volumes          *Volumes
 	materials        *materials.Materials
 	tree             *aabb.Tree
-	player           *ThingPlayer
+	player           *things.ThingPlayer
 	entities         map[uint64]volumes.IThing
 	running          []volumes.IThing
 	removables       []volumes.IThing
@@ -41,7 +42,7 @@ type Things struct {
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols *volumes.Volumes, materials *materials.Materials) *Things {
+func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols *Volumes, materials *materials.Materials) *Things {
 	const defaultLen = 1024
 	if maxOverlaps <= 0 {
 		maxOverlaps = 100
@@ -174,12 +175,12 @@ func (th *Things) QueryStatic(callback func(object aabb.IObject) bool) {
 }
 
 // GetPlayer returns the current player instance.
-func (th *Things) GetPlayer() *ThingPlayer {
+func (th *Things) GetPlayer() *things.ThingPlayer {
 	return th.player
 }
 
 // SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
-func (th *Things) SetPlayer(p *ThingPlayer) {
+func (th *Things) SetPlayer(p *things.ThingPlayer) {
 	th.player = p
 	th.addThing(p)
 }
@@ -215,19 +216,19 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) volumes.IThin
 	var thing volumes.IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = NewThingEnemy(th, ct, volume)
+		thing = things.NewThingEnemy(th, ct, volume)
 	case config.ThingWeaponDef:
-		thing = NewThingItem(th, ct, volume)
+		thing = things.NewThingItem(th, ct, volume)
 	case config.ThingThrowableDef:
-		thing = NewThingThrowable(th, ct, volume)
+		thing = things.NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:
-		thing = NewThingItem(th, ct, volume)
+		thing = things.NewThingItem(th, ct, volume)
 	case config.ThingInterfaceDef:
-		thing = NewThingInterface(th, ct)
+		thing = things.NewThingInterface(th, ct)
 	case config.ThingItemDef:
-		thing = NewThingItem(th, ct, volume)
+		thing = things.NewThingItem(th, ct, volume)
 	default:
-		thing = NewThingItem(th, ct, volume)
+		thing = things.NewThingItem(th, ct, volume)
 	}
 	entity := thing.VerticesGetEntity()
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)

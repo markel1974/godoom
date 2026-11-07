@@ -224,12 +224,16 @@ func (t *Base) StageApply() {
 			continue
 		case collisions.ImpactElastic:
 			nX, nY, nZ := slot.GetNormal()
-			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
-			rPushX, rPushY, rPushZ := slot.GetRCage().GetPushOffset()
-			alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
 			rCage := slot.GetRCage()
+			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
+			rPushX, rPushY, rPushZ := rCage.GetPushOffset()
+			alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
 			if pen := slot.GetPenetration() - alreadyResolved; pen > 0 {
-				entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
+				if !slot.Penetrable() {
+					entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
+				} else {
+					entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
+				}
 			}
 			t.onCollision(rCage.GetObject())
 		case collisions.ImpactInelastic:

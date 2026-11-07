@@ -117,7 +117,6 @@ func (th *Things) Len() int {
 // QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
 func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 	lThing := lCage.GetThing()
-	counter := 0
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(volumes.IThing)
 		if lThing == rThing {
@@ -129,31 +128,21 @@ func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 		}
 		lCage.Seen(rCage)
 		rCage.Seen(lCage)
+		pairCounter := 0
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
 		rThing.VerticesGetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
 			rFace := rEnt.(*volumes.Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
-			// Query sul BVH del Self
+			// Query sul BVH del Self: basta il primo lFace sovrapposto per validare il contatto con rFace
 			lThing.VerticesGetVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
 				lFace := lEnt.(*volumes.Face)
-				// Integrazione nel Manifold (verificare che AddFace accetti/conosca i delta
-				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
 				lCage.AddFace(rFace, lFace)
-				counter++
-				if counter > maxOverlaps {
-					return true
-				}
-				return false
-			})
-			if counter > maxOverlaps {
+				pairCounter++
 				return true
-			}
-			return false
+			})
+			return pairCounter > maxOverlaps
 		})
 		lCage.Commit(rCage)
-		if counter > maxOverlaps {
-			return true
-		}
 		return false
 	})
 }

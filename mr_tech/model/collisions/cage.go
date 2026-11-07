@@ -118,9 +118,7 @@ func (s *Cage) Rebuild(maxStep float64) {
 	s.hasFloor = false
 	s.applied = false
 
-	for k := range s.seen {
-		delete(s.seen, k)
-	}
+	clear(s.seen)
 	s.maxStep = maxStep
 }
 
@@ -164,6 +162,12 @@ func (s *Cage) Commit(rCage *Cage) {
 		rFace := faces.rFace
 		lFace := faces.lFace
 
+		if mat := rFace.GetMaterial(); mat != nil {
+			if mat.GetKind() == int(config.MaterialKindSky) || !mat.IsSolid() {
+				continue // Skybox or non-solid surface: ignore collision and volume tracking
+			}
+		}
+
 		var b BucketType
 		var dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ float64
 
@@ -184,16 +188,6 @@ func (s *Cage) Commit(rCage *Cage) {
 					s.volume = volume
 					s.distance = dist
 				}
-			}
-		}
-
-		//TODO SMALL PATCH - FULL IMPLEMENTATION REQUIRED
-		if mat := rFace.GetMaterial(); mat != nil {
-			if mat.GetKind() == int(config.MaterialKindSky) {
-				continue // Skybox/transparent: ignore collision
-			}
-			if !mat.IsSolid() {
-				continue
 			}
 		}
 
@@ -219,6 +213,18 @@ func (s *Cage) Commit(rCage *Cage) {
 		}
 
 		s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
+		if rCage != nil && iMode == ImpactElastic {
+			recipFace := lFace
+			if recipFace == nil {
+				recipFace = rFace
+			}
+			lMaxZ := lAABB.GetMaxZ()
+			oppB := b.Opposite()
+			rCage.addToBucket(oppB, s, recipFace, dist, pen, -nX, -nY, -nZ, p0x, p0y, p0z, lMaxZ, ImpactElastic)
+			if oppB == BucketFloor {
+				rCage.hasFloor = true
+			}
+		}
 		switch b {
 		case BucketFloor:
 			s.hasFloor = true
@@ -466,10 +472,18 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, of
 	deltaPen := math.Max(0.0, penetration-pen0)
 
 	normOX := oX
-	if nAbsX > 1e-5 && nAbsX < 1.0 {
+	if solidWE && nAbsX > 1e-5 && nAbsX < 1.0 {
 		normOX = oX / nAbsX
 	}
-	minOverlap := math.Min(normOX, math.Min(oY, oZ)) + deltaPen
+	normOY := oY
+	if solidNS && nAbsY > 1e-5 && nAbsY < 1.0 {
+		normOY = oY / nAbsY
+	}
+	normOZ := oZ
+	if !solidWE && !solidNS && nAbsZ > 1e-5 && nAbsZ < 1.0 {
+		normOZ = oZ / nAbsZ
+	}
+	minOverlap := math.Min(normOX, math.Min(normOY, normOZ)) + deltaPen
 
 	if penetration > minOverlap+satFilterEpsilon {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ

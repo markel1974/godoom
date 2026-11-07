@@ -49,6 +49,26 @@ func (p BucketType) IsWall() bool {
 	return p == BucketWallWest || p == BucketWallEast || p == BucketWallNorth || p == BucketWallSouth
 }
 
+// Opposite returns the opposite directional BucketType.
+func (p BucketType) Opposite() BucketType {
+	switch p {
+	case BucketWallWest:
+		return BucketWallEast
+	case BucketWallEast:
+		return BucketWallWest
+	case BucketWallNorth:
+		return BucketWallSouth
+	case BucketWallSouth:
+		return BucketWallNorth
+	case BucketCeiling:
+		return BucketFloor
+	case BucketFloor:
+		return BucketCeiling
+	default:
+		return p
+	}
+}
+
 // BucketSize defines the size of a single bucket, calculated as BucketFloor + 1.
 const BucketSize = BucketFloor + 1
 
@@ -89,6 +109,13 @@ func (b *Bucket) Count() int {
 // Penetrable determines if the Bucket can be penetrated starting from a specified entity ID.
 // Returns false if any entity in the bucket provides infinite inelastic resistance or cannot be recursively pushed.
 func (b *Bucket) Penetrable(from uint64) bool {
+	return b.penetrable(from, 0)
+}
+
+func (b *Bucket) penetrable(from uint64, depth int) bool {
+	if depth >= maxPushDepth {
+		return true
+	}
 	// Scorriamo TUTTE le entità in questo bucket (multi-pushing)
 	for i := 0; i < b.containerCounter; i++ {
 		entry := b.container[i]
@@ -102,12 +129,25 @@ func (b *Bucket) Penetrable(from uint64) bool {
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
 		// può essere spinta a sua volta (Attraversamento Ricorsivo del Grafo).
 		// Se anche UNA SOLA entità è bloccata, tutto il nostro fronte di spinta è bloccato!
-		if !entry.Penetrable() {
+		if !entry.penetrable(depth) {
 			return false
 		}
 	}
 	// Se nessuna entità oppone resistenza anelastica infinita, il bucket cede.
 	return true
+}
+
+func impactModePriority(iMode int) int {
+	switch iMode {
+	case ImpactInelastic:
+		return 3
+	case ImpactElastic:
+		return 2
+	case ImpactStep:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
@@ -160,16 +200,21 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes
 		return target
 	}
 
-	// Replace the least relevant face
+	// Replace the least relevant face (respecting impactModePriority first, then penetration depth)
 	minIdx := 0
+	minPrio := impactModePriority(b.container[0].iMode)
 	minPen := b.container[0].penetration
 	for i := 1; i < FacesPerBucket; i++ {
-		if b.container[i].penetration < minPen {
-			minPen = b.container[i].penetration
+		cPrio := impactModePriority(b.container[i].iMode)
+		cPen := b.container[i].penetration
+		if cPrio < minPrio || (cPrio == minPrio && cPen < minPen) {
+			minPrio = cPrio
+			minPen = cPen
 			minIdx = i
 		}
 	}
-	if penetration > minPen {
+	inPrio := impactModePriority(iMode)
+	if inPrio > minPrio || (inPrio == minPrio && penetration > minPen) {
 		b.container[minIdx].Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 	}
 	return nil

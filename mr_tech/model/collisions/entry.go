@@ -71,17 +71,23 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volu
 	s.iMode = iMode
 }
 
+const maxPushDepth = 8
+
 // Penetrable determines if the Entry can be penetrated based on its collision mode and the state of adjacent entities.
 func (s *Entry) Penetrable() bool {
+	return s.penetrable(0)
+}
+
+func (s *Entry) penetrable(depth int) bool {
 	if s.iMode == ImpactInelastic {
 		return false
 	}
-	if s.rCage == nil {
+	if s.rCage == nil || depth >= maxPushDepth {
 		return true
 	}
 	// Passiamo il controllo al bucket dell'entità remota nella STESSA direzione.
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.object.VerticesGetEntity().GetId())
+	return v.penetrable(s.lCage.object.VerticesGetEntity().GetId(), depth+1)
 }

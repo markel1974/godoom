@@ -1,7 +1,8 @@
-package model
+package volumes
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -33,7 +34,7 @@ type IVertices interface {
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
-func VerticesFactory(thing IThing, cfg *config.Thing, materials *Materials) IVertices {
+func VerticesFactory(thing IThing, cfg *config.Thing, materials *materials.Materials) IVertices {
 	var out IVertices
 	if cfg.Model3D != nil {
 		out = NewVertices3D(thing, cfg, materials)

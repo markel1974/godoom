@@ -1,4 +1,4 @@
-package model
+package volumes
 
 import "sync"
 
@@ -83,4 +83,12 @@ func (e *ThingEvent) Done() {
 // GetKind returns the ComputeStage value representing the stage or stage associated with the ThingEvent.
 func (e *ThingEvent) GetKind() ComputeStage {
 	return e.stage
+}
+
+func (e *ThingEvent) Add() {
+	e.wg.Add(1)
+}
+
+func (e *ThingEvent) Wait() {
+	e.wg.Wait()
 }

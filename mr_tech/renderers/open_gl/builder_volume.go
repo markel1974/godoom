@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
@@ -140,14 +141,14 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *en
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
-func (w *BuilderVolume) pushQVolumes(volumes *model.Volumes, frustumFront *aabb.Frustum, camX, camY, camZ float64) {
+func (w *BuilderVolume) pushQVolumes(vols *volumes.Volumes, frustumFront *aabb.Frustum, camX, camY, camZ float64) {
 	//w.occBuffer.Clear()
 
-	w.visibleVol.Reset(volumes.Len(), camX, camY, camZ)
+	w.visibleVol.Reset(vols.Len(), camX, camY, camZ)
 
 	// Raccolta dal DBVH (Broad-Phase)
-	volumes.QueryFrustum(frustumFront, func(object aabb.IObject) bool {
-		w.visibleVol.Add(object.(*model.Volume))
+	vols.QueryFrustum(frustumFront, func(object aabb.IObject) bool {
+		w.visibleVol.Add(object.(*volumes.Volume))
 		return false
 	})
 
@@ -251,7 +252,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//counter := 0
 	things.StagePrepare()
 
-	pushPassThing := func(thing model.IThing, faces *model.Faces, nextFaces *model.Faces, lp float64, renderMode float64) {
+	pushPassThing := func(thing volumes.IThing, faces *volumes.Faces, nextFaces *volumes.Faces, lp float64, renderMode float64) {
 		if !thing.IsVisible() {
 			return
 		}
@@ -320,7 +321,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	qOcclusion := func(object aabb.IObject) bool {
-		thing := object.(model.IThing)
+		thing := object.(volumes.IThing)
 		occState := w.occlusion.GetState(thing.VerticesGetEntity().GetId())
 		if occState != nil && !occState.IsVisible {
 			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
@@ -342,7 +343,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	qStatic := func(object aabb.IObject) bool {
-		thing := object.(model.IThing)
+		thing := object.(volumes.IThing)
 		thing.VerticesCompile(textures.GlobalTick())
 		faces, nextFaces, lp, renderMode := thing.VerticesGet()
 		if faces.Len() > 0 {

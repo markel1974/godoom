@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // ThingEnemy represents an enemy entity that extends ThingBase and defines behavior through a custom thinking function.
@@ -14,7 +15,7 @@ type ThingEnemy struct {
 // NewThingEnemy initializes and returns a new instance of ThingEnemy with the specified configuration and parameters.
 // It ensures that default values are set for speed and acceleration if not provided.
 // The function panics if the OnThinking callback in the config is nil.
-func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnemy {
+func NewThingEnemy(things *Things, cfg *config.Thing, volume *volumes.Volume) *ThingEnemy {
 	if cfg.OnThinking == nil {
 		panic("onThinking is nil for enemy:" + cfg.Id)
 	}
@@ -27,7 +28,7 @@ func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnem
 }
 
 // IsEqual reports whether other is the same ThingEnemy instance.
-func (t *ThingEnemy) IsEqual(other IThing) bool {
+func (t *ThingEnemy) IsEqual(other volumes.IThing) bool {
 	if v, ok := other.(*ThingEnemy); ok && t == v {
 		return true
 	}
@@ -55,7 +56,7 @@ func (t *ThingEnemy) LaunchObject(throwableIndex int, onCollision config.Collisi
 }
 
 // PostMessage sends a ThingEvent instance to the inbox channel of ThingEnemy for processing.
-func (t *ThingEnemy) PostMessage(ec *ThingEvent) {
+func (t *ThingEnemy) PostMessage(ec *volumes.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -66,13 +67,13 @@ func (t *ThingEnemy) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case StageThinking:
+				case volumes.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case StageCompute:
+				case volumes.StageCompute:
 					//t.StageCompute()
-				case StageResolve:
+				case volumes.StageResolve:
 					t.StageResolve()
-				case StageApply:
+				case volumes.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

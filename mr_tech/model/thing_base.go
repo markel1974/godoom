@@ -3,13 +3,14 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // ThingBase represents the fundamental attributes and behaviors of an object in the system.
 type ThingBase struct {
-	IVertices
+	volumes.IVertices
 	id             string
 	kind           config.ThingType
 	angle          float64
@@ -19,19 +20,19 @@ type ThingBase struct {
 	wakeupDistance float64
 	acceleration   float64
 	jumpForce      float64
-	location       *Volume
+	location       *volumes.Volume
 	things         *Things
 	isActive       bool
-	cage           *CollisionCage
+	cage           *volumes.CollisionCage
 
-	inbox       chan *ThingEvent
+	inbox       chan *volumes.ThingEvent
 	onCollision config.CollisionFunc
 	onImpact    config.ImpactFunc
 	done        chan struct{}
 }
 
 // NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Volume) *ThingBase {
+func NewThingBase(thing volumes.IThing, things *Things, cfg *config.Thing, location *volumes.Volume) *ThingBase {
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
@@ -43,7 +44,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 	}
 
 	t := &ThingBase{
-		IVertices:      VerticesFactory(thing, cfg, things.GetMaterials()),
+		IVertices:      volumes.VerticesFactory(thing, cfg, things.GetMaterials()),
 		id:             cfg.Id,
 		angle:          cfg.Angle,
 		kind:           cfg.Kind,
@@ -55,7 +56,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		things:         things,
 		maxStep:        0,
 		isActive:       true,
-		inbox:          make(chan *ThingEvent, 16),
+		inbox:          make(chan *volumes.ThingEvent, 16),
 		done:           make(chan struct{}),
 		cage:           nil,
 		onImpact:       cfg.OnImpact,
@@ -65,7 +66,7 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 	entity := t.VerticesGetEntity()
 	entity.SetOnGround(false)
 	t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
-	t.cage = NewCollisionCage(thing)
+	t.cage = volumes.NewCollisionCage(thing)
 
 	return t
 }
@@ -81,12 +82,12 @@ func (t *ThingBase) GetKind() config.ThingType {
 }
 
 // GetLocation retrieves the current location associated with the ThingBase instance.
-func (t *ThingBase) GetLocation() *Volume {
+func (t *ThingBase) GetLocation() *volumes.Volume {
 	return t.location
 }
 
 // GetCage retrieves the CollisionCage instance associated with the ThingBase, which defines its physical boundaries.
-func (t *ThingBase) GetCage() ICollisionCage {
+func (t *ThingBase) GetCage() volumes.ICollisionCage {
 	return t.cage
 }
 
@@ -172,12 +173,13 @@ func (t *ThingBase) StageResolve() {
 
 		iMode := slot.GetImpactMode()
 		switch iMode {
-		case ImpactStep:
+		case volumes.ImpactStep:
 			continue
 		}
 		var rParentEnt *physics.Entity
-		if slot.rCage != nil {
-			rParentEnt = slot.rCage.GetEntity()
+
+		if rCage := slot.GetRCage(); rCage != nil {
+			rParentEnt = rCage.GetEntity()
 		} else {
 			rFace := slot.GetRemoteFace()
 			rParent := rFace.GetParent()
@@ -205,20 +207,20 @@ func (t *ThingBase) StageApply() {
 		slot := t.cage.GetSlot(i)
 		iMode := slot.GetImpactMode()
 		switch iMode {
-		case ImpactStep:
+		case volumes.ImpactStep:
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
-		case ImpactElastic:
+		case volumes.ImpactElastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
-			rPushX, rPushY, rPushZ := slot.rCage.GetPushOffset()
+			rPushX, rPushY, rPushZ := slot.GetRCage().GetPushOffset()
 			alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
-			pen := slot.GetPenetration() - alreadyResolved
-			if pen > 0 {
-				entity.ResolveElasticPenetration(slot.rCage.GetEntity(), slot.rCage.HasFloor(), nX, nY, nZ, pen)
+			rCage := slot.GetRCage()
+			if pen := slot.GetPenetration() - alreadyResolved; pen > 0 {
+				entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
 			}
-			t.onCollision(slot.rCage.object)
-		case ImpactInelastic:
+			t.onCollision(rCage.GetObject())
+		case volumes.ImpactInelastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ
@@ -254,7 +256,7 @@ func (t *ThingBase) GetBase() *ThingBase {
 }
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
-func (t *ThingBase) Jump(self IThing, leapX float64, leapY float64, zFactor float64) bool {
+func (t *ThingBase) Jump(self volumes.IThing, leapX float64, leapY float64, zFactor float64) bool {
 	entity := t.VerticesGetEntity()
 	if !entity.IsOnGround() {
 		return false
@@ -266,16 +268,16 @@ func (t *ThingBase) Jump(self IThing, leapX float64, leapY float64, zFactor floa
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *ThingBase) FireHitscan(self IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *ThingBase) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 	var closestDist = maxDistance
-	var closestThing IThing
+	var closestThing volumes.IThing
 
 	// Usiamo l'origine (pos) e il vettore direzione (dir) calcolato esternamente.
 	// QueryRay richiede invDir (1.0/dir) che viene calcolato internamente.
 	t.things.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, maxDistance, func(object aabb.IObject, distance float64) (float64, bool) {
 		// Self-hit culling: l'entità che spara non deve colpire se stessa
-		other, ok := object.(IThing)
+		other, ok := object.(volumes.IThing)
 		if !ok {
 			return maxDistance, false
 		}
@@ -315,7 +317,7 @@ func (t *ThingBase) Impact(other config.IThingConfig, id string, force, closestD
 
 // spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.
 // It offsets slightly from the surface to avoid Z-fighting and applies a visual decal for a limited duration.
-func (t *ThingBase) spawnBulletHole(x, y, z float64, target IThing) {
+func (t *ThingBase) spawnBulletHole(x, y, z float64, target volumes.IThing) {
 	// Creiamo un'entità visiva temporanea tramite il gestore Things
 	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)
 	// per evitare lo Z-fighting durante il rendering.

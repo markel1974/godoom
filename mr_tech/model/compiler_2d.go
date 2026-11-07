@@ -7,7 +7,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	materials2 "github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -28,13 +30,13 @@ func materialSize(mat *textures.Material) (float64, float64, bool) {
 }
 
 // BuildQuad constructs two triangular faces that form a quad, applies UV mapping, and adds them to the specified 3D volume.
-func buildQuad(v *Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material, align *config.UVAlign, t1, t2 float64) {
+func buildQuad(v *volumes.Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material, align *config.UVAlign, t1, t2 float64) {
 	v0 := geometry.XYZ{X: s.X, Y: s.Y, Z: zBS}
 	v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE}
 	v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE}
 	v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS}
-	face1 := NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
-	face2 := NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
+	face1 := volumes.NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
+	face2 := volumes.NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
 	if align != nil {
 		if w, h, ok := materialSize(material); ok {
 			uStart, uEnd, vBS, vBE, vTS, vTE := align.ComputeVertical(w, h, t1, t2, s, e, zBS, zBE, zTS, zTE)
@@ -51,11 +53,11 @@ func buildQuad(v *Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag stri
 // Compiler2d is responsible for compiling 2D sector data, vertices, and materials into structured volume representations.
 type Compiler2d struct {
 	cfg       *config.Root
-	materials *Materials
+	materials *materials2.Materials
 }
 
 // NewCompiler2d creates and returns a new instance of Compiler2d, used for compiling 2D game sectors and related data.
-func NewCompiler2d(cfg *config.Root, materials *Materials) *Compiler2d {
+func NewCompiler2d(cfg *config.Root, materials *materials2.Materials) *Compiler2d {
 	return &Compiler2d{
 		cfg:       cfg,
 		materials: materials,
@@ -63,8 +65,8 @@ func NewCompiler2d(cfg *config.Root, materials *Materials) *Compiler2d {
 }
 
 // Compile constructs 3D volumes and lights from 2D sector data, resolving player and thing positions using sector geometry.
-func (r *Compiler2d) Compile() ([]*Volume, []*lights.Light, error) {
-	var allVolumes []*Volume
+func (r *Compiler2d) Compile() ([]*volumes.Volume, []*lights.Light, error) {
+	var allVolumes []*volumes.Volume
 	if len(r.cfg.Sectors) == 0 {
 		return nil, nil, nil
 	}
@@ -341,13 +343,13 @@ func (r *Compiler2d) compile2d() ([]*sectors.Sector, []*sectors.SegmentUncovered
 
 // upgrade3d converts a collection of 2D sectors into corresponding 3D volumes by resolving their geometric features.
 // It applies floor and ceiling heights, handles segment neighbors, and builds walls based on slope and material properties.
-func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
-	var volumes3d []*Volume
-	volMap := make(map[*sectors.Sector]*Volume)
+func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
+	var volumes3d []*volumes.Volume
+	volMap := make(map[*sectors.Sector]*volumes.Volume)
 
 	for _, sector := range sectors2d {
 		id := fmt.Sprintf("%s_3d", sector.GetId())
-		vol3d := NewVolumeConcrete(sector.GetModelId(), id, sector.GetTag())
+		vol3d := volumes.NewVolumeConcrete(sector.GetModelId(), id, sector.GetTag())
 
 		if cLight := sector.GetLight(); cLight != nil {
 			light := lights.NewLight()
@@ -373,10 +375,10 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 		zF2, zC2 := sector.ResolveZ(p2, curFloorY, curCeilY, false)
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
-		ceilFace := NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
+		ceilFace := volumes.NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
 		if align := sector.GetCeilAlign(); align != nil {
 			if w, h, ok := materialSize(ceilFace.GetMaterial()); ok {
-				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, ceilFace.tri)
+				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, ceilFace.GetTri())
 				ceilFace.SetUV(u0, v0, u1, v1, u2, v2)
 				ceilFace.LockUV(true)
 			}
@@ -385,11 +387,11 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 		vol3d.AddFace(ceilFace)
 
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
-		floorFace := NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
+		floorFace := volumes.NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
 
 		if align := sector.GetFloorAlign(); align != nil {
 			if w, h, ok := materialSize(floorFace.GetMaterial()); ok {
-				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, floorFace.tri)
+				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, floorFace.GetTri())
 				floorFace.SetUV(u0, v0, u1, v1, u2, v2)
 				floorFace.LockUV(true)
 			}
@@ -540,13 +542,13 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*Volume {
 }
 
 // upgrade3dSegmentUncovered converts uncovered wall segments into 3D volumes by generating faces and applying lighting.
-func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncovered) []*Volume {
-	var volumes []*Volume
+func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncovered) []*volumes.Volume {
+	var vols []*volumes.Volume
 	for _, su := range segments {
 		if su.GetMat() == nil || su.GetMat().GetHeadFrame() == nil {
 			continue
 		}
-		vol3d := NewVolumeConcrete(su.GetModelId(), fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId()), su.GetCsTag())
+		vol3d := volumes.NewVolumeConcrete(su.GetModelId(), fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId()), su.GetCsTag())
 		if su.GetCsLight() != nil {
 			light := lights.NewLight()
 			light.Setup(su.GetCsLight(), su.GetLightPos())
@@ -556,9 +558,9 @@ func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncov
 		buildQuad(vol3d, su.GetStart(), su.GetEnd(), su.GetZBS(), su.GetZBE(), su.GetZTS(), su.GetZTE(), su.GetTag(), su.GetMat(), su.GetAlign(), 0.0, 1.0)
 
 		vol3d.Rebuild()
-		volumes = append(volumes, vol3d)
+		vols = append(vols, vol3d)
 	}
-	return volumes
+	return vols
 }
 
 // updateAdjDependencies resolves dependency order among sectors and reorders them for adjacency processing.

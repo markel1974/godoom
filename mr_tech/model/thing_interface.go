@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // ThingInterface is a specialized wrapper around ThingBase, representing a HUD entity that follows the camera.
@@ -19,7 +20,7 @@ func NewThingInterface(things *Things, cfg *config.Thing) *ThingInterface {
 }
 
 // IsEqual reports whether other is the same ThingInterface instance.
-func (t *ThingInterface) IsEqual(other IThing) bool {
+func (t *ThingInterface) IsEqual(other volumes.IThing) bool {
 	if v, ok := other.(*ThingInterface); ok && t == v {
 		return true
 	}
@@ -40,7 +41,7 @@ func (t *ThingInterface) LaunchObject(throwableIndex int, onCollision config.Col
 }
 
 // PostMessage sends an ThingEvent instance to the ThingItem's inbox channel for processing.
-func (t *ThingInterface) PostMessage(_ *ThingEvent) {
+func (t *ThingInterface) PostMessage(_ *volumes.ThingEvent) {
 }
 
 // StartLoop begins a goroutine that processes incoming events.
@@ -63,10 +64,10 @@ func (t *ThingInterface) VerticesCompile(tick uint64) bool {
 
 // GetVertices overrides the default GetVertices to use the HUD render mode.
 // The vertex shader will bypass the view matrix completely and place it in screen space.
-func (t *ThingInterface) VerticesGet() (*Faces, *Faces, float64, float64) {
+func (t *ThingInterface) VerticesGet() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	//TODO posizione assoluta e' un pezzo dell'interfaccia
 	t.VerticesGetEntity().MoveTo(0, 0, 0)
 	f1, f2, lp, _ := t.ThingBase.VerticesGet()
 	// Usiamo 1.1 (Spherical Billboard) in modo che lo shader originale lo processi correttamente
-	return f1, f2, lp, RenderModeInterface
+	return f1, f2, lp, volumes.RenderModeInterface
 }

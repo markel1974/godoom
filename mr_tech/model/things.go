@@ -6,6 +6,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
@@ -16,30 +18,30 @@ const solverJitter = 1e-6
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
 	config           []*config.Thing
-	volumes          *Volumes
-	materials        *Materials
+	volumes          *volumes.Volumes
+	materials        *materials.Materials
 	tree             *aabb.Tree
 	player           *ThingPlayer
-	entities         map[uint64]IThing
-	running          []IThing
-	removables       []IThing
-	pending          []IThing
-	ready            []IThing
-	thinkers         []IThing
-	statics          []IThing
+	entities         map[uint64]volumes.IThing
+	running          []volumes.IThing
+	removables       []volumes.IThing
+	pending          []volumes.IThing
+	ready            []volumes.IThing
+	thinkers         []volumes.IThing
+	statics          []volumes.IThing
 	readyLen         int
 	thinkersLen      int
 	removablesLen    int
 	pendingLen       atomic.Int32
 	hasPending       bool
 	solverIterations int
-	event            *ThingEvent
+	event            *volumes.ThingEvent
 	cfg              []*config.Thing
 	maxOverlaps      int
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
-func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, volumes *Volumes, materials *Materials) *Things {
+func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols *volumes.Volumes, materials *materials.Materials) *Things {
 	const defaultLen = 1024
 	if maxOverlaps <= 0 {
 		maxOverlaps = 100
@@ -52,20 +54,20 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, volum
 		solverIterations: solverIterations,
 		cfg:              cfg,
 		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
-		entities:         make(map[uint64]IThing),
-		running:          make([]IThing, defaultLen),
-		ready:            make([]IThing, defaultLen),
-		thinkers:         make([]IThing, defaultLen),
-		pending:          make([]IThing, defaultLen),
+		entities:         make(map[uint64]volumes.IThing),
+		running:          make([]volumes.IThing, defaultLen),
+		ready:            make([]volumes.IThing, defaultLen),
+		thinkers:         make([]volumes.IThing, defaultLen),
+		pending:          make([]volumes.IThing, defaultLen),
 		readyLen:         0,
 		thinkersLen:      0,
 		removablesLen:    0,
 		hasPending:       false,
 		config:           cfg,
-		volumes:          volumes,
+		volumes:          vols,
 		materials:        materials,
-		event:            NewThingEvent(0, solverJitter),
-		statics:          make([]IThing, 0, 16),
+		event:            volumes.NewThingEvent(0, solverJitter),
+		statics:          make([]volumes.IThing, 0, 16),
 	}
 	e.pendingLen.Store(0)
 
@@ -101,7 +103,7 @@ func (th *Things) Setup() error {
 }
 
 // GetMaterials returns a pointer to the Materials associated with the Things instance.
-func (th *Things) GetMaterials() *Materials {
+func (th *Things) GetMaterials() *materials.Materials {
 	return th.materials
 }
 
@@ -111,15 +113,15 @@ func (th *Things) Len() int {
 }
 
 // QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
-func (th *Things) QueryCollisionCage(lCage *CollisionCage, maxOverlaps int) {
+func (th *Things) QueryCollisionCage(lCage *volumes.CollisionCage, maxOverlaps int) {
 	lThing := lCage.GetThing()
 	counter := 0
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
-		rThing := object.(IThing)
+		rThing := object.(volumes.IThing)
 		if lThing == rThing {
 			return false
 		}
-		rCage := rThing.GetCage().(*CollisionCage)
+		rCage := rThing.GetCage().(*volumes.CollisionCage)
 		if lCage.HasSeen(rCage) {
 			return false
 		}
@@ -127,11 +129,11 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage, maxOverlaps int) {
 		rCage.Seen(lCage)
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
 		rThing.VerticesGetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
-			rFace := rEnt.(*Face)
+			rFace := rEnt.(*volumes.Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
 			// Query sul BVH del Self
 			lThing.VerticesGetVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
-				lFace := lEnt.(*Face)
+				lFace := lEnt.(*volumes.Face)
 				// Integrazione nel Manifold (verificare che AddFace accetti/conosca i delta
 				// per allineare i vertici allo stesso sistema di riferimento durante il calcolo SAT)
 				lCage.AddFace(rFace, lFace)
@@ -188,7 +190,7 @@ func (th *Things) GetTextures() textures.ITextures {
 }
 
 // GetActive returns the slice of active IThing objects and the current index of active things.
-func (th *Things) GetActive() ([]IThing, int) {
+func (th *Things) GetActive() ([]volumes.IThing, int) {
 	return th.ready, th.readyLen
 }
 
@@ -203,14 +205,14 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 }
 
 // Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
-func (th *Things) Create(ct *config.Thing, volume *Volume) IThing {
+func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) volumes.IThing {
 	const disableEnemies = false
 	if disableEnemies {
 		if ct.Kind == config.ThingEnemyDef {
 			ct.Kind = config.ThingItemDef
 		}
 	}
-	var thing IThing
+	var thing volumes.IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
 		thing = NewThingEnemy(th, ct, volume)
@@ -233,7 +235,7 @@ func (th *Things) Create(ct *config.Thing, volume *Volume) IThing {
 }
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
-func (th *Things) CreateThrowable(self IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
+func (th *Things) CreateThrowable(self volumes.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64) {
 	if len(th.config) <= throwableIndex {
 		return
 	}
@@ -264,7 +266,7 @@ func (th *Things) StagePrepare() {
 }
 
 // StageAdd queues t2 as ready and tracks it as a thinker when it supports thinking.
-func (th *Things) StageAdd(t2 IThing) {
+func (th *Things) StageAdd(t2 volumes.IThing) {
 	th.ready[th.readyLen] = t2
 	th.readyLen++
 	if t2.HasThinking() {
@@ -296,14 +298,14 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	// Apply Thinking
 	if th.thinkersLen > 0 {
-		th.event.SetStage(StageThinking)
+		th.event.SetStage(volumes.StageThinking)
 		th.event.SetCoords(pX, pY, pZ)
 		for x := 0; x < th.thinkersLen; x++ {
 			t2 := th.thinkers[x]
-			th.event.wg.Add(1)
+			th.event.Add()
 			t2.PostMessage(th.event)
 		}
-		th.event.wg.Wait()
+		th.event.Wait()
 	}
 
 	//Apply Physics
@@ -326,14 +328,14 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		cage := t2.GetCage().(*CollisionCage)
+		cage := t2.GetCage().(*volumes.CollisionCage)
 		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
 		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		cage := t2.GetCage().(*CollisionCage)
+		cage := t2.GetCage().(*volumes.CollisionCage)
 		t2.VerticesGetEntity().SetOnGround(cage.HasFloor())
 	}
 
@@ -364,24 +366,24 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 }
 
 // AddStaticThing adds a static object to the scene without physics or spatial partitioning.
-func (th *Things) AddStaticThing(ent IThing) {
+func (th *Things) AddStaticThing(ent volumes.IThing) {
 	th.statics = append(th.statics, ent)
 }
 
 // addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
-func (th *Things) addThing(ent IThing) {
+func (th *Things) addThing(ent volumes.IThing) {
 	th.entities[ent.VerticesGetEntity().GetId()] = ent
 	if len(th.entities) > cap(th.running) {
-		th.running = make([]IThing, len(th.entities)*4)
-		th.removables = make([]IThing, len(th.entities)*4)
-		th.pending = make([]IThing, len(th.entities)*4)
+		th.running = make([]volumes.IThing, len(th.entities)*4)
+		th.removables = make([]volumes.IThing, len(th.entities)*4)
+		th.pending = make([]volumes.IThing, len(th.entities)*4)
 	}
 	th.tree.InsertObject(ent)
 	ent.StartLoop()
 }
 
 // removeThing removes an IThing instance from the spatial tree and the entities map.
-func (th *Things) removeThing(ent IThing) {
+func (th *Things) removeThing(ent volumes.IThing) {
 	th.tree.RemoveObject(ent)
 	delete(th.entities, ent.VerticesGetEntity().GetId())
 }

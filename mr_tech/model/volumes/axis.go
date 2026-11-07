@@ -1,6 +1,8 @@
-package model
+package volumes
 
-import "github.com/markel1974/godoom/mr_tech/geometry"
+import (
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
 
 // _im is a predefined identity matrix array representing the standard basis vectors in 3D space.
 var _im = [3]geometry.XYZ{

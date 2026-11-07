@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	volumes2 "github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // Calibration contains parameters for configuring the camera and map projection in a 3D engine.
@@ -27,11 +28,11 @@ type Calibration struct {
 	EnableShadows      bool
 	PrjScale           float64
 	PrjScaleLights     float64
-	volumes            *Volumes
+	volumes            *volumes2.Volumes
 }
 
 // NewCalibration creates and initializes a new Calibration instance using the provided configuration and volume data.
-func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
+func NewCalibration(cfg *config.Calibration, volumes *volumes2.Volumes) *Calibration {
 	c := &Calibration{
 		OrthoSize:          cfg.OrthoSize,
 		MapCenterX:         cfg.MapCenterX,
@@ -54,7 +55,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 
 // Setup initializes the calibration's parameters based on the dimensions and position of the root volume if Auto is enabled.
 func (c *Calibration) Setup() error {
-	root, ok := c.volumes.tree.GetRoot()
+	root, ok := c.volumes.GetRoot()
 	if !ok {
 		return fmt.Errorf("no root volume found")
 	}

@@ -1,4 +1,4 @@
-package model
+package volumes
 
 import (
 	"math"
@@ -188,6 +188,10 @@ func (s *CageEntry) GetNormal() (float64, float64, float64) { return s.nX, s.nY,
 
 // GetPenetration returns the penetration depth of the collision measured by the cage entry.
 func (s *CageEntry) GetPenetration() float64 { return s.penetration }
+
+func (s *CageEntry) GetLCage() *CollisionCage { return s.lCage }
+
+func (s *CageEntry) GetRCage() *CollisionCage { return s.rCage }
 
 // NewCollisionFace creates and returns a new instance of CageEntry initialized with default zero values.
 func NewCollisionFace() *CageEntry {
@@ -388,6 +392,10 @@ func NewCollisionCage(object IThing) *CollisionCage {
 		c.ellipsoidLocal[i] = physics.NewEntity(0, 0, 0, 0)
 	}
 	return c
+}
+
+func (s *CollisionCage) GetObject() IThing {
+	return s.object
 }
 
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.

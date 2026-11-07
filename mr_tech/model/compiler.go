@@ -7,20 +7,22 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	materials2 "github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 type ICompiler interface {
-	Compile() ([]*Volume, []*lights.Light, error)
+	Compile() ([]*volumes.Volume, []*lights.Light, error)
 }
 
 // Compiler represents a core game engine component for managing world, game objects, player interactions, and things.
 type Compiler struct {
 	gScale      geometry.XYZ
-	volumes     *Volumes
+	volumes     *volumes.Volumes
 	player      *ThingPlayer
 	lights      *lights.Lights
 	things      *Things
-	ui          []IThing
+	ui          []volumes.IThing
 	calibration *Calibration
 }
 
@@ -51,7 +53,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 
 	cfg.Scale(r.gScale)
 
-	materials := NewMaterials(cfg.GetTextures())
+	materials := materials2.NewMaterials(cfg.GetTextures())
 	if err := materials.Setup(); err != nil {
 		return err
 	}
@@ -62,7 +64,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		NewCompilerLights(cfg.Lights),
 	}
 
-	var allVolumes []*Volume
+	var allVolumes []*volumes.Volume
 	var allLights []*lights.Light
 
 	for _, compiler := range pipeline {
@@ -79,7 +81,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 	fmt.Printf("pipeline compiled in %s \n", time.Since(now))
 
-	r.volumes = NewVolumes(allVolumes)
+	r.volumes = volumes.NewVolumes(allVolumes)
 	if err := r.volumes.Setup(); err != nil {
 		return err
 	}
@@ -123,12 +125,12 @@ func (r *Compiler) GetThings() *Things {
 }
 
 // GetUI returns the list of UI-related IThing instances managed by the Compiler.
-func (r *Compiler) GetUI() []IThing {
+func (r *Compiler) GetUI() []volumes.IThing {
 	return r.ui
 }
 
 // GetVolumes retrieves the Volumes instance associated with the current Compiler object.
-func (r *Compiler) GetVolumes() *Volumes {
+func (r *Compiler) GetVolumes() *volumes.Volumes {
 	return r.volumes
 }
 

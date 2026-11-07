@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // ThingThrowable represents a throwable object in the system, extending the base functionality of ThingBase.
@@ -13,7 +14,7 @@ type ThingThrowable struct {
 }
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
-func NewThingThrowable(things *Things, cfg *config.Thing, volume *Volume) *ThingThrowable {
+func NewThingThrowable(things *Things, cfg *config.Thing, volume *volumes.Volume) *ThingThrowable {
 	throwable := &ThingThrowable{}
 	throwable.ThingBase = NewThingBase(throwable, things, cfg, volume)
 	cfg.OnBind(throwable)
@@ -36,7 +37,7 @@ func NewThingThrowable(things *Things, cfg *config.Thing, volume *Volume) *Thing
 }
 
 // IsEqual reports whether other is the same ThingThrowable instance.
-func (t *ThingThrowable) IsEqual(other IThing) bool {
+func (t *ThingThrowable) IsEqual(other volumes.IThing) bool {
 	if v, ok := other.(*ThingThrowable); ok && t == v {
 		return true
 	}
@@ -57,7 +58,7 @@ func (t *ThingThrowable) LaunchObject(throwableIndex int, onCollision config.Col
 }
 
 // PostMessage sends a ThingEvent to the ThingThrowable's inbox channel for processing in the event loop.
-func (t *ThingThrowable) PostMessage(ec *ThingEvent) {
+func (t *ThingThrowable) PostMessage(ec *volumes.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -68,13 +69,13 @@ func (t *ThingThrowable) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case StageThinking:
+				case volumes.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case StageCompute:
+				case volumes.StageCompute:
 					//t.StageCompute()
-				case StageResolve:
+				case volumes.StageResolve:
 					t.StageResolve()
-				case StageApply:
+				case volumes.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

@@ -1,8 +1,9 @@
-package model
+package volumes
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -15,7 +16,7 @@ type VerticesSprite struct {
 }
 
 // NewVerticesSprite creates a billboard-rendered vertex sprite for thing from cfg and optional sprite material.
-func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *Materials) *VerticesSprite {
+func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesSprite {
 	w := cfg.Radius * 2
 	d := cfg.Height
 
@@ -140,5 +141,5 @@ func (v *VerticesSprite) VerticesSetAction(idx int) {
 
 // VerticesGetCenter returns the x, y, and z coordinates of the sprite volume's center.
 func (v *VerticesSprite) VerticesGetCenter() (float64, float64, float64) {
-	return v.volume.entity.GetCenter()
+	return v.volume.GetEntity().GetCenter()
 }

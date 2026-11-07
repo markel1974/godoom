@@ -1,4 +1,4 @@
-package model
+package volumes
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -53,7 +54,7 @@ type Vertices3DEntry struct {
 
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
 // It panics if required frame, action interval, or group size configuration is invalid.
-func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *Materials) *Vertices3DEntry {
+func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
 	model := cfg.Model3DEntry
 	if len(model.Frames) <= 0 {
 		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
@@ -88,7 +89,7 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *Materials) *
 		}
 	}
 
-	volumes := make([]*Volume, len(model.Frames))
+	vols := make([]*Volume, len(model.Frames))
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
 		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
@@ -109,11 +110,11 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *Materials) *
 			volume.SetVertexTag(tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
-		volumes[frameIdx] = volume
+		vols[frameIdx] = volume
 	}
 
 	v := &Vertices3DEntry{
-		volumes:       volumes,
+		volumes:       vols,
 		groupSize:     float64(model.GroupSize),
 		actions:       actions,
 		startFrame:    0,

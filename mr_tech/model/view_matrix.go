@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
@@ -23,7 +24,7 @@ type ViewMatrix struct {
 	roll            float64
 	pitch           float64
 	lightIntensity  float64
-	location        *Volume
+	location        *volumes.Volume
 	swayX           float64
 	swayY           float64
 	swaySensitivity float64
@@ -94,7 +95,7 @@ func (vi *ViewMatrix) GetLightIntensity() float64 {
 }
 
 // GetLocation retrieves the Volume instance associated with the ViewMatrix.
-func (vi *ViewMatrix) GetLocation() *Volume {
+func (vi *ViewMatrix) GetLocation() *volumes.Volume {
 	return vi.location
 }
 

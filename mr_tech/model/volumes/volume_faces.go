@@ -1,4 +1,4 @@
-package model
+package volumes
 
 // Faces represents a collection of face entries.
 type Faces struct {

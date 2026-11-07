@@ -1,4 +1,4 @@
-package model
+package volumes
 
 import (
 	"math"
@@ -35,6 +35,10 @@ func (s *Volumes) Setup() error {
 		}
 	}
 	return nil
+}
+
+func (s *Volumes) GetRoot() (*aabb.AABB, bool) {
+	return s.tree.GetRoot()
 }
 
 // GetVolume retrieves a Volume from the cache using the provided unique identifier.

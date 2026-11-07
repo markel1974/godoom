@@ -4,6 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -13,7 +14,7 @@ type Engine struct {
 	things *model.Things
 	player *model.ThingPlayer
 	//ui          []model.IThing
-	volumes     *model.Volumes
+	volumes     *volumes.Volumes
 	lights      *lights.Lights
 	calibration *model.Calibration
 }
@@ -96,6 +97,6 @@ func (e *Engine) GetCalibration() *model.Calibration {
 }
 
 // GetVolumes returns the Volumes instance currently managed by the Engine.
-func (e *Engine) GetVolumes() *model.Volumes {
+func (e *Engine) GetVolumes() *volumes.Volumes {
 	return e.volumes
 }

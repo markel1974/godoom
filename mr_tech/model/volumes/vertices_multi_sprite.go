@@ -1,10 +1,11 @@
-package model
+package volumes
 
 import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -25,7 +26,7 @@ type VerticesMultiSprite struct {
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
 // It initializes per-view volumes, rendering mode, animation clamps, and binds each volume to thing.
 // It panics if a view is nil, has no textures, or face creation fails.
-func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *Materials) *VerticesMultiSprite {
+func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
 		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,

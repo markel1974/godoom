@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
@@ -24,7 +25,7 @@ type ThingPlayer struct {
 	flash          *Flash
 	visible        bool
 	debug          bool
-	volumes        *Volumes
+	volumes        *volumes.Volumes
 	things         *Things
 	cfg            *config.Player
 	*ThingBase
@@ -33,7 +34,7 @@ type ThingPlayer struct {
 // NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(volumes *Volumes, things *Things, c *config.Player, debug bool) *ThingPlayer {
+func NewThingPlayer(volumes *volumes.Volumes, things *Things, c *config.Player, debug bool) *ThingPlayer {
 	player := &ThingPlayer{
 		volumes:        volumes,
 		things:         things,
@@ -79,7 +80,7 @@ func (pr *ThingPlayer) IsVisible() bool {
 }
 
 // IsEqual reports whether other is the same ThingPlayer instance.
-func (pr *ThingPlayer) IsEqual(other IThing) bool {
+func (pr *ThingPlayer) IsEqual(other volumes.IThing) bool {
 	if v, ok := other.(*ThingPlayer); ok && pr == v {
 		return true
 	}
@@ -102,7 +103,7 @@ func (pr *ThingPlayer) LaunchObject(throwableIndex int, onCollision config.Colli
 }
 
 // PostMessage sends the provided ThingEvent to the ThingPlayer's inbox channel for processing.
-func (pr *ThingPlayer) PostMessage(ec *ThingEvent) {
+func (pr *ThingPlayer) PostMessage(ec *volumes.ThingEvent) {
 	pr.inbox <- ec
 }
 
@@ -118,13 +119,13 @@ func (pr *ThingPlayer) StartLoop() {
 			select {
 			case evt := <-pr.inbox:
 				switch evt.GetKind() {
-				case StageThinking:
+				case volumes.StageThinking:
 					pr.StageThinking(evt.GetCoords())
-				case StageCompute:
+				case volumes.StageCompute:
 					//p.StageCompute()
-				case StageResolve:
+				case volumes.StageResolve:
 					pr.StageResolve()
-				case StageApply:
+				case volumes.StageApply:
 					pr.StageApply()
 				}
 				evt.Done()

@@ -1,4 +1,4 @@
-package model
+package volumes
 
 import (
 	"math"

@@ -1,10 +1,11 @@
-package model
+package volumes
 
 import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -35,7 +36,7 @@ type Vertices3D struct {
 
 // NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
 // It validates model parts, links, action maps, and initializes face and transform buffers.
-func NewVertices3D(thing IThing, cfg *config.Thing, materials *Materials) *Vertices3D {
+func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	if cfg.Model3D == nil {
 		panic(fmt.Sprintf("no Model3D for thing %s", cfg.Id))
 	}

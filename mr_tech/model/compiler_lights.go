@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // CompilerLights represents a type responsible for compiling and configuring light entities for rendering or simulation.
@@ -18,7 +19,7 @@ func NewCompilerLights(cLights []*config.Light) *CompilerLights {
 }
 
 // Compile processes and transforms configuration light data into runtime light objects, returning compiled lights or errors.
-func (r *CompilerLights) Compile() ([]*Volume, []*lights.Light, error) {
+func (r *CompilerLights) Compile() ([]*volumes.Volume, []*lights.Light, error) {
 	var out []*lights.Light
 	for _, cl := range r.cLights {
 		if cl == nil {

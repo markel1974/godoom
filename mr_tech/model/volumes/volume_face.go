@@ -1,4 +1,4 @@
-package model
+package volumes
 
 import (
 	"math"
@@ -33,6 +33,10 @@ func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Fa
 	}
 	out.Rebuild()
 	return out
+}
+
+func (fc *Face) GetTri() [3]geometry.XYZ {
+	return fc.tri
 }
 
 // Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.

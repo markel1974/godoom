@@ -6,17 +6,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	materials2 "github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Compiler3d is a type responsible for compiling 3D volumes and their associated materials and lighting configurations.
 type Compiler3d struct {
 	cfg       *config.Root
-	materials *Materials
+	materials *materials2.Materials
 }
 
 // NewCompiler3d creates and returns a new instance of the Compiler3d type.
-func NewCompiler3d(cfg *config.Root, materials *Materials) *Compiler3d {
+func NewCompiler3d(cfg *config.Root, materials *materials2.Materials) *Compiler3d {
 	return &Compiler3d{
 		cfg:       cfg,
 		materials: materials,
@@ -24,7 +26,7 @@ func NewCompiler3d(cfg *config.Root, materials *Materials) *Compiler3d {
 }
 
 // Compile processes the 3D configuration, generating volumes and lights, and returns them along with any encountered error.
-func (r *Compiler3d) Compile() ([]*Volume, []*lights.Light, error) {
+func (r *Compiler3d) Compile() ([]*volumes.Volume, []*lights.Light, error) {
 	if len(r.cfg.Volumes) == 0 {
 		return nil, nil, nil
 	}
@@ -33,16 +35,16 @@ func (r *Compiler3d) Compile() ([]*Volume, []*lights.Light, error) {
 }
 
 // compile3d processes a list of 3D volumes, triangulates their geometry, applies materials, and organizes them into a container.
-func (r *Compiler3d) compile3d() []*Volume {
-	volumes, anim := r.cfg.Volumes, r.materials
+func (r *Compiler3d) compile3d() []*volumes.Volume {
+	vols, anim := r.cfg.Volumes, r.materials
 	totalFaces := 0
-	var container []*Volume
-	var fixFaces []*Face
+	var container []*volumes.Volume
+	var fixFaces []*volumes.Face
 	modelSectorId := 0
 	facesTree := aabb.NewTree(1024, 0.001)
-	for _, cv := range volumes {
+	for _, cv := range vols {
 		// cv.Id and cv.Tag come from the BSP parser
-		volume := NewVolumeConcrete(modelSectorId, cv.Id, cv.Tag)
+		volume := volumes.NewVolumeConcrete(modelSectorId, cv.Id, cv.Tag)
 		modelSectorId++
 		for _, cf := range cv.Faces {
 			pts := cf.Points
@@ -60,7 +62,7 @@ func (r *Compiler3d) compile3d() []*Volume {
 					continue
 				}
 				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
-				face := NewFace(tri, cf.Tag, material)
+				face := volumes.NewFace(tri, cf.Tag, material)
 
 				// Map UVs if provided by the config face
 				if len(cf.UVs) > 0 {
@@ -86,7 +88,7 @@ func (r *Compiler3d) compile3d() []*Volume {
 			}
 		}
 		// Initialize default light (will be calculated later in compileVolumesLights)
-		volume.light = lights.NewLight()
+		volume.SetLight(lights.NewLight())
 		volume.Rebuild()
 		container = append(container, volume)
 	}

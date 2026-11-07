@@ -3,6 +3,7 @@ package model
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // ThingItem is a specialized wrapper around ThingBase, representing a specific type of Thing in the environment.
@@ -11,7 +12,7 @@ type ThingItem struct {
 }
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
-func NewThingItem(things *Things, cfg *config.Thing, volume *Volume) *ThingItem {
+func NewThingItem(things *Things, cfg *config.Thing, volume *volumes.Volume) *ThingItem {
 	item := &ThingItem{}
 	item.ThingBase = NewThingBase(item, things, cfg, volume)
 	cfg.OnBind(item)
@@ -19,7 +20,7 @@ func NewThingItem(things *Things, cfg *config.Thing, volume *Volume) *ThingItem 
 }
 
 // IsEqual reports whether other is the same ThingItem instance.
-func (t *ThingItem) IsEqual(other IThing) bool {
+func (t *ThingItem) IsEqual(other volumes.IThing) bool {
 	if v, ok := other.(*ThingItem); ok && t == v {
 		return true
 	}
@@ -40,7 +41,7 @@ func (t *ThingItem) LaunchObject(throwableIndex int, onCollision config.Collisio
 }
 
 // PostMessage sends an ThingEvent instance to the ThingItem's inbox channel for processing.
-func (t *ThingItem) PostMessage(ec *ThingEvent) {
+func (t *ThingItem) PostMessage(ec *volumes.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -51,13 +52,13 @@ func (t *ThingItem) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case StageThinking:
+				case volumes.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case StageCompute:
+				case volumes.StageCompute:
 					//t.StageCompute()
-				case StageResolve:
+				case volumes.StageResolve:
 					t.StageResolve()
-				case StageApply:
+				case volumes.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

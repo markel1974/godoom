@@ -11,37 +11,10 @@ func cleanAssetPath(p string) string {
 	return strings.TrimSpace(strings.ToLower(strings.ReplaceAll(p, "\\", Pak4Separator)))
 }
 
-// EntityDef represents a parsed Doom 3 entityDef block from a .def file.
-type EntityDef struct {
-	Name       string
-	Properties map[string]string
-}
-
-// ModelDef represents a parsed Doom 3 model block from a .def file.
-type ModelDef struct {
-	Name    string
-	Inherit string
-	Mesh    string
-	Anims   map[string]string
-}
-
-// AFBody represents a single rigid body segment from a Doom 3 .af (Articulated Figure) ragdoll file.
-type AFBody struct {
-	Name            string
-	Joint           string
-	ContainedJoints string
-}
-
-// AFDecl represents a parsed articulatedFigure declaration from an .af file.
-type AFDecl struct {
-	Name   string
-	Bodies []AFBody
-}
-
 // ResolvedEntityDef holds the fully resolved model, head, animation, and physical dependencies for a Doom 3 entity.
 type ResolvedEntityDef struct {
 	Classname  string
-	Spawnclass string
+	SpawnClass string
 	ModelPath  string
 	HeadMesh   string
 	HeadJoint  string
@@ -59,19 +32,17 @@ type ResolvedEntityDef struct {
 
 // Defs manages all entityDef, model, and articulatedFigure declarations parsed from Doom 3 .def and .af files in the PK4 archive.
 type Defs struct {
-	arc        IPkArchive
-	EntityDefs map[string]*EntityDef
-	ModelDefs  map[string]*ModelDef
-	AFDecls    map[string]*AFDecl
+	arc IPkArchive
+	af  *AFData
+	def *DefData
 }
 
 // NewDefs creates and returns a new empty Defs registry.
 func NewDefs(arc IPkArchive) *Defs {
 	return &Defs{
-		arc:        arc,
-		EntityDefs: make(map[string]*EntityDef),
-		ModelDefs:  make(map[string]*ModelDef),
-		AFDecls:    make(map[string]*AFDecl),
+		arc: arc,
+		af:  NewAFData(),
+		def: NewDefData(),
 	}
 }
 
@@ -88,7 +59,7 @@ func (d *Defs) LoadFromArchive() error {
 		if err != nil {
 			continue
 		}
-		d.parseDefData(data)
+		d.def.Parse(data)
 	}
 
 	afFiles, _ := d.arc.ReadDirFilter("af", "\\.af$")
@@ -103,301 +74,30 @@ func (d *Defs) LoadFromArchive() error {
 			continue
 		}
 		stem := strings.TrimSuffix(strings.ToLower(path.Base(afName)), ".af")
-		d.parseAFData(stem, data)
+		d.af.Parse(stem, data)
 	}
 	return nil
 }
 
-// parseDefData parses entityDef and model blocks from raw .def file bytes.
-func (d *Defs) parseDefData(data []byte) {
-	lexer := NewLexer(data)
-	for {
-		tok, err := lexer.NextToken()
-		if err != nil {
-			break
-		}
-		tokLower := strings.ToLower(StripQuotes(tok))
-		switch tokLower {
-		case "entitydef":
-			nameTok, err := lexer.NextToken()
-			if err != nil {
-				return
-			}
-			name := strings.ToLower(StripQuotes(nameTok))
-			if peek, err := lexer.PeekToken(); err != nil || peek != "{" {
-				continue
-			}
-			_ = lexer.Expect("{")
-			ed, ok := d.EntityDefs[name]
-			if !ok {
-				ed = &EntityDef{
-					Name:       name,
-					Properties: make(map[string]string),
-				}
-				d.EntityDefs[name] = ed
-			}
-			for {
-				kTok, err := lexer.NextToken()
-				if err != nil || kTok == "}" {
-					break
-				}
-				if kTok == "{" {
-					_ = lexer.SkipBlock()
-					continue
-				}
-				vTok, err := lexer.NextToken()
-				if err != nil || vTok == "}" {
-					break
-				}
-				if vTok == "{" {
-					_ = lexer.SkipBlock()
-					continue
-				}
-				key := strings.ToLower(StripQuotes(kTok))
-				val := StripQuotes(vTok)
-				ed.Properties[key] = val
-			}
-
-		case "model":
-			nameTok, err := lexer.NextToken()
-			if err != nil {
-				return
-			}
-			name := strings.ToLower(StripQuotes(nameTok))
-			if peek, err := lexer.PeekToken(); err != nil || peek != "{" {
-				continue
-			}
-			_ = lexer.Expect("{")
-			md, ok := d.ModelDefs[name]
-			if !ok {
-				md = &ModelDef{Name: name, Anims: make(map[string]string)}
-				d.ModelDefs[name] = md
-			}
-			depth := 1
-			for depth > 0 {
-				mTok, err := lexer.NextToken()
-				if err != nil {
-					break
-				}
-				if mTok == "{" {
-					depth++
-					continue
-				}
-				if mTok == "}" {
-					depth--
-					continue
-				}
-				if depth != 1 {
-					continue
-				}
-				mLower := strings.ToLower(StripQuotes(mTok))
-				switch mLower {
-				case "inherit":
-					if pTok, err := lexer.NextToken(); err == nil && pTok != "{" && pTok != "}" {
-						md.Inherit = strings.ToLower(StripQuotes(pTok))
-					}
-				case "mesh":
-					if meshTok, err := lexer.NextToken(); err == nil && meshTok != "{" && meshTok != "}" {
-						md.Mesh = cleanAssetPath(StripQuotes(meshTok))
-					}
-				case "anim":
-					aliasTok, err1 := lexer.NextToken()
-					pathTok, err2 := lexer.NextToken()
-					if err1 == nil && err2 == nil && aliasTok != "}" && pathTok != "}" {
-						alias := strings.ToLower(StripQuotes(aliasTok))
-						animPath := cleanAssetPath(strings.TrimSuffix(StripQuotes(pathTok), ","))
-						if strings.HasSuffix(animPath, ".md5anim") {
-							if _, exists := md.Anims[alias]; !exists {
-								md.Anims[alias] = animPath
-							}
-						}
-					}
-				}
-			}
-
-		default:
-			// Skip any other top-level block (e.g. export, skin, sound) if followed by '{'
-			if peek, err := lexer.PeekToken(); err == nil && peek == "{" {
-				_ = lexer.Expect("{")
-				depth := 1
-				for depth > 0 {
-					t, err := lexer.NextToken()
-					if err != nil {
-						break
-					}
-					if t == "{" {
-						depth++
-					} else if t == "}" {
-						depth--
-					}
-				}
-			}
-		}
-	}
-}
-
-// parseAFData parses articulatedFigure and body blocks from raw .af file bytes.
-func (d *Defs) parseAFData(fileStem string, data []byte) {
-	lexer := NewLexer(data)
-	declName := fileStem
-	var bodies []AFBody
-
-	for {
-		tok, err := lexer.NextToken()
-		if err != nil {
-			break
-		}
-		tokLower := strings.ToLower(StripQuotes(tok))
-		if tokLower == "articulatedfigure" {
-			if nameTok, err := lexer.NextToken(); err == nil && nameTok != "{" {
-				declName = strings.ToLower(StripQuotes(nameTok))
-			}
-			continue
-		}
-		if tokLower == "body" {
-			nameTok, err := lexer.NextToken()
-			if err != nil {
-				break
-			}
-			if peek, err := lexer.PeekToken(); err != nil || peek != "{" {
-				continue
-			}
-			_ = lexer.Expect("{")
-			body := AFBody{
-				Name: strings.ToLower(StripQuotes(nameTok)),
-			}
-			depth := 1
-			parenDepth := 0
-			for depth > 0 {
-				bTok, err := lexer.NextToken()
-				if err != nil {
-					break
-				}
-				if bTok == "{" {
-					depth++
-					continue
-				}
-				if bTok == "}" {
-					depth--
-					continue
-				}
-				if bTok == "(" {
-					parenDepth++
-					continue
-				}
-				if bTok == ")" {
-					if parenDepth > 0 {
-						parenDepth--
-					}
-					continue
-				}
-				if depth != 1 || parenDepth > 0 {
-					continue
-				}
-				bLower := strings.ToLower(StripQuotes(bTok))
-				switch bLower {
-				case "joint":
-					if peek, err := lexer.PeekToken(); err == nil && peek != "(" && peek != "{" && peek != "}" {
-						if jTok, err := lexer.NextToken(); err == nil {
-							body.Joint = StripQuotes(jTok)
-						}
-					}
-				case "containedjoints":
-					if cjTok, err := lexer.NextToken(); err == nil && cjTok != "{" && cjTok != "}" {
-						body.ContainedJoints = StripQuotes(cjTok)
-					}
-				}
-			}
-			bodies = append(bodies, body)
-		}
-	}
-
-	if len(bodies) > 0 {
-		afDecl := &AFDecl{
-			Name:   declName,
-			Bodies: bodies,
-		}
-		d.AFDecls[declName] = afDecl
-		if len(fileStem) > 0 {
-			d.AFDecls[fileStem] = afDecl
-		}
-	}
-}
-
 // ResolveAFBodies looks up the parsed AFBody slice for an articulated figure name or .af path.
 func (d *Defs) ResolveAFBodies(ragdoll string) ([]AFBody, bool) {
-	if len(ragdoll) == 0 {
-		return nil, false
-	}
-	clean := strings.ToLower(strings.TrimSpace(StripQuotes(ragdoll)))
-	clean = strings.TrimPrefix(clean, "af/")
-	clean = strings.TrimSuffix(clean, ".af")
-	if decl, ok := d.AFDecls[clean]; ok && len(decl.Bodies) > 0 {
-		return decl.Bodies, true
-	}
-	return nil, false
+	return d.af.ResolveBodies(ragdoll)
 }
 
-// GetEntityProperty resolves a property key on an entityDef following its "inherit" chain.
-func (d *Defs) GetEntityProperty(classname, key string) (string, bool) {
-	return d.getEntityPropertyVisited(strings.ToLower(classname), strings.ToLower(key), make(map[string]bool))
-}
-
-func (d *Defs) getEntityPropertyVisited(classname, key string, visited map[string]bool) (string, bool) {
-	if visited[classname] {
-		return "", false
-	}
-	visited[classname] = true
-	ed, ok := d.EntityDefs[classname]
-	if !ok {
-		return "", false
-	}
-	if val, exists := ed.Properties[key]; exists {
-		return val, true
-	}
-	if parent, hasParent := ed.Properties["inherit"]; hasParent && len(parent) > 0 {
-		return d.getEntityPropertyVisited(strings.ToLower(parent), key, visited)
-	}
-	return "", false
-}
-
-// ResolveModel resolves a model block name following its inherit chain, returning the mesh path and merged anim map.
 func (d *Defs) ResolveModel(modelName string) (string, map[string]string, bool) {
-	return d.resolveModelVisited(strings.ToLower(modelName), make(map[string]bool))
+	return d.def.ResolveModel(modelName)
 }
 
-func (d *Defs) resolveModelVisited(modelName string, visited map[string]bool) (string, map[string]string, bool) {
-	if visited[modelName] {
-		return "", nil, false
-	}
-	visited[modelName] = true
-	md, ok := d.ModelDefs[modelName]
-	if !ok {
-		return "", nil, false
-	}
-
-	var mesh string
-	anims := make(map[string]string)
-
-	if len(md.Inherit) > 0 {
-		if pMesh, pAnims, pOk := d.resolveModelVisited(md.Inherit, visited); pOk {
-			mesh = pMesh
-			for k, v := range pAnims {
-				anims[k] = v
-			}
-		}
-	}
-	if len(md.Mesh) > 0 {
-		mesh = md.Mesh
-	}
-	for k, v := range md.Anims {
-		anims[k] = v
-	}
-	return mesh, anims, len(mesh) > 0 || len(anims) > 0
+func (d *Defs) ModelLen() int {
+	return d.def.ModelLen()
 }
 
-// DiscoverModelAnimsFromDir scans the PK4 directory of a .md5mesh using ReadDirFilter and merges discovered .md5anim files.
-func (d *Defs) DiscoverModelAnimsFromDir(meshPath string, anims map[string]string) map[string]string {
+func (d *Defs) EntityLen() int {
+	return d.def.EntityLen()
+}
+
+// discoverModelAnimsFromDir scans the PK4 directory of a .md5mesh using ReadDirFilter and merges discovered .md5anim files.
+func (d *Defs) discoverModelAnimsFromDir(meshPath string, anims map[string]string) map[string]string {
 	if anims == nil {
 		anims = make(map[string]string)
 	}
@@ -455,60 +155,59 @@ func (d *Defs) pickAnim(anims map[string]string, exactKeys []string, substrings 
 // ResolveEntity reconstructs all model, head, animation, and physical dependencies for a classname from .def files and PK4 directory scanning.
 func (d *Defs) ResolveEntity(classname string) (*ResolvedEntityDef, bool) {
 	cn := strings.ToLower(strings.TrimSpace(classname))
-	if _, ok := d.EntityDefs[cn]; !ok {
+	if !d.def.HasEntity(cn) {
 		return nil, false
 	}
-
 	res := &ResolvedEntityDef{
 		Classname: cn,
 	}
-	if sc, ok := d.GetEntityProperty(cn, "spawnclass"); ok {
-		res.Spawnclass = sc
+	if sc, ok := d.def.GetEntityProperty(cn, "spawnclass"); ok {
+		res.SpawnClass = sc
 	}
-	if hStr, ok := d.GetEntityProperty(cn, "health"); ok {
+	if hStr, ok := d.def.GetEntityProperty(cn, "health"); ok {
 		if h, err := strconv.ParseFloat(hStr, 64); err == nil {
 			res.Health = h
 		}
 	}
-	if mStr, ok := d.GetEntityProperty(cn, "mass"); ok {
+	if mStr, ok := d.def.GetEntityProperty(cn, "mass"); ok {
 		if m, err := strconv.ParseFloat(mStr, 64); err == nil {
 			res.Mass = m
 		}
 	}
 
-	modelProp, _ := d.GetEntityProperty(cn, "model")
+	modelProp, _ := d.def.GetEntityProperty(cn, "model")
 	modelPropClean := cleanAssetPath(modelProp)
 
 	var anims map[string]string
 	if strings.HasSuffix(modelPropClean, ".md5mesh") || strings.HasSuffix(modelPropClean, ".lwo") {
 		res.ModelPath = modelPropClean
 	} else if len(modelPropClean) > 0 {
-		if mesh, mAnims, ok := d.ResolveModel(modelPropClean); ok {
+		if mesh, mAnims, ok := d.def.ResolveModel(modelPropClean); ok {
 			res.ModelPath = mesh
 			anims = mAnims
 		}
 	}
 
 	// Resolve attached head ("def_head" -> entityDef/model -> mesh)
-	if headDef, ok := d.GetEntityProperty(cn, "def_head"); ok && len(headDef) > 0 {
+	if headDef, ok := d.def.GetEntityProperty(cn, "def_head"); ok && len(headDef) > 0 {
 		headClean := cleanAssetPath(headDef)
 		if strings.HasSuffix(headClean, ".md5mesh") {
 			res.HeadMesh = headClean
-		} else if headMesh, _, hOk := d.ResolveModel(headClean); hOk && len(headMesh) > 0 {
+		} else if headMesh, _, hOk := d.def.ResolveModel(headClean); hOk && len(headMesh) > 0 {
 			res.HeadMesh = headMesh
-		} else if headModelProp, hOk := d.GetEntityProperty(headClean, "model"); hOk {
+		} else if headModelProp, hOk := d.def.GetEntityProperty(headClean, "model"); hOk {
 			hmClean := cleanAssetPath(headModelProp)
 			if strings.HasSuffix(hmClean, ".md5mesh") {
 				res.HeadMesh = hmClean
-			} else if headMesh, _, mOk := d.ResolveModel(hmClean); mOk {
+			} else if headMesh, _, mOk := d.def.ResolveModel(hmClean); mOk {
 				res.HeadMesh = headMesh
 			}
 		}
 	}
-	if hj, ok := d.GetEntityProperty(cn, "head_joint"); ok && len(hj) > 0 {
+	if hj, ok := d.def.GetEntityProperty(cn, "head_joint"); ok && len(hj) > 0 {
 		res.HeadJoint = hj
 	}
-	if rag, ok := d.GetEntityProperty(cn, "ragdoll"); ok && len(rag) > 0 {
+	if rag, ok := d.def.GetEntityProperty(cn, "ragdoll"); ok && len(rag) > 0 {
 		res.Ragdoll = rag
 		if bodies, bOk := d.ResolveAFBodies(rag); bOk {
 			res.AFBodies = bodies
@@ -520,7 +219,7 @@ func (d *Defs) ResolveEntity(classname string) (*ResolvedEntityDef, bool) {
 
 	// If it's an MD5 mesh, enrich animations via ReadDirFilter on the mesh directory in the PK4
 	if strings.HasSuffix(res.ModelPath, ".md5mesh") {
-		anims = d.DiscoverModelAnimsFromDir(res.ModelPath, anims)
+		anims = d.discoverModelAnimsFromDir(res.ModelPath, anims)
 		res.IdleAnim = d.pickAnim(
 			anims,
 			[]string{"idle", "idle1", "idle2", "stand", "alert_idle", "crawl_idle", "on4_idle", "idle_stand1", "zidle1", "zctidle", "chaingun_idle", "machinegun_stand", "shield_stand", "playdead"},

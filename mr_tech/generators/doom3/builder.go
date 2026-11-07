@@ -76,7 +76,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 
 	defs := proc.NewDefs(arc)
 	_ = defs.LoadFromArchive()
-	fmt.Printf("Loaded %d entityDefs, %d models from .def files\n", len(defs.EntityDefs), len(defs.ModelDefs))
+	fmt.Printf("Loaded %d entityDefs, %d models from .def files\n", defs.EntityLen(), defs.ModelLen())
 
 	// Parse corresponding .map file to extract entities (lights, player start, func_static, items)
 	mapName := strings.TrimSuffix(maps[levelIndex], ".proc")

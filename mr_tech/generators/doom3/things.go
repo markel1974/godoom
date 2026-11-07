@@ -55,7 +55,7 @@ func (t *Things) resolveSpec(classname string) (Doom3ThingSpec, bool) {
 			kind := config.ThingItemDef
 			speed := 0.0
 			mass := 15.0
-			if prefix == "monster" || strings.Contains(strings.ToLower(resolved.Spawnclass), "idai") {
+			if prefix == "monster" || strings.Contains(strings.ToLower(resolved.SpawnClass), "idai") {
 				kind = config.ThingEnemyDef
 				speed = 1150.0
 				mass = 35.0

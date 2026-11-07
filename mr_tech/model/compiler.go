@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
@@ -35,6 +36,8 @@ func NewCompiler() *Compiler {
 
 // Compile initializes and processes game data from the provided configuration, returning an error if compilation fails.
 func (r *Compiler) Compile(cfg *config.Root) error {
+	now := time.Now()
+	fmt.Println("starting compiling world")
 	r.gScale = cfg.ScaleFactor
 	if r.gScale.X == 0 {
 		r.gScale.X = 1
@@ -106,7 +109,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return err
 	}
 
-	fmt.Printf("Scan complete world: volumes %d lights: %d\n", r.volumes.Len(), r.lights.Len())
+	fmt.Printf("world compiled in %s (volumes: %d lights: %d)\n", time.Since(now), r.volumes.Len(), r.lights.Len())
 	return nil
 }
 

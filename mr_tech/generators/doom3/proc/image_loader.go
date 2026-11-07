@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/generators/common"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3/textures"
 )
 
 // ImageDriver represents a structure that associates a file extension with a corresponding image decoding function.
@@ -104,7 +104,7 @@ func (il *ImageLoader) Load(texName string, forceOpaque bool) error {
 		}
 	}
 
-	if err = il.texHandler.RegisterPixelsRGBA(texNameLC, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
+	if err = il.texHandler.RegisterPixelsRGBA(0, texNameLC, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
 		return fmt.Errorf("registering texture %s: %w", texNameLC, err)
 	}
 	return nil
@@ -129,7 +129,7 @@ func (il *ImageLoader) LoadNormal(texName string) error {
 	rgba := image.NewRGBA(bounds)
 	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
 
-	if err = il.texHandler.RegisterPixelsRGBA(texNameLC, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
+	if err = il.texHandler.RegisterPixelsRGBA(1, texNameLC, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
 		return fmt.Errorf("registering normal map %s: %w", texNameLC, err)
 	}
 	return nil
@@ -154,7 +154,7 @@ func (il *ImageLoader) LoadSpecular(texName string) error {
 	rgba := image.NewRGBA(bounds)
 	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
 
-	if err = il.texHandler.RegisterPixelsRGBA(texNameLC, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
+	if err = il.texHandler.RegisterPixelsRGBA(2, texNameLC, bounds.Dx(), bounds.Dy(), rgba.Pix, true); err != nil {
 		return fmt.Errorf("registering specular map %s: %w", texNameLC, err)
 	}
 	return nil

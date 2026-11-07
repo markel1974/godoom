@@ -138,7 +138,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 						material = guiMat
 						effectiveMatName = guiName
 					} else {
-						material = CreateConfigMaterial(matDef)
+						material = ResolveConfigMaterial(matDef)
 					}
 				}
 			}
@@ -204,7 +204,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 							tagMaterials[ti] = guiMat
 							tagNames[ti] = guiName
 						} else {
-							tagMaterials[ti] = CreateConfigMaterial(matDef)
+							tagMaterials[ti] = ResolveConfigMaterial(matDef)
 						}
 					}
 				}

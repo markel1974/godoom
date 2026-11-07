@@ -11,7 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
@@ -542,7 +542,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 		var mat *config.Material
 		if len(sub.Shader) > 0 {
 			if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
-				mat = CreateConfigMaterial(matDef)
+				mat = ResolveConfigMaterial(matDef)
 			}
 		}
 		if mat == nil {
@@ -561,7 +561,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 			var mat *config.Material
 			if len(sub.Shader) > 0 {
 				if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
-					mat = CreateConfigMaterial(matDef)
+					mat = ResolveConfigMaterial(matDef)
 				}
 			}
 			if mat == nil {
@@ -1119,7 +1119,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 		var mat *config.Material
 		if len(sub.Shader) > 0 {
 			if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
-				mat = CreateConfigMaterial(matDef)
+				mat = ResolveConfigMaterial(matDef)
 			}
 		}
 		if mat == nil {
@@ -1138,7 +1138,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 			var mat *config.Material
 			if len(sub.Shader) > 0 {
 				if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
-					mat = CreateConfigMaterial(matDef)
+					mat = ResolveConfigMaterial(matDef)
 				}
 			}
 			if mat == nil {
@@ -1366,7 +1366,7 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 			if guiMat, _ := ResolveGuiMaterial(t.arc, t.materials, matDef, nil); guiMat != nil {
 				tagMaterials[i] = guiMat
 			} else {
-				tagMaterials[i] = CreateConfigMaterial(matDef)
+				tagMaterials[i] = ResolveConfigMaterial(matDef)
 			}
 		}
 		if tagMaterials[i] == nil {

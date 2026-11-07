@@ -8,7 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
-	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
+	"github.com/markel1974/godoom/mr_tech/generators/doom3/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 

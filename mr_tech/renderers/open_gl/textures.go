@@ -1,8 +1,10 @@
 package open_gl
 
 import (
+	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	textures3 "github.com/markel1974/godoom/mr_tech/textures"
@@ -48,6 +50,9 @@ func NewTextures(ctx api.IContext) *Textures {
 
 // Setup initializes texture arrays and their respective VRAM buckets for efficient rendering and management.
 func (tx *Textures) Setup(t textures3.ITextures) error {
+	now := time.Now()
+	fmt.Println("starting compiling textures")
+
 	names := t.GetNames()
 	if len(names) == 0 {
 		return nil
@@ -120,6 +125,8 @@ func (tx *Textures) Setup(t textures3.ITextures) error {
 			tx.ctx.GenerateMipmap(api.TEXTURE_2D_ARRAY)
 		}
 	}
+
+	fmt.Println("textures compiled in", time.Since(now))
 	return nil
 }
 

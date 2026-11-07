@@ -1,10 +1,7 @@
 package textures
 
 import (
-	"image"
-	"image/color"
 	_ "image/png"
-	"io"
 
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -50,96 +47,39 @@ func (w *Textures) Add(name string, tex *textures.Texture) {
 	w.resources[name] = tex
 }
 
-// RegisterFile registers a texture from an io.Reader source using the given name and returns an error if loading fails.
-func (w *Textures) RegisterFile(name string, rs io.Reader) error {
-	if _, ok := w.resources[name]; ok {
-		return nil
-	}
-	idx := int32(len(w.resources))
-	tex, err := w.loadFromFile(name, rs, idx)
-	if err != nil {
-		return err
-	}
-	w.resources[name] = tex
-	return nil
-}
-
-// RegisterPixelsPalette registers a texture using indexed color data and a color palette.
-// name specifies the texture name, width and height define dimensions, and indices contain indexed pixel data.
-// palette is a 256-sized RGBA color array; isTransparent determines if transparency should be used.
-// transIndex indicates the transparent color index; invertY inverts the vertical axis. Returns an error on failure.
-func (w *Textures) RegisterPixelsPalette(name string, width, height int, indices []byte, palette [256]color.RGBA, isTransparent bool, transIndex byte, invertY bool) error {
-	if _, ok := w.resources[name]; ok {
-		return nil
-	}
-	idx := int32(len(w.resources))
-	tex, err := w.loadFromPixelsPalette(name, width, height, indices, palette, idx, isTransparent, transIndex, invertY)
-	if err != nil {
-		return err
-	}
-	w.resources[name] = tex
-	return nil
-}
-
 // RegisterPixelsRGBA registers a new RGBA texture from a pixel byte array with specified dimensions and Y-axis inversion.
-func (w *Textures) RegisterPixelsRGBA(name string, width, height int, pixels []byte, invertY bool) error {
+func (w *Textures) RegisterPixelsRGBA(kind int, name string, width, height int, pixels []byte, invertY bool) error {
 	if _, ok := w.resources[name]; ok {
 		return nil
 	}
 	idx := int32(len(w.resources))
-	tex, err := w.loadFromPixelsRGBA(name, width, height, pixels, idx, invertY)
+	tex, err := w.loadFromPixelsRGBA(kind, name, width, height, pixels, idx, invertY)
 	if err != nil {
 		return err
 	}
 	w.resources[name] = tex
 	return nil
-}
-
-// loadFromPixelsPalette creates a new texture from indexed pixel data and a color palette, managing transparency and Y inversion.
-func (w *Textures) loadFromPixelsPalette(name string, width, height int, indices []byte, palette [256]color.RGBA, idx int32, isTransparent bool, transIndex byte, invertY bool) (*textures.Texture, error) {
-	emissive := false
-	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
-		emissive = true
-	}
-	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
-	// Gestione unificata dell'Alpha (HL BSP + Override esplicito)
-	hasAlpha := isTransparent || (len(name) > 0 && name[0] == '{')
-	transparentColor := transIndex
-
-	if len(name) > 0 && name[0] == '{' {
-		transparentColor = 255
-	}
-
-	for y := 0; y < height; y++ {
-		// L'inversione Y avviene solo se il formato lo richiede esplicitamente
-		targetY := y
-		if invertY {
-			targetY = height - 1 - y
-		}
-		for x := 0; x < width; x++ {
-			colorIdx := indices[y*width+x]
-			if hasAlpha && colorIdx == transparentColor {
-				tex.Set(x, targetY, 0x00000000)
-				continue
-			}
-			r := uint32(palette[colorIdx].R)
-			g := uint32(palette[colorIdx].G)
-			b := uint32(palette[colorIdx].B)
-			a := uint32(255)
-			cl := (r << 24) | (g << 16) | (b << 8) | a
-			tex.Set(x, targetY, int(cl))
-		}
-	}
-	return tex, nil
 }
 
 // loadFromPixelsRGBA loads a texture from raw RGBA pixel data with optional Y-axis inversion for OpenGL compatibility.
-func (w *Textures) loadFromPixelsRGBA(name string, width, height int, pixels []byte, idx int32, invertY bool) (*textures.Texture, error) {
-	emissive := false
-	if len(name) > 0 && (name[0] == '*' || name[0] == '+') {
-		emissive = true
+func (w *Textures) loadFromPixelsRGBA(kind int, name string, width, height int, pixels []byte, idx int32, invertY bool) (*textures.Texture, error) {
+	tex := textures.NewTexture(name, uint32(idx), width, height, false)
+
+	var setter func(int, int, int)
+	switch kind {
+	case 0:
+		setter = tex.Set
+	case 1:
+		if !tex.HasNormal() {
+			tex.CreateNormal()
+		}
+		setter = tex.SetNormal
+	case 2:
+		if !tex.HasEmissive() {
+			tex.CreateEmissive()
+		}
+		setter = tex.SetEmissive
 	}
-	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
 	for y := 0; y < height; y++ {
 		// Gestione inversione asse Y (Top-Left to Bottom-Left per OpenGL)
 		targetY := y
@@ -156,40 +96,11 @@ func (w *Textures) loadFromPixelsRGBA(name string, width, height int, pixels []b
 				b := uint32(pixels[offset+2])
 				a := uint32(pixels[offset+3])
 				cl := (r << 24) | (g << 16) | (b << 8) | a
-				tex.Set(x, targetY, int(cl))
+				setter(x, targetY, int(cl))
 			} else {
 				// Fallback color (magenta debugging) se mancano dati nel buffer
-				tex.Set(x, targetY, 0xFF00FF00)
+				setter(x, targetY, 0xFF00FF00)
 			}
-		}
-	}
-	return tex, nil
-}
-
-// loadFromFile loads a texture from an io.Reader, decodes the image, and initializes it with OpenGL-compatible memory layout.
-func (w *Textures) loadFromFile(name string, reader io.Reader, idx int32) (*textures.Texture, error) {
-	img, _, err := image.Decode(reader)
-	if err != nil {
-		return nil, err
-	}
-	bounds := img.Bounds()
-	width := bounds.Max.X - bounds.Min.X
-	height := bounds.Max.Y - bounds.Min.Y
-	emissive := false
-	if len(name) > 0 && name[0] == '*' || name[0] == '+' {
-		emissive = true
-	}
-	tex := textures.NewTexture(name, uint32(idx), width, height, emissive)
-	for y := 0; y < height; y++ {
-		flippedY := height - 1 - y
-		for x := 0; x < width; x++ {
-			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			r8 := int(r >> 8)
-			g8 := int(g >> 8)
-			b8 := int(b >> 8)
-			a8 := int(a >> 8)
-			cl := (r8 << 24) | (g8 << 16) | (b8 << 8) | a8
-			tex.Set(x, flippedY, cl)
 		}
 	}
 	return tex, nil

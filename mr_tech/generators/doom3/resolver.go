@@ -26,8 +26,8 @@ func ToMaterial(texNameLC string) config.MaterialKind {
 	return kind
 }
 
-// CreateConfigMaterial creates and returns a configured `config.Material` based on the provided material name.
-func CreateConfigMaterial(def *proc.MaterialDef) *config.Material {
+// ResolveConfigMaterial creates and returns a configured `config.Material` based on the provided material name.
+func ResolveConfigMaterial(def *proc.MaterialDef) *config.Material {
 	//def := materials.Resolve(materialName)
 	tex := []string{def.DiffuseMap}
 	mat := config.NewConfigMaterial(def.Name, tex, ToMaterial(def.Kind2))
@@ -118,6 +118,6 @@ func ResolveGuiMaterial(arc proc.IPkArchive, materials *proc.Materials, def *pro
 		bg = DefaultMonitorTexture
 	}
 	bgDef := materials.Resolve(bg)
-	mat := CreateConfigMaterial(bgDef)
+	mat := ResolveConfigMaterial(bgDef)
 	return mat, bgDef.Name
 }

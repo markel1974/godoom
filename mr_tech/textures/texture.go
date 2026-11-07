@@ -25,6 +25,8 @@ func NewTexture(name string, id uint32, w int, h int, autoEmissive bool) *Textur
 		w:            w,
 		h:            h,
 		diffuse:      make([][]int, w),
+		normal:       nil,
+		emissive:     nil,
 		autoEmissive: autoEmissive,
 		identifier:   -1,
 	}
@@ -59,10 +61,13 @@ func (t *Texture) GetSize() (float64, float64) {
 	return float64(t.w), float64(t.h)
 }
 
-// Size returns the width and height of the texture as two integer values.
-//func (t *Texture) Size() (int, int) {
-//	return t.w, t.h
-//}
+func (t *Texture) HasNormal() bool {
+	return t.normal != nil
+}
+
+func (t *Texture) HasEmissive() bool {
+	return t.emissive != nil
+}
 
 // Get retrieves the color value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) Get(x int, y int) int {

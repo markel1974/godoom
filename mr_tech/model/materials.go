@@ -7,8 +7,8 @@ import (
 
 // Materials is a type that manages a collection of named materials and provides access to these materials.
 type Materials struct {
-	container map[string]*textures.Material
 	handler   textures.ITextures
+	container map[string]*textures.Material
 	empty     *textures.Material
 }
 

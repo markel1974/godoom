@@ -119,7 +119,7 @@ func (th *Things) QueryCollisionCage(lCage *CollisionCage, maxOverlaps int) {
 		if lThing == rThing {
 			return false
 		}
-		rCage := rThing.GetCage()
+		rCage := rThing.GetCage().(*CollisionCage)
 		if lCage.HasSeen(rCage) {
 			return false
 		}
@@ -228,7 +228,6 @@ func (th *Things) Create(ct *config.Thing, volume *Volume) IThing {
 		thing = NewThingItem(th, ct, volume)
 	}
 	entity := thing.VerticesGetEntity()
-	entity.SetOnGround(false)
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	return thing
 }
@@ -254,7 +253,6 @@ func (th *Things) CreateThrowable(self IThing, throwableIndex int, onCollision c
 		return
 	}
 	throwable := th.Create(dst, volume)
-	throwable.VerticesGetEntity().SetOnGround(false)
 	th.pending[slot] = throwable
 	th.hasPending = true
 }
@@ -317,10 +315,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 			th.removablesLen++
 			continue
 		}
-		_ = t2.StagePrepare()
-		//if !moving {
-		//	continue
-		//}
+		t2.StagePrepare()
 		th.running[runningLen] = t2
 		runningLen++
 	}
@@ -331,14 +326,15 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		cage := t2.GetCage()
+		cage := t2.GetCage().(*CollisionCage)
 		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
 		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		t2.VerticesGetEntity().SetOnGround(t2.GetCage().HasFloor())
+		cage := t2.GetCage().(*CollisionCage)
+		t2.VerticesGetEntity().SetOnGround(cage.HasFloor())
 	}
 
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)

@@ -86,7 +86,7 @@ func (t *ThingBase) GetLocation() *Volume {
 }
 
 // GetCage retrieves the CollisionCage instance associated with the ThingBase, which defines its physical boundaries.
-func (t *ThingBase) GetCage() *CollisionCage {
+func (t *ThingBase) GetCage() ICollisionCage {
 	return t.cage
 }
 
@@ -152,11 +152,10 @@ func (t *ThingBase) IsVisible() bool {
 }
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
-func (t *ThingBase) StagePrepare() bool {
+func (t *ThingBase) StagePrepare() {
 	entity := t.VerticesGetEntity()
 	entity.Update()
 	t.cage.Rebuild(t.maxStep)
-	return entity.IsMoving()
 }
 
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.
@@ -196,7 +195,6 @@ func (t *ThingBase) StageApply() {
 		t.location = location
 	}
 	entity := t.VerticesGetEntity()
-	entity.SetOnGround(t.cage.HasFloor())
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)

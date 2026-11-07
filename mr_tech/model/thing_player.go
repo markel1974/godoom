@@ -61,7 +61,6 @@ func (pr *ThingPlayer) Setup() error {
 	pr.ThingBase = NewThingBase(pr, pr.things, pr.cfg.Thing, location)
 	pr.cfg.Thing.OnBind(pr)
 	entity := pr.VerticesGetEntity()
-	entity.SetOnGround(false)
 	entity.MoveTo(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	pr.SetAngle(pr.cfg.Angle)
 
@@ -108,9 +107,8 @@ func (pr *ThingPlayer) PostMessage(ec *ThingEvent) {
 }
 
 // StagePrepare prepares the stage for the ThingPlayer by invoking the StagePrepare method of its ThingBase.
-func (pr *ThingPlayer) StagePrepare() bool {
-	_ = pr.ThingBase.StagePrepare()
-	return true
+func (pr *ThingPlayer) StagePrepare() {
+	pr.ThingBase.StagePrepare()
 }
 
 // StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.

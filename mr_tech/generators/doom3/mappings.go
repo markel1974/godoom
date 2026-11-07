@@ -19,7 +19,7 @@ type Doom3ThingSpec struct {
 	HeadMesh   string
 	HeadJoint  string
 	Ragdoll    string
-	AFBodies   []proc.AFBody
+	AFBodies   []*proc.AFBody
 	Kind       config.ThingType
 	Mass       float64
 	Speed      float64

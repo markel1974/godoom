@@ -34,22 +34,24 @@ func NewMaterialDef(matName string) *MaterialDef {
 
 // Materials represents a collection of material definitions identified by unique string keys.
 type Materials struct {
+	arc  IPkArchive
 	Defs map[string]*MaterialDef
 }
 
 // NewMaterials initializes and returns a pointer to a new Materials instance with an empty map for material definitions.
-func NewMaterials() *Materials {
+func NewMaterials(arc IPkArchive) *Materials {
 	return &Materials{
+		arc:  arc,
 		Defs: make(map[string]*MaterialDef),
 	}
 }
 
-// LoadFromArchive processes material files from the provided archive and adds their data to the Materials collection.
-func (m *Materials) LoadFromArchive(arc IPkArchive) error {
-	mtrFiles, _ := arc.ReadDirFilter("materials", "\\.mtr$")
+// Load processes material files from the provided archive and adds their data to the Materials collection.
+func (m *Materials) Load() error {
+	mtrFiles, _ := m.arc.ReadDirFilter("materials", "\\.mtr$")
 	for _, mtrName := range mtrFiles {
 		fullPath := "materials/" + mtrName
-		f, err := arc.Open(fullPath)
+		f, err := m.arc.Open(fullPath)
 		if err != nil {
 			continue
 		}

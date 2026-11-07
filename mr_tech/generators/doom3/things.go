@@ -373,7 +373,7 @@ type ragdollBodyPart struct {
 
 // partitionSkeletonIntoRagdollBodies assigns every joint in mesh.Joints to an articulated ragdoll body
 // using Doom 3's .af (Articulated Figure) body declarations or standard anatomical limb roots.
-func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []proc.AFBody) ([]ragdollBodyPart, []int) {
+func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AFBody) ([]ragdollBodyPart, []int) {
 	numJoints := len(joints)
 	if numJoints == 0 {
 		return nil, nil
@@ -546,7 +546,7 @@ type rawSkelFrame struct {
 
 // bakeMD5Ragdoll decomposes an MD5Mesh (plus optional attached headMesh) into multiple articulated
 // Model3DEntry parts linked via Model3DLink and per-frame Model3DTag joint transforms.
-func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, afBodies []proc.AFBody, anims map[string]*md5.Anim) ([]*config.Model3DEntry, []config.Model3DLink, float64, error) {
+func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, afBodies []*proc.AFBody, anims map[string]*md5.Anim) ([]*config.Model3DEntry, []config.Model3DLink, float64, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 || len(mesh.Joints) == 0 {
 		return nil, nil, 0, fmt.Errorf("empty md5 mesh")
 	}

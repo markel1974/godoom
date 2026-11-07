@@ -70,12 +70,16 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	}
 	fmt.Printf("Parsed %d models, %d portals from .proc\n", len(procFile.Models), len(procFile.Portals))
 
-	materials := proc.NewMaterials()
-	_ = materials.LoadFromArchive(arc)
+	materials := proc.NewMaterials(arc)
+	if err = materials.Load(); err != nil {
+		return nil, fmt.Errorf("failed to load materials: %w", err)
+	}
 	fmt.Printf("Loaded %d materials from .mtr shaders\n", len(materials.Defs))
 
 	defs := proc.NewDefs(arc)
-	_ = defs.LoadFromArchive()
+	if err = defs.Load(); err != nil {
+		return nil, fmt.Errorf("failed to load entityDefs and models: %w", err)
+	}
 	fmt.Printf("Loaded %d entityDefs, %d models from .def files\n", defs.EntityLen(), defs.ModelLen())
 
 	// Parse corresponding .map file to extract entities (lights, player start, func_static, items)

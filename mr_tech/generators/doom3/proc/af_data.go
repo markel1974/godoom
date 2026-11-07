@@ -9,10 +9,25 @@ type AFBody struct {
 	ContainedJoints string
 }
 
+func NewAFBody(name string) *AFBody {
+	return &AFBody{
+		Name:            name,
+		Joint:           "",
+		ContainedJoints: "",
+	}
+}
+
 // AFDecl represents a parsed articulatedFigure declaration from an .af file.
 type AFDecl struct {
 	Name   string
-	Bodies []AFBody
+	Bodies []*AFBody
+}
+
+func NewAFDecl(name string, bodies []*AFBody) *AFDecl {
+	return &AFDecl{
+		Name:   name,
+		Bodies: bodies,
+	}
 }
 
 type AFData struct {
@@ -29,7 +44,7 @@ func NewAFData() *AFData {
 func (d *AFData) Parse(fileStem string, data []byte) {
 	lexer := NewLexer(data)
 	declName := fileStem
-	var bodies []AFBody
+	var bodies []*AFBody
 
 	for {
 		tok, err := lexer.NextToken()
@@ -52,9 +67,7 @@ func (d *AFData) Parse(fileStem string, data []byte) {
 				continue
 			}
 			_ = lexer.Expect("{")
-			body := AFBody{
-				Name: strings.ToLower(StripQuotes(nameTok)),
-			}
+			body := NewAFBody(strings.ToLower(StripQuotes(nameTok)))
 			depth := 1
 			parenDepth := 0
 			for depth > 0 {
@@ -102,10 +115,7 @@ func (d *AFData) Parse(fileStem string, data []byte) {
 	}
 
 	if len(bodies) > 0 {
-		afDecl := &AFDecl{
-			Name:   declName,
-			Bodies: bodies,
-		}
+		afDecl := NewAFDecl(declName, bodies)
 		d.AFDecls[declName] = afDecl
 		if len(fileStem) > 0 {
 			d.AFDecls[fileStem] = afDecl
@@ -114,7 +124,7 @@ func (d *AFData) Parse(fileStem string, data []byte) {
 }
 
 // ResolveBodies looks up the parsed AFBody slice for an articulated figure name or .af path.
-func (d *AFData) ResolveBodies(ragdoll string) ([]AFBody, bool) {
+func (d *AFData) ResolveBodies(ragdoll string) ([]*AFBody, bool) {
 	if len(ragdoll) == 0 {
 		return nil, false
 	}

@@ -8,12 +8,26 @@ type EntityDef struct {
 	Properties map[string]string
 }
 
+func NewEntityDef(name string) *EntityDef {
+	return &EntityDef{
+		Name:       name,
+		Properties: make(map[string]string),
+	}
+}
+
 // ModelDef represents a parsed Doom 3 model block from a .def file.
 type ModelDef struct {
 	Name    string
 	Inherit string
 	Mesh    string
 	Anims   map[string]string
+}
+
+func NewModelDef(name string) *ModelDef {
+	return &ModelDef{
+		Name:  name,
+		Anims: make(map[string]string),
+	}
 }
 
 type DefData struct {
@@ -50,10 +64,7 @@ func (d *DefData) Parse(data []byte) {
 			_ = lexer.Expect("{")
 			ed, ok := d.entityDefs[name]
 			if !ok {
-				ed = &EntityDef{
-					Name:       name,
-					Properties: make(map[string]string),
-				}
+				ed = NewEntityDef(name)
 				d.entityDefs[name] = ed
 			}
 			for {
@@ -90,7 +101,7 @@ func (d *DefData) Parse(data []byte) {
 			_ = lexer.Expect("{")
 			md, ok := d.modelDefs[name]
 			if !ok {
-				md = &ModelDef{Name: name, Anims: make(map[string]string)}
+				md = NewModelDef(name)
 				d.modelDefs[name] = md
 			}
 			depth := 1

@@ -15,21 +15,15 @@ type ThingEnemy struct {
 // It ensures that default values are set for speed and acceleration if not provided.
 // The function panics if the OnThinking callback in the config is nil.
 func NewThingEnemy(things *Things, cfg *config.Thing, volume *Volume) *ThingEnemy {
-	if cfg.Speed <= 0 {
-		cfg.Speed = 6
-	}
-	if cfg.Acceleration <= 0 {
-		cfg.Acceleration = 3
-	}
 	if cfg.OnThinking == nil {
 		panic("onThinking is nil for enemy:" + cfg.Id)
 	}
-	thing := &ThingEnemy{
+	enemy := &ThingEnemy{
 		onThinking: cfg.OnThinking,
 	}
-	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
-	cfg.OnBind(thing)
-	return thing
+	enemy.ThingBase = NewThingBase(enemy, things, cfg, volume)
+	cfg.OnBind(enemy)
+	return enemy
 }
 
 // IsEqual reports whether other is the same ThingEnemy instance.
@@ -47,17 +41,17 @@ func (t *ThingEnemy) HasThinking() bool {
 
 // Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
 func (t *ThingEnemy) Jump(leapX float64, leapY float64, zFactor float64) bool {
-	return t.ThingBase.jump(leapX, leapY, zFactor)
+	return t.ThingBase.Jump(t, leapX, leapY, zFactor)
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
 func (t *ThingEnemy) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
-	t.ThingBase.fireHitscan(t, id, pos, force, dirX, dirY, dirZ)
+	t.ThingBase.FireHitscan(t, id, pos, force, dirX, dirY, dirZ)
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
 func (t *ThingEnemy) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
-	t.things.CreateThrowable(throwableIndex, onCollision, onImpact, t.location, pos, angle, pitch, speed)
+	t.things.CreateThrowable(t, throwableIndex, onCollision, onImpact, t.location, pos, angle, pitch, speed)
 }
 
 // PostMessage sends a ThingEvent instance to the inbox channel of ThingEnemy for processing.

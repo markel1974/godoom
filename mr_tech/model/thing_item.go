@@ -12,10 +12,10 @@ type ThingItem struct {
 
 // NewThingItem creates a new ThingItem instance by initializing its base properties using the provided configuration.
 func NewThingItem(things *Things, cfg *config.Thing, volume *Volume) *ThingItem {
-	thing := &ThingItem{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
-	cfg.OnBind(thing)
-	return thing
+	item := &ThingItem{}
+	item.ThingBase = NewThingBase(item, things, cfg, volume)
+	cfg.OnBind(item)
+	return item
 }
 
 // IsEqual reports whether other is the same ThingItem instance.

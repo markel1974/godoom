@@ -14,25 +14,25 @@ type ThingThrowable struct {
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
 func NewThingThrowable(things *Things, cfg *config.Thing, volume *Volume) *ThingThrowable {
-	thing := &ThingThrowable{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, volume)
-	cfg.OnBind(thing)
+	throwable := &ThingThrowable{}
+	throwable.ThingBase = NewThingBase(throwable, things, cfg, volume)
+	cfg.OnBind(throwable)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
-	thing.maxStep = 0.0
-	// 1. Normalizzazione del Pitch (da [-5, 5] a radianti)
-	// 2. Vettore Direzionale 3D normalizzato
-	dirX := math.Cos(thing.angle) * math.Cos(cfg.Pitch)
-	dirY := math.Sin(thing.angle) * math.Cos(cfg.Pitch)
+	throwable.maxStep = 0.0
+	// Normalizzazione del Pitch (da [-5, 5] a radianti)
+	// Vettore Direzionale 3D normalizzato
+	dirX := math.Cos(throwable.angle) * math.Cos(cfg.Pitch)
+	dirY := math.Sin(throwable.angle) * math.Cos(cfg.Pitch)
 	dirZ := math.Sin(cfg.Pitch)
 	// 3. Muzzle Velocity (Iniezione istantanea di velocità)
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
 	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
-	muzzleVelocity := thing.speed * 5.0
-	entity := thing.VerticesGetEntity()
+	muzzleVelocity := throwable.speed * 5.0
+	entity := throwable.VerticesGetEntity()
 	entity.SetVx(dirX * muzzleVelocity)
 	entity.SetVy(dirY * muzzleVelocity)
 	entity.SetVz(dirZ * muzzleVelocity)
-	return thing
+	return throwable
 }
 
 // IsEqual reports whether other is the same ThingThrowable instance.

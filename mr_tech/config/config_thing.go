@@ -44,7 +44,6 @@ type Thing struct {
 	Height         float64       `json:"height"`
 	Speed          float64       `json:"speed"`
 	Impulse        float64       `json:"impulse"`
-	Acceleration   float64       `json:"acceleration"`
 	JumpForce      float64       `json:"jumpForce"`
 	Pitch          float64       `json:"pitch"`
 	WakeupDistance float64       `json:"wakeupDistance"`
@@ -90,19 +89,18 @@ func (t *Thing) Scale(scale geometry.XYZ) {
 // Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
 func (t *Thing) Clone() *Thing {
 	return &Thing{
-		Id:           t.Id,
-		Position:     t.Position,
-		Kind:         t.Kind,
-		Angle:        t.Angle,
-		Mass:         t.Mass,
-		Restitution:  t.Restitution,
-		Friction:     t.Friction,
-		Radius:       t.Radius,
-		Height:       t.Height,
-		Speed:        t.Speed,
-		Acceleration: t.Acceleration,
-		JumpForce:    t.JumpForce,
-		Pitch:        t.Pitch,
+		Id:          t.Id,
+		Position:    t.Position,
+		Kind:        t.Kind,
+		Angle:       t.Angle,
+		Mass:        t.Mass,
+		Restitution: t.Restitution,
+		Friction:    t.Friction,
+		Radius:      t.Radius,
+		Height:      t.Height,
+		Speed:       t.Speed,
+		JumpForce:   t.JumpForce,
+		Pitch:       t.Pitch,
 		//WakeUpDistance: t.WakeUpDistance,
 		GForce:       t.GForce,
 		Model3DEntry: t.Model3DEntry,

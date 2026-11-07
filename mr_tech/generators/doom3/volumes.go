@@ -134,7 +134,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 			effectiveMatName := matName
 			if vs.materials != nil {
 				if matDef := vs.materials.Resolve(matName); matDef != nil {
-					if guiMat, guiName := ResolveGuiMaterial(vs.arc, vs.materials, matDef, ent); guiMat != nil {
+					if guiMat, guiName := ResolveGUIMaterial(vs.arc, vs.materials, matDef, ent); guiMat != nil {
 						material = guiMat
 						effectiveMatName = guiName
 					} else {
@@ -145,6 +145,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 			if material == nil {
 				kind := ToMaterial(texNameLC)
 				material = config.NewConfigMaterial(matName, []string{texNameLC}, kind)
+				ConfigureMaterial(material, texNameLC, nil)
 			}
 
 			for i := 0; i+2 < len(surface.Indices); i += 3 {
@@ -200,7 +201,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 				tagNames[ti] = tagName
 				if vs.materials != nil {
 					if matDef := vs.materials.Resolve(tagName); matDef != nil {
-						if guiMat, guiName := ResolveGuiMaterial(vs.arc, vs.materials, matDef, ent); guiMat != nil {
+						if guiMat, guiName := ResolveGUIMaterial(vs.arc, vs.materials, matDef, ent); guiMat != nil {
 							tagMaterials[ti] = guiMat
 							tagNames[ti] = guiName
 						} else {
@@ -211,6 +212,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 				if tagMaterials[ti] == nil {
 					kind := ToMaterial(strings.ToLower(tagName))
 					tagMaterials[ti] = config.NewConfigMaterial("lwo.part", []string{tagName}, kind)
+					ConfigureMaterial(tagMaterials[ti], tagName, nil)
 				}
 			}
 

@@ -49,7 +49,6 @@ func NewThingBase(thing IThing, things *Things, cfg *config.Thing, location *Vol
 		kind:           cfg.Kind,
 		speed:          cfg.Speed,
 		impulse:        cfg.Impulse,
-		acceleration:   cfg.Acceleration,
 		wakeupDistance: cfg.WakeupDistance,
 		jumpForce:      cfg.JumpForce,
 		location:       location,
@@ -257,7 +256,7 @@ func (t *ThingBase) GetBase() *ThingBase {
 }
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
-func (t *ThingBase) jump(leapX float64, leapY float64, zFactor float64) bool {
+func (t *ThingBase) Jump(self IThing, leapX float64, leapY float64, zFactor float64) bool {
 	entity := t.VerticesGetEntity()
 	if !entity.IsOnGround() {
 		return false
@@ -269,7 +268,7 @@ func (t *ThingBase) jump(leapX float64, leapY float64, zFactor float64) bool {
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *ThingBase) fireHitscan(self IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *ThingBase) FireHitscan(self IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 	var closestDist = maxDistance
 	var closestThing IThing

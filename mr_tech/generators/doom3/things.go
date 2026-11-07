@@ -540,14 +540,16 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	subMaterials := make([]*config.Material, len(mesh.SubMeshes))
 	for sIdx, sub := range mesh.SubMeshes {
 		var mat *config.Material
+		var matDef *proc.MaterialDef
 		if len(sub.Shader) > 0 {
-			if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
+			if matDef = t.materials.Resolve(sub.Shader); matDef != nil {
 				mat = ResolveConfigMaterial(matDef)
 			}
 		}
 		if mat == nil {
 			mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
 		}
+		ConfigureThingMaterial(mat, sub.Shader, matDef)
 		subMaterials[sIdx] = mat
 	}
 
@@ -559,14 +561,16 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 		headMaterials = make([]*config.Material, len(headMesh.SubMeshes))
 		for sIdx, sub := range headMesh.SubMeshes {
 			var mat *config.Material
+			var matDef *proc.MaterialDef
 			if len(sub.Shader) > 0 {
-				if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
+				if matDef = t.materials.Resolve(sub.Shader); matDef != nil {
 					mat = ResolveConfigMaterial(matDef)
 				}
 			}
 			if mat == nil {
 				mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
 			}
+			ConfigureThingMaterial(mat, sub.Shader, matDef)
 			headMaterials[sIdx] = mat
 		}
 	}
@@ -1117,14 +1121,16 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	subMaterials := make([]*config.Material, len(mesh.SubMeshes))
 	for sIdx, sub := range mesh.SubMeshes {
 		var mat *config.Material
+		var matDef *proc.MaterialDef
 		if len(sub.Shader) > 0 {
-			if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
+			if matDef = t.materials.Resolve(sub.Shader); matDef != nil {
 				mat = ResolveConfigMaterial(matDef)
 			}
 		}
 		if mat == nil {
 			mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
 		}
+		ConfigureThingMaterial(mat, sub.Shader, matDef)
 		subMaterials[sIdx] = mat
 	}
 
@@ -1136,14 +1142,16 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 		headMaterials = make([]*config.Material, len(headMesh.SubMeshes))
 		for sIdx, sub := range headMesh.SubMeshes {
 			var mat *config.Material
+			var matDef *proc.MaterialDef
 			if len(sub.Shader) > 0 {
-				if matDef := t.materials.Resolve(sub.Shader); matDef != nil {
+				if matDef = t.materials.Resolve(sub.Shader); matDef != nil {
 					mat = ResolveConfigMaterial(matDef)
 				}
 			}
 			if mat == nil {
 				mat = config.NewConfigMaterial("md5.mesh", []string{sub.Shader}, config.MaterialKindSolid)
 			}
+			ConfigureThingMaterial(mat, sub.Shader, matDef)
 			headMaterials[sIdx] = mat
 		}
 	}
@@ -1363,7 +1371,7 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 	tagMaterials := make([]*config.Material, len(lwd.Tags))
 	for i, tagName := range lwd.Tags {
 		if matDef := t.materials.Resolve(tagName); matDef != nil {
-			if guiMat, _ := ResolveGuiMaterial(t.arc, t.materials, matDef, nil); guiMat != nil {
+			if guiMat, _ := ResolveGUIMaterial(t.arc, t.materials, matDef, nil); guiMat != nil {
 				tagMaterials[i] = guiMat
 			} else {
 				tagMaterials[i] = ResolveConfigMaterial(matDef)
@@ -1372,6 +1380,7 @@ func (t *Things) bakeLWO(r io.Reader) (*config.Model3DEntry, error) {
 		if tagMaterials[i] == nil {
 			tagMaterials[i] = config.NewConfigMaterial("lwo.part", []string{tagName}, config.MaterialKindSolid)
 		}
+		ConfigureThingMaterial(tagMaterials[i], tagName, t.materials.Resolve(tagName))
 	}
 
 	var triangles []config.Model3DEntryTriangle

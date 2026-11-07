@@ -15,7 +15,8 @@ type MaterialDef struct {
 	DiffuseMap  string
 	NormalMap   string
 	SpecularMap string
-	Kind2       string
+	Kind        string
+	SurfaceType string
 	IsDecal     bool
 	GuiSurf     string
 }
@@ -26,7 +27,7 @@ func NewMaterialDef(matName string) *MaterialDef {
 	isDecal := strings.HasPrefix(nameLower, "textures/decals/") || strings.HasSuffix(nameLower, "_shadow")
 	mat := &MaterialDef{
 		Name:    matName,
-		Kind2:   matName,
+		Kind:    matName,
 		IsDecal: isDecal,
 	}
 	return mat
@@ -211,7 +212,14 @@ func (m *Materials) parseMtrData(data []byte) {
 					}
 				}
 			case "translucent":
-				def.Kind2 = "translucent" // TODO config.MaterialKindTranslucent
+				def.Kind = "translucent" // TODO config.MaterialKindTranslucent
+			case "metal", "stone", "flesh", "wood", "cardboard", "liquid", "glass", "plastic", "ricochet":
+				def.SurfaceType = tokLower
+			case "water", "slime", "lava", "blood", "sky":
+				def.Kind = tokLower
+				if def.SurfaceType == "" {
+					def.SurfaceType = tokLower
+				}
 			case "decal_macro", "polygonoffset":
 				def.IsDecal = true
 			case "(", ")":

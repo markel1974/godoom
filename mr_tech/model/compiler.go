@@ -77,21 +77,25 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 			allLights = append(allLights, ls...)
 		}
 	}
+	fmt.Printf("pipeline compiled in %s \n", time.Since(now))
 
 	r.volumes = NewVolumes(allVolumes)
 	if err := r.volumes.Setup(); err != nil {
 		return err
 	}
+	fmt.Printf("volumes initialized in %s \n", time.Since(now))
 
 	r.lights = lights.NewLights(allLights)
 	if err := r.lights.Setup(); err != nil {
 		return err
 	}
+	fmt.Printf("lights initialized in %s \n", time.Since(now))
 
 	r.things = NewThings(cfg.Calibration.MaxOverlaps, cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
 	if err := r.things.Setup(); err != nil {
 		return err
 	}
+	fmt.Printf("things initialized in %s \n", time.Since(now))
 
 	r.player = NewThingPlayer(r.volumes, r.things, cfg.Player, false)
 	if err := r.player.Setup(); err != nil {

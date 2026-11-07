@@ -12,10 +12,10 @@ type ThingInterface struct {
 
 // NewThingInterface creates a new ThingInterface instance.
 func NewThingInterface(things *Things, cfg *config.Thing) *ThingInterface {
-	thing := &ThingInterface{}
-	thing.ThingBase = NewThingBase(thing, things, cfg, nil)
-	cfg.OnBind(thing)
-	return thing
+	inter := &ThingInterface{}
+	inter.ThingBase = NewThingBase(inter, things, cfg, nil)
+	cfg.OnBind(inter)
+	return inter
 }
 
 // IsEqual reports whether other is the same ThingInterface instance.

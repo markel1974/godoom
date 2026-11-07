@@ -34,7 +34,7 @@ type ThingPlayer struct {
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
 func NewThingPlayer(volumes *Volumes, things *Things, c *config.Player, debug bool) *ThingPlayer {
-	thing := &ThingPlayer{
+	player := &ThingPlayer{
 		volumes:        volumes,
 		things:         things,
 		cfg:            c,
@@ -49,7 +49,7 @@ func NewThingPlayer(volumes *Volumes, things *Things, c *config.Player, debug bo
 		pitchSens:      0.05,
 		visible:        c.IsVisible,
 	}
-	return thing
+	return player
 }
 
 // Setup initializes the ThingPlayer instance and prepares it for operation, returning an error if initialization fails.
@@ -89,17 +89,17 @@ func (pr *ThingPlayer) IsEqual(other IThing) bool {
 
 // Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
 func (pr *ThingPlayer) Jump(leapX float64, leapY float64, zFactor float64) bool {
-	return pr.ThingBase.jump(leapX, leapY, zFactor)
+	return pr.ThingBase.Jump(pr, leapX, leapY, zFactor)
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
 func (pr *ThingPlayer) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
-	pr.ThingBase.fireHitscan(pr, id, pos, force, dirX, dirY, dirZ)
+	pr.ThingBase.FireHitscan(pr, id, pos, force, dirX, dirY, dirZ)
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
 func (pr *ThingPlayer) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
-	pr.things.CreateThrowable(throwableIndex, onCollision, onImpact, pr.location, pos, angle, pitch, speed)
+	pr.things.CreateThrowable(pr, throwableIndex, onCollision, onImpact, pr.location, pos, angle, pitch, speed)
 }
 
 // PostMessage sends the provided ThingEvent to the ThingPlayer's inbox channel for processing.

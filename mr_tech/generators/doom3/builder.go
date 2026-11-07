@@ -120,7 +120,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 				continue
 			}
 			imgLoader.LoadMaterialMaps(surface.Material)
-			if guiBg := ResolveGuiBackgroundForSurface(arc, materials, surface.Material, ent); len(guiBg) > 0 {
+			if guiBg := ResolveGUIBackgroundForSurface(arc, materials, surface.Material, ent); len(guiBg) > 0 {
 				imgLoader.LoadMaterialMaps(guiBg)
 			}
 		}
@@ -134,7 +134,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 				if err := lwd.Parse(lf); err == nil {
 					for _, tag := range lwd.Tags {
 						imgLoader.LoadMaterialMaps(tag)
-						if guiBg := ResolveGuiBackgroundForSurface(arc, materials, tag, ent); len(guiBg) > 0 {
+						if guiBg := ResolveGUIBackgroundForSurface(arc, materials, tag, ent); len(guiBg) > 0 {
 							imgLoader.LoadMaterialMaps(guiBg)
 						}
 					}

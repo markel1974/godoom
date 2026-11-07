@@ -234,7 +234,7 @@ func (th *Things) Create(ct *config.Thing, volume *Volume) IThing {
 }
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
-func (th *Things) CreateThrowable(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
+func (th *Things) CreateThrowable(self IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *Volume, pos geometry.XYZ, angle, pitch, speed float64) {
 	if len(th.config) <= throwableIndex {
 		return
 	}

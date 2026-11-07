@@ -17,7 +17,7 @@ type Entry struct {
 	p0Y         float64
 	p0Z         float64
 	maxZ        float64
-	iMode       int
+	iMode       ImpactMode
 }
 
 // NewCageEntry creates and returns a new instance of Entry initialized with default zero values.
@@ -41,7 +41,7 @@ func (s *Entry) GetMaxZ() float64 { return s.maxZ }
 func (s *Entry) GetBucket() BucketType { return s.bucket }
 
 // GetImpactMode returns the impact mode of the collision as an integer value.
-func (s *Entry) GetImpactMode() int {
+func (s *Entry) GetImpactMode() ImpactMode {
 	return s.iMode
 }
 
@@ -58,7 +58,7 @@ func (s *Entry) GetLCage() *Cage { return s.lCage }
 func (s *Entry) GetRCage() *Cage { return s.rCage }
 
 // Rebuild reinitializes the Entry with the given parameters and updates all its attributes accordingly.
-func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
+func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) {
 	s.bucket = bucket
 	s.lCage = lCage
 	s.rCage = rCage

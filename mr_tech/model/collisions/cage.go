@@ -9,17 +9,34 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+// ImpactMode identifies how a collision impact should be resolved and prioritized.
+type ImpactMode int
+
 // ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
 // ImpactElastic represents a collision impact mode where entities respond elastically, maintaining relative motion post-impact.
 // ImpactStep is a constant representing a collision mode where the entity encounters a step or small height difference.
 const (
 	// ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
-	ImpactInelastic = 1
+	ImpactInelastic = ImpactMode(1)
 	// ImpactElastic represents a collision impact mode where entities respond elastically, maintaining relative motion post-impact.
-	ImpactElastic = 2
+	ImpactElastic = ImpactMode(2)
 	// ImpactStep is a constant representing a collision mode where the entity encounters a step or small height difference.
-	ImpactStep = 3
+	ImpactStep = ImpactMode(3)
 )
+
+// Priority returns the collision ordering rank for the impact mode, with unknown modes ranked lowest.
+func (iMode ImpactMode) Priority() int {
+	switch iMode {
+	case ImpactInelastic:
+		return 3
+	case ImpactElastic:
+		return 2
+	case ImpactStep:
+		return 1
+	default:
+		return 0
+	}
+}
 
 // satFilterEpsilon defines the tolerance threshold used in SAT to filter phantom plane projections in collision detection.
 const satFilterEpsilon = 0.05
@@ -238,7 +255,7 @@ func (s *Cage) Commit(rCage *Cage) {
 }
 
 // addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
-func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace *volumes.Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) bool {
+func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace *volumes.Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) bool {
 	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage

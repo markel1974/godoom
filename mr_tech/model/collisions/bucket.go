@@ -137,21 +137,8 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 	return true
 }
 
-func impactModePriority(iMode int) int {
-	switch iMode {
-	case ImpactInelastic:
-		return 3
-	case ImpactElastic:
-		return 2
-	case ImpactStep:
-		return 1
-	default:
-		return 0
-	}
-}
-
 // Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
-func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode int) *Entry {
+func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
 		// DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
@@ -202,10 +189,10 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes
 
 	// Replace the least relevant face (respecting impactModePriority first, then penetration depth)
 	minIdx := 0
-	minPrio := impactModePriority(b.container[0].iMode)
+	minPrio := b.container[0].iMode.Priority()
 	minPen := b.container[0].penetration
 	for i := 1; i < FacesPerBucket; i++ {
-		cPrio := impactModePriority(b.container[i].iMode)
+		cPrio := b.container[i].iMode.Priority()
 		cPen := b.container[i].penetration
 		if cPrio < minPrio || (cPrio == minPrio && cPen < minPen) {
 			minPrio = cPrio
@@ -213,7 +200,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes
 			minIdx = i
 		}
 	}
-	inPrio := impactModePriority(iMode)
+	inPrio := iMode.Priority()
 	if inPrio > minPrio || (inPrio == minPrio && penetration > minPen) {
 		b.container[minIdx].Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 	}

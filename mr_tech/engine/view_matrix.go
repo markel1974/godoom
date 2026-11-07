@@ -1,4 +1,4 @@
-package model
+package engine
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -42,7 +42,7 @@ func NewViewMatrix() *ViewMatrix {
 }
 
 // Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given ThingPlayer's state.
-func (vi *ViewMatrix) Update(player *things.ThingPlayer) {
+func (vi *ViewMatrix) Update(player *things.Player) {
 	vi.angleSin, vi.angleCos = player.GetAngleFull()
 	vi.location = player.GetLocation()
 	vi.view.X, vi.view.Y, vi.view.Z = player.GetVisualPosition()

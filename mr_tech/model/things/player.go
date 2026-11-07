@@ -10,8 +10,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
-// ThingPlayer represents a controllable entity with movement, physics, and gameplay-related properties.
-type ThingPlayer struct {
+// Player represents a controllable entity with movement, physics, and gameplay-related properties.
+type Player struct {
 	angleSin       float64
 	angleCos       float64
 	pitch          float64
@@ -28,14 +28,14 @@ type ThingPlayer struct {
 	volumes        IVolumeHandler
 	things         IThingHandler
 	cfg            *config.Player
-	*ThingBase
+	*Base
 }
 
-// NewThingPlayer creates and initializes a new ThingPlayer entity using the provided configuration, world, and things.
+// NewPlayer creates and initializes a new Player entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
-// Returns the initialized ThingPlayer or an error if the player's sector is not found or configuration fails.
-func NewThingPlayer(volumes IVolumeHandler, things IThingHandler, c *config.Player, debug bool) *ThingPlayer {
-	player := &ThingPlayer{
+// Returns the initialized Player or an error if the player's sector is not found or configuration fails.
+func NewPlayer(volumes IVolumeHandler, things IThingHandler, c *config.Player, debug bool) *Player {
+	player := &Player{
 		volumes:        volumes,
 		things:         things,
 		cfg:            c,
@@ -53,13 +53,13 @@ func NewThingPlayer(volumes IVolumeHandler, things IThingHandler, c *config.Play
 	return player
 }
 
-// Setup initializes the ThingPlayer instance and prepares it for operation, returning an error if initialization fails.
-func (pr *ThingPlayer) Setup() error {
+// Setup initializes the Player instance and prepares it for operation, returning an error if initialization fails.
+func (pr *Player) Setup() error {
 	location, _ := pr.volumes.QueryPoint(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	if location == nil {
 		return fmt.Errorf("can't find 3d player location at X: %f Y: %f Z: %f\n", pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	}
-	pr.ThingBase = NewThingBase(pr, pr.things, pr.cfg.Thing, location)
+	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, location)
 	pr.cfg.Thing.OnBind(pr)
 	entity := pr.VerticesGetEntity()
 	entity.MoveTo(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
@@ -69,51 +69,51 @@ func (pr *ThingPlayer) Setup() error {
 	return nil
 }
 
-// IsActive determines whether the ThingPlayer instance is currently active, returning true if active, otherwise false.
-func (pr *ThingPlayer) IsActive() bool {
+// IsActive determines whether the Player instance is currently active, returning true if active, otherwise false.
+func (pr *Player) IsActive() bool {
 	return true
 }
 
-// IsVisible determines whether the ThingPlayer instance is currently visible.
-func (pr *ThingPlayer) IsVisible() bool {
+// IsVisible determines whether the Player instance is currently visible.
+func (pr *Player) IsVisible() bool {
 	return pr.visible
 }
 
-// IsEqual reports whether other is the same ThingPlayer instance.
-func (pr *ThingPlayer) IsEqual(other volumes.IThing) bool {
-	if v, ok := other.(*ThingPlayer); ok && pr == v {
+// IsEqual reports whether other is the same Player instance.
+func (pr *Player) IsEqual(other volumes.IThing) bool {
+	if v, ok := other.(*Player); ok && pr == v {
 		return true
 	}
 	return false
 }
 
 // Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
-func (pr *ThingPlayer) Jump(leapX float64, leapY float64, zFactor float64) bool {
-	return pr.ThingBase.Jump(pr, leapX, leapY, zFactor)
+func (pr *Player) Jump(leapX float64, leapY float64, zFactor float64) bool {
+	return pr.Base.Jump(pr, leapX, leapY, zFactor)
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (pr *ThingPlayer) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
-	pr.ThingBase.FireHitscan(pr, id, pos, force, dirX, dirY, dirZ)
+func (pr *Player) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+	pr.Base.FireHitscan(pr, id, pos, force, dirX, dirY, dirZ)
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
-func (pr *ThingPlayer) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+func (pr *Player) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
 	pr.things.CreateThrowable(pr, throwableIndex, onCollision, onImpact, pr.location, pos, angle, pitch, speed)
 }
 
-// PostMessage sends the provided ThingEvent to the ThingPlayer's inbox channel for processing.
-func (pr *ThingPlayer) PostMessage(ec *volumes.ThingEvent) {
+// PostMessage sends the provided ThingEvent to the Player's inbox channel for processing.
+func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
 	pr.inbox <- ec
 }
 
-// StagePrepare prepares the stage for the ThingPlayer by invoking the StagePrepare method of its ThingBase.
-func (pr *ThingPlayer) StagePrepare() {
-	pr.ThingBase.StagePrepare()
+// StagePrepare prepares the stage for the Player by invoking the StagePrepare method of its Base.
+func (pr *Player) StagePrepare() {
+	pr.Base.StagePrepare()
 }
 
 // StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.
-func (pr *ThingPlayer) StartLoop() {
+func (pr *Player) StartLoop() {
 	go func() {
 		for {
 			select {
@@ -136,43 +136,43 @@ func (pr *ThingPlayer) StartLoop() {
 	}()
 }
 
-// GetLight retrieves the light object associated with the ThingPlayer.
-func (pr *ThingPlayer) GetLight() *lights.Light {
+// GetLight retrieves the light object associated with the Player.
+func (pr *Player) GetLight() *lights.Light {
 	return nil
 }
 
 // AddAngle adjusts the player's current angle by the specified value in radians, updating related trigonometric properties.
-func (pr *ThingPlayer) AddAngle(angle float64) {
+func (pr *Player) AddAngle(angle float64) {
 	pr.SetAngle(pr.angle + angle)
 }
 
 // SetAngle updates the player's orientation angle and recalculates the sine and cosine of the angle.
-func (pr *ThingPlayer) SetAngle(angle float64) {
+func (pr *Player) SetAngle(angle float64) {
 	pr.angle = angle
 	pr.angleSin = math.Sin(pr.angle)
 	pr.angleCos = math.Cos(pr.angle)
 }
 
-// GetAngleFull returns the sine and cosine of the current angle of the ThingPlayer as two float64 values.
-func (pr *ThingPlayer) GetAngleFull() (float64, float64) {
+// GetAngleFull returns the sine and cosine of the current angle of the Player as two float64 values.
+func (pr *Player) GetAngleFull() (float64, float64) {
 	return pr.angleSin, pr.angleCos
 }
 
 // SetPitch adjusts the player's pitch angle within the allowed range, affecting vertical view orientation.
-func (pr *ThingPlayer) SetPitch(y float64) {
+func (pr *Player) SetPitch(y float64) {
 	pr.pitchState = geometry.ClampF(pr.pitchState-(y*pr.pitchSens), pr.pitchMin, pr.pitchMax)
 	pr.pitch = pr.pitchState
 }
 
 // SetPitchOptions configures the minimum, maximum, and sensitivity values for pitch adjustment.
-func (pr *ThingPlayer) SetPitchOptions(min, max, sens float64) {
+func (pr *Player) SetPitchOptions(min, max, sens float64) {
 	pr.pitchMin = min
 	pr.pitchMax = max
 	pr.pitchSens = sens
 }
 
 // Move applies a directional impulse to the player based on input flags (up, down, left, right) and a given impulse magnitude.
-func (pr *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
+func (pr *Player) Move(impulse float64, up, down, left, right bool) {
 	if !up && !down && !left && !right {
 		return
 	}
@@ -201,8 +201,8 @@ func (pr *ThingPlayer) Move(impulse float64, up, down, left, right bool) {
 	}
 }
 
-// SetJump applies an upward force to make the ThingPlayer jump.
-func (pr *ThingPlayer) SetJump(multi bool) {
+// SetJump applies an upward force to make the Player jump.
+func (pr *Player) SetJump(multi bool) {
 	factor := 1.0
 	if multi {
 		factor = 0.2
@@ -214,7 +214,7 @@ func (pr *ThingPlayer) SetJump(multi bool) {
 }
 
 // SetDucking toggles the player's ducking state between true and false.
-func (pr *ThingPlayer) SetDucking() {
+func (pr *Player) SetDucking() {
 	entity := pr.VerticesGetEntity()
 	pr.ducking = !pr.ducking
 	if pr.ducking {
@@ -226,22 +226,22 @@ func (pr *ThingPlayer) SetDucking() {
 	}
 }
 
-// GetFlash retrieves the flash instance associated with the ThingPlayer.
-func (pr *ThingPlayer) GetFlash() *Flash {
+// GetFlash retrieves the flash instance associated with the Player.
+func (pr *Player) GetFlash() *Flash {
 	return pr.flash
 }
 
-// GetBob retrieves the current bobbing values of the ThingPlayer as three float64 components (x, y, z).
-func (pr *ThingPlayer) GetBob() (float64, float64, float64) {
+// GetBob retrieves the current bobbing values of the Player as three float64 components (x, y, z).
+func (pr *Player) GetBob() (float64, float64, float64) {
 	return pr.bobbing.Get()
 }
 
 // GetSway retrieves the flashlight's current state as two float64 values.
-func (pr *ThingPlayer) GetSway() (float64, float64, float64) {
+func (pr *Player) GetSway() (float64, float64, float64) {
 	return pr.bobbing.GetSway()
 }
 
-func (pr *ThingPlayer) GetTilt() float64 {
+func (pr *Player) GetTilt() float64 {
 	//if !p.entity.IsOnGround() {
 	//	return 0.0
 	//}
@@ -267,7 +267,7 @@ func (pr *ThingPlayer) GetTilt() float64 {
 }
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
-func (pr *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
+func (pr *Player) GetVisualPosition() (float64, float64, float64) {
 	visualX, visualY, visualZ := pr.VerticesGetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
 	angleSin, angleCos := pr.GetAngleFull()
 	bobX, bobY, _ := pr.GetBob()
@@ -280,36 +280,36 @@ func (pr *ThingPlayer) GetVisualPosition() (float64, float64, float64) {
 }
 
 // GetLightIntensity retrieves the current light intensity value associated with the player.
-func (pr *ThingPlayer) GetLightIntensity() float64 {
+func (pr *Player) GetLightIntensity() float64 {
 	return pr.lightIntensity
 }
 
-// SetLightIntensity sets the light intensity level for the ThingPlayer instance.
-func (pr *ThingPlayer) SetLightIntensity(lightIntensity float64) {
+// SetLightIntensity sets the light intensity level for the Player instance.
+func (pr *Player) SetLightIntensity(lightIntensity float64) {
 	pr.lightIntensity = lightIntensity
 }
 
-// GetPitch returns the current pitch angle of the ThingPlayer as a float64 value.
-func (pr *ThingPlayer) GetPitch() float64 {
+// GetPitch returns the current pitch angle of the Player as a float64 value.
+func (pr *Player) GetPitch() float64 {
 	return pr.pitch
 }
 
-// HasThinking determines if the ThingPlayer instance has a thinking function assigned. Returns true if it is set.
-func (pr *ThingPlayer) HasThinking() bool {
+// HasThinking determines if the Player instance has a thinking function assigned. Returns true if it is set.
+func (pr *Player) HasThinking() bool {
 	return true
 }
 
 // StageThinking updates the player's internal state based on the provided x, y, and z coordinates.
-func (pr *ThingPlayer) StageThinking(playerX float64, playerY float64, playerZ float64) {
+func (pr *Player) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	//
 }
 
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
-func (pr *ThingPlayer) StageApply() {
+func (pr *Player) StageApply() {
 	entity := pr.VerticesGetEntity()
 	wasGrounded := entity.IsOnGround()
 	prevVz := entity.GetVz()
-	pr.ThingBase.StageApply()
+	pr.Base.StageApply()
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := entity.IsOnGround()
 	if !wasGrounded && isGrounded {
@@ -320,7 +320,7 @@ func (pr *ThingPlayer) StageApply() {
 }
 
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.
-func (pr *ThingPlayer) getEyeHeight() float64 {
+func (pr *Player) getEyeHeight() float64 {
 	entity := pr.VerticesGetEntity()
 	if pr.ducking {
 		return entity.GetDepth() * 0.25
@@ -329,7 +329,7 @@ func (pr *ThingPlayer) getEyeHeight() float64 {
 }
 
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
-func (pr *ThingPlayer) Throw(throwableIndex int, speed float64) {
+func (pr *Player) Throw(throwableIndex int, speed float64) {
 	camX, camY, camZ := pr.GetVisualPosition()
 	entity := pr.VerticesGetEntity()
 	diameter := entity.GetWidth()
@@ -341,7 +341,7 @@ func (pr *ThingPlayer) Throw(throwableIndex int, speed float64) {
 }
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.
-func (pr *ThingPlayer) Fire(id string) {
+func (pr *Player) Fire(id string) {
 	// Origine della vista (include Bobbing e Crouch)
 	camX, camY, camZ := pr.GetVisualPosition()
 	// Calcolo del vettore direzione (Radianti)

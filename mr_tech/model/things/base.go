@@ -21,8 +21,8 @@ type IVolumeHandler interface {
 	QueryPoint(px, py, pz float64) (*volumes.Volume, *volumes.Face)
 }
 
-// ThingBase represents the fundamental attributes and behaviors of an object in the system.
-type ThingBase struct {
+// Base represents the fundamental attributes and behaviors of an object in the system.
+type Base struct {
 	volumes.IVertices
 	id             string
 	kind           config.ThingType
@@ -43,8 +43,8 @@ type ThingBase struct {
 	done           chan struct{}
 }
 
-// NewThingBase creates a new ThingBase instance with specified configuration, material, sector, world, and things.
-func NewThingBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, location *volumes.Volume) *ThingBase {
+// NewBase creates a new Base instance with specified configuration, material, sector, world, and things.
+func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, location *volumes.Volume) *Base {
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
@@ -55,7 +55,7 @@ func NewThingBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing,
 		panic("mass is zero for thing:" + cfg.Id)
 	}
 
-	t := &ThingBase{
+	t := &Base{
 		IVertices:      volumes.VerticesFactory(thing, cfg, things.GetMaterials()),
 		id:             cfg.Id,
 		angle:          cfg.Angle,
@@ -83,53 +83,53 @@ func NewThingBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing,
 	return t
 }
 
-// GetId returns the identifier string of the ThingBase instance.
-func (t *ThingBase) GetId() string {
+// GetId returns the identifier string of the Base instance.
+func (t *Base) GetId() string {
 	return t.id
 }
 
-// GetKind returns the type of the ThingBase as a value of the ThingType enumeration.
-func (t *ThingBase) GetKind() config.ThingType {
+// GetKind returns the type of the Base as a value of the ThingType enumeration.
+func (t *Base) GetKind() config.ThingType {
 	return t.kind
 }
 
-// GetLocation retrieves the current location associated with the ThingBase instance.
-func (t *ThingBase) GetLocation() *volumes.Volume {
+// GetLocation retrieves the current location associated with the Base instance.
+func (t *Base) GetLocation() *volumes.Volume {
 	return t.location
 }
 
-// GetCage retrieves the CollisionCage instance associated with the ThingBase, which defines its physical boundaries.
-func (t *ThingBase) GetCage() volumes.ICollisionCage {
+// GetCage retrieves the CollisionCage instance associated with the Base, which defines its physical boundaries.
+func (t *Base) GetCage() volumes.ICollisionCage {
 	return t.cage
 }
 
-// GetAngle returns the current rotation angle of the ThingBase instance as a float64 value.
-func (t *ThingBase) GetAngle() float64 {
+// GetAngle returns the current rotation angle of the Base instance as a float64 value.
+func (t *Base) GetAngle() float64 {
 	return t.angle
 }
 
-// SetAngle updates the rotation angle of the ThingBase instance to the specified float64 value.
-func (t *ThingBase) SetAngle(angle float64) {
+// SetAngle updates the rotation angle of the Base instance to the specified float64 value.
+func (t *Base) SetAngle(angle float64) {
 	t.angle = angle
 }
 
-// GetMaxStep returns the maximum step value associated with the ThingBase instance.
-func (t *ThingBase) GetMaxStep() float64 {
+// GetMaxStep returns the maximum step value associated with the Base instance.
+func (t *Base) GetMaxStep() float64 {
 	return t.maxStep
 }
 
-// GetAcceleration returns the current acceleration value of the ThingBase.
-func (t *ThingBase) GetAcceleration() float64 {
+// GetAcceleration returns the current acceleration value of the Base.
+func (t *Base) GetAcceleration() float64 {
 	return t.acceleration
 }
 
-// GetSpeed returns the current speed of the ThingBase instance as a float64.
-func (t *ThingBase) GetSpeed() float64 {
+// GetSpeed returns the current speed of the Base instance as a float64.
+func (t *Base) GetSpeed() float64 {
 	return t.speed
 }
 
 // GetDistSq returns the squared distance from the light's position to the given 3D point.
-func (t *ThingBase) GetDistSq(pX, pY, pZ float64) float64 {
+func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
 	entity := t.VerticesGetEntity()
 	tx, ty, tz := entity.GetCenter()
 	dx := tx - pX
@@ -140,39 +140,39 @@ func (t *ThingBase) GetDistSq(pX, pY, pZ float64) float64 {
 }
 
 // GetImpulse returns the
-func (t *ThingBase) GetImpulse() float64 {
+func (t *Base) GetImpulse() float64 {
 	return t.impulse
 }
 
 // GetWakeUpDistance retrieves the
-func (t *ThingBase) GetWakeUpDistance() float64 {
+func (t *Base) GetWakeUpDistance() float64 {
 	return t.wakeupDistance
 }
 
-// IsActive checks if the ThingBase instance is currently active.
-func (t *ThingBase) IsActive() bool {
+// IsActive checks if the Base instance is currently active.
+func (t *Base) IsActive() bool {
 	return t.isActive
 }
 
-// SetActive updates the activation state of the ThingBase instance and returns the updated state as a boolean.
-func (t *ThingBase) SetActive(active bool) {
+// SetActive updates the activation state of the Base instance and returns the updated state as a boolean.
+func (t *Base) SetActive(active bool) {
 	t.isActive = active
 }
 
-// IsVisible determines whether the ThingBase instance is currently visible, returning true if it is visible.
-func (t *ThingBase) IsVisible() bool {
+// IsVisible determines whether the Base instance is currently visible, returning true if it is visible.
+func (t *Base) IsVisible() bool {
 	return true
 }
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
-func (t *ThingBase) StagePrepare() {
+func (t *Base) StagePrepare() {
 	entity := t.VerticesGetEntity()
 	entity.Update()
 	t.cage.Rebuild(t.maxStep)
 }
 
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.
-func (t *ThingBase) StageResolve() {
+func (t *Base) StageResolve() {
 	slotsLen := t.cage.GetSlotsLen()
 	if slotsLen == 0 {
 		return
@@ -204,7 +204,7 @@ func (t *ThingBase) StageResolve() {
 }
 
 // StageApply applies physical and geometrical adjustments to the entity based on collision resolution and position corrections.
-func (t *ThingBase) StageApply() {
+func (t *Base) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location
 	}
@@ -252,7 +252,7 @@ func (t *ThingBase) StageApply() {
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
-func (t *ThingBase) MoveTowards(dirX, dirY, speed, accelForce float64) {
+func (t *Base) MoveTowards(dirX, dirY, speed, accelForce float64) {
 	entity := t.VerticesGetEntity()
 	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * speed
@@ -262,13 +262,13 @@ func (t *ThingBase) MoveTowards(dirX, dirY, speed, accelForce float64) {
 	entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)
 }
 
-// GetBase returns the current instance of ThingBase. Useful for method chaining or accessing the base object.
-func (t *ThingBase) GetBase() *ThingBase {
+// GetBase returns the current instance of Base. Useful for method chaining or accessing the base object.
+func (t *Base) GetBase() *Base {
 	return t
 }
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
-func (t *ThingBase) Jump(self volumes.IThing, leapX float64, leapY float64, zFactor float64) bool {
+func (t *Base) Jump(self volumes.IThing, leapX float64, leapY float64, zFactor float64) bool {
 	entity := t.VerticesGetEntity()
 	if !entity.IsOnGround() {
 		return false
@@ -280,7 +280,7 @@ func (t *ThingBase) Jump(self volumes.IThing, leapX float64, leapY float64, zFac
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *ThingBase) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *Base) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 	var closestDist = maxDistance
 	var closestThing volumes.IThing
@@ -323,13 +323,13 @@ func (t *ThingBase) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ
 // force denotes the magnitude of the impact force.
 // closestDist represents the closest penetration between the objects upon collision.
 // dirX, dirY, and dirZ specify the directional vector of the impact in 3D space.
-func (t *ThingBase) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
+func (t *Base) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 	t.onImpact(other, id, force, closestDist, dirX, dirY, dirZ)
 }
 
 // spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.
 // It offsets slightly from the surface to avoid Z-fighting and applies a visual decal for a limited duration.
-func (t *ThingBase) spawnBulletHole(x, y, z float64, target volumes.IThing) {
+func (t *Base) spawnBulletHole(x, y, z float64, target volumes.IThing) {
 	// Creiamo un'entità visiva temporanea tramite il gestore Things
 	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)
 	// per evitare lo Z-fighting durante il rendering.

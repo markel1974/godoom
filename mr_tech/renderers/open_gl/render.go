@@ -12,7 +12,7 @@ import (
 
 // IBuilder provides methods for constructing and managing rendering data, such as vertices, lights, textures, and draw commands.
 type IBuilder interface {
-	Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine)
+	Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *engine.Engine)
 
 	GetSkyTexture() *textures.Texture
 
@@ -41,8 +41,8 @@ type IBuilder interface {
 type RenderOpenGL struct {
 	ctx    api.IContext
 	engine *engine.Engine
-	vi     *model.ViewMatrix
-	player *things.ThingPlayer
+	vi     *engine.ViewMatrix
+	player *things.Player
 	tex    *Textures
 
 	builder     *BuilderVolume
@@ -91,7 +91,7 @@ func NewRender(ctx api.IContext) *RenderOpenGL {
 	r := &RenderOpenGL{
 		ctx:         ctx,
 		engine:      nil,
-		vi:          model.NewViewMatrix(),
+		vi:          engine.NewViewMatrix(),
 		player:      nil,
 		enableClear: false,
 	}

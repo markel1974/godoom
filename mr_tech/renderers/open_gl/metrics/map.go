@@ -3,7 +3,7 @@ package metrics
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/engine"
 )
 
 // Map represents a data structure used to manage orthographic settings, transformations, and camera projections.
@@ -51,8 +51,8 @@ func NewMap() *Map {
 // GetScale2d calculates and returns the horizontal and vertical scale factors for a 2D scene based on window dimensions.
 func (m *Map) GetScale2d(width, height int32) (float32, float32) {
 	aspect := float32(width) / float32(height)
-	scaleX := (ndcRange / aspect) * float32(model.HFov)
-	scaleY := ndcRange * float32(model.VFov)
+	scaleX := (ndcRange / aspect) * float32(engine.HFov)
+	scaleY := ndcRange * float32(engine.VFov)
 	return scaleX, scaleY
 }
 
@@ -154,13 +154,13 @@ func (m *Map) SetCenter(cx float32, cz float32, lightCamY float32) {
 }
 
 // Update updates the room space and projection-view matrices using the provided view matrix and scaling factors.
-func (m *Map) Update(vi *model.ViewMatrix, scaleX float32, scaleY float32) {
+func (m *Map) Update(vi *engine.ViewMatrix, scaleX float32, scaleY float32) {
 	m.createRoomSpace(vi)
 	m.createProjView(vi, scaleX, scaleY)
 }
 
 // CreateRoomSpace configures the main view matrix using the provided ViewMatrix instance to establish room spatial mapping.
-func (m *Map) createRoomSpace(vi *model.ViewMatrix) {
+func (m *Map) createRoomSpace(vi *engine.ViewMatrix) {
 	// Clean extraction (World Space: Z-UP)
 	// Setup Camera (Main View)
 	sinA, cosA := vi.GetAngleFull()
@@ -240,7 +240,7 @@ func (m *Map) updateRoomView(lX, lY, lZ float32) {
 
 // CreateProjView computes and updates projection, view, and inverse view matrices for 3D rendering.
 // It uses the provided view matrix and scaling factors for calculations and returns the matrices.
-func (m *Map) createProjView(vi *model.ViewMatrix, scaleX float32, scaleY float32) {
+func (m *Map) createProjView(vi *engine.ViewMatrix, scaleX float32, scaleY float32) {
 	// Acquire angles
 	sinY, cosY := vi.GetAngleFull()
 	pitch := -vi.GetPitch()

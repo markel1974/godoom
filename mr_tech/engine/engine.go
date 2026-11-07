@@ -11,7 +11,7 @@ import (
 // Engine represents the core structure for managing game components and interactions.
 type Engine struct {
 	things *model.Things
-	player *things.ThingPlayer
+	player *things.Player
 	//ui          []model.IThing
 	volumes     *model.Volumes
 	lights      *model.Lights
@@ -29,7 +29,7 @@ func NewEngine() *Engine {
 }
 
 // GetPlayer returns the current player instance managed by the engine.
-func (e *Engine) GetPlayer() *things.ThingPlayer {
+func (e *Engine) GetPlayer() *things.Player {
 	return e.player
 }
 
@@ -79,7 +79,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 }
 
 // Compute updates the game state by synchronizing the player, processing AI, applying physics, and updating the view matrix.
-func (e *Engine) Compute(player *things.ThingPlayer, vi *model.ViewMatrix) {
+func (e *Engine) Compute(player *things.Player, vi *ViewMatrix) {
 	// AI & External Forces: Wake up things BEFORE physics calculation
 	pX, pY, pZ := player.VerticesGetEntity().GetCenter()
 	// Dynamic Solver

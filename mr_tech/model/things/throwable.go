@@ -8,15 +8,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
-// ThingThrowable represents a throwable object in the system, extending the base functionality of ThingBase.
-type ThingThrowable struct {
-	*ThingBase
+// Throwable represents a throwable object in the system, extending the base functionality of Base.
+type Throwable struct {
+	*Base
 }
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
-func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *ThingThrowable {
-	throwable := &ThingThrowable{}
-	throwable.ThingBase = NewThingBase(throwable, things, cfg, volume)
+func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *Throwable {
+	throwable := &Throwable{}
+	throwable.Base = NewBase(throwable, things, cfg, volume)
 	cfg.OnBind(throwable)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	throwable.maxStep = 0.0
@@ -36,34 +36,34 @@ func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.
 	return throwable
 }
 
-// IsEqual reports whether other is the same ThingThrowable instance.
-func (t *ThingThrowable) IsEqual(other volumes.IThing) bool {
-	if v, ok := other.(*ThingThrowable); ok && t == v {
+// IsEqual reports whether other is the same Throwable instance.
+func (t *Throwable) IsEqual(other volumes.IThing) bool {
+	if v, ok := other.(*Throwable); ok && t == v {
 		return true
 	}
 	return false
 }
 
 // Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
-func (t *ThingThrowable) Jump(leapX float64, leapY float64, zFactor float64) bool {
+func (t *Throwable) Jump(leapX float64, leapY float64, zFactor float64) bool {
 	return false
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *ThingThrowable) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *Throwable) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 }
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
-func (t *ThingThrowable) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+func (t *Throwable) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
 }
 
-// PostMessage sends a ThingEvent to the ThingThrowable's inbox channel for processing in the event loop.
-func (t *ThingThrowable) PostMessage(ec *volumes.ThingEvent) {
+// PostMessage sends a ThingEvent to the Throwable's inbox channel for processing in the event loop.
+func (t *Throwable) PostMessage(ec *volumes.ThingEvent) {
 	t.inbox <- ec
 }
 
 // StartLoop initializes a goroutine to process events from the inbox channel or terminate when signaled via the done channel.
-func (t *ThingThrowable) StartLoop() {
+func (t *Throwable) StartLoop() {
 	go func() {
 		for {
 			select {
@@ -86,12 +86,12 @@ func (t *ThingThrowable) StartLoop() {
 	}()
 }
 
-// HasThinking checks if the ThingThrowable instance has a "thinking" state behavior enabled and returns false by default.
-func (t *ThingThrowable) HasThinking() bool {
+// HasThinking checks if the Throwable instance has a "thinking" state behavior enabled and returns false by default.
+func (t *Throwable) HasThinking() bool {
 	return false
 }
 
 // StageThinking calculates or updates the state of the `ThingThrowable` instance based on the player's coordinates.
-func (t *ThingThrowable) StageThinking(playerX float64, playerY float64, playerZ float64) {
+func (t *Throwable) StageThinking(playerX float64, playerY float64, playerZ float64) {
 	// Logica eventuale di homing-missile o timeout qui
 }

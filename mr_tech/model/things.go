@@ -22,7 +22,7 @@ type Things struct {
 	volumes          *Volumes
 	materials        *materials.Materials
 	tree             *aabb.Tree
-	player           *things.ThingPlayer
+	player           *things.Player
 	entities         map[uint64]volumes.IThing
 	running          []volumes.IThing
 	removables       []volumes.IThing
@@ -175,12 +175,12 @@ func (th *Things) QueryStatic(callback func(object aabb.IObject) bool) {
 }
 
 // GetPlayer returns the current player instance.
-func (th *Things) GetPlayer() *things.ThingPlayer {
+func (th *Things) GetPlayer() *things.Player {
 	return th.player
 }
 
 // SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
-func (th *Things) SetPlayer(p *things.ThingPlayer) {
+func (th *Things) SetPlayer(p *things.Player) {
 	th.player = p
 	th.addThing(p)
 }
@@ -216,19 +216,19 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) volumes.IThin
 	var thing volumes.IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
-		thing = things.NewThingEnemy(th, ct, volume)
+		thing = things.NewEnemy(th, ct, volume)
 	case config.ThingWeaponDef:
-		thing = things.NewThingItem(th, ct, volume)
+		thing = things.NewItem(th, ct, volume)
 	case config.ThingThrowableDef:
 		thing = things.NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:
-		thing = things.NewThingItem(th, ct, volume)
+		thing = things.NewItem(th, ct, volume)
 	case config.ThingInterfaceDef:
-		thing = things.NewThingInterface(th, ct)
+		thing = things.NewUI(th, ct)
 	case config.ThingItemDef:
-		thing = things.NewThingItem(th, ct, volume)
+		thing = things.NewItem(th, ct, volume)
 	default:
-		thing = things.NewThingItem(th, ct, volume)
+		thing = things.NewItem(th, ct, volume)
 	}
 	entity := thing.VerticesGetEntity()
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)

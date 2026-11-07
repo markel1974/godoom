@@ -103,7 +103,7 @@ func (w *BuilderVolume) GetLights() (unsafe.Pointer, int32, int32) { return w.fl
 func (w *BuilderVolume) GetSkyMaterial() *textures.Material { return w.cSky }
 
 // Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
-func (w *BuilderVolume) Compute(fbw, fbh int32, vi *model.ViewMatrix, engine *engine.Engine) {
+func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *engine.Engine) {
 	px, py, pz := vi.GetView()
 	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()
 	rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll

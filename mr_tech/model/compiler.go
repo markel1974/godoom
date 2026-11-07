@@ -21,7 +21,7 @@ type ICompiler interface {
 type Compiler struct {
 	gScale      geometry.XYZ
 	volumes     *Volumes
-	player      *things.ThingPlayer
+	player      *things.Player
 	lights      *Lights
 	things      *Things
 	ui          []volumes.IThing
@@ -101,14 +101,14 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 	fmt.Printf("things initialized in %s \n", time.Since(now))
 
-	r.player = things.NewThingPlayer(r.volumes, r.things, cfg.Player, false)
+	r.player = things.NewPlayer(r.volumes, r.things, cfg.Player, false)
 	if err := r.player.Setup(); err != nil {
 		return err
 	}
 	r.things.SetPlayer(r.player)
 
 	for _, i := range cfg.UI {
-		e := things.NewThingInterface(r.things, i)
+		e := things.NewUI(r.things, i)
 		r.things.AddStaticThing(e)
 		r.ui = append(r.ui, e)
 	}
@@ -138,7 +138,7 @@ func (r *Compiler) GetVolumes() *Volumes {
 }
 
 // GetPlayer returns the player object associated with the compiler instance.
-func (r *Compiler) GetPlayer() *things.ThingPlayer {
+func (r *Compiler) GetPlayer() *things.Player {
 	return r.player
 }
 

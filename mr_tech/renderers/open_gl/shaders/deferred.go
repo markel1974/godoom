@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
@@ -51,7 +52,7 @@ type Deferred struct {
 	ssao              *SSAO
 	mapMetrics        *metrics.Map
 	flashlightMetrics *metrics.Flashlight
-	flash             *model.Flash
+	flash             *things.Flash
 	post              *Post
 	prg               uint32
 	table             [DeferredLocLast]int32

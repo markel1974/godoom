@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -82,7 +83,7 @@ type Main struct {
 	metrics             *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
-	flash               *model.Flash
+	flash               *things.Flash
 	depth               *Depth
 	lights              *Lights
 	post                *Post

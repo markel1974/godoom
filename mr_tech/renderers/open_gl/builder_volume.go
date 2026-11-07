@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -248,7 +249,7 @@ func (w *BuilderVolume) pushQVolumes(vols *volumes.Volumes, frustumFront *aabb.F
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
+func (w *BuilderVolume) pushQThings(things *things.Things, frustumFront *aabb.Frustum) {
 	//counter := 0
 	things.StagePrepare()
 

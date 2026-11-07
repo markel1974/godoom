@@ -4,6 +4,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -11,8 +12,8 @@ import (
 
 // Engine represents the core structure for managing game components and interactions.
 type Engine struct {
-	things *model.Things
-	player *model.ThingPlayer
+	things *things.Things
+	player *things.ThingPlayer
 	//ui          []model.IThing
 	volumes     *volumes.Volumes
 	lights      *lights.Lights
@@ -30,7 +31,7 @@ func NewEngine() *Engine {
 }
 
 // GetPlayer returns the current player instance managed by the engine.
-func (e *Engine) GetPlayer() *model.ThingPlayer {
+func (e *Engine) GetPlayer() *things.ThingPlayer {
 	return e.player
 }
 
@@ -40,7 +41,7 @@ func (e *Engine) GetTextures() textures.ITextures {
 }
 
 // GetThings returns the Things instance managed by the Engine.
-func (e *Engine) GetThings() *model.Things {
+func (e *Engine) GetThings() *things.Things {
 	return e.things
 }
 
@@ -80,7 +81,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 }
 
 // Compute updates the game state by synchronizing the player, processing AI, applying physics, and updating the view matrix.
-func (e *Engine) Compute(player *model.ThingPlayer, vi *model.ViewMatrix) {
+func (e *Engine) Compute(player *things.ThingPlayer, vi *model.ViewMatrix) {
 	// AI & External Forces: Wake up things BEFORE physics calculation
 	pX, pY, pZ := player.VerticesGetEntity().GetCenter()
 	// Dynamic Solver

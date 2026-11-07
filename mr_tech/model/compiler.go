@@ -6,8 +6,10 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/compilers"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	materials2 "github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -19,9 +21,9 @@ type ICompiler interface {
 type Compiler struct {
 	gScale      geometry.XYZ
 	volumes     *volumes.Volumes
-	player      *ThingPlayer
+	player      *things.ThingPlayer
 	lights      *lights.Lights
-	things      *Things
+	things      *things.Things
 	ui          []volumes.IThing
 	calibration *Calibration
 }
@@ -59,9 +61,9 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	pipeline := []ICompiler{
-		NewCompiler2d(cfg, materials),
-		NewCompiler3d(cfg, materials),
-		NewCompilerLights(cfg.Lights),
+		compilers.NewCompiler2d(cfg, materials),
+		compilers.NewCompiler3d(cfg, materials),
+		compilers.NewCompilerLights(cfg.Lights),
 	}
 
 	var allVolumes []*volumes.Volume
@@ -93,19 +95,19 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 	fmt.Printf("lights initialized in %s \n", time.Since(now))
 
-	r.things = NewThings(cfg.Calibration.MaxOverlaps, cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
+	r.things = things.NewThings(cfg.Calibration.MaxOverlaps, cfg.Calibration.SolverIterations, cfg.Things, r.volumes, materials)
 	if err := r.things.Setup(); err != nil {
 		return err
 	}
 	fmt.Printf("things initialized in %s \n", time.Since(now))
 
-	r.player = NewThingPlayer(r.volumes, r.things, cfg.Player, false)
+	r.player = things.NewThingPlayer(r.volumes, r.things, cfg.Player, false)
 	if err := r.player.Setup(); err != nil {
 		return err
 	}
 
 	for _, i := range cfg.UI {
-		e := NewThingInterface(r.things, i)
+		e := things.NewThingInterface(r.things, i)
 		r.things.AddStaticThing(e)
 		r.ui = append(r.ui, e)
 	}
@@ -120,7 +122,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 }
 
 // GetThings returns the Things instance managed by the Compiler.
-func (r *Compiler) GetThings() *Things {
+func (r *Compiler) GetThings() *things.Things {
 	return r.things
 }
 
@@ -135,7 +137,7 @@ func (r *Compiler) GetVolumes() *volumes.Volumes {
 }
 
 // GetPlayer returns the player object associated with the compiler instance.
-func (r *Compiler) GetPlayer() *ThingPlayer {
+func (r *Compiler) GetPlayer() *things.ThingPlayer {
 	return r.player
 }
 

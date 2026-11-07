@@ -3,7 +3,7 @@ package shaders
 import (
 	"fmt"
 
-	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -119,7 +119,7 @@ type Depth struct {
 	mapMetrics          *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
-	flash               *model.Flash
+	flash               *things.Flash
 	matrixEmpty         [16]float32
 	matrixEmptyPtr      *float32
 	viewMatrixPtr       *float32

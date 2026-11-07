@@ -28,9 +28,9 @@ const (
 type ThingEvent struct {
 	solverIndex  int
 	solverJitter float64
-	playerX      float64
-	playerY      float64
-	playerZ      float64
+	pX           float64
+	pY           float64
+	pZ           float64
 	stage        ComputeStage
 	wg           *sync.WaitGroup
 }
@@ -67,12 +67,12 @@ func (e *ThingEvent) SetStage(stage ComputeStage) {
 
 // SetCoords updates the X, Y, and Z player coordinates for the ThingEvent instance.
 func (e *ThingEvent) SetCoords(x, y, z float64) {
-	e.playerX, e.playerY, e.playerZ = x, y, z
+	e.pX, e.pY, e.pZ = x, y, z
 }
 
 // GetCoords returns the X, Y, and Z player coordinates of the ThingEvent instance.
 func (e *ThingEvent) GetCoords() (float64, float64, float64) {
-	return e.playerX, e.playerY, e.playerZ
+	return e.pX, e.pY, e.pZ
 }
 
 // Done signals that the current operation associated with the ThingEvent is complete by marking the WaitGroup as done.
@@ -85,10 +85,12 @@ func (e *ThingEvent) GetKind() ComputeStage {
 	return e.stage
 }
 
+// Add increments the event wait group counter for a pending operation.
 func (e *ThingEvent) Add() {
 	e.wg.Add(1)
 }
 
+// Wait blocks until all operations associated with the ThingEvent are complete.
 func (e *ThingEvent) Wait() {
 	e.wg.Wait()
 }

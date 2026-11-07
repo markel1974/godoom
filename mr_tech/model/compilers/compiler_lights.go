@@ -1,4 +1,4 @@
-package model
+package compilers
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"

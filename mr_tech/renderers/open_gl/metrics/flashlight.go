@@ -1,6 +1,8 @@
 package metrics
 
-import "github.com/markel1974/godoom/mr_tech/model"
+import (
+	"github.com/markel1974/godoom/mr_tech/model/things"
+)
 
 // Flashlight represents a structure for handling shadow-related transformations and projections in a rendering system.
 type Flashlight struct {
@@ -16,11 +18,11 @@ type Flashlight struct {
 	shadowViewPtr      *float32
 	shadowViewLocalPtr *float32
 
-	flash *model.Flash
+	flash *things.Flash
 }
 
 // NewFlashlight creates and initializes a new Flashlight instance with a given Flash object and default shadow settings.
-func NewFlashlight(flash *model.Flash) *Flashlight {
+func NewFlashlight(flash *things.Flash) *Flashlight {
 	m := &Flashlight{
 		flash: flash,
 	}

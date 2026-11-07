@@ -35,6 +35,7 @@ func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Fa
 	return out
 }
 
+// GetTri returns the three vertices that define the face triangle.
 func (fc *Face) GetTri() [3]geometry.XYZ {
 	return fc.tri
 }

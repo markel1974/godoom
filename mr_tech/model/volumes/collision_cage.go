@@ -546,6 +546,149 @@ func (s *CollisionCage) Commit(rCage *CollisionCage) {
 	s.facesIdx = 0
 }
 
+// addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
+func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) bool {
+	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
+	if cage != nil {
+		s.slots[s.slotsLen] = cage
+		s.slotsLen++
+		return true
+	}
+	return false
+}
+
+// TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.
+func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *physics.Entity {
+	w := s.ellipsoidLocal[slot]
+	from := s.ellipsoid.GetAABB()
+	lMinX := from.GetMinX() - deltaX
+	lMaxX := from.GetMaxX() - deltaX
+	lMinY := from.GetMinY() - deltaY
+	lMaxY := from.GetMaxY() - deltaY
+	lMinZ := from.GetMinZ() - deltaZ
+	lMaxZ := from.GetMaxZ() - deltaZ
+	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return w
+}
+
+// TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
+func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IObject, float64, float64, float64) {
+	lOx, lOy, lOz := s.object.VerticesGetCenter()
+	lOx += s.dX
+	lOy += s.dY
+	lOz += s.dZ
+	rOx, rOy, rOz := rCage.object.VerticesGetCenter()
+	rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
+	rOx += rDX
+	rOy += rDY
+	rOz += rDZ
+	lEntityL := s.TranslateWorldToLocal(slot, rOx, rOy, rOz)
+	return lEntityL, rOx - lOx, rOy - lOy, rOz - lOz
+}
+
+// Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
+func (s *CollisionCage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *physics.Entity {
+	w := s.ellipsoidLocal[slot]
+	to := src.GetAABB()
+	lMinX := to.GetMinX() + deltaX
+	lMaxX := to.GetMaxX() + deltaX
+	lMinY := to.GetMinY() + deltaY
+	lMaxY := to.GetMaxY() + deltaY
+	lMinZ := to.GetMinZ() + deltaZ
+	lMaxZ := to.GetMaxZ() + deltaZ
+	if f, ok := src.(*Face); ok {
+		nX, nY, nZ := f.GetNormal()
+		padX := math.Abs(nX) * s.eRadX * 2.0
+		padY := math.Abs(nY) * s.eRadY * 2.0
+		padZ := math.Abs(nZ) * s.eRadZ * 2.0
+		lMinX -= padX
+		lMaxX += padX
+		lMinY -= padY
+		lMaxY += padY
+		lMinZ -= padZ
+		lMaxZ += padZ
+	}
+	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+	return w
+}
+
+// HasSeen checks if the given CollisionCage has already been marked as seen in the current CollisionCage.
+func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
+	return s.seen[rCage]
+}
+
+// Seen marks a given CollisionCage as observed by the current CollisionCage within its internal tracking.
+func (s *CollisionCage) Seen(rCage *CollisionCage) {
+	s.seen[rCage] = true
+}
+
+// GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.
+func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
+
+// HasBucket reports whether the collision cage contains a bucket of the specified type.
+func (s *CollisionCage) HasBucket(t BucketType) bool {
+	for z := 0; z < s.slotsLen; z++ {
+		if s.slots[z].bucket == t {
+			return true
+		}
+	}
+	return false
+}
+
+// GetSlotsLen returns the current number of active slots in the CollisionCage.
+func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
+
+// GetSlot returns the CageEntry at the specified index in the slots slice.
+func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
+
+// GetThing retrieves the IThing object associated with the CollisionCage.
+func (s *CollisionCage) GetThing() IThing { return s.object }
+
+// GetVolume returns the volume associated with the CollisionCage.
+func (s *CollisionCage) GetVolume() *Volume { return s.volume }
+
+// GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.
+func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
+
+// GetC returns the center coordinates (cX, cY, cZ) of the CollisionCage.
+func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
+
+// GetDisplacement returns the displacement of the collision cage along the x, y, and z axes.
+func (s *CollisionCage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
+
+// GetT retrieves the current transformed coordinates (tX, tY, tZ) of the CollisionCage.
+func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
+
+// BucketCount returns the number of entries in the specified bucket.
+func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
+
+// GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.
+func (s *CollisionCage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
+
+// HasFloor reports whether the collision cage has a floor.
+func (s *CollisionCage) HasFloor() bool {
+	return s.hasFloor
+}
+
+// GetEntity returns the physics entity associated with the collision cage.
+func (s *CollisionCage) GetEntity() *physics.Entity {
+	return s.object.VerticesGetEntity()
+}
+
+// SetApplied marks the collision cage as having applied its frame displacement.
+func (s *CollisionCage) SetApplied() {
+	s.applied = true
+}
+
+// GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
+func (s *CollisionCage) GetPushOffset() (float64, float64, float64) {
+	curX, curY, curZ := s.object.VerticesGetEntity().GetCenter()
+	if s.applied {
+		return curX - s.tX, curY - s.tY, curZ - s.tZ
+	}
+	return curX - s.cX, curY - s.cY, curZ - s.cZ
+}
+
 // computeFace calculates the penetration and distance of a face relative to an ellipsoid's motion and assigns a collision bucket.
 func (s *CollisionCage) computeFace(lAABB *aabb.AABB, rFace *Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
@@ -1060,146 +1203,3 @@ func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, 
 	return cm
 }
 */
-
-// addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
-func (s *CollisionCage) addToBucket(bucket BucketType, rCage *CollisionCage, rFace *Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) bool {
-	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
-	if cage != nil {
-		s.slots[s.slotsLen] = cage
-		s.slotsLen++
-		return true
-	}
-	return false
-}
-
-// TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.
-func (s *CollisionCage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *physics.Entity {
-	w := s.ellipsoidLocal[slot]
-	from := s.ellipsoid.GetAABB()
-	lMinX := from.GetMinX() - deltaX
-	lMaxX := from.GetMaxX() - deltaX
-	lMinY := from.GetMinY() - deltaY
-	lMaxY := from.GetMaxY() - deltaY
-	lMinZ := from.GetMinZ() - deltaZ
-	lMaxZ := from.GetMaxZ() - deltaZ
-	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return w
-}
-
-// TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
-func (s *CollisionCage) TranslateCage(slot int, rCage *CollisionCage) (aabb.IObject, float64, float64, float64) {
-	lOx, lOy, lOz := s.object.VerticesGetCenter()
-	lOx += s.dX
-	lOy += s.dY
-	lOz += s.dZ
-	rOx, rOy, rOz := rCage.object.VerticesGetCenter()
-	rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
-	rOx += rDX
-	rOy += rDY
-	rOz += rDZ
-	lEntityL := s.TranslateWorldToLocal(slot, rOx, rOy, rOz)
-	return lEntityL, rOx - lOx, rOy - lOy, rOz - lOz
-}
-
-// Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
-func (s *CollisionCage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *physics.Entity {
-	w := s.ellipsoidLocal[slot]
-	to := src.GetAABB()
-	lMinX := to.GetMinX() + deltaX
-	lMaxX := to.GetMaxX() + deltaX
-	lMinY := to.GetMinY() + deltaY
-	lMaxY := to.GetMaxY() + deltaY
-	lMinZ := to.GetMinZ() + deltaZ
-	lMaxZ := to.GetMaxZ() + deltaZ
-	if f, ok := src.(*Face); ok {
-		nX, nY, nZ := f.GetNormal()
-		padX := math.Abs(nX) * s.eRadX * 2.0
-		padY := math.Abs(nY) * s.eRadY * 2.0
-		padZ := math.Abs(nZ) * s.eRadZ * 2.0
-		lMinX -= padX
-		lMaxX += padX
-		lMinY -= padY
-		lMaxY += padY
-		lMinZ -= padZ
-		lMaxZ += padZ
-	}
-	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
-	return w
-}
-
-// HasSeen checks if the given CollisionCage has already been marked as seen in the current CollisionCage.
-func (s *CollisionCage) HasSeen(rCage *CollisionCage) bool {
-	return s.seen[rCage]
-}
-
-// Seen marks a given CollisionCage as observed by the current CollisionCage within its internal tracking.
-func (s *CollisionCage) Seen(rCage *CollisionCage) {
-	s.seen[rCage] = true
-}
-
-// GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.
-func (s *CollisionCage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
-
-// HasBucket reports whether the collision cage contains a bucket of the specified type.
-func (s *CollisionCage) HasBucket(t BucketType) bool {
-	for z := 0; z < s.slotsLen; z++ {
-		if s.slots[z].bucket == t {
-			return true
-		}
-	}
-	return false
-}
-
-// GetSlotsLen returns the current number of active slots in the CollisionCage.
-func (s *CollisionCage) GetSlotsLen() int { return s.slotsLen }
-
-// GetSlot returns the CageEntry at the specified index in the slots slice.
-func (s *CollisionCage) GetSlot(i int) *CageEntry { return s.slots[i] }
-
-// GetThing retrieves the IThing object associated with the CollisionCage.
-func (s *CollisionCage) GetThing() IThing { return s.object }
-
-// GetVolume returns the volume associated with the CollisionCage.
-func (s *CollisionCage) GetVolume() *Volume { return s.volume }
-
-// GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.
-func (s *CollisionCage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
-
-// GetC returns the center coordinates (cX, cY, cZ) of the CollisionCage.
-func (s *CollisionCage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
-
-// GetDisplacement returns the displacement of the collision cage along the x, y, and z axes.
-func (s *CollisionCage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
-
-// GetT retrieves the current transformed coordinates (tX, tY, tZ) of the CollisionCage.
-func (s *CollisionCage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
-
-// BucketCount returns the number of entries in the specified bucket.
-func (s *CollisionCage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
-
-// GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.
-func (s *CollisionCage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
-
-// HasFloor reports whether the collision cage has a floor.
-func (s *CollisionCage) HasFloor() bool {
-	return s.hasFloor
-}
-
-// GetEntity returns the physics entity associated with the collision cage.
-func (s *CollisionCage) GetEntity() *physics.Entity {
-	return s.object.VerticesGetEntity()
-}
-
-// SetApplied marks the collision cage as having applied its frame displacement.
-func (s *CollisionCage) SetApplied() {
-	s.applied = true
-}
-
-// GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
-func (s *CollisionCage) GetPushOffset() (float64, float64, float64) {
-	curX, curY, curZ := s.object.VerticesGetEntity().GetCenter()
-	if s.applied {
-		return curX - s.tX, curY - s.tY, curZ - s.tZ
-	}
-	return curX - s.cX, curY - s.cY, curZ - s.cZ
-}

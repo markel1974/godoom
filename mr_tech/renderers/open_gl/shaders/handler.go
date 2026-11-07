@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
@@ -17,7 +18,7 @@ type Handler struct {
 
 	mapMetrics *metrics.Map
 
-	flash               *model.Flash
+	flash               *things.Flash
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
 
@@ -91,7 +92,7 @@ func NewHandler(vStride, lStride int32) *Handler {
 }
 
 // Setup initializes the Handler by configuring context, calibration, flash, and various metrics and components.
-func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *model.Flash, fbW, fbH int32) error {
+func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *things.Flash, fbW, fbH int32) error {
 	h.ctx = ctx
 	h.cal = cal
 	h.flash = flash
@@ -181,7 +182,7 @@ func (h *Handler) GetShadowLightsMetrics() *metrics.ShadowLights {
 }
 
 // GetFlash retrieves the Flash instance associated with the Handler, providing access to its rendering and shading parameters.
-func (h *Handler) GetFlash() *model.Flash {
+func (h *Handler) GetFlash() *things.Flash {
 	return h.flash
 }
 

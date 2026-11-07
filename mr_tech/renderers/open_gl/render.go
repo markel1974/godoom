@@ -3,6 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -41,13 +42,13 @@ type RenderOpenGL struct {
 	ctx    api.IContext
 	engine *engine.Engine
 	vi     *model.ViewMatrix
-	player *model.ThingPlayer
+	player *things.ThingPlayer
 	tex    *Textures
 
 	builder     *BuilderVolume
 	enableClear bool
 
-	flash         *model.Flash
+	flash         *things.Flash
 	container     []IShader
 	enableShadows bool
 

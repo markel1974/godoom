@@ -3,6 +3,7 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/collisions"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -72,7 +73,7 @@ func (s *Volumes) Query(targetObj aabb.IObject) []*volumes.Volume {
 }
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-func (s *Volumes) QueryCollisionCage(cage *volumes.CollisionCage, maxOverlaps int) {
+func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 	counter := 0
 	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
 		vol := object.(*volumes.Volume)

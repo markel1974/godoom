@@ -1,0 +1,87 @@
+package collisions
+
+import "github.com/markel1974/godoom/mr_tech/model/volumes"
+
+// Entry represents a collision entry used during spatial computations in the collision detection system.
+type Entry struct {
+	bucket      BucketType
+	rCage       *Cage
+	rFace       *volumes.Face
+	lCage       *Cage
+	dist        float64
+	penetration float64
+	nX          float64
+	nY          float64
+	nZ          float64
+	p0X         float64
+	p0Y         float64
+	p0Z         float64
+	maxZ        float64
+	iMode       int
+}
+
+// NewCageEntry creates and returns a new instance of Entry initialized with default zero values.
+func NewCageEntry() *Entry {
+	return &Entry{}
+}
+
+// GetRemoteFace returns the remote face associated with the Entry structure.
+func (s *Entry) GetRemoteFace() *volumes.Face { return s.rFace }
+
+// GetDistance returns the precomputed distance value associated with the Entry instance.
+func (s *Entry) GetDistance() float64 { return s.dist }
+
+// IsDynamic determines if the instance is associated with a remote collision cage.
+func (s *Entry) IsDynamic() bool { return s.rCage != nil }
+
+// GetMaxZ returns the maximum Z-coordinate of the Entry.
+func (s *Entry) GetMaxZ() float64 { return s.maxZ }
+
+// GetBucket retrieves the BucketType associated with the Entry instance.
+func (s *Entry) GetBucket() BucketType { return s.bucket }
+
+// GetImpactMode returns the impact mode of the collision as an integer value.
+func (s *Entry) GetImpactMode() int {
+	return s.iMode
+}
+
+// GetNormal returns the components of the contact normal vector (nX, nY, nZ) as a tuple of three float64 values.
+func (s *Entry) GetNormal() (float64, float64, float64) { return s.nX, s.nY, s.nZ }
+
+// GetPenetration returns the penetration depth of the collision measured by the cage entry.
+func (s *Entry) GetPenetration() float64 { return s.penetration }
+
+// GetLCage returns the local collision cage associated with the entry.
+func (s *Entry) GetLCage() *Cage { return s.lCage }
+
+// GetRCage returns the remote collision cage associated with the entry.
+func (s *Entry) GetRCage() *Cage { return s.rCage }
+
+// Rebuild reinitializes the Entry with the given parameters and updates all its attributes accordingly.
+func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode int) {
+	s.bucket = bucket
+	s.lCage = lCage
+	s.rCage = rCage
+	s.rFace = rFace
+	s.dist = dist
+	s.penetration = penetration
+	s.nX, s.nY, s.nZ = nX, nY, nZ
+	s.p0X, s.p0Y, s.p0Z = p0x, p0y, p0z
+	s.maxZ = maxZ
+	s.iMode = iMode
+}
+
+// Penetrable determines if the Entry can be penetrated based on its collision mode and the state of adjacent entities.
+func (s *Entry) Penetrable() bool {
+	if s.iMode == ImpactInelastic {
+		return false
+	}
+	if s.rCage == nil {
+		return true
+	}
+	// Passiamo il controllo al bucket dell'entità remota nella STESSA direzione.
+	v := s.rCage.buckets[s.bucket]
+	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
+	// allora questa specifica faccia non può essere penetrata/spinta.
+	return v.Penetrable(s.lCage.object.VerticesGetEntity().GetId())
+}

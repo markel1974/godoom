@@ -3,6 +3,7 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/collisions"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics"
@@ -36,7 +37,7 @@ type Base struct {
 	location       *volumes.Volume
 	things         IThingHandler
 	isActive       bool
-	cage           *volumes.CollisionCage
+	cage           *collisions.Cage
 	inbox          chan *volumes.ThingEvent
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
@@ -70,7 +71,6 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		isActive:       true,
 		inbox:          make(chan *volumes.ThingEvent, 16),
 		done:           make(chan struct{}),
-		cage:           nil,
 		onImpact:       cfg.OnImpact,
 		onCollision:    cfg.OnCollision,
 	}
@@ -78,7 +78,7 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	entity := t.VerticesGetEntity()
 	entity.SetOnGround(false)
 	t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
-	t.cage = volumes.NewCollisionCage(thing)
+	t.cage = collisions.NewCage(thing)
 
 	return t
 }
@@ -185,7 +185,7 @@ func (t *Base) StageResolve() {
 
 		iMode := slot.GetImpactMode()
 		switch iMode {
-		case volumes.ImpactStep:
+		case collisions.ImpactStep:
 			continue
 		}
 		var rParentEnt *physics.Entity
@@ -219,10 +219,10 @@ func (t *Base) StageApply() {
 		slot := t.cage.GetSlot(i)
 		iMode := slot.GetImpactMode()
 		switch iMode {
-		case volumes.ImpactStep:
+		case collisions.ImpactStep:
 			entity.MoveToZ(slot.GetMaxZ())
 			continue
-		case volumes.ImpactElastic:
+		case collisions.ImpactElastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			rPushX, rPushY, rPushZ := slot.GetRCage().GetPushOffset()
@@ -232,7 +232,7 @@ func (t *Base) StageApply() {
 				entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
 			}
 			t.onCollision(rCage.GetObject())
-		case volumes.ImpactInelastic:
+		case collisions.ImpactInelastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ

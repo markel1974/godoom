@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/collisions"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -114,7 +115,7 @@ func (th *Things) Len() int {
 }
 
 // QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
-func (th *Things) QueryCollisionCage(lCage *volumes.CollisionCage, maxOverlaps int) {
+func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 	lThing := lCage.GetThing()
 	counter := 0
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
@@ -122,7 +123,7 @@ func (th *Things) QueryCollisionCage(lCage *volumes.CollisionCage, maxOverlaps i
 		if lThing == rThing {
 			return false
 		}
-		rCage := rThing.GetCage().(*volumes.CollisionCage)
+		rCage := rThing.GetCage().(*collisions.Cage)
 		if lCage.HasSeen(rCage) {
 			return false
 		}
@@ -329,14 +330,14 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		cage := t2.GetCage().(*volumes.CollisionCage)
+		cage := t2.GetCage().(*collisions.Cage)
 		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
 		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
 	}
 
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
-		cage := t2.GetCage().(*volumes.CollisionCage)
+		cage := t2.GetCage().(*collisions.Cage)
 		t2.VerticesGetEntity().SetOnGround(cage.HasFloor())
 	}
 

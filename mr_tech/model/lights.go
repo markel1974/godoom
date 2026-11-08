@@ -45,6 +45,11 @@ func (l *Lights) Get() []*lights.Light {
 	return l.container
 }
 
+// QueryOverlaps finds objects overlapping front and invokes callback for each match.
+func (l *Lights) QueryOverlaps(front aabb.IObject, callback func(object aabb.IObject) bool) {
+	l.tree.QueryOverlaps(front, callback)
+}
+
 // QueryFrustum performs a spatial query using the specified frustum and invokes the callback for each intersected object.
 func (l *Lights) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	l.tree.QueryFrustum(front, callback)

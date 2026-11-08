@@ -19,27 +19,28 @@ const solverJitter = 1e-6
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	config           []*config.Thing
-	volumes          *Volumes
-	materials        *materials.Materials
-	tree             *aabb.Tree
-	player           *things.Player
-	entities         map[uint64]volumes.IThing
-	running          []volumes.IThing
-	removables       []volumes.IThing
-	pending          []volumes.IThing
-	ready            []volumes.IThing
-	thinkers         []volumes.IThing
-	statics          []volumes.IThing
-	readyLen         int
-	thinkersLen      int
-	removablesLen    int
-	pendingLen       atomic.Int32
-	hasPending       bool
-	solverIterations int
-	event            *volumes.ThingEvent
-	cfg              []*config.Thing
-	maxOverlaps      int
+	config            []*config.Thing
+	volumes           *Volumes
+	materials         *materials.Materials
+	tree              *aabb.Tree
+	player            *things.Player
+	entities          map[uint64]volumes.IThing
+	running           []volumes.IThing
+	removables        []volumes.IThing
+	pending           []volumes.IThing
+	ready             []volumes.IThing
+	thinkers          []volumes.IThing
+	statics           []volumes.IThing
+	readyLen          int
+	thinkersLen       int
+	removablesLen     int
+	pendingLen        atomic.Int32
+	hasPending        bool
+	solverIterations  int
+	event             *volumes.ThingEvent
+	cfg               []*config.Thing
+	maxOverlapsWorld  int
+	maxOverlapsThings int
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -52,24 +53,25 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		solverIterations = 10
 	}
 	e := &Things{
-		maxOverlaps:      maxOverlaps,
-		solverIterations: solverIterations,
-		cfg:              cfg,
-		tree:             aabb.NewTree(uint(len(cfg)*2), 4.0),
-		entities:         make(map[uint64]volumes.IThing),
-		running:          make([]volumes.IThing, defaultLen),
-		ready:            make([]volumes.IThing, defaultLen),
-		thinkers:         make([]volumes.IThing, defaultLen),
-		pending:          make([]volumes.IThing, defaultLen),
-		readyLen:         0,
-		thinkersLen:      0,
-		removablesLen:    0,
-		hasPending:       false,
-		config:           cfg,
-		volumes:          vols,
-		materials:        materials,
-		event:            volumes.NewThingEvent(0, solverJitter),
-		statics:          make([]volumes.IThing, 0, 16),
+		maxOverlapsWorld:  maxOverlaps,
+		maxOverlapsThings: maxOverlaps / 2,
+		solverIterations:  solverIterations,
+		cfg:               cfg,
+		tree:              aabb.NewTree(uint(len(cfg)*2), 4.0),
+		entities:          make(map[uint64]volumes.IThing),
+		running:           make([]volumes.IThing, defaultLen),
+		ready:             make([]volumes.IThing, defaultLen),
+		thinkers:          make([]volumes.IThing, defaultLen),
+		pending:           make([]volumes.IThing, defaultLen),
+		readyLen:          0,
+		thinkersLen:       0,
+		removablesLen:     0,
+		hasPending:        false,
+		config:            cfg,
+		volumes:           vols,
+		materials:         materials,
+		event:             volumes.NewThingEvent(0, solverJitter),
+		statics:           make([]volumes.IThing, 0, 16),
 	}
 	e.pendingLen.Store(0)
 
@@ -320,8 +322,8 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
 		cage := t2.GetCage().(*collisions.Cage)
-		th.volumes.QueryCollisionCage(cage, th.maxOverlaps) //world collision
-		th.QueryCollisionCage(cage, th.maxOverlaps)         //things collision
+		th.volumes.QueryCollisionCage(cage, th.maxOverlapsWorld) //world collision
+		th.QueryCollisionCage(cage, th.maxOverlapsThings)        //things collision
 	}
 
 	for x := 0; x < runningLen; x++ {

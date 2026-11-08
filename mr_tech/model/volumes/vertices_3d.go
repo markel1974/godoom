@@ -3,7 +3,6 @@ package volumes
 import (
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -21,10 +20,10 @@ type Vertices3D struct {
 	partFaceCounts    []int
 	viewVolume        *Volume
 	entity            *physics.Entity
+	actions           *Vertices3DActions
 	currentAction     int
-	actions           [][]int
 	elements          []*Vertices3DEntry
-	links             *Links
+	links             *Vertices3DLinks
 	volsA             []*Volume
 	volsB             []*Volume
 	originsA          []geometry.XYZ
@@ -32,7 +31,7 @@ type Vertices3D struct {
 	rotationsA        []*TagAxis
 	rotationsB        []*TagAxis
 	lerpT             float64
-	joints            *PartJoints
+	joints            *Vertices3DJoints
 	lastTick          uint64
 	hasActiveDynamics bool
 	isRagdoll         bool
@@ -95,55 +94,15 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		}
 	}
 
-	// Validate and normalize ActionMaps
-	rawActionMaps := cfg.Model3D.ActionMaps
-	if rawActionMaps == nil || len(rawActionMaps) == 0 {
-		fmt.Printf("[warning] Vertices3D %s: Model3D has no ActionMaps defined\n", cfg.Id)
-	} else if len(rawActionMaps) != numParts {
-		fmt.Printf("[warning] Vertices3D %s: ActionMaps count (%d) does not match parts count (%d)\n", cfg.Id, len(rawActionMaps), numParts)
-	}
-
-	expectedActions := 0
-	if cfg.Model3D != nil && len(cfg.Model3D.ActionDefinitions) > 0 {
-		expectedActions = len(cfg.Model3D.ActionDefinitions)
-	} else if len(rawActionMaps) > 0 && len(rawActionMaps[0]) > 0 {
-		expectedActions = len(rawActionMaps[0])
-	} else if len(elements) > 0 && elements[0] != nil {
-		expectedActions = len(elements[0].actions)
-	}
-
-	actions := make([][]int, numParts)
-	for i := 0; i < numParts; i++ {
-		var action []int
-		if i < len(rawActionMaps) && rawActionMaps[i] != nil {
-			action = make([]int, len(rawActionMaps[i]))
-			copy(action, rawActionMaps[i])
-			if expectedActions > 0 && len(action) < expectedActions {
-				fmt.Printf("[warning] Vertices3D %s: part %d action map has %d entries, expected at least %d, falling back to action 0 for missing entries\n", cfg.Id, i, len(action), expectedActions)
-				padded := make([]int, expectedActions)
-				copy(padded, action)
-				action = padded
-			}
-		} else {
-			fmt.Printf("[warning] Vertices3D %s: missing action map for part %d, falling back to action 0\n", cfg.Id, i)
-			action = make([]int, expectedActions)
-		}
-
-		if elements[i] != nil {
-			numActions := len(elements[i].actions)
-			for actionIdx, targetIdx := range action {
-				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {
-					fmt.Printf("[warning] Vertices3D %s: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n", cfg.Id, i, actionIdx, targetIdx, numActions-1)
-					action[actionIdx] = 0
-				}
-			}
-		}
-		actions[i] = action
-	}
-
 	// Ensure links slice matches parts count
-	links := NewLinks()
-	_ = links.Setup(cfg.Model3D.Links, elements)
+	links := NewVertices3DLinks()
+	_ = links.Setup(cfg.Model3D, elements)
+
+	joints := NewVertices3DJoints()
+	_ = joints.Setup(cfg.Model3D, elements, links)
+
+	actions := NewVertices3DActions()
+	_ = actions.Setup(cfg.Model3D, elements)
 
 	v := &Vertices3D{
 		elements:         elements,
@@ -161,7 +120,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		originsB:         make([]geometry.XYZ, numParts),
 		rotationsA:       make([]*TagAxis, numParts),
 		rotationsB:       make([]*TagAxis, numParts),
-		joints:           NewPartJoints(numParts),
+		joints:           joints,
 		lastHitPart:      -1,
 		fallAxisX:        1.0,
 		rootQuat:         physics.NewQuaternionIdentity(),
@@ -175,8 +134,6 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		v.rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
 	}
 
-	v.initPartJoints()
-
 	// Initialize face buffers using partFaceOffsets to decouple buffer layout from execution order
 	for i, el := range v.elements {
 		if el == nil {
@@ -185,7 +142,6 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		if len(el.volumes) == 0 {
 			panic("nil volumes found in vertices_3d")
 		}
-
 		if el.volumes[0] == nil {
 			panic("nil volumes[0] found in vertices_3d")
 		}
@@ -227,111 +183,6 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	}
 
 	return v
-}
-
-// initPartJoints configures anatomical joint parameters, local bounds, and pre-allocated matrices for each part.
-func (v *Vertices3D) initPartJoints() {
-	for i := range v.joints.data {
-		j := v.joints.data[i]
-		j.quat.SetIdentity()
-		j.detQuat.SetIdentity()
-		j.axis.Reset()
-		j.combinedA.Reset()
-		j.combinedB.Reset()
-		j.partRadius = 8.0
-
-		if i < len(v.elements) && v.elements[i] != nil && len(v.elements[i].volumes) > 0 && v.elements[i].volumes[0] != nil {
-			vol := v.elements[i].volumes[0]
-			fc := vol.GetFaceCount()
-			if fc > 0 {
-				minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-				maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-				for fIdx := 0; fIdx < fc; fIdx++ {
-					f := vol.GetFace(fIdx)
-					minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-				}
-				j.localCenter = geometry.XYZ{X: (minX + maxX) * 0.5, Y: (minY + maxY) * 0.5, Z: (minZ + maxZ) * 0.5}
-				dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
-				r := math.Max(dx, math.Max(dy, dz)) * 0.5
-				j.partRadius = math.Max(4.0, math.Min(48.0, r))
-			}
-		}
-
-		tagLow := ""
-		if i < len(v.links.data) {
-			tagLow = strings.ToLower(v.links.data[i].tag)
-		}
-
-		switch {
-		case i == 0 || v.links.data[i].parent < 0:
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
-			j.maxAngleAlive = 0
-			j.maxAngleRagdoll = 0
-			j.stiffness = 80.0
-			j.damping = 10.0
-			j.canDetach = false
-
-		case strings.Contains(tagLow, "torso") || strings.Contains(tagLow, "chest") ||
-			strings.Contains(tagLow, "waist") || strings.Contains(tagLow, "pelvis") ||
-			strings.Contains(tagLow, "hips") || strings.Contains(tagLow, "belly") ||
-			strings.Contains(tagLow, "spine") || strings.Contains(tagLow, "shoulders") ||
-			strings.Contains(tagLow, "upper"):
-			// Torso / Spine: 3 DoF (Pitch, Roll, Yaw), core trunk stays connected
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.85
-			j.maxAngleAlive = 0.48
-			j.maxAngleRagdoll = 0.85
-			j.stiffness = 58.0
-			j.damping = 7.5
-			j.canDetach = false
-
-		case strings.Contains(tagLow, "head") || strings.Contains(tagLow, "neck") || strings.Contains(tagLow, "jaw"):
-			// Head / Neck: 2-3 DoF with decapitation threshold
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.75
-			j.maxAngleAlive = 0.60
-			j.maxAngleRagdoll = 1.15
-			j.stiffness = 48.0
-			j.damping = 6.5
-			//j.canDetach = true
-			j.canDetach = false
-			j.detachThreshold = 1.25
-
-		case strings.Contains(tagLow, "lloarm") || strings.Contains(tagLow, "rloarm") ||
-			strings.Contains(tagLow, "lhand") || strings.Contains(tagLow, "rhand") ||
-			strings.Contains(tagLow, "lloleg") || strings.Contains(tagLow, "rloleg") ||
-			strings.Contains(tagLow, "lfoot") || strings.Contains(tagLow, "rfoot"):
-			// Distal limbs (forearms, hands, lower legs): 1-2 DoF hinge, detachable
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 0.90, 0.40
-			j.maxAngleAlive = 0.72
-			j.maxAngleRagdoll = 1.35
-			j.stiffness = 40.0
-			j.damping = 5.5
-			//j.canDetach = true
-			j.canDetach = false
-			j.detachThreshold = 1.05
-
-		case strings.Contains(tagLow, "weapon"):
-			// Held weapon: disarms/flies off on hit
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.65
-			j.maxAngleAlive = 0.68
-			j.maxAngleRagdoll = 1.35
-			j.stiffness = 42.0
-			j.damping = 5.5
-			//j.canDetach = true
-			j.canDetach = false
-			j.detachThreshold = 0.95
-
-		default:
-			// Upper arms and upper legs (luparm, ruparm, lupleg, rupleg, tail, etc.): 2-3 DoF ball joint, detachable on heavy/ragdoll hits
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.65
-			j.maxAngleAlive = 0.62
-			j.maxAngleRagdoll = 1.20
-			j.stiffness = 46.0
-			j.damping = 6.2
-			//j.canDetach = true
-			j.canDetach = false
-			j.detachThreshold = 1.30
-		}
-	}
 }
 
 // VerticesGetVolume returns the composite view volume of the model, or nil if unavailable.
@@ -400,8 +251,8 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 		if i > 0 && v.isPartOrAncestorDetached(i) {
 			continue
 		}
-		if i < len(v.actions) && idx < len(v.actions[i]) {
-			targetAction := v.actions[i][idx]
+		if i < len(v.actions.actions) && idx < len(v.actions.actions[i]) {
+			targetAction := v.actions.actions[i][idx]
 			if targetAction >= 0 && targetAction < len(el.actions) {
 				el.VerticesSetAction(targetAction)
 				if el.IsActionClamped(targetAction) {
@@ -764,7 +615,7 @@ func (v *Vertices3D) stepJoints(tick uint64) {
 
 	anyActive := false
 
-	// 1. Root ragdoll collapse & post-mortem impact jolt integration
+	// Root ragdoll collapse & post-mortem impact jolt integration
 	if v.isRagdoll {
 		rootActive := false
 		if v.ragdollCollapse {
@@ -846,7 +697,7 @@ func (v *Vertices3D) stepJoints(tick uint64) {
 		}
 	}
 
-	// 2. Detached limbs and connected 5+ DoF joint spring-dampers
+	// Detached limbs and connected 5+ DoF joint spring-dampers
 	for i := 1; i < len(v.joints.data); i++ {
 		j := v.joints.data[i]
 		if j.detached {

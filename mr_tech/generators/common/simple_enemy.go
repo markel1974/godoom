@@ -41,9 +41,8 @@ type Enemy struct {
 	shotIntervalMin         float64
 	painTimer               float64
 	shootTimer              float64
-	actions                 map[string]int
 	animations              *config.EnemyAnimations
-	lastAnimation           map[config.EnemyState]int
+	lastAnimation           []int
 	self                    config.IThingConfig
 	animationDurationFrames int
 }
@@ -59,9 +58,11 @@ func NewEnemy(thingCfg *config.Thing, animations *config.EnemyAnimations) *Enemy
 		activeAnimation: config.EnemyStateUnknown,
 		health:          100,
 		shotIntervalMin: float64(rand.Intn(shotIntervalMax-shotIntervalMin+1) + shotIntervalMin),
-		actions:         make(map[string]int, len(animations.Content)),
-		lastAnimation:   make(map[config.EnemyState]int),
+		lastAnimation:   make([]int, config.EnemyStateLast),
 		animations:      animations,
+	}
+	for i := range e.lastAnimation {
+		e.lastAnimation[i] = -1
 	}
 	thingCfg.OnBind = e.OnBind
 	thingCfg.OnThinking = e.OnThinking
@@ -270,7 +271,9 @@ func (e *Enemy) playAnimation(category config.EnemyState, eAnim *config.EnemyAni
 			e.lastAnimation[state] = animations.Indices[0]
 			return animations.Indices[0], duration, true
 		}
-		last, hasLast := e.lastAnimation[state]
+		last := e.lastAnimation[state]
+		hasLast := last >= 0
+
 		// Conta le animazioni candidate, escludendo l'ultima scelta.
 		candidateCount := 0
 		for _, idx := range animations.Indices {

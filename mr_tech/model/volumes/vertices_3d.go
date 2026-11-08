@@ -12,62 +12,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// PartJointState holds the zero-allocation 11-DoF dynamic articulation, ragdoll, and dismemberment state for a single part in Vertices3D.
-type PartJointState struct {
-	localCenter     geometry.XYZ
-	partRadius      float64
-	dofScaleX       float64
-	dofScaleY       float64
-	dofScaleZ       float64
-	maxAngleAlive   float64
-	maxAngleRagdoll float64
-	stiffness       float64
-	damping         float64
-	canDetach       bool
-	detachThreshold float64
-
-	angX           float64
-	angY           float64
-	angZ           float64
-	velX           float64
-	velY           float64
-	velZ           float64
-	ragdollTargetX float64
-	ragdollTargetY float64
-	ragdollTargetZ float64
-	damage         float64
-	hasDeflection  bool
-
-	detached   bool
-	detSettled bool
-	detWorldX  float64
-	detWorldY  float64
-	detWorldZ  float64
-	detVx      float64
-	detVy      float64
-	detVz      float64
-	detWx      float64
-	detWy      float64
-	detWz      float64
-	detFloorZ  float64
-
-	quat      *physics.Quaternion
-	detQuat   *physics.Quaternion
-	axis      *TagAxis
-	combinedA *TagAxis
-	combinedB *TagAxis
-}
-
-func NewPartJointState() *PartJointState {
-	return &PartJointState{
-		quat:      physics.NewQuaternionIdentity(),
-		detQuat:   physics.NewQuaternionIdentity(),
-		axis:      NewTagAxis(geometry.XYZ{}, _im),
-		combinedA: NewTagAxis(geometry.XYZ{}, _im),
-		combinedB: NewTagAxis(geometry.XYZ{}, _im),
-	}
-}
-
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
 type Vertices3D struct {
 	facesA            *Faces
@@ -90,7 +34,7 @@ type Vertices3D struct {
 	rotationsA        []*TagAxis
 	rotationsB        []*TagAxis
 	lerpT             float64
-	joints            []*PartJointState
+	joints            *PartJoints
 	lastTick          uint64
 	hasActiveDynamics bool
 	isRagdoll         bool
@@ -332,7 +276,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		originsB:         make([]geometry.XYZ, numParts),
 		rotationsA:       make([]*TagAxis, numParts),
 		rotationsB:       make([]*TagAxis, numParts),
-		joints:           make([]*PartJointState, numParts),
+		joints:           NewPartJoints(numParts),
 		lastHitPart:      -1,
 		fallAxisX:        1.0,
 		rootQuat:         physics.NewQuaternionIdentity(),
@@ -344,7 +288,6 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	for i := 0; i < numParts; i++ {
 		v.rotationsA[i] = NewTagAxis(geometry.XYZ{}, _im)
 		v.rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
-		v.joints[i] = NewPartJointState()
 	}
 	v.initPartJoints()
 
@@ -402,8 +345,8 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 
 // initPartJoints configures anatomical joint parameters, local bounds, and pre-allocated matrices for each part.
 func (v *Vertices3D) initPartJoints() {
-	for i := range v.joints {
-		j := v.joints[i]
+	for i := range v.joints.data {
+		j := v.joints.data[i]
 		j.quat.SetIdentity()
 		j.detQuat.SetIdentity()
 		j.axis.Reset()
@@ -419,33 +362,9 @@ func (v *Vertices3D) initPartJoints() {
 				maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 				for fIdx := 0; fIdx < fc; fIdx++ {
 					f := vol.GetFace(fIdx)
-					for k := 0; k < 3; k++ {
-						p := f.tri[k]
-						if p.X < minX {
-							minX = p.X
-						}
-						if p.Y < minY {
-							minY = p.Y
-						}
-						if p.Z < minZ {
-							minZ = p.Z
-						}
-						if p.X > maxX {
-							maxX = p.X
-						}
-						if p.Y > maxY {
-							maxY = p.Y
-						}
-						if p.Z > maxZ {
-							maxZ = p.Z
-						}
-					}
+					minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 				}
-				j.localCenter = geometry.XYZ{
-					X: (minX + maxX) * 0.5,
-					Y: (minY + maxY) * 0.5,
-					Z: (minZ + maxZ) * 0.5,
-				}
+				j.localCenter = geometry.XYZ{X: (minX + maxX) * 0.5, Y: (minY + maxY) * 0.5, Z: (minZ + maxZ) * 0.5}
 				dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
 				r := math.Max(dx, math.Max(dy, dz)) * 0.5
 				j.partRadius = math.Max(4.0, math.Min(48.0, r))
@@ -620,8 +539,8 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 // isPartOrAncestorDetached reports whether part i or any ancestor along its parent chain is detached.
 func (v *Vertices3D) isPartOrAncestorDetached(i int) bool {
 	curr := i
-	for steps := 0; steps < len(v.joints) && curr > 0 && curr < len(v.joints); steps++ {
-		if v.joints[curr].detached {
+	for steps := 0; steps < len(v.joints.data) && curr > 0 && curr < len(v.joints.data); steps++ {
+		if v.joints.data[curr].detached {
 			return true
 		}
 		if curr < len(v.links) {
@@ -661,15 +580,15 @@ func (v *Vertices3D) activateRagdoll() {
 	v.rootBounceVz = 48.0
 
 	// If the killing blow hit a detachable extremity with sufficient accumulated stress, sever it on death
-	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.joints) {
-		hj := v.joints[v.lastHitPart]
+	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.joints.data) {
+		hj := v.joints.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
 			v.detachPart(v.lastHitPart, dx, dy, dz, v.lastHitForce)
 		}
 	}
 
-	for i := 1; i < len(v.joints); i++ {
-		j := v.joints[i]
+	for i := 1; i < len(v.joints.data); i++ {
+		j := v.joints.data[i]
 		if j.detached {
 			continue
 		}
@@ -748,7 +667,7 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 		if i > 0 && v.isPartOrAncestorDetached(i) {
 			continue
 		}
-		j := v.joints[i]
+		j := v.joints.data[i]
 		lcX, lcY, lcZ := v.rotationsA[i].RotatePoint(j.localCenter.X, j.localCenter.Y, j.localCenter.Z)
 		partCx := v.originsA[i].X + lcX
 		partCy := v.originsA[i].Y + lcY
@@ -789,7 +708,7 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 	targetPart := bestPart
 	if targetPart == 0 {
 		for i := 1; i < len(v.links); i++ {
-			if v.links[i].Parent == 0 && !v.joints[i].detached {
+			if v.links[i].Parent == 0 && !v.joints.data[i].detached {
 				targetPart = i
 				break
 			}
@@ -801,8 +720,8 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 	// Propagate joint torque up the kinematic chain (hit limb -> parent -> grandparent)
 	curr := targetPart
 	atten := 1.0
-	for depth := 0; depth < 3 && curr > 0 && curr < len(v.joints); depth++ {
-		j := v.joints[curr]
+	for depth := 0; depth < 3 && curr > 0 && curr < len(v.joints.data); depth++ {
+		j := v.joints.data[curr]
 		if j.detached {
 			break
 		}
@@ -858,8 +777,8 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 
 	// When shooting a ragdoll corpse on the torso, also whip all connected limbs and stress the nearest detachable limb
 	if v.isRagdoll {
-		for i := 1; i < len(v.joints); i++ {
-			j := v.joints[i]
+		for i := 1; i < len(v.joints.data); i++ {
+			j := v.joints.data[i]
 			if i == targetPart || j.detached {
 				continue
 			}
@@ -872,7 +791,7 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 			j.velZ += (2.2 * normImpulse * sign) * j.dofScaleZ
 		}
 		if bestDetachPart > 0 && bestDetachPart != targetPart && bestDetachScore < 3.2 && v.dismemberedCount < 3 {
-			dj := v.joints[bestDetachPart]
+			dj := v.joints.data[bestDetachPart]
 			dj.damage += 0.85 * normImpulse
 			if dj.damage >= dj.detachThreshold {
 				v.detachPart(bestDetachPart, dirX, dirY, dirZ, fMag)
@@ -883,10 +802,10 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 
 // detachPart severs part idx from its parent joint and launches it on an independent 6-DoF ballistic & tumbling trajectory.
 func (v *Vertices3D) detachPart(idx int, dirX, dirY, dirZ, fMag float64) {
-	if idx <= 0 || idx >= len(v.joints) || v.dismemberedCount >= 3 {
+	if idx <= 0 || idx >= len(v.joints.data) || v.dismemberedCount >= 3 {
 		return
 	}
-	j := v.joints[idx]
+	j := v.joints.data[idx]
 	if j.detached || !j.canDetach {
 		return
 	}
@@ -1042,8 +961,8 @@ func (v *Vertices3D) stepJoints(tick uint64) {
 	}
 
 	// 2. Detached limbs and connected 5+ DoF joint spring-dampers
-	for i := 1; i < len(v.joints); i++ {
-		j := v.joints[i]
+	for i := 1; i < len(v.joints.data); i++ {
+		j := v.joints.data[i]
 		if j.detached {
 			if !j.detSettled {
 				anyActive = true
@@ -1190,8 +1109,8 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 			pIdx = v.links[i].Parent
 		}
 
-		if i > 0 && v.joints[i].detached {
-			j := v.joints[i]
+		if i > 0 && v.joints.data[i].detached {
+			j := v.joints.data[i]
 			v.originsA[i].X = j.detWorldX - cx
 			v.originsA[i].Y = j.detWorldY - cy
 			v.originsA[i].Z = j.detWorldZ - cz
@@ -1203,7 +1122,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 			if i < len(v.linkTagIndices) {
 				tagIdx = v.linkTagIndices[i]
 			}
-			j := v.joints[i]
+			j := v.joints.data[i]
 			if tagIdx >= 0 {
 				if tagAxisA := v.volsA[pIdx].GetVertexTag(tagIdx); tagAxisA != nil {
 					rotOrigAX, rotOrigAY, rotOrigAZ := v.rotationsA[pIdx].RotatePointByTag(tagAxisA)

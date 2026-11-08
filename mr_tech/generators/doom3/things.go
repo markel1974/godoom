@@ -999,16 +999,11 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 		parts[pIdx] = entry
 	}
 
-	unitX := geometry.XYZ{X: 1, Y: 0, Z: 0}
-	unitY := geometry.XYZ{X: 0, Y: 1, Z: 0}
-	unitZ := geometry.XYZ{X: 0, Y: 0, Z: 1}
-
 	anchorPos := make([]geometry.XYZ, numParts)
 	anchorQuat := make([]*physics.Quaternion, numParts)
-	identityQuat := physics.NewQuaternion([4]float64{0, 0, 0, 1})
+	identityQuat := physics.NewQuaternionIdentity()
 	invParentQ := physics.NewQuaternionEmpty()
 	relQ := physics.NewQuaternionEmpty()
-	invQ := physics.NewQuaternionEmpty()
 
 	for fIdx, rf := range rawFrames {
 		// Part 0 is the root coordinate frame at centered origin (0,0,0) with identity orientation
@@ -1040,9 +1035,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 			tagOrigin.X, tagOrigin.Y, tagOrigin.Z = invParentQ.Rotate(diff.X, diff.Y, diff.Z)
 			invParentQ.Multiplies(anchorQuat[pIdx], relQ)
 			relQ.Normalize()
-			a0x, a0y, a0z := relQ.Rotate(unitX.X, unitX.Y, unitX.Z)
-			a1x, a1y, a1z := relQ.Rotate(unitY.X, unitY.Y, unitY.Z)
-			a2x, a2y, a2z := relQ.Rotate(unitZ.X, unitZ.Y, unitZ.Z)
+			a0x, a0y, a0z, a1x, a1y, a1z, a2x, a2y, a2z := relQ.ToAxes()
 			tagAxis := [3]geometry.XYZ{
 				{a0x, a0y, a0z},
 				{a1x, a1y, a1z},
@@ -1055,7 +1048,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 		for pIdx := 0; pIdx < numParts; pIdx++ {
 			specs := partTris[pIdx]
 			frameTris := make([]config.Model3DEntryTriangle, len(specs))
-			invQ.Conjugate(anchorQuat[pIdx])
+			aQuat := anchorQuat[pIdx]
 			aPos := anchorPos[pIdx]
 
 			for tIdx, ts := range specs {
@@ -1075,12 +1068,11 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 						if pIdx == 0 {
 							vLocal = vCentered
 						} else {
-							rel := geometry.XYZ{
-								X: vCentered.X - aPos.X,
-								Y: vCentered.Y - aPos.Y,
-								Z: vCentered.Z - aPos.Z,
-							}
-							vLocal.X, vLocal.Y, vLocal.Z = invQ.Rotate(rel.X, rel.Y, rel.Z)
+							vLocal.X, vLocal.Y, vLocal.Z = aQuat.RotateInverse(
+								vCentered.X-aPos.X,
+								vCentered.Y-aPos.Y,
+								vCentered.Z-aPos.Z,
+							)
 						}
 						uv := sub.Vertices[vi]
 						tri.Vertices[k] = config.Model3DEntryVertex{Pos: vLocal, U: uv.U, V: uv.V}
@@ -1100,12 +1092,11 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 						if pIdx == 0 {
 							vLocal = vCentered
 						} else {
-							rel := geometry.XYZ{
-								X: vCentered.X - aPos.X,
-								Y: vCentered.Y - aPos.Y,
-								Z: vCentered.Z - aPos.Z,
-							}
-							vLocal.X, vLocal.Y, vLocal.Z = invQ.Rotate(rel.X, rel.Y, rel.Z)
+							vLocal.X, vLocal.Y, vLocal.Z = aQuat.RotateInverse(
+								vCentered.X-aPos.X,
+								vCentered.Y-aPos.Y,
+								vCentered.Z-aPos.Z,
+							)
 						}
 						uv := sub.Vertices[vi]
 						tri.Vertices[k] = config.Model3DEntryVertex{Pos: vLocal, U: uv.U, V: uv.V}

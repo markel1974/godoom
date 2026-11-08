@@ -18,11 +18,8 @@ type BoundingBoxOBB struct {
 	// Local axes transformed into world space.
 	axis [3]obbVector
 
-	// Rotation quaternion in x, y, z, w order.
-	rotationX float64
-	rotationY float64
-	rotationZ float64
-	rotationW float64
+	// Orientation quaternion.
+	rotation Quaternion
 }
 
 // obbVector is a fixed-size 3D vector used by the SAT implementation.
@@ -36,8 +33,8 @@ func NewBoundingBoxOBB(x, y, w, h, z, d float64) *BoundingBoxOBB {
 		center:       NewPoint(0, 0, 0),
 		size:         NewSize(w, h, d),
 		aabb:         aabb.NewAABB(),
-		rotationW:    1,
 	}
+	r.rotation.SetIdentity()
 	r.rebuild()
 	return r
 }
@@ -53,25 +50,19 @@ func (r *BoundingBoxOBB) Rebuild(x, y, z, w, h, d float64) {
 // SetRotationQuaternion sets the orientation using a quaternion (x, y, z, w).
 // The quaternion is normalized before being stored.
 func (r *BoundingBoxOBB) SetRotationQuaternion(x, y, z, w float64) {
-	length := x*x + y*y + z*z + w*w
-	if length < 1e-24 {
-		r.rotationX = 0
-		r.rotationY = 0
-		r.rotationZ = 0
-		r.rotationW = 1
-	} else {
-		invLength := 1.0 / math.Sqrt(length)
-		r.rotationX = x * invLength
-		r.rotationY = y * invLength
-		r.rotationZ = z * invLength
-		r.rotationW = w * invLength
-	}
+	r.rotation.Set(x, y, z, w)
+	r.rotation.Normalize()
 	r.rebuild()
 }
 
 // GetRotationQuaternion returns the orientation in x, y, z, w order.
 func (r *BoundingBoxOBB) GetRotationQuaternion() (x, y, z, w float64) {
-	return r.rotationX, r.rotationY, r.rotationZ, r.rotationW
+	return r.rotation.Get()
+}
+
+// GetQuaternion returns a pointer to the internal orientation Quaternion.
+func (r *BoundingBoxOBB) GetQuaternion() *Quaternion {
+	return &r.rotation
 }
 
 // rebuild recalculates the center, local axes and enclosing AABB.
@@ -101,32 +92,9 @@ func (r *BoundingBoxOBB) rebuild() {
 // updateAxes transforms the local X, Y and Z axes into world space.
 // Called only when the bounding box changes.
 func (r *BoundingBoxOBB) updateAxes() {
-	x := r.rotationX
-	y := r.rotationY
-	z := r.rotationZ
-	w := r.rotationW
-
-	xx := x * x
-	yy := y * y
-	zz := z * z
-	xy := x * y
-	xz := x * z
-	yz := y * z
-	wx := w * x
-	wy := w * y
-	wz := w * z
-
-	r.axis[0][0] = 1 - 2*(yy+zz)
-	r.axis[0][1] = 2 * (xy + wz)
-	r.axis[0][2] = 2 * (xz - wy)
-
-	r.axis[1][0] = 2 * (xy - wz)
-	r.axis[1][1] = 1 - 2*(xx+zz)
-	r.axis[1][2] = 2 * (yz + wx)
-
-	r.axis[2][0] = 2 * (xz + wy)
-	r.axis[2][1] = 2 * (yz - wx)
-	r.axis[2][2] = 1 - 2*(xx+yy)
+	r.axis[0][0], r.axis[0][1], r.axis[0][2],
+		r.axis[1][0], r.axis[1][1], r.axis[1][2],
+		r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.rotation.ToAxes()
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.

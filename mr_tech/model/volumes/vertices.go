@@ -31,6 +31,8 @@ type IVertices interface {
 	VerticesGetEntity() *physics.Entity
 
 	VerticesSetAction(idx int)
+
+	VerticesApplyImpact(fx, fy, fz, px, py, pz float64)
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.

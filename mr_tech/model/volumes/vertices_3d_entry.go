@@ -342,6 +342,31 @@ func (v *Vertices3DEntry) VerticesGetCenter() (float64, float64, float64) {
 	return v.viewVolume.GetEntity().GetCenter()
 }
 
+// VerticesApplyImpact is a no-op for single-part 3D entries (handled by 6-DoF Entity dynamics).
+func (v *Vertices3DEntry) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
+}
+
+// IsActionClamped reports whether the action at idx is clamped (such as a death animation).
+func (v *Vertices3DEntry) IsActionClamped(idx int) bool {
+	if idx < 0 || idx >= len(v.actions) || v.actions[idx] == nil {
+		return false
+	}
+	act := v.actions[idx]
+	if act.Clamp {
+		return true
+	}
+	return strings.Contains(act.Name, "death") || strings.Contains(act.Name, "die") || strings.Contains(act.Name, "dead")
+}
+
+// FreezeCurrentFrame locks this part on its current animation frame (used when dismembered).
+func (v *Vertices3DEntry) FreezeCurrentFrame() {
+	v.singleFrame = true
+	if v.volA != nil {
+		v.volB = v.volA
+	}
+	v.lerpT = 0.0
+}
+
 // GetTagIndex returns the index for the named tag, or -1 if the tag is not found.
 func (v *Vertices3DEntry) GetTagIndex(name string) int {
 	if idx, ok := v.tagMap[name]; ok {

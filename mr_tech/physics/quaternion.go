@@ -132,6 +132,41 @@ func (q *Quaternion) ToAxes() (a0x, a0y, a0z, a1x, a1y, a1z, a2x, a2y, a2z float
 	return
 }
 
+// SetFromAxes populates q from three orthonormal column basis vectors a0=(a0x,a0y,a0z), a1=(a1x,a1y,a1z), a2=(a2x,a2y,a2z).
+func (q *Quaternion) SetFromAxes(a0x, a0y, a0z, a1x, a1y, a1z, a2x, a2y, a2z float64) {
+	trace := a0x + a1y + a2z
+	if trace > 0.0 {
+		s := math.Sqrt(trace+1.0) * 2.0
+		invS := 1.0 / s
+		q.data[0] = (a1z - a2y) * invS
+		q.data[1] = (a2x - a0z) * invS
+		q.data[2] = (a0y - a1x) * invS
+		q.data[3] = 0.25 * s
+	} else if a0x > a1y && a0x > a2z {
+		s := math.Sqrt(1.0+a0x-a1y-a2z) * 2.0
+		invS := 1.0 / s
+		q.data[0] = 0.25 * s
+		q.data[1] = (a0y + a1x) * invS
+		q.data[2] = (a2x + a0z) * invS
+		q.data[3] = (a1z - a2y) * invS
+	} else if a1y > a2z {
+		s := math.Sqrt(1.0+a1y-a0x-a2z) * 2.0
+		invS := 1.0 / s
+		q.data[0] = (a0y + a1x) * invS
+		q.data[1] = 0.25 * s
+		q.data[2] = (a1z + a2y) * invS
+		q.data[3] = (a2x - a0z) * invS
+	} else {
+		s := math.Sqrt(1.0+a2z-a0x-a1y) * 2.0
+		invS := 1.0 / s
+		q.data[0] = (a2x + a0z) * invS
+		q.data[1] = (a1z + a2y) * invS
+		q.data[2] = 0.25 * s
+		q.data[3] = (a0y - a1x) * invS
+	}
+	q.Normalize()
+}
+
 // MultipliesSelf multiplies this quaternion by q2 and stores the result in this quaternion.
 func (q *Quaternion) MultipliesSelf(q2 *Quaternion) {
 	q.Multiplies(q2, q)

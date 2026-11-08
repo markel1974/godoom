@@ -321,6 +321,7 @@ func (t *Base) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, for
 		impactZ := pos.Z + (dirZ * closestDist)
 
 		closestThing.VerticesGetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
+		closestThing.VerticesApplyImpact(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(closestThing, id, force, closestDist, impactX, impactY, impactZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}

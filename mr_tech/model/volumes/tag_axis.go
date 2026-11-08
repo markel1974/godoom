@@ -53,6 +53,18 @@ func (ta *TagAxis) SetFromQuaternion(q *physics.Quaternion) {
 		ta.data[2].X, ta.data[2].Y, ta.data[2].Z = q.ToAxes()
 }
 
+// ToQuaternion extracts the 3x3 basis orientation of the TagAxis into the supplied Quaternion without allocating.
+func (ta *TagAxis) ToQuaternion(q *physics.Quaternion) {
+	if q == nil {
+		return
+	}
+	q.SetFromAxes(
+		ta.data[0].X, ta.data[0].Y, ta.data[0].Z,
+		ta.data[1].X, ta.data[1].Y, ta.data[1].Z,
+		ta.data[2].X, ta.data[2].Y, ta.data[2].Z,
+	)
+}
+
 // RotatePointByTag performs a 3D vector transformation using the matrix of the current TagAxis and the origin of the input TagAxis.
 func (ta *TagAxis) RotatePointByTag(k *TagAxis) (float64, float64, float64) {
 	x := k.originX*ta.data[0].X + k.originY*ta.data[1].X + k.originZ*ta.data[2].X
@@ -66,6 +78,14 @@ func (ta *TagAxis) RotatePoint(pX, pY, pZ float64) (float64, float64, float64) {
 	x := pX*ta.data[0].X + pY*ta.data[1].X + pZ*ta.data[2].X
 	y := pX*ta.data[0].Y + pY*ta.data[1].Y + pZ*ta.data[2].Y
 	z := pX*ta.data[0].Z + pY*ta.data[1].Z + pZ*ta.data[2].Z
+	return x, y, z
+}
+
+// RotatePointInverse transforms a vector (pX, pY, pZ) by the transpose (inverse) of the TagAxis 3x3 basis matrix.
+func (ta *TagAxis) RotatePointInverse(pX, pY, pZ float64) (float64, float64, float64) {
+	x := pX*ta.data[0].X + pY*ta.data[0].Y + pZ*ta.data[0].Z
+	y := pX*ta.data[1].X + pY*ta.data[1].Y + pZ*ta.data[1].Z
+	z := pX*ta.data[2].X + pY*ta.data[2].Y + pZ*ta.data[2].Z
 	return x, y, z
 }
 

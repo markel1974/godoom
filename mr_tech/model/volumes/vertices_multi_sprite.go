@@ -106,7 +106,9 @@ func (v *VerticesMultiSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
 
 // VerticesSetAction switches to the action volume at idx and restarts its face material animations.
 func (v *VerticesMultiSprite) VerticesSetAction(idx int) {
-	//return
+	if idx < 0 {
+		return
+	}
 	if !v.computeAction(idx, 0) {
 		return
 	}
@@ -131,6 +133,10 @@ func (v *VerticesMultiSprite) VerticesSetAction(idx int) {
 // VerticesGetCenter returns the x, y, and z coordinates of the center of the first volume's entity.
 func (v *VerticesMultiSprite) VerticesGetCenter() (float64, float64, float64) {
 	return v.volumes[0].GetEntity().GetCenter()
+}
+
+// VerticesApplyImpact is a no-op for multi-sprite views without articulated 3D sub-parts.
+func (v *VerticesMultiSprite) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
 // computeAction selects the action volume for action and reports whether the active volume changed.

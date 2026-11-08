@@ -48,6 +48,9 @@ func (s *Entry) GetImpactMode() ImpactMode {
 // GetNormal returns the components of the contact normal vector (nX, nY, nZ) as a tuple of three float64 values.
 func (s *Entry) GetNormal() (float64, float64, float64) { return s.nX, s.nY, s.nZ }
 
+// GetPoint returns the contact point coordinates (p0X, p0Y, p0Z) as a tuple of three float64 values.
+func (s *Entry) GetPoint() (float64, float64, float64) { return s.p0X, s.p0Y, s.p0Z }
+
 // GetPenetration returns the penetration depth of the collision measured by the cage entry.
 func (s *Entry) GetPenetration() float64 { return s.penetration }
 

@@ -744,10 +744,10 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 				for w := 0; w < vert.WeightSpan; w++ {
 					weight := sub.Weights[vert.WeightIdx+w]
 					joint := skel[weight.JointId]
-					rotated := physics.QuatRotate(joint.Orient, weight.Pos)
-					p.X += (joint.Pos.X + rotated.X) * weight.Bias
-					p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
-					p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
+					rotatedX, rotatedY, rotatedZ := joint.Orient.Rotate(weight.Pos.X, weight.Pos.Y, weight.Pos.Z)
+					p.X += (joint.Pos.X + rotatedX) * weight.Bias
+					p.Y += (joint.Pos.Y + rotatedY) * weight.Bias
+					p.Z += (joint.Pos.Z + rotatedZ) * weight.Bias
 				}
 				computedVerts[i] = p
 			}
@@ -765,10 +765,10 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 					for w := 0; w < vert.WeightSpan; w++ {
 						weight := sub.Weights[vert.WeightIdx+w]
 						joint := headSkel[weight.JointId]
-						rotated := physics.QuatRotate(joint.Orient, weight.Pos)
-						p.X += (joint.Pos.X + rotated.X) * weight.Bias
-						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
-						p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
+						rotatedX, rotatedY, rotatedZ := joint.Orient.Rotate(weight.Pos.X, weight.Pos.Y, weight.Pos.Z)
+						p.X += (joint.Pos.X + rotatedX) * weight.Bias
+						p.Y += (joint.Pos.Y + rotatedY) * weight.Bias
+						p.Z += (joint.Pos.Z + rotatedZ) * weight.Bias
 					}
 					computedVerts[i] = p
 				}
@@ -809,8 +809,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	if len(rawFrames) == 0 {
 		skel := make([]*md5.Joint, len(mesh.Joints))
 		for jIdx, j := range mesh.Joints {
-			cp := *j
-			skel[jIdx] = &cp
+			skel[jIdx] = j.Clone()
 		}
 		rawFrames = append(rawFrames, evaluateSkel(skel))
 		actionNames = []string{"idle"}
@@ -845,6 +844,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 
 		const deathFrames = 16
 		startFrame := len(rawFrames)
+		qFall := physics.NewQuaternionEmpty()
 		for f := 0; f < deathFrames; f++ {
 			var skel []*md5.Joint
 			if baseAnim != nil && len(baseAnim.Frames) > 0 {
@@ -856,19 +856,19 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 			} else {
 				skel = make([]*md5.Joint, len(mesh.Joints))
 				for jIdx, j := range mesh.Joints {
-					cp := *j
-					skel[jIdx] = &cp
+					skel[jIdx] = j.Clone()
 				}
 			}
 
 			tNorm := float64(f) / float64(deathFrames-1)
 			theta := -(math.Pi * 0.5) * (tNorm * tNorm)
 			half := theta * 0.5
-			qFall := [4]float64{0, math.Sin(half), 0, math.Cos(half)}
+			qFall.Set(0, math.Sin(half), 0, math.Cos(half))
 
 			for _, j := range skel {
-				j.Pos = physics.QuatRotate(qFall, j.Pos)
-				j.Orient = physics.QuatNormalize(physics.QuatMultiplies(qFall, j.Orient))
+				j.Pos.X, j.Pos.Y, j.Pos.Z = qFall.Rotate(j.Pos.X, j.Pos.Y, j.Pos.Z)
+				qFall.Multiplies(j.Orient, j.Orient)
+				j.Orient.Normalize()
 			}
 
 			rf := evaluateSkel(skel)
@@ -1003,14 +1003,17 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	unitY := geometry.XYZ{X: 0, Y: 1, Z: 0}
 	unitZ := geometry.XYZ{X: 0, Y: 0, Z: 1}
 
-	for fIdx, rf := range rawFrames {
-		// Determine anchor position (in centered model space) and orientation for each part
-		anchorPos := make([]geometry.XYZ, numParts)
-		anchorQuat := make([][4]float64, numParts)
+	anchorPos := make([]geometry.XYZ, numParts)
+	anchorQuat := make([]*physics.Quaternion, numParts)
+	identityQuat := physics.NewQuaternion([4]float64{0, 0, 0, 1})
+	invParentQ := physics.NewQuaternionEmpty()
+	relQ := physics.NewQuaternionEmpty()
+	invQ := physics.NewQuaternionEmpty()
 
+	for fIdx, rf := range rawFrames {
 		// Part 0 is the root coordinate frame at centered origin (0,0,0) with identity orientation
 		anchorPos[0] = geometry.XYZ{X: 0, Y: 0, Z: 0}
-		anchorQuat[0] = [4]float64{0, 0, 0, 1}
+		anchorQuat[0] = identityQuat
 
 		for pIdx := 1; pIdx < numParts; pIdx++ {
 			jIdx := activeBodies[pIdx].anchorJoint
@@ -1027,18 +1030,23 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 		for pIdx := 1; pIdx < numParts; pIdx++ {
 			parentIdx := links[pIdx].Parent
 			tagName := links[pIdx].Tag
-			invParentQ := physics.QuatConjugate(anchorQuat[parentIdx])
+			invParentQ.Conjugate(anchorQuat[parentIdx])
 			diff := geometry.XYZ{
 				X: anchorPos[pIdx].X - anchorPos[parentIdx].X,
 				Y: anchorPos[pIdx].Y - anchorPos[parentIdx].Y,
 				Z: anchorPos[pIdx].Z - anchorPos[parentIdx].Z,
 			}
-			tagOrigin := physics.QuatRotate(invParentQ, diff)
-			relQ := physics.QuatNormalize(physics.QuatMultiplies(invParentQ, anchorQuat[pIdx]))
+			var tagOrigin geometry.XYZ
+			tagOrigin.X, tagOrigin.Y, tagOrigin.Z = invParentQ.Rotate(diff.X, diff.Y, diff.Z)
+			invParentQ.Multiplies(anchorQuat[pIdx], relQ)
+			relQ.Normalize()
+			a0x, a0y, a0z := relQ.Rotate(unitX.X, unitX.Y, unitX.Z)
+			a1x, a1y, a1z := relQ.Rotate(unitY.X, unitY.Y, unitY.Z)
+			a2x, a2y, a2z := relQ.Rotate(unitZ.X, unitZ.Y, unitZ.Z)
 			tagAxis := [3]geometry.XYZ{
-				physics.QuatRotate(relQ, unitX),
-				physics.QuatRotate(relQ, unitY),
-				physics.QuatRotate(relQ, unitZ),
+				{a0x, a0y, a0z},
+				{a1x, a1y, a1z},
+				{a2x, a2y, a2z},
 			}
 			parts[parentIdx].Frames[fIdx].Tags[tagName] = config.NewModel3DTag(tagOrigin, tagAxis)
 		}
@@ -1047,7 +1055,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 		for pIdx := 0; pIdx < numParts; pIdx++ {
 			specs := partTris[pIdx]
 			frameTris := make([]config.Model3DEntryTriangle, len(specs))
-			invQ := physics.QuatConjugate(anchorQuat[pIdx])
+			invQ.Conjugate(anchorQuat[pIdx])
 			aPos := anchorPos[pIdx]
 
 			for tIdx, ts := range specs {
@@ -1072,7 +1080,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 								Y: vCentered.Y - aPos.Y,
 								Z: vCentered.Z - aPos.Z,
 							}
-							vLocal = physics.QuatRotate(invQ, rel)
+							vLocal.X, vLocal.Y, vLocal.Z = invQ.Rotate(rel.X, rel.Y, rel.Z)
 						}
 						uv := sub.Vertices[vi]
 						tri.Vertices[k] = config.Model3DEntryVertex{Pos: vLocal, U: uv.U, V: uv.V}
@@ -1097,7 +1105,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 								Y: vCentered.Y - aPos.Y,
 								Z: vCentered.Z - aPos.Z,
 							}
-							vLocal = physics.QuatRotate(invQ, rel)
+							vLocal.X, vLocal.Y, vLocal.Z = invQ.Rotate(rel.X, rel.Y, rel.Z)
 						}
 						uv := sub.Vertices[vi]
 						tri.Vertices[k] = config.Model3DEntryVertex{Pos: vLocal, U: uv.U, V: uv.V}
@@ -1171,11 +1179,10 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 				for w := 0; w < vert.WeightSpan; w++ {
 					weight := sub.Weights[vert.WeightIdx+w]
 					joint := skel[weight.JointId]
-
-					rotated := physics.QuatRotate(joint.Orient, weight.Pos)
-					p.X += (joint.Pos.X + rotated.X) * weight.Bias
-					p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
-					p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
+					rotatedX, rotatedY, rotatedZ := joint.Orient.Rotate(weight.Pos.X, weight.Pos.Y, weight.Pos.Z)
+					p.X += (joint.Pos.X + rotatedX) * weight.Bias
+					p.Y += (joint.Pos.Y + rotatedY) * weight.Bias
+					p.Z += (joint.Pos.Z + rotatedZ) * weight.Bias
 				}
 				computedVerts[i] = p
 			}
@@ -1205,10 +1212,10 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 					for w := 0; w < vert.WeightSpan; w++ {
 						weight := sub.Weights[vert.WeightIdx+w]
 						joint := headSkel[weight.JointId]
-						rotated := physics.QuatRotate(joint.Orient, weight.Pos)
-						p.X += (joint.Pos.X + rotated.X) * weight.Bias
-						p.Y += (joint.Pos.Y + rotated.Y) * weight.Bias
-						p.Z += (joint.Pos.Z + rotated.Z) * weight.Bias
+						rotatedX, rotatedY, rotatedZ := joint.Orient.Rotate(weight.Pos.X, weight.Pos.Y, weight.Pos.Z)
+						p.X += (joint.Pos.X + rotatedX) * weight.Bias
+						p.Y += (joint.Pos.Y + rotatedY) * weight.Bias
+						p.Z += (joint.Pos.Z + rotatedZ) * weight.Bias
 					}
 					computedVerts[i] = p
 				}
@@ -1292,6 +1299,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 
 		const deathFrames = 16
 		startFrame := len(allFrames)
+		qFall := physics.NewQuaternionEmpty()
 		for f := 0; f < deathFrames; f++ {
 			var skel []*md5.Joint
 			if baseAnim != nil && len(baseAnim.Frames) > 0 {
@@ -1303,19 +1311,19 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 			} else {
 				skel = make([]*md5.Joint, len(mesh.Joints))
 				for jIdx, j := range mesh.Joints {
-					cp := *j
-					skel[jIdx] = &cp
+					skel[jIdx] = j.Clone()
 				}
 			}
 
 			tNorm := float64(f) / float64(deathFrames-1)
 			theta := -(math.Pi * 0.5) * (tNorm * tNorm)
 			half := theta * 0.5
-			qFall := [4]float64{0, math.Sin(half), 0, math.Cos(half)}
+			qFall.Set(0, math.Sin(half), 0, math.Cos(half))
 
 			for _, j := range skel {
-				j.Pos = physics.QuatRotate(qFall, j.Pos)
-				j.Orient = physics.QuatNormalize(physics.QuatMultiplies(qFall, j.Orient))
+				j.Pos.X, j.Pos.Y, j.Pos.Z = qFall.Rotate(j.Pos.X, j.Pos.Y, j.Pos.Z)
+				qFall.Multiplies(j.Orient, j.Orient)
+				j.Orient.Normalize()
 			}
 
 			frame := bakeFrameWithSkel(skel)

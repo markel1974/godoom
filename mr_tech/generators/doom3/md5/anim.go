@@ -229,12 +229,17 @@ func (anim *Anim) BuildFrameSkeleton(frameIdx int) []*Joint {
 		if h.parent < 0 {
 			// Strip root motion translation so the animation plays in-place while physics drives world movement.
 			pos = geometry.XYZ{}
-			skel[i] = NewJoint(h.name, h.parent, pos, orient)
+			skel[i] = NewJoint(h.name, h.parent, pos, physics.NewQuaternion(orient))
 		} else {
 			parentJoint := skel[h.parent]
-			rPos := physics.QuatRotate(parentJoint.Orient, pos)
-			pk := geometry.XYZ{X: parentJoint.Pos.X + rPos.X, Y: parentJoint.Pos.Y + rPos.Y, Z: parentJoint.Pos.Z + rPos.Z}
-			skel[i] = NewJoint(h.name, h.parent, pk, physics.QuatNormalize(physics.QuatMultiplies(parentJoint.Orient, orient)))
+			rPosX, rPosY, rPosZ := parentJoint.Orient.Rotate(pos.X, pos.Y, pos.Z)
+			pk := geometry.XYZ{X: parentJoint.Pos.X + rPosX, Y: parentJoint.Pos.Y + rPosY, Z: parentJoint.Pos.Z + rPosZ}
+
+			orientQuat := physics.NewQuaternion(orient)
+			parentJoint.Orient.Multiplies(orientQuat, orientQuat)
+			orientQuat.Normalize()
+
+			skel[i] = NewJoint(h.name, h.parent, pk, orientQuat)
 		}
 	}
 

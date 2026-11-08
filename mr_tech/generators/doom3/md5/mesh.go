@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // MeshVertex represents a vertex definition in the MD5 mesh.
@@ -137,7 +138,9 @@ func (mh *Mesh) Parse(r io.Reader) error {
 				qw = -math.Sqrt(t)
 			}
 
-			mh.Joints = append(mh.Joints, NewJoint(name, parent, geometry.XYZ{X: px, Y: py, Z: pz}, [4]float64{qx, qy, qz, qw}))
+			pts := geometry.XYZ{X: px, Y: py, Z: pz}
+			quat := physics.NewQuaternion([4]float64{qx, qy, qz, qw})
+			mh.Joints = append(mh.Joints, NewJoint(name, parent, pts, quat))
 			continue
 		}
 

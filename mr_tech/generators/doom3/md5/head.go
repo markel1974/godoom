@@ -21,7 +21,7 @@ type HeadJointBinding struct {
 	bodyIdx   int
 	parentIdx int
 	pLocal    geometry.XYZ
-	qLocal    [4]float64
+	qLocal    *physics.Quaternion
 }
 
 // NewHeadJointBinding initializes and returns a new HeadJointBinding with the given joint transformation type and body index.
@@ -31,7 +31,7 @@ func NewHeadJointBinding(kind HeadJointTransform, bodyIdx int) *HeadJointBinding
 		bodyIdx:   bodyIdx,
 		parentIdx: 0,
 		pLocal:    geometry.XYZ{},
-		qLocal:    [4]float64{},
+		qLocal:    physics.NewQuaternionEmpty(),
 	}
 }
 
@@ -79,12 +79,14 @@ func NewHeadAttachment(bodyMesh *Mesh, headMesh *Mesh, attachJoint string) *Head
 				continue
 			}
 			pj := headMesh.Joints[pIdx]
-			invQ := physics.QuatConjugate(pj.Orient)
+
 			dPos := geometry.XYZ{X: hj.Pos.X - pj.Pos.X, Y: hj.Pos.Y - pj.Pos.Y, Z: hj.Pos.Z - pj.Pos.Z}
 			hb := NewHeadJointBinding(HeadTransformChild, 0)
 			hb.parentIdx = pIdx
-			hb.pLocal = physics.QuatRotate(invQ, dPos)
-			hb.qLocal = physics.QuatMultiplies(invQ, hj.Orient)
+			hb.qLocal.Conjugate(pj.Orient)
+			hb.pLocal.X, hb.pLocal.Y, hb.pLocal.Z = hb.qLocal.Rotate(dPos.X, dPos.Y, dPos.Z)
+			hb.qLocal.Multiplies(hj.Orient, hb.qLocal)
+			hb.qLocal.Normalize()
 			bindings[i] = hb
 		}
 	}
@@ -108,9 +110,11 @@ func (h *HeadAttachment) BuildHeadSkeleton(bodySkeleton []*Joint) []*Joint {
 		} else {
 			if b.parentIdx >= 0 && b.parentIdx < len(headSkeleton) {
 				pEval := headSkeleton[b.parentIdx]
-				rPos := physics.QuatRotate(pEval.Orient, b.pLocal)
-				cPos := geometry.XYZ{X: pEval.Pos.X + rPos.X, Y: pEval.Pos.Y + rPos.Y, Z: pEval.Pos.Z + rPos.Z}
-				cOrient := physics.QuatNormalize(physics.QuatMultiplies(pEval.Orient, b.qLocal))
+				rPosX, rPosY, rPosZ := pEval.Orient.Rotate(b.pLocal.X, b.pLocal.Y, b.pLocal.Z)
+				cPos := geometry.XYZ{X: pEval.Pos.X + rPosX, Y: pEval.Pos.Y + rPosY, Z: pEval.Pos.Z + rPosZ}
+				cOrient := physics.NewQuaternionEmpty()
+				pEval.Orient.Multiplies(b.qLocal, cOrient)
+				cOrient.Normalize()
 				headSkeleton[i] = NewJoint(hj.name, hj.parent, cPos, cOrient)
 			}
 		}

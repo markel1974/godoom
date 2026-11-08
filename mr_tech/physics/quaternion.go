@@ -1,46 +1,72 @@
 package physics
 
-import (
-	"math"
+import "math"
 
-	"github.com/markel1974/godoom/mr_tech/geometry"
-)
-
-// QuatRotate rotates a 3D vector v by a quaternion q and returns the resulting vector as a new geometry.XYZ.
-func QuatRotate(q [4]float64, v geometry.XYZ) geometry.XYZ {
-	qx, qy, qz, qw := q[0], q[1], q[2], q[3]
-	tx := 2.0 * (qy*v.Z - qz*v.Y)
-	ty := 2.0 * (qz*v.X - qx*v.Z)
-	tz := 2.0 * (qx*v.Y - qy*v.X)
-	rx := v.X + qw*tx + (qy*tz - qz*ty)
-	ry := v.Y + qw*ty + (qz*tx - qx*tz)
-	rz := v.Z + qw*tz + (qx*ty - qy*tx)
-	return geometry.XYZ{X: rx, Y: ry, Z: rz}
+// Quaternion represents a 3D rotation or orientation supporting rotation, normalization, and composition.
+type Quaternion struct {
+	data [4]float64
 }
 
-// QuatMultiplies computes the product of two quaternions q1 and q2, returning the resulting quaternion.
-func QuatMultiplies(q1 [4]float64, q2 [4]float64) [4]float64 {
-	x1, y1, z1, w1 := q1[0], q1[1], q1[2], q1[3]
-	x2, y2, z2, w2 := q2[0], q2[1], q2[2], q2[3]
-	return [4]float64{
-		w1*x2 + x1*w2 + y1*z2 - z1*y2,
-		w1*y2 - x1*z2 + y1*w2 + z1*x2,
-		w1*z2 + x1*y2 - y1*x2 + z1*w2,
-		w1*w2 - x1*x2 - y1*y2 - z1*z2,
-	}
+// NewQuaternion creates a quaternion initialized with the supplied component array.
+func NewQuaternion(data [4]float64) *Quaternion {
+	return &Quaternion{data: data}
 }
 
-// QuatNormalize normalizes a quaternion to ensure it has a unit length, returning the normalized quaternion.
-func QuatNormalize(q [4]float64) [4]float64 {
-	lenSq := q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]
+// NewQuaternionEmpty creates a quaternion with all components initialized to zero.
+func NewQuaternionEmpty() *Quaternion {
+	return &Quaternion{data: [4]float64{}}
+}
+
+// Set updates the quaternion components in place.
+func (q *Quaternion) Set(x, y, z, w float64) {
+	q.data[0], q.data[1], q.data[2], q.data[3] = x, y, z, w
+}
+
+// Clone returns a new Quaternion with the same components as q.
+func (q *Quaternion) Clone() *Quaternion {
+	return &Quaternion{data: q.data}
+}
+
+// Rotate applies the quaternion rotation to the vector components and returns the rotated components.
+func (q *Quaternion) Rotate(vX, vY, vZ float64) (float64, float64, float64) {
+	qx, qy, qz, qw := q.data[0], q.data[1], q.data[2], q.data[3]
+	tx := 2.0 * (qy*vZ - qz*vY)
+	ty := 2.0 * (qz*vX - qx*vZ)
+	tz := 2.0 * (qx*vY - qy*vX)
+	rx := vX + qw*tx + (qy*tz - qz*ty)
+	ry := vY + qw*ty + (qz*tx - qx*tz)
+	rz := vZ + qw*tz + (qx*ty - qy*tx)
+	return rx, ry, rz
+}
+
+// MultipliesSelf multiplies this quaternion by q2 and stores the result in this quaternion.
+func (q *Quaternion) MultipliesSelf(q2 *Quaternion) {
+	q.Multiplies(q2, q)
+}
+
+// Multiplies multiplies q1 by q2 and writes the resulting quaternion to out.
+func (q *Quaternion) Multiplies(q2 *Quaternion, out *Quaternion) {
+	x1, y1, z1, w1 := q.data[0], q.data[1], q.data[2], q.data[3]
+	x2, y2, z2, w2 := q2.data[0], q2.data[1], q2.data[2], q2.data[3]
+
+	out.data[0] = w1*x2 + x1*w2 + y1*z2 - z1*y2
+	out.data[1] = w1*y2 - x1*z2 + y1*w2 + z1*x2
+	out.data[2] = w1*z2 + x1*y2 - y1*x2 + z1*w2
+	out.data[3] = w1*w2 - x1*x2 - y1*y2 - z1*z2
+}
+
+// Normalize scales q in place so its components have unit length.
+func (q *Quaternion) Normalize() {
+	lenSq := q.data[0]*q.data[0] + q.data[1]*q.data[1] + q.data[2]*q.data[2] + q.data[3]*q.data[3]
 	if lenSq <= 0.0 {
-		return [4]float64{0, 0, 0, 1}
+		q.data[0], q.data[1], q.data[2], q.data[3] = 0, 0, 0, 1
+		return
 	}
 	l := math.Sqrt(lenSq)
-	return [4]float64{q[0] / l, q[1] / l, q[2] / l, q[3] / l}
+	q.data[0], q.data[1], q.data[2], q.data[3] = q.data[0]/l, q.data[1]/l, q.data[2]/l, q.data[3]/l
 }
 
-// QuatConjugate computes the conjugate of a quaternion, reversing the sign of the x, y, and z components.
-func QuatConjugate(q [4]float64) [4]float64 {
-	return [4]float64{-q[0], -q[1], -q[2], q[3]}
+// Conjugate sets q1 to the conjugate of in, negating the vector part and preserving the scalar part.
+func (q *Quaternion) Conjugate(in *Quaternion) {
+	q.data[0], q.data[1], q.data[2], q.data[3] = -in.data[0], -in.data[1], -in.data[2], in.data[3]
 }

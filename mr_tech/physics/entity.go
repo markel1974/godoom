@@ -58,68 +58,138 @@ func (e *Entity) GetId() uint64 {
 func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
 	e.BoundingBox.Rebuild(x, y, z, w, h, d)
 	e.Cinematic.UpdateInertia(w, h, d)
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
 // SetSize updates the bounding box dimensions and refreshes the cuboid inertia tensor.
 func (e *Entity) SetSize(w, h, d float64) {
 	e.BoundingBox.SetSize(w, h, d)
 	e.Cinematic.UpdateInertia(w, h, d)
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
 // AddSize increments the bounding box dimensions and refreshes the cuboid inertia tensor.
 func (e *Entity) AddSize(w, h, d float64) {
 	e.BoundingBox.AddSize(w, h, d)
 	e.Cinematic.UpdateInertia(e.GetWidth(), e.GetHeight(), e.GetDepth())
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
-// AddForceAtPoint applies a linear force (fx, fy, fz) at world point (px, py, pz) and generates 3D torque on the OBB.
+// SetRotationAngleZ sets the OBB orientation to a yaw rotation around Z and synchronizes the world inertia tensor.
+func (e *Entity) SetRotationAngleZ(angleRad float64) {
+	e.BoundingBox.SetRotationAngleZ(angleRad)
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+}
+
+// SetRotationEuler sets the OBB orientation from Euler angles and synchronizes the world inertia tensor.
+func (e *Entity) SetRotationEuler(rollX, pitchY, yawZ float64) {
+	e.BoundingBox.SetRotationEuler(rollX, pitchY, yawZ)
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+}
+
+// SyncRotation updates the OBB world axes and synchronizes the world-space inverse inertia tensor.
+func (e *Entity) SyncRotation() {
+	e.BoundingBox.SyncRotation()
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+}
+
+// AddForceAtPoint applies a linear force (fx, fy, fz) at world point (px, py, pz) and generates 3D torque τ = r × F on the OBB
+// using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	e.AddForce(fx, fy, fz)
 	if e.GetInvMass() == 0.0 {
 		return
 	}
+	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
+	if fMag <= 1e-9 {
+		return
+	}
+	invF := 1.0 / fMag
+
 	cx, cy, cz := e.GetCenter()
-	rx, ry, rz := px-cx, py-cy, pz-cz
+	r0x, r0y, r0z := px-cx, py-cy, pz-cz
 
 	hx, hy, hz := e.GetSizeCenter()
 	a0, a1, a2 := e.GetAxes()
 
-	lx := math.Max(-hx, math.Min(hx, rx*a0[0]+ry*a0[1]+rz*a0[2]))
-	ly := math.Max(-hy, math.Min(hy, rx*a1[0]+ry*a1[1]+rz*a1[2]))
-	lz := math.Max(-hz, math.Min(hz, rx*a2[0]+ry*a2[1]+rz*a2[2]))
+	// Project impact point and ray direction into OBB local frame
+	plx := r0x*a0[0] + r0y*a0[1] + r0z*a0[2]
+	ply := r0x*a1[0] + r0y*a1[1] + r0z*a1[2]
+	plz := r0x*a2[0] + r0y*a2[1] + r0z*a2[2]
 
-	rx = a0[0]*lx + a1[0]*ly + a2[0]*lz
-	ry = a0[1]*lx + a1[1]*ly + a2[1]*lz
-	rz = (a0[2]*lx + a1[2]*ly + a2[2]*lz) * 0.20
+	dlx := (fx*a0[0] + fy*a0[1] + fz*a0[2]) * invF
+	dly := (fx*a1[0] + fy*a1[1] + fz*a1[2]) * invF
+	dlz := (fx*a2[0] + fy*a2[1] + fz*a2[2]) * invF
 
+	// Shift to closest point on the ray to OBB center, clamped within the OBB interior
+	tProj := plx*dlx + ply*dly + plz*dlz
+	plx = math.Max(-hx*0.98, math.Min(hx*0.98, plx-tProj*dlx))
+	ply = math.Max(-hy*0.98, math.Min(hy*0.98, ply-tProj*dly))
+	plz = math.Max(-hz*0.98, math.Min(hz*0.98, plz-tProj*dlz))
+
+	// March backward along -dl to find the exact entry point on the struck OBB face
+	tBack := math.MaxFloat64
+	hitAxis := 0
+	hitSign := 1.0
+	if math.Abs(dlx) > 1e-6 {
+		s := -1.0
+		if dlx < 0 {
+			s = 1.0
+		}
+		if tb := (plx - s*hx) / dlx; tb >= 0.0 && tb < tBack {
+			tBack = tb
+			hitAxis = 0
+			hitSign = s
+		}
+	}
+	if math.Abs(dly) > 1e-6 {
+		s := -1.0
+		if dly < 0 {
+			s = 1.0
+		}
+		if tb := (ply - s*hy) / dly; tb >= 0.0 && tb < tBack {
+			tBack = tb
+			hitAxis = 1
+			hitSign = s
+		}
+	}
+	if math.Abs(dlz) > 1e-6 {
+		s := -1.0
+		if dlz < 0 {
+			s = 1.0
+		}
+		if tb := (plz - s*hz) / dlz; tb >= 0.0 && tb < tBack {
+			tBack = tb
+			hitAxis = 2
+			hitSign = s
+		}
+	}
+	if tBack < math.MaxFloat64 {
+		plx -= tBack * dlx
+		ply -= tBack * dly
+		plz -= tBack * dlz
+	}
+
+	// Reconstruct world-space lever arm r from OBB center to surface entry point
+	rx := a0[0]*plx + a1[0]*ply + a2[0]*plz
+	ry := a0[1]*plx + a1[1]*ply + a2[1]*plz
+	rz := (a0[2]*plx + a1[2]*ply + a2[2]*plz) * 0.25
+
+	// Direct moment of force: τ = r × F
 	tx := ry*fz - rz*fy
 	ty := rz*fx - rx*fz
 	tz := rx*fy - ry*fx
 
-	// Determine the struck horizontal OBB face normal to include surface normal pressure torque
-	nxRatio, nyRatio := 0.0, 0.0
-	if hx > 1e-6 {
-		nxRatio = math.Abs(lx) / hx
-	}
-	if hy > 1e-6 {
-		nyRatio = math.Abs(ly) / hy
-	}
-
+	// Normal pressure moment on the struck OBB face: τ_n = r × F_n
 	var fnX, fnY, fnZ float64
-	if nxRatio >= nyRatio {
-		s := 1.0
-		if lx < 0 {
-			s = -1.0
-		}
-		fnX, fnY, fnZ = s*a0[0], s*a0[1], s*a0[2]
-	} else {
-		s := 1.0
-		if ly < 0 {
-			s = -1.0
-		}
-		fnX, fnY, fnZ = s*a1[0], s*a1[1], s*a1[2]
+	switch hitAxis {
+	case 0:
+		fnX, fnY, fnZ = hitSign*a0[0], hitSign*a0[1], hitSign*a0[2]
+	case 1:
+		fnX, fnY, fnZ = hitSign*a1[0], hitSign*a1[1], hitSign*a1[2]
+	default:
+		fnX, fnY, fnZ = hitSign*a2[0], hitSign*a2[1], hitSign*a2[2]
 	}
-
 	if fDotN := fx*fnX + fy*fnY + fz*fnZ; fDotN < 0.0 {
 		fnFx, fnFy, fnFz := fDotN*fnX, fDotN*fnY, fDotN*fnZ
 		tx += (ry*fnFz - rz*fnFy) * 0.25
@@ -127,24 +197,7 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 		tz += rx*fnFy - ry*fnFx
 	}
 
-	// Ensure even near-center hits produce a subtle, natural Yaw twist without spinning wildly
-	fHoriz := math.Hypot(fx, fy)
-	rHoriz := math.Max(hx, hy)
-	minYawTorque := 0.12 * rHoriz * fHoriz
-	if math.Abs(tz) < minYawTorque {
-		sign := 1.0
-		if math.Abs(tz) > 1e-6 {
-			if tz < 0.0 {
-				sign = -1.0
-			}
-		} else if fx*a0[1]-fy*a0[0] < 0.0 {
-			sign = -1.0
-		}
-		tz = sign * minYawTorque
-	}
-
-	const torqueScale = 0.12
-	e.AddTorque(tx*torqueScale, ty*torqueScale, tz*torqueScale)
+	e.AddTorque(tx, ty, tz)
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
@@ -186,7 +239,7 @@ func (e *Entity) Update() {
 	if e.IsRotating() || isTilted {
 		q := e.BoundingBox.GetQuaternion()
 		q.IntegrateAngular(e.wx, e.wy, e.wz, e.GetDt())
-		e.BoundingBox.SyncRotation()
+		e.SyncRotation()
 
 		// Clamp maximum tilt angle (~18 degrees) so objects rock dynamically when hit
 		// without ever flipping sideways/upside-down or getting stuck in an unnatural pose.
@@ -207,7 +260,7 @@ func (e *Entity) Update() {
 			qTilt.SetAxisAngle(txAxis, tyAxis, 0.0, math.Asin(maxTiltSin))
 			qTilt.Multiplies(&qYaw, q)
 			q.Normalize()
-			e.BoundingBox.SyncRotation()
+			e.SyncRotation()
 			// Zero outward Roll/Pitch angular velocity
 			if e.wx*txAxis+e.wy*tyAxis > 0.0 {
 				e.wx = 0.0
@@ -221,33 +274,40 @@ func (e *Entity) Update() {
 	}
 }
 
-// ResolveImpact resolves a collision impact with another entity using the supplied collision normal,
-// applying both linear and rotational impulses.
+// ResolveImpact resolves a 6-DoF collision impact with another entity using the supplied collision normal,
+// computing the contact manifold point on the OBBs and applying both linear and rotational impulses.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
-	jx, jy, jz, ok := e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz)
-	if !ok {
-		return
-	}
 	cx1, cy1, cz1 := e.GetCenter()
 	ex1, ey1, ez1 := e.GetOrientedHalfExtents()
-	cx2, cy2, cz2 := e2.GetCenter()
-	ex2, ey2, ez2 := e2.GetOrientedHalfExtents()
 
-	minX := math.Max(cx1-ex1, cx2-ex2)
-	maxX := math.Min(cx1+ex1, cx2+ex2)
-	minY := math.Max(cy1-ey1, cy2-ey2)
-	maxY := math.Min(cy1+ey1, cy2+ey2)
-	minZ := math.Max(cz1-ez1, cz2-ez2)
-	maxZ := math.Min(cz1+ez1, cz2+ez2)
+	var r1x, r1y, r1z float64
+	var r2x, r2y, r2z float64
 
-	px := math.Max(cx1-ex1, math.Min(cx1+ex1, (minX+maxX)*0.5))
-	py := math.Max(cy1-ey1, math.Min(cy1+ey1, (minY+maxY)*0.5))
-	pz := math.Max(cz1-ez1, math.Min(cz1+ez1, (minZ+maxZ)*0.5))
+	if e2.GetInvMass() > 0.0 {
+		cx2, cy2, cz2 := e2.GetCenter()
+		ex2, ey2, ez2 := e2.GetOrientedHalfExtents()
 
-	if e.GetInvMass() > 0.0 && e2.GetInvMass() > 0.0 {
-		e.AddImpulseAtOffset(jx, jy, jz, px-cx1, py-cy1, pz-cz1)
-		e2.AddImpulseAtOffset(-jx, -jy, -jz, px-cx2, py-cy2, pz-cz2)
+		minX := math.Max(cx1-ex1, cx2-ex2)
+		maxX := math.Min(cx1+ex1, cx2+ex2)
+		minY := math.Max(cy1-ey1, cy2-ey2)
+		maxY := math.Min(cy1+ey1, cy2+ey2)
+		minZ := math.Max(cz1-ez1, cz2-ez2)
+		maxZ := math.Min(cz1+ez1, cz2+ez2)
+
+		px := math.Max(cx1-ex1, math.Min(cx1+ex1, (minX+maxX)*0.5))
+		py := math.Max(cy1-ey1, math.Min(cy1+ey1, (minY+maxY)*0.5))
+		pz := math.Max(cz1-ez1, math.Min(cz1+ez1, (minZ+maxZ)*0.5))
+
+		r1x, r1y, r1z = px-cx1, py-cy1, (pz-cz1)*0.25
+		r2x, r2y, r2z = px-cx2, py-cy2, (pz-cz2)*0.25
+	} else if math.Abs(nz) < 0.7 {
+		// Impact against static wall/obstacle: contact point on OBB perimeter along -n
+		r1x = -nx * ex1
+		r1y = -ny * ey1
+		r1z = -nz * ez1 * 0.25
 	}
+
+	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, r1x, r1y, r1z, r2x, r2y, r2z)
 }
 
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.

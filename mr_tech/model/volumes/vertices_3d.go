@@ -24,7 +24,7 @@ type Vertices3D struct {
 	currentAction     int
 	actions           [][]int
 	elements          []*Vertices3DEntry
-	links             []config.Model3DLink
+	links             *Links
 	linkTagIndices    []int
 	executionOrder    []int
 	volsA             []*Volume
@@ -99,27 +99,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	}
 
 	// Ensure links slice matches parts count
-	links := make([]config.Model3DLink, numParts)
-	for i := 0; i < numParts; i++ {
-		if i < len(cfg.Model3D.Links) {
-			links[i] = cfg.Model3D.Links[i]
-		} else {
-			links[i] = config.Model3DLink{Parent: -1, Tag: ""}
-		}
-	}
-
-	// Reject invalid parents and self-links
-	for i := 0; i < numParts; i++ {
-		if links[i].Parent == i {
-			fmt.Printf("[warning] Vertices3D %s: part %d links to itself, disconnecting link\n", cfg.Id, i)
-			links[i].Parent = -1
-			links[i].Tag = ""
-		} else if links[i].Parent >= numParts {
-			fmt.Printf("[warning] Vertices3D %s: part %d links to invalid parent %d (numParts=%d), disconnecting link\n", cfg.Id, i, links[i].Parent, numParts)
-			links[i].Parent = -1
-			links[i].Tag = ""
-		}
-	}
+	links := NewLinks(numParts, cfg.Model3D.Links)
 
 	// Reject circular dependencies by recording node positions in the current chain
 	visited := make([]bool, numParts)
@@ -142,14 +122,13 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 				// Cycle detected starting at path[pos] (curr) and closed by path[len(path)-1] -> curr.
 				// Disconnect exclusively the edge closing the cycle, preserving upstream links.
 				prev := path[len(path)-1]
-				fmt.Printf("[warning] Vertices3D %s: circular link detected (cycle start at part %d, closed by part %d -> %d), disconnecting link\n", cfg.Id, curr, prev, links[prev].Parent)
-				links[prev].Parent = -1
-				links[prev].Tag = ""
+				fmt.Printf("[warning] Vertices3D %s: circular link detected (cycle start at part %d, closed by part %d -> %d), disconnecting link\n", cfg.Id, curr, prev, links.GetParent(prev))
+				links.Invalidate(prev)
 				break
 			}
 			pathIndex[curr] = len(path)
 			path = append(path, curr)
-			curr = links[curr].Parent
+			curr = links.GetParent(curr)
 		}
 		for _, node := range path {
 			visited[node] = true
@@ -204,18 +183,18 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 
 	// Resolve link tag indices
 	linkTagIndices := make([]int, numParts)
-	for i, link := range links {
+	for i, link := range links.data {
 		linkTagIndices[i] = -1
-		if link.Parent >= 0 && link.Parent < numParts && elements[link.Parent] != nil {
-			tagIdx := elements[link.Parent].GetTagIndex(link.Tag)
+		if link.parent >= 0 && link.parent < numParts && elements[link.parent] != nil {
+			tagIdx := elements[link.parent].GetTagIndex(link.tag)
 			linkTagIndices[i] = tagIdx
 			if tagIdx < 0 {
-				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.Tag, link.Parent, i)
+				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.tag, link.parent, i)
 			} else {
-				for frameIdx, vol := range elements[link.Parent].volumes {
+				for frameIdx, vol := range elements[link.parent].volumes {
 					if vol != nil {
 						if !vol.HasVertexTag(tagIdx) {
-							fmt.Printf("[warning] Vertices3D %s: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.Tag, tagIdx, frameIdx, link.Parent, i)
+							fmt.Printf("[warning] Vertices3D %s: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.tag, tagIdx, frameIdx, link.parent, i)
 						}
 					}
 				}
@@ -238,12 +217,11 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		}
 		if dfsState[node] == dfsVisiting {
 			fmt.Printf("[warning] Vertices3D %s: cycle detected during DFS at node %d, disconnecting link\n", cfg.Id, node)
-			links[node].Parent = -1
-			links[node].Tag = ""
+			links.Invalidate(node)
 			return
 		}
 		dfsState[node] = dfsVisiting
-		pIdx := links[node].Parent
+		pIdx := links.GetParent(node)
 		if pIdx >= 0 && pIdx < numParts && pIdx != node {
 			visit(pIdx)
 		}
@@ -372,12 +350,12 @@ func (v *Vertices3D) initPartJoints() {
 		}
 
 		tagLow := ""
-		if i < len(v.links) {
-			tagLow = strings.ToLower(v.links[i].Tag)
+		if i < len(v.links.data) {
+			tagLow = strings.ToLower(v.links.data[i].tag)
 		}
 
 		switch {
-		case i == 0 || v.links[i].Parent < 0:
+		case i == 0 || v.links.data[i].parent < 0:
 			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
 			j.maxAngleAlive = 0
 			j.maxAngleRagdoll = 0
@@ -543,8 +521,8 @@ func (v *Vertices3D) isPartOrAncestorDetached(i int) bool {
 		if v.joints.data[curr].detached {
 			return true
 		}
-		if curr < len(v.links) {
-			curr = v.links[curr].Parent
+		if curr < len(v.links.data) {
+			curr = v.links.data[curr].parent
 		} else {
 			break
 		}
@@ -707,8 +685,8 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 	// If root part 0 was matched, also excite its primary torso child if present
 	targetPart := bestPart
 	if targetPart == 0 {
-		for i := 1; i < len(v.links); i++ {
-			if v.links[i].Parent == 0 && !v.joints.data[i].detached {
+		for i := 1; i < len(v.links.data); i++ {
+			if v.links.data[i].parent == 0 && !v.joints.data[i].detached {
 				targetPart = i
 				break
 			}
@@ -771,7 +749,7 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 			}
 		}
 
-		curr = v.links[curr].Parent
+		curr = v.links.data[curr].parent
 		atten *= 0.60
 	}
 
@@ -1105,8 +1083,8 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 		v.volsB[i] = volB
 
 		pIdx := -1
-		if i < len(v.links) {
-			pIdx = v.links[i].Parent
+		if i < len(v.links.data) {
+			pIdx = v.links.data[i].parent
 		}
 
 		if i > 0 && v.joints.data[i].detached {
@@ -1136,7 +1114,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 						v.rotationsA[pIdx].MultiplyMatrix(tagAxisA, v.rotationsA[i])
 					}
 				} else {
-					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
+					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
 					v.originsA[i] = v.originsA[pIdx]
 					if j.hasDeflection {
 						v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
@@ -1156,7 +1134,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 						v.rotationsB[pIdx].MultiplyMatrix(tagAxisB, v.rotationsB[i])
 					}
 				} else {
-					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
+					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
 					v.originsB[i] = v.originsB[pIdx]
 					if j.hasDeflection {
 						v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
@@ -1165,7 +1143,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 					}
 				}
 			} else {
-				fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, pIdx, i)
+				fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
 				v.originsA[i] = v.originsA[pIdx]
 				v.originsB[i] = v.originsB[pIdx]
 				if j.hasDeflection {

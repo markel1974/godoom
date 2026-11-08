@@ -486,7 +486,8 @@ func (v *Vertices3D) initPartJoints() {
 			j.maxAngleRagdoll = 1.15
 			j.stiffness = 48.0
 			j.damping = 6.5
-			j.canDetach = true
+			//j.canDetach = true
+			j.canDetach = false
 			j.detachThreshold = 1.25
 
 		case strings.Contains(tagLow, "lloarm") || strings.Contains(tagLow, "rloarm") ||
@@ -499,7 +500,8 @@ func (v *Vertices3D) initPartJoints() {
 			j.maxAngleRagdoll = 1.35
 			j.stiffness = 40.0
 			j.damping = 5.5
-			j.canDetach = true
+			//j.canDetach = true
+			j.canDetach = false
 			j.detachThreshold = 1.05
 
 		case strings.Contains(tagLow, "weapon"):
@@ -509,7 +511,8 @@ func (v *Vertices3D) initPartJoints() {
 			j.maxAngleRagdoll = 1.35
 			j.stiffness = 42.0
 			j.damping = 5.5
-			j.canDetach = true
+			//j.canDetach = true
+			j.canDetach = false
 			j.detachThreshold = 0.95
 
 		default:
@@ -519,7 +522,8 @@ func (v *Vertices3D) initPartJoints() {
 			j.maxAngleRagdoll = 1.20
 			j.stiffness = 46.0
 			j.damping = 6.2
-			j.canDetach = true
+			//j.canDetach = true
+			j.canDetach = false
 			j.detachThreshold = 1.30
 		}
 	}

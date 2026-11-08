@@ -50,6 +50,7 @@ type Vertices3DEntry struct {
 	lastVolA      *Volume
 	groupSize     float64
 	salt          uint64
+	tick          uint64
 }
 
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
@@ -173,7 +174,7 @@ func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 	}
 	v.currentAction = idx
 	action := v.actions[idx]
-	v.startTick = textures.GlobalTick()
+	v.startTick = v.tick
 	v.startFrame = action.Start
 	v.endFrame = action.End
 	v.clampAnim = action.Clamp
@@ -184,7 +185,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	if v.singleFrame {
 		return false
 	}
-	tick += v.salt
+	v.tick = tick + v.salt
 
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {
@@ -196,8 +197,8 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	var relativeFrameB int
 	if v.clampAnim {
 		frameFloat := 0.0
-		if tick > v.startTick {
-			frameFloat = float64(tick-v.startTick) / v.groupSize
+		if v.tick > v.startTick {
+			frameFloat = float64(v.tick-v.startTick) / v.groupSize
 		}
 		lastAnim := animLength - 1
 		if relativeFrameA = int(frameFloat); relativeFrameA >= lastAnim {
@@ -213,7 +214,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 		}
 	} else {
 		// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
-		frameFloat := float64(tick) / v.groupSize
+		frameFloat := float64(v.tick) / v.groupSize
 		lerpT = frameFloat - math.Floor(frameFloat)
 		relativeFrameA = int(frameFloat) % animLength
 		relativeFrameB = (int(frameFloat) + 1) % animLength

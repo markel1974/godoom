@@ -60,27 +60,7 @@ func (v *Volume) Rebuild() bool {
 		face := v.faces.container[x]
 		face.Rebuild()
 		v.facesTree.InsertObject(face)
-
-		for _, p := range face.GetPoints() {
-			if p.X < minX {
-				minX = p.X
-			}
-			if p.X > maxX {
-				maxX = p.X
-			}
-			if p.Y < minY {
-				minY = p.Y
-			}
-			if p.Y > maxY {
-				maxY = p.Y
-			}
-			if p.Z < minZ {
-				minZ = p.Z
-			}
-			if p.Z > maxZ {
-				maxZ = p.Z
-			}
-		}
+		minX, minY, minZ, maxX, maxY, maxZ = face.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 	}
 	w := maxX - minX
 	h := maxY - minY
@@ -236,21 +216,8 @@ func (v *Volume) GetTag() string {
 
 // GetCentroid returns the average position of all points across the volume's faces.
 // GetCentroid returns a zero XYZ when the volume has no face points.
-func (v *Volume) GetCentroid() geometry.XYZ {
-	var cx, cy, cz, count float64
-	for x := 0; x < v.faces.Len(); x++ {
-		face := v.faces.At(x)
-		for _, p := range face.GetPoints() {
-			cx += p.X
-			cy += p.Y
-			cz += p.Z
-			count++
-		}
-	}
-	if count > 0 {
-		return geometry.XYZ{X: cx / count, Y: cy / count, Z: cz / count}
-	}
-	return geometry.XYZ{}
+func (v *Volume) GetCentroid() (float64, float64, float64) {
+	return v.faces.GetCentroid()
 }
 
 // QueryOverlaps searches the volume's face tree for objects whose AABB overlaps the given object's AABB.

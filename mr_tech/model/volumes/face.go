@@ -117,8 +117,8 @@ func (fc *Face) GetMaterial() *textures.Material {
 	return fc.material
 }
 
-// GetPoints returns the list of 3D points (geometry.XYZ) that define the segment's shape or path.
-func (fc *Face) GetPoints() [3]geometry.XYZ {
+// ClonePoints returns a copy of the face's three triangle points.
+func (fc *Face) ClonePoints() [3]geometry.XYZ {
 	return fc.tri
 }
 
@@ -297,6 +297,42 @@ func (fc *Face) computeUV() {
 		// Walls facing X
 		fc.SetUV(fc.tri[0].Y/w, fc.tri[0].Z/h, fc.tri[1].Y/w, fc.tri[1].Z/h, fc.tri[2].Y/w, fc.tri[2].Z/h)
 	}
+}
+
+// SumPoints adds the face's triangle point coordinates to the provided totals and returns the updated sums and count.
+func (fc *Face) SumPoints(cx, cy, cz float64, count int) (float64, float64, float64, int) {
+	for _, p := range fc.tri {
+		cx += p.X
+		cy += p.Y
+		cz += p.Z
+		count++
+	}
+	return cx, cy, cz, count
+}
+
+// GetMinMax returns the bounds expanded to include all vertices of the face.
+func (fc *Face) GetMinMax(minX, minY, minZ, maxX, maxY, maxZ float64) (float64, float64, float64, float64, float64, float64) {
+	for _, p := range fc.tri {
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.X > maxX {
+			maxX = p.X
+		}
+		if p.Y < minY {
+			minY = p.Y
+		}
+		if p.Y > maxY {
+			maxY = p.Y
+		}
+		if p.Z < minZ {
+			minZ = p.Z
+		}
+		if p.Z > maxZ {
+			maxZ = p.Z
+		}
+	}
+	return minX, minY, minZ, maxX, maxY, maxZ
 }
 
 /*

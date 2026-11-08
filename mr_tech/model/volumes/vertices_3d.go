@@ -293,8 +293,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 			if src == nil {
 				continue
 			}
-			pts := src.GetPoints()
-			fCopy := NewFace(pts, fmt.Sprintf("%s_md3_f_%d", cfg.Id, idx), src.material)
+			fCopy := NewFace(src.ClonePoints(), fmt.Sprintf("%s_md3_f_%d", cfg.Id, idx), src.material)
 			u0, v0 := src.GetUV0()
 			u1, v1 := src.GetUV1()
 			u2, v2 := src.GetUV2()

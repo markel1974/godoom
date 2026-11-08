@@ -34,6 +34,21 @@ func (f *Faces) Len() int {
 	return f.count
 }
 
+// GetCentroid returns the average x, y, and z coordinates of all points across the faces.
+// It returns zero coordinates when there are no points.
+func (f *Faces) GetCentroid() (float64, float64, float64) {
+	cx, cy, cz := 0.0, 0.0, 0.0
+	count := 0
+	for x := 0; x < len(f.container); x++ {
+		face := f.container[x]
+		cx, cy, cz, count = face.SumPoints(cx, cy, cz, count)
+	}
+	if count > 0 {
+		return cx / float64(count), cy / float64(count), cz / float64(count)
+	}
+	return 0.0, 0.0, 0.0
+}
+
 // Set assigns face to the element at idx.
 func (f *Faces) Set(idx int, face *Face) {
 	f.container[idx] = face

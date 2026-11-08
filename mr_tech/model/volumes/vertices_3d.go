@@ -25,8 +25,6 @@ type Vertices3D struct {
 	actions           [][]int
 	elements          []*Vertices3DEntry
 	links             *Links
-	linkTagIndices    []int
-	executionOrder    []int
 	volsA             []*Volume
 	volsB             []*Volume
 	originsA          []geometry.XYZ
@@ -89,49 +87,11 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 			entry.salt = elements[0].salt
 		}
 		elements[i] = entry
-
 		if len(entry.volumes) > 0 && entry.volumes[0] != nil {
 			count := entry.volumes[0].GetFaceCount()
 			partFaceOffsets[i] = totalFaces
 			partFaceCounts[i] = count
 			totalFaces += count
-		}
-	}
-
-	// Ensure links slice matches parts count
-	links := NewLinks(numParts, cfg.Model3D.Links)
-
-	// Reject circular dependencies by recording node positions in the current chain
-	visited := make([]bool, numParts)
-	pathIndex := make([]int, numParts)
-	path := make([]int, 0, numParts)
-	for i := 0; i < numParts; i++ {
-		if visited[i] {
-			continue
-		}
-		for k := range pathIndex {
-			pathIndex[k] = -1
-		}
-		path = path[:0]
-		curr := i
-		for curr >= 0 && curr < numParts {
-			if visited[curr] {
-				break
-			}
-			if pos := pathIndex[curr]; pos >= 0 {
-				// Cycle detected starting at path[pos] (curr) and closed by path[len(path)-1] -> curr.
-				// Disconnect exclusively the edge closing the cycle, preserving upstream links.
-				prev := path[len(path)-1]
-				fmt.Printf("[warning] Vertices3D %s: circular link detected (cycle start at part %d, closed by part %d -> %d), disconnecting link\n", cfg.Id, curr, prev, links.GetParent(prev))
-				links.Invalidate(prev)
-				break
-			}
-			pathIndex[curr] = len(path)
-			path = append(path, curr)
-			curr = links.GetParent(curr)
-		}
-		for _, node := range path {
-			visited[node] = true
 		}
 	}
 
@@ -181,60 +141,9 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		actions[i] = action
 	}
 
-	// Resolve link tag indices
-	linkTagIndices := make([]int, numParts)
-	for i, link := range links.data {
-		linkTagIndices[i] = -1
-		if link.parent >= 0 && link.parent < numParts && elements[link.parent] != nil {
-			tagIdx := elements[link.parent].GetTagIndex(link.tag)
-			linkTagIndices[i] = tagIdx
-			if tagIdx < 0 {
-				fmt.Printf("[warning] Vertices3D %s: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.tag, link.parent, i)
-			} else {
-				for frameIdx, vol := range elements[link.parent].volumes {
-					if vol != nil {
-						if !vol.HasVertexTag(tagIdx) {
-							fmt.Printf("[warning] Vertices3D %s: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", cfg.Id, link.tag, tagIdx, frameIdx, link.parent, i)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Build topological execution order based on Links using DFS
-	const (
-		dfsUnvisited = 0
-		dfsVisiting  = 1
-		dfsVisited   = 2
-	)
-	executionOrder := make([]int, 0, numParts)
-	dfsState := make([]int, numParts)
-	var visit func(int)
-	visit = func(node int) {
-		if node < 0 || node >= numParts || dfsState[node] == dfsVisited {
-			return
-		}
-		if dfsState[node] == dfsVisiting {
-			fmt.Printf("[warning] Vertices3D %s: cycle detected during DFS at node %d, disconnecting link\n", cfg.Id, node)
-			links.Invalidate(node)
-			return
-		}
-		dfsState[node] = dfsVisiting
-		pIdx := links.GetParent(node)
-		if pIdx >= 0 && pIdx < numParts && pIdx != node {
-			visit(pIdx)
-		}
-		dfsState[node] = dfsVisited
-		executionOrder = append(executionOrder, node)
-	}
-
-	// Ensure all nodes are visited (including disconnected sub-trees)
-	for i := 0; i < numParts; i++ {
-		if dfsState[i] == dfsUnvisited {
-			visit(i)
-		}
-	}
+	// Ensure links slice matches parts count
+	links := NewLinks()
+	_ = links.Setup(cfg.Model3D.Links, elements)
 
 	v := &Vertices3D{
 		elements:         elements,
@@ -246,8 +155,6 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		facesA:           NewFaces(totalFaces, true),
 		facesB:           NewFaces(totalFaces, true),
 		links:            links,
-		linkTagIndices:   linkTagIndices,
-		executionOrder:   executionOrder,
 		volsA:            make([]*Volume, numParts),
 		volsB:            make([]*Volume, numParts),
 		originsA:         make([]geometry.XYZ, numParts),
@@ -267,6 +174,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		v.rotationsA[i] = NewTagAxis(geometry.XYZ{}, _im)
 		v.rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
 	}
+
 	v.initPartJoints()
 
 	// Initialize face buffers using partFaceOffsets to decouple buffer layout from execution order
@@ -481,7 +389,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 	}
 	v.currentAction = idx
 	enteringRagdoll := false
-	for _, i := range v.executionOrder {
+	for _, i := range v.links.executionOrder {
 		if i < 0 || i >= len(v.elements) {
 			continue
 		}
@@ -1071,7 +979,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	v.stepJoints(tick)
 	cx, cy, cz := v.VerticesGetCenter()
 
-	for _, i := range v.executionOrder {
+	for _, i := range v.links.executionOrder {
 		element := v.elements[i]
 		_ = element.VerticesCompile(tick)
 		volA, volB, lerpT := element.GetVolumes()
@@ -1097,8 +1005,8 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 			v.rotationsB[i].SetFromQuaternion(j.detQuat)
 		} else if pIdx >= 0 && pIdx < len(v.elements) && pIdx != i && v.volsA[pIdx] != nil && v.volsB[pIdx] != nil {
 			tagIdx := -1
-			if i < len(v.linkTagIndices) {
-				tagIdx = v.linkTagIndices[i]
+			if i < len(v.links.tagIndices) {
+				tagIdx = v.links.tagIndices[i]
 			}
 			j := v.joints.data[i]
 			if tagIdx >= 0 {

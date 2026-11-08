@@ -163,7 +163,9 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 			return
 		}
 		if dist2dSq > 0.000001 {
-			e.self.SetAngle(math.Atan2(dy, dx))
+			if !entity.IsRotating() {
+				e.self.SetAngle(math.Atan2(dy, dx))
+			}
 			nx := float64(0)
 			ny := float64(0)
 			targetSpeed := float64(0)
@@ -380,6 +382,9 @@ func (e *Enemy) handleHit() bool {
 		e.state = EnemyStatePain
 		durationFrames := e.setAnimationState(config.EnemyStatePain)
 		e.painTimer = framesToSeconds(durationFrames)
+		if e.painTimer < 0.35 {
+			e.painTimer = 0.35
+		}
 		e.shootTimer = 0
 		return true
 	}

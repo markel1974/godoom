@@ -285,6 +285,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	if numParts == 1 && v.elements[0] != nil {
 		v.viewVolume = v.elements[0].viewVolume
 		v.entity = v.elements[0].VerticesGetEntity()
+		v.VerticesCompile(0)
 	} else if numParts > 1 {
 		v.VerticesCompile(0)
 		compVol := NewVolume(0, fmt.Sprintf("%s_md3_composite", cfg.Id), "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
@@ -437,7 +438,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 				} else {
 					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsA[i] = v.originsA[pIdx]
-					v.rotationsA[i] = v.rotationsA[pIdx]
+					*v.rotationsA[i] = *v.rotationsA[pIdx]
 				}
 				if tagAxisB := v.volsB[pIdx].GetVertexTag(tagIdx); tagAxisB != nil {
 					rotOrigBX, rotOrigBY, rotOrigBZ := v.rotationsB[pIdx].RotatePointByTag(tagAxisB)
@@ -448,14 +449,14 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 				} else {
 					fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, tagIdx, pIdx, i)
 					v.originsB[i] = v.originsB[pIdx]
-					v.rotationsB[i] = v.rotationsB[pIdx]
+					*v.rotationsB[i] = *v.rotationsB[pIdx]
 				}
 			} else {
 				fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links[i].Tag, pIdx, i)
 				v.originsA[i] = v.originsA[pIdx]
 				v.originsB[i] = v.originsB[pIdx]
-				v.rotationsA[i] = v.rotationsA[pIdx]
-				v.rotationsB[i] = v.rotationsB[pIdx]
+				*v.rotationsA[i] = *v.rotationsA[pIdx]
+				*v.rotationsB[i] = *v.rotationsB[pIdx]
 			}
 		} else {
 			v.reset(i)
@@ -527,12 +528,18 @@ func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 
-// reset clears the origin offsets and restores the rotation axes at index i to identity.
+// reset clears the origin offsets and restores the rotation axes at index i to the entity's orientation (or identity if unset).
 func (v *Vertices3D) reset(i int) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, 0
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, 0
-	v.rotationsA[i].Reset()
-	v.rotationsB[i].Reset()
+	if v.entity != nil {
+		q := v.entity.GetQuaternion()
+		v.rotationsA[i].SetFromQuaternion(q)
+		v.rotationsB[i].SetFromQuaternion(q)
+	} else {
+		v.rotationsA[i].Reset()
+		v.rotationsB[i].Reset()
+	}
 }
 
 // deepReset clears cached volumes and resets origin and rotation state for the part at i.

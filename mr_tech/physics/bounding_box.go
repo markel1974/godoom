@@ -6,16 +6,31 @@ import (
 	aabb "github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// BoundingBox represents a 3D rectangular region defined by its position, dimensions, and axis-aligned bounding box (AABB).
+// BoundingBox represents a 3D oriented bounding box (OBB)
+// and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
 	bottomLeft   Point
 	bottomCenter Point
 	center       Point
 	size         Size
 	aabb         *aabb.AABB
+
+	// Local axes transformed into world space.
+	axis [3]obbVector
+
+	// Orientation quaternion.
+	rotation Quaternion
+
+	// Oriented half-extents projected onto world axes.
+	ex float64
+	ey float64
+	ez float64
 }
 
-// NewBoundingBox initializes and returns a pointer to a BoundingBox with the specified position, dimensions, and depth.
+// obbVector is a fixed-size 3D vector used by the SAT implementation.
+type obbVector [3]float64
+
+// NewBoundingBox creates a bounding box with identity rotation.
 func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
 	r := &BoundingBox{
 		bottomLeft:   NewPoint(x, y, z),
@@ -24,76 +39,158 @@ func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
 		size:         NewSize(w, h, d),
 		aabb:         aabb.NewAABB(),
 	}
+	r.rotation.SetIdentity()
 	r.rebuild()
 	return r
 }
 
-// Rebuild updates the bounding box's bottom-left position and size, and triggers a rebuild of its dependent properties.
+// Rebuild updates the reference position and dimensions,
+// then recalculates the derived bounding-box data.
 func (r *BoundingBox) Rebuild(x, y, z, w, h, d float64) {
 	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = x, y, z
 	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
 }
 
-// rebuild recalculates the center, bottom-center, and AABB boundaries of the bounding box based on its current position and size.
-func (r *BoundingBox) rebuild() {
-	cw, ch, cd := r.size.GetCenter()
-	r.center.MoveTo(r.bottomLeft.x+cw, r.bottomLeft.y+ch, r.bottomLeft.z+cd)
-	r.bottomCenter.MoveTo(r.center.x, r.center.y, r.bottomLeft.z)
-	minX := r.bottomLeft.x
-	minY := r.bottomLeft.y
-	minZ := r.bottomLeft.z
-	maxX := r.bottomLeft.x + r.size.w
-	maxY := r.bottomLeft.y + r.size.h
-	maxZ := r.bottomLeft.z + r.size.d
-	r.aabb.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+// SetRotationQuaternion sets the orientation using a quaternion (x, y, z, w).
+// The quaternion is normalized before being stored.
+func (r *BoundingBox) SetRotationQuaternion(x, y, z, w float64) {
+	r.rotation.Set(x, y, z, w)
+	r.rotation.Normalize()
+	r.rebuild()
 }
 
-// GetAABB returns the axis-aligned bounding box (AABB) of the BoundingBox.
-func (r *BoundingBox) GetAABB() *aabb.AABB { return r.aabb }
+// SetRotationAngleZ sets the orientation to a rotation around the world Z axis by angleRad radians.
+func (r *BoundingBox) SetRotationAngleZ(angleRad float64) {
+	r.rotation.SetAxisAngle(0, 0, 1, angleRad)
+	r.rebuild()
+}
 
-// GetWidth returns the width of the bounding box as a float64 value.
-func (r *BoundingBox) GetWidth() float64 { return r.size.GetWidth() }
+// SetRotationEuler sets the orientation from roll (X), pitch (Y), and yaw (Z) angles in radians.
+func (r *BoundingBox) SetRotationEuler(rollX, pitchY, yawZ float64) {
+	r.rotation.SetEulerZYX(rollX, pitchY, yawZ)
+	r.rebuild()
+}
 
-// GetHeight returns the height of the BoundingBox.
-func (r *BoundingBox) GetHeight() float64 { return r.size.GetHeight() }
+// SyncRotation recalculates the oriented axes and enclosing AABB after in-place quaternion updates.
+func (r *BoundingBox) SyncRotation() {
+	r.rebuild()
+}
 
-// GetDepth returns the depth value of the bounding box.
-func (r *BoundingBox) GetDepth() float64 { return r.size.GetDepth() }
+// GetRotationQuaternion returns the orientation in x, y, z, w order.
+func (r *BoundingBox) GetRotationQuaternion() (x, y, z, w float64) {
+	return r.rotation.Get()
+}
 
-// GetSize returns the width, height, and depth of the bounding box as a tuple of three float64 values.
-func (r *BoundingBox) GetSize() (float64, float64, float64) { return r.size.Get() }
+// GetQuaternion returns a pointer to the internal orientation Quaternion.
+func (r *BoundingBox) GetQuaternion() *Quaternion {
+	return &r.rotation
+}
 
-// GetSizeCenter returns the center coordinates (x, y, z) of the bounding box's size dimensions.
-func (r *BoundingBox) GetSizeCenter() (float64, float64, float64) { return r.size.GetCenter() }
+// GetAxes returns the three orthonormal local axes (X, Y, Z) in world space.
+func (r *BoundingBox) GetAxes() ([3]float64, [3]float64, [3]float64) {
+	return r.axis[0], r.axis[1], r.axis[2]
+}
 
-// GetZ returns the z-coordinate of the bottom-left point of the BoundingBox.
-func (r *BoundingBox) GetZ() float64 { return r.bottomLeft.z }
+// GetYaw returns the current horizontal yaw angle in radians derived from the local X axis in world space.
+func (r *BoundingBox) GetYaw() float64 {
+	return math.Atan2(r.axis[0][1], r.axis[0][0])
+}
 
-// GetBottomLeft retrieves the x, y, and z coordinates of the bottom-left corner of the bounding box.
+// GetOrientedHalfExtents returns the half-extents of the oriented bounding box projected onto world X, Y, Z axes.
+func (r *BoundingBox) GetOrientedHalfExtents() (float64, float64, float64) {
+	return r.ex, r.ey, r.ez
+}
+
+// rebuild recalculates the center, local axes and enclosing AABB.
+// The box rotates around its geometric center.
+func (r *BoundingBox) rebuild() {
+	hx := r.size.w * 0.5
+	hy := r.size.h * 0.5
+	hz := r.size.d * 0.5
+
+	cx := r.bottomLeft.x + hx
+	cy := r.bottomLeft.y + hy
+	cz := r.bottomLeft.z + hz
+
+	r.center.MoveTo(cx, cy, cz)
+	r.bottomCenter.MoveTo(cx, cy, r.bottomLeft.z)
+
+	r.updateAxes()
+
+	// Project the oriented half-extents onto the world axes.
+	r.ex = math.Abs(r.axis[0][0])*hx + math.Abs(r.axis[1][0])*hy + math.Abs(r.axis[2][0])*hz
+	r.ey = math.Abs(r.axis[0][1])*hx + math.Abs(r.axis[1][1])*hy + math.Abs(r.axis[2][1])*hz
+	r.ez = math.Abs(r.axis[0][2])*hx + math.Abs(r.axis[1][2])*hy + math.Abs(r.axis[2][2])*hz
+
+	r.aabb.Rebuild(cx-r.ex, cy-r.ey, cz-r.ez, cx+r.ex, cy+r.ey, cz+r.ez)
+}
+
+// updateAxes transforms the local X, Y and Z axes into world space.
+// Called only when the bounding box changes.
+func (r *BoundingBox) updateAxes() {
+	r.axis[0][0], r.axis[0][1], r.axis[0][2],
+		r.axis[1][0], r.axis[1][1], r.axis[1][2],
+		r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.rotation.ToAxes()
+}
+
+// GetAABB returns the enclosing axis-aligned bounding box.
+func (r *BoundingBox) GetAABB() *aabb.AABB {
+	return r.aabb
+}
+
+// GetWidth returns the width of the bounding box.
+func (r *BoundingBox) GetWidth() float64 {
+	return r.size.GetWidth()
+}
+
+// GetHeight returns the height of the bounding box.
+func (r *BoundingBox) GetHeight() float64 {
+	return r.size.GetHeight()
+}
+
+// GetDepth returns the depth of the bounding box.
+func (r *BoundingBox) GetDepth() float64 {
+	return r.size.GetDepth()
+}
+
+// GetSize returns the width, height and depth.
+func (r *BoundingBox) GetSize() (float64, float64, float64) {
+	return r.size.Get()
+}
+
+// GetSizeCenter returns the center of the dimensions.
+func (r *BoundingBox) GetSizeCenter() (float64, float64, float64) {
+	return r.size.GetCenter()
+}
+
+// GetZ returns the reference position's Z coordinate.
+func (r *BoundingBox) GetZ() float64 {
+	return r.bottomLeft.z
+}
+
+// GetBottomLeft returns the reference position.
 func (r *BoundingBox) GetBottomLeft() (float64, float64, float64) {
 	return r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z
 }
 
-// GetBottomCenter returns the x, y, and z coordinates of the bottom-center point of the bounding box.
+// GetBottomCenter returns the bottom-center coordinates.
 func (r *BoundingBox) GetBottomCenter() (float64, float64, float64) {
 	return r.bottomCenter.x, r.bottomCenter.y, r.bottomCenter.z
 }
 
-// GetCenter returns the x, y, and z coordinates of the center point of the bounding box.
+// GetCenter returns the geometric center.
 func (r *BoundingBox) GetCenter() (float64, float64, float64) {
 	return r.center.x, r.center.y, r.center.z
 }
 
-// SetSize updates the width, height, and depth of the bounding box and triggers a rebuild of its derived properties.
+// SetSize updates the dimensions and derived data.
 func (r *BoundingBox) SetSize(w, h, d float64) {
-	r.size.w = w
-	r.size.h = h
-	r.size.d = d
+	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
 }
 
-// AddSize increases the width, height, and depth of the bounding box by the specified values and updates its state.
+// AddSize increases the dimensions and updates derived data.
 func (r *BoundingBox) AddSize(w, h, d float64) {
 	r.size.w += w
 	r.size.h += h
@@ -101,7 +198,7 @@ func (r *BoundingBox) AddSize(w, h, d float64) {
 	r.rebuild()
 }
 
-// AddTo adjusts the position of the BoundingBox by adding the specified x, y, and z offsets to its bottom left corner.
+// AddTo translates the reference position.
 func (r *BoundingBox) AddTo(x, y, z float64) {
 	if x == 0.0 && y == 0.0 && z == 0.0 {
 		return
@@ -112,7 +209,7 @@ func (r *BoundingBox) AddTo(x, y, z float64) {
 	r.rebuild()
 }
 
-// MoveTo updates the bottom-left corner of the BoundingBox to the specified x, y, and z coordinates and recalculates derived properties.
+// MoveTo changes the reference position.
 func (r *BoundingBox) MoveTo(x, y, z float64) {
 	r.bottomLeft.x = x
 	r.bottomLeft.y = y
@@ -120,27 +217,26 @@ func (r *BoundingBox) MoveTo(x, y, z float64) {
 	r.rebuild()
 }
 
-// MoveToZ updates the z-coordinate of the bottom-left point of the BoundingBox and recalculates dependent properties.
+// MoveToZ changes the reference position's Z coordinate.
 func (r *BoundingBox) MoveToZ(z float64) {
 	r.bottomLeft.z = z
 	r.rebuild()
 }
 
-// MoveTest computes new coordinates by adding the given offsets to the BoundingBox's bottom-left corner position.
+// MoveTest returns the reference position after applying a translation,
+// without modifying the bounding box.
 func (r *BoundingBox) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
-	x := r.bottomLeft.x + vx
-	y := r.bottomLeft.y + vy
-	z := r.bottomLeft.z + vz
-	return x, y, z
+	return r.bottomLeft.x + vx,
+		r.bottomLeft.y + vy,
+		r.bottomLeft.z + vz
 }
 
-// Distance computes the Euclidean distance between the entity and a specified collider entity.
+// Distance returns the distance between the geometric centers.
 func (r *BoundingBox) Distance(target *BoundingBox) float64 {
-	x1, y1, z1 := r.GetCenter()
-	x2, y2, z2 := target.GetCenter()
-	dx := x2 - x1
-	dy := y2 - y1
-	dz := z2 - z1
+	dx := target.center.x - r.center.x
+	dy := target.center.y - r.center.y
+	dz := target.center.z - r.center.z
+
 	d := dx*dx + dy*dy + dz*dz
 	if d < 0.0001 {
 		return 0.01
@@ -148,18 +244,125 @@ func (r *BoundingBox) Distance(target *BoundingBox) float64 {
 	return math.Sqrt(d)
 }
 
-// Intersect checks if the current bounding box intersects with another AABB defined by its position and dimensions.
-func (r *BoundingBox) Intersect(x2, y2, z2, w2, h2, d2 float64) bool {
-	// Separating Axis Theorem (SAT) per AABB
-	if x2 > r.bottomLeft.x+r.size.w || r.bottomLeft.x > x2+w2 ||
-		y2 > r.bottomLeft.y+r.size.h || r.bottomLeft.y > y2+h2 ||
-		z2 > r.bottomLeft.z+r.size.d || r.bottomLeft.z > z2+d2 {
-		return false
-	}
-	return true
+// Intersect tests this OBB against an axis-aligned box defined by
+// its reference position and dimensions.
+func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
+	return intersectsOBB(
+		obbVector{r.center.x, r.center.y, r.center.z},
+		r.axis,
+		obbVector{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
+		obbVector{x + w*0.5, y + h*0.5, z + d*0.5},
+		[3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}},
+		obbVector{w * 0.5, h * 0.5, d * 0.5},
+	)
 }
 
-// IntersectBB checks if the current bounding box intersects with another bounding box.
-func (r *BoundingBox) IntersectBB(r2 *BoundingBox) bool {
-	return r.Intersect(r2.bottomLeft.x, r2.bottomLeft.y, r2.bottomLeft.z, r2.size.w, r2.size.h, r2.size.d)
+// IntersectBB tests this OBB against another OBB.
+func (r *BoundingBox) IntersectBB(other *BoundingBox) bool {
+	return intersectsOBB(
+		obbVector{r.center.x, r.center.y, r.center.z},
+		r.axis,
+		obbVector{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
+		obbVector{other.center.x, other.center.y, other.center.z},
+		other.axis,
+		obbVector{other.size.w * 0.5, other.size.h * 0.5, other.size.d * 0.5},
+	)
+}
+
+// intersectsOBB performs the 15-axis Separating Axis Theorem test.
+// It uses fixed-size arrays and does not create slices or heap objects.
+func intersectsOBB(cA obbVector, a [3]obbVector, hA obbVector, cB obbVector, b [3]obbVector, hB obbVector) bool {
+	dx := cB[0] - cA[0]
+	dy := cB[1] - cA[1]
+	dz := cB[2] - cA[2]
+	var R [3][3]float64
+	var AbsR [3][3]float64
+	// Rotation matrix between the two box coordinate systems.
+	// The epsilon stabilizes nearly parallel axes.
+	const epsilon = 1e-12
+	for i := 0; i < 3; i++ {
+		ax := a[i][0]
+		ay := a[i][1]
+		az := a[i][2]
+		for j := 0; j < 3; j++ {
+			value := ax*b[j][0] + ay*b[j][1] + az*b[j][2]
+			R[i][j] = value
+			AbsR[i][j] = math.Abs(value) + epsilon
+		}
+	}
+
+	// Center displacement in A's coordinate system.
+	t0 := dx*a[0][0] + dy*a[0][1] + dz*a[0][2]
+	t1 := dx*a[1][0] + dy*a[1][1] + dz*a[1][2]
+	t2 := dx*a[2][0] + dy*a[2][1] + dz*a[2][2]
+
+	// Test the three axes of A.
+	for i := 0; i < 3; i++ {
+		rb := hB[0]*AbsR[i][0] + hB[1]*AbsR[i][1] + hB[2]*AbsR[i][2]
+		var distance float64
+		switch i {
+		case 0:
+			distance = math.Abs(t0)
+		case 1:
+			distance = math.Abs(t1)
+		default:
+			distance = math.Abs(t2)
+		}
+		if distance > hA[i]+rb {
+			return false
+		}
+	}
+
+	// Test the three axes of B.
+	for j := 0; j < 3; j++ {
+		ra := hA[0]*AbsR[0][j] + hA[1]*AbsR[1][j] + hA[2]*AbsR[2][j]
+		distance := math.Abs(t0*R[0][j] + t1*R[1][j] + t2*R[2][j])
+		if distance > ra+hB[j] {
+			return false
+		}
+	}
+
+	// Test the nine cross-product axes A[i] x B[j].
+	// These are evaluated directly without constructing vectors.
+	for i := 0; i < 3; i++ {
+		i1 := (i + 1) % 3
+		i2 := (i + 2) % 3
+
+		for j := 0; j < 3; j++ {
+			j1 := (j + 1) % 3
+			j2 := (j + 2) % 3
+			ra := hA[i1]*AbsR[i2][j] + hA[i2]*AbsR[i1][j]
+			rb := hB[j1]*AbsR[i][j2] + hB[j2]*AbsR[i][j1]
+			var ti1, ti2 float64
+			switch i1 {
+			case 0:
+				ti1 = t0
+			case 1:
+				ti1 = t1
+			default:
+				ti1 = t2
+			}
+
+			switch i2 {
+			case 0:
+				ti2 = t0
+			case 1:
+				ti2 = t1
+			default:
+				ti2 = t2
+			}
+
+			distance := math.Abs(
+				ti2*R[i1][j] -
+					ti1*R[i2][j],
+			)
+
+			if distance > ra+rb {
+				return false
+			}
+		}
+	}
+
+	// Preserve the previous contact semantics: touching is intersection.
+	return true
 }

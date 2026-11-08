@@ -104,8 +104,9 @@ func (s *Cage) GetObject() volumes.IThing {
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
 func (s *Cage) Rebuild(maxStep float64) {
 	entity := s.object.VerticesGetEntity()
-	// Calculate Half-Extents
-	s.eRadX, s.eRadY, s.eRadZ = entity.GetSizeCenter()
+	// Calculate Oriented Horizontal Half-Extents and Canonical Vertical Half-Extent
+	s.eRadX, s.eRadY, _ = entity.GetOrientedHalfExtents()
+	_, _, s.eRadZ = entity.GetSizeCenter()
 	// Calculate center for Broad-Phase
 	s.cX, s.cY, s.cZ = entity.GetCenter()
 	// Calculate Position
@@ -286,37 +287,80 @@ func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, floa
 	lOy += s.dY
 	lOz += s.dZ
 	rOx, rOy, rOz := rCage.object.VerticesGetCenter()
-	rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
+	rEnt := rCage.object.VerticesGetEntity()
+	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	rOx += rDX
 	rOy += rDY
 	rOz += rDZ
-	lEntityL := s.TranslateWorldToLocal(slot, rOx, rOy, rOz)
-	return lEntityL, rOx - lOx, rOy - lOy, rOz - lOz
+
+	from := s.ellipsoid.GetAABB()
+	wMinX, wMaxX := from.GetMinX()-rOx, from.GetMaxX()-rOx
+	wMinY, wMaxY := from.GetMinY()-rOy, from.GetMaxY()-rOy
+	wMinZ, wMaxZ := from.GetMinZ()-rOz, from.GetMaxZ()-rOz
+
+	wCx, wCy, wCz := (wMinX+wMaxX)*0.5, (wMinY+wMaxY)*0.5, (wMinZ+wMaxZ)*0.5
+	wHx, wHy, wHz := (wMaxX-wMinX)*0.5, (wMaxY-wMinY)*0.5, (wMaxZ-wMinZ)*0.5
+
+	a0, a1, a2 := rEnt.GetAxes()
+	locCx := wCx*a0[0] + wCy*a0[1] + wCz*a0[2]
+	locCy := wCx*a1[0] + wCy*a1[1] + wCz*a1[2]
+	locCz := wCx*a2[0] + wCy*a2[1] + wCz*a2[2]
+
+	locHx := math.Abs(a0[0])*wHx + math.Abs(a0[1])*wHy + math.Abs(a0[2])*wHz
+	locHy := math.Abs(a1[0])*wHx + math.Abs(a1[1])*wHy + math.Abs(a1[2])*wHz
+	locHz := math.Abs(a2[0])*wHx + math.Abs(a2[1])*wHy + math.Abs(a2[2])*wHz
+
+	w := s.ellipsoidLocal[slot]
+	w.Rebuild(locCx-locHx, locCy-locHy, locCz-locHz, locHx*2.0, locHy*2.0, locHz*2.0)
+	return w, rOx - lOx, rOy - lOy, rOz - lOz
 }
 
 // Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
 func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *physics.Entity {
 	w := s.ellipsoidLocal[slot]
 	to := src.GetAABB()
-	lMinX := to.GetMinX() + deltaX
-	lMaxX := to.GetMaxX() + deltaX
-	lMinY := to.GetMinY() + deltaY
-	lMaxY := to.GetMaxY() + deltaY
-	lMinZ := to.GetMinZ() + deltaZ
-	lMaxZ := to.GetMaxZ() + deltaZ
+	rLocCx := (to.GetMinX() + to.GetMaxX()) * 0.5
+	rLocCy := (to.GetMinY() + to.GetMaxY()) * 0.5
+	rLocCz := (to.GetMinZ() + to.GetMaxZ()) * 0.5
+	rLocHx := (to.GetMaxX() - to.GetMinX()) * 0.5
+	rLocHy := (to.GetMaxY() - to.GetMinY()) * 0.5
+	rLocHz := (to.GetMaxZ() - to.GetMinZ()) * 0.5
+
+	wCx, wCy, wCz := rLocCx+deltaX, rLocCy+deltaY, rLocCz+deltaZ
+	wHx, wHy, wHz := rLocHx, rLocHy, rLocHz
+
 	if f, ok := src.(*volumes.Face); ok {
 		nX, nY, nZ := f.GetNormal()
-		padX := math.Abs(nX) * s.eRadX * 2.0
-		padY := math.Abs(nY) * s.eRadY * 2.0
-		padZ := math.Abs(nZ) * s.eRadZ * 2.0
-		lMinX -= padX
-		lMaxX += padX
-		lMinY -= padY
-		lMaxY += padY
-		lMinZ -= padZ
-		lMaxZ += padZ
+		if p := f.GetParent(); p != nil {
+			if rEnt := p.GetEntity(); rEnt != nil {
+				rA0, rA1, rA2 := rEnt.GetAxes()
+				wCx = rA0[0]*rLocCx + rA1[0]*rLocCy + rA2[0]*rLocCz + deltaX
+				wCy = rA0[1]*rLocCx + rA1[1]*rLocCy + rA2[1]*rLocCz + deltaY
+				wCz = rA0[2]*rLocCx + rA1[2]*rLocCy + rA2[2]*rLocCz + deltaZ
+				wHx = math.Abs(rA0[0])*rLocHx + math.Abs(rA1[0])*rLocHy + math.Abs(rA2[0])*rLocHz
+				wHy = math.Abs(rA0[1])*rLocHx + math.Abs(rA1[1])*rLocHy + math.Abs(rA2[1])*rLocHz
+				wHz = math.Abs(rA0[2])*rLocHx + math.Abs(rA1[2])*rLocHy + math.Abs(rA2[2])*rLocHz
+				fnX, fnY, fnZ := nX, nY, nZ
+				nX = rA0[0]*fnX + rA1[0]*fnY + rA2[0]*fnZ
+				nY = rA0[1]*fnX + rA1[1]*fnY + rA2[1]*fnZ
+				nZ = rA0[2]*fnX + rA1[2]*fnY + rA2[2]*fnZ
+			}
+		}
+		wHx += math.Abs(nX) * s.eRadX * 2.0
+		wHy += math.Abs(nY) * s.eRadY * 2.0
+		wHz += math.Abs(nZ) * s.eRadZ * 2.0
 	}
-	w.Rebuild(lMinX, lMinY, lMinZ, lMaxX-lMinX, lMaxY-lMinY, lMaxZ-lMinZ)
+
+	lA0, lA1, lA2 := s.object.VerticesGetEntity().GetAxes()
+	lLocCx := wCx*lA0[0] + wCy*lA0[1] + wCz*lA0[2]
+	lLocCy := wCx*lA1[0] + wCy*lA1[1] + wCz*lA1[2]
+	lLocCz := wCx*lA2[0] + wCy*lA2[1] + wCz*lA2[2]
+
+	lLocHx := math.Abs(lA0[0])*wHx + math.Abs(lA0[1])*wHy + math.Abs(lA0[2])*wHz
+	lLocHy := math.Abs(lA1[0])*wHx + math.Abs(lA1[1])*wHy + math.Abs(lA1[2])*wHz
+	lLocHz := math.Abs(lA2[0])*wHx + math.Abs(lA2[1])*wHy + math.Abs(lA2[2])*wHz
+
+	w.Rebuild(lLocCx-lLocHx, lLocCy-lLocHy, lLocCz-lLocHz, lLocHx*2.0, lLocHy*2.0, lLocHz*2.0)
 	return w
 }
 
@@ -522,9 +566,15 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *vo
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
 
+	rQ := rCage.GetEntity().GetQuaternion()
+	nX, nY, nZ = rQ.Rotate(nX, nY, nZ)
+	nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), math.Abs(nZ)
+
 	// Punto di ancoraggio del piano remoto in World Space a fine frame (t = 1),
 	// poiché rOffX, rOffY, rOffZ includono già lo spostamento rDX, rDY, rDZ.
-	p0x, p0y, p0z := rFace.Translate(0, rOffX, rOffY, rOffZ)
+	lp0x, lp0y, lp0z := rFace.Get0()
+	rp0x, rp0y, rp0z := rQ.Rotate(lp0x, lp0y, lp0z)
+	p0x, p0y, p0z := rp0x+rOffX, rp0y+rOffY, rp0z+rOffZ
 
 	rCx0, rCy0, rCz0 := rCage.GetC()
 	rDX, rDY, rDZ := rCage.GetDisplacement()
@@ -739,8 +789,11 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *vo
 		}
 	}
 
-	rFaceAABB := rFace.GetAABB()
-	rMaxZ := rFaceAABB.GetMaxZ() + rOffZ
+	tri := rFace.GetTri()
+	_, _, z0 := rQ.Rotate(tri[0].X, tri[0].Y, tri[0].Z)
+	_, _, z1 := rQ.Rotate(tri[1].X, tri[1].Y, tri[1].Z)
+	_, _, z2 := rQ.Rotate(tri[2].X, tri[2].Y, tri[2].Z)
+	rMaxZ := math.Max(z0, math.Max(z1, z2)) + rOffZ
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
 }

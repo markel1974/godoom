@@ -51,6 +51,15 @@ type Vertices3DEntry struct {
 	groupSize     float64
 	salt          uint64
 	tick          uint64
+	facesA        *Faces
+	facesB        *Faces
+	rot           *TagAxis
+	lastQx        float64
+	lastQy        float64
+	lastQz        float64
+	lastQw        float64
+	lastRotVolA   *Volume
+	lastRotVolB   *Volume
 }
 
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
@@ -114,6 +123,27 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		vols[frameIdx] = volume
 	}
 
+	maxFaces := 0
+	for _, vol := range vols {
+		if c := vol.GetFaceCount(); c > maxFaces {
+			maxFaces = c
+		}
+	}
+	facesA := NewFaces(maxFaces, true)
+	facesB := NewFaces(maxFaces, true)
+	for j := 0; j < maxFaces; j++ {
+		var mat *textures.Material
+		var u, v [3]float64
+		if len(vols) > 0 && vols[0] != nil && j < vols[0].GetFaceCount() {
+			src := vols[0].GetFace(j)
+			mat = src.material
+			u = src.u
+			v = src.v
+		}
+		facesA.Set(j, &Face{material: mat, u: u, v: v})
+		facesB.Set(j, &Face{material: mat, u: u, v: v})
+	}
+
 	v := &Vertices3DEntry{
 		volumes:       vols,
 		groupSize:     float64(model.GroupSize),
@@ -127,6 +157,10 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		lerpT:         0.0,
 		lastVolA:      nil,
 		salt:          uint64(rand.Intn(len(model.Frames))),
+		facesA:        facesA,
+		facesB:        facesB,
+		rot:           NewTagAxis(geometry.XYZ{}, _im),
+		lastQw:        1.0,
 	}
 
 	if len(v.actions) > 0 {
@@ -178,14 +212,20 @@ func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 	v.startFrame = action.Start
 	v.endFrame = action.End
 	v.clampAnim = action.Clamp
+	v.singleFrame = v.startFrame == v.endFrame
+	if v.startFrame >= 0 && v.startFrame < len(v.volumes) {
+		v.volA = v.volumes[v.startFrame]
+		v.volB = v.volumes[v.startFrame]
+		v.lerpT = 0.0
+	}
 }
 
 // VerticesCompile updates the active animation frames and interpolation factor for the given tick.
 func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
+	v.tick = tick + v.salt
 	if v.singleFrame {
 		return false
 	}
-	v.tick = tick + v.salt
 
 	animLength := v.endFrame - v.startFrame + 1
 	if animLength <= 0 {
@@ -232,9 +272,64 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	return true
 }
 
-// VerticesGet returns the two face sets, interpolation factor, and model 3D render mode.
+// VerticesGet returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
 func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
-	return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
+	if v.volA == nil || v.volB == nil {
+		return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
+	}
+	entity := v.viewVolume.GetEntity()
+	if entity == nil {
+		return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
+	}
+	q := entity.GetQuaternion()
+	qx, qy, qz, qw := q.Get()
+	if qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0 {
+		return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
+	}
+
+	if v.volA != v.lastRotVolA || v.volB != v.lastRotVolB || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
+		v.rot.SetFromQuaternion(q)
+		v.lastQx, v.lastQy, v.lastQz, v.lastQw = qx, qy, qz, qw
+		v.lastRotVolA = v.volA
+		v.lastRotVolB = v.volB
+
+		countA := v.volA.GetFaceCount()
+		for j := 0; j < countA; j++ {
+			srcA := v.volA.GetFace(j)
+			dstA := v.facesA.At(j)
+			dstA.material = srcA.material
+			dstA.u = srcA.u
+			dstA.v = srcA.v
+			v.rot.TransformPointsWithMatrix(dstA, srcA, 0, 0, 0)
+		}
+		for j := countA; j < v.facesA.Len(); j++ {
+			if faceA := v.facesA.At(j); faceA != nil {
+				faceA.Zero()
+			}
+		}
+
+		if v.volB != v.volA {
+			countB := v.volB.GetFaceCount()
+			for j := 0; j < countB; j++ {
+				srcB := v.volB.GetFace(j)
+				dstB := v.facesB.At(j)
+				dstB.material = srcB.material
+				dstB.u = srcB.u
+				dstB.v = srcB.v
+				v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
+			}
+			for j := countB; j < v.facesB.Len(); j++ {
+				if faceB := v.facesB.At(j); faceB != nil {
+					faceB.Zero()
+				}
+			}
+		}
+	}
+
+	if v.volB == v.volA {
+		return v.facesA, v.facesA, v.lerpT, RenderModeModel3D
+	}
+	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 
 // GetVolumes returns the current source and target volumes with the interpolation factor between them.

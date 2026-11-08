@@ -77,6 +77,7 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 
 	entity := t.VerticesGetEntity()
 	entity.SetOnGround(false)
+	t.SetAngle(cfg.Angle)
 	t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
 	t.cage = collisions.NewCage(thing)
 
@@ -108,9 +109,12 @@ func (t *Base) GetAngle() float64 {
 	return t.angle
 }
 
-// SetAngle updates the rotation angle of the Base instance to the specified float64 value.
+// SetAngle updates the rotation angle of the Base instance and synchronizes the entity's orientation quaternion.
 func (t *Base) SetAngle(angle float64) {
 	t.angle = angle
+	if entity := t.VerticesGetEntity(); entity != nil {
+		entity.SetRotationAngleZ(angle)
+	}
 }
 
 // GetMaxStep returns the maximum step value associated with the Base instance.
@@ -168,6 +172,7 @@ func (t *Base) IsVisible() bool {
 func (t *Base) StagePrepare() {
 	entity := t.VerticesGetEntity()
 	entity.Update()
+	t.angle = entity.GetYaw()
 	t.cage.Rebuild(t.maxStep)
 }
 
@@ -315,7 +320,7 @@ func (t *Base) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, for
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
 
-		closestThing.VerticesGetEntity().AddForce(dirX*force, dirY*force, dirZ*force)
+		closestThing.VerticesGetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(closestThing, id, force, closestDist, impactX, impactY, impactZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}

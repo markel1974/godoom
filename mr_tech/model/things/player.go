@@ -109,6 +109,7 @@ func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
 
 // StagePrepare prepares the stage for the Player by invoking the StagePrepare method of its Base.
 func (pr *Player) StagePrepare() {
+	pr.VerticesGetEntity().StopAngular()
 	pr.Base.StagePrepare()
 }
 
@@ -148,7 +149,7 @@ func (pr *Player) AddAngle(angle float64) {
 
 // SetAngle updates the player's orientation angle and recalculates the sine and cosine of the angle.
 func (pr *Player) SetAngle(angle float64) {
-	pr.angle = angle
+	pr.Base.SetAngle(angle)
 	pr.angleSin = math.Sin(pr.angle)
 	pr.angleCos = math.Cos(pr.angle)
 }

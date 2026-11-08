@@ -15,6 +15,7 @@ type UI struct {
 func NewUI(things IThingHandler, cfg *config.Thing) *UI {
 	ui := &UI{}
 	ui.Base = NewBase(ui, things, cfg, nil)
+	ui.SetAngle(0)
 	cfg.OnBind(ui)
 	return ui
 }

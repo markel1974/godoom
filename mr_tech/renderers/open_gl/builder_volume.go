@@ -256,6 +256,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		//thing.SetVisible()
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
+		if renderMode == volumes.RenderModeModel3D {
+			yaw = 0.0
+		}
 		tPosX, tPosY, zBot := thing.VerticesGetCenter()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 

@@ -2,6 +2,7 @@ package volumes
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // _im is a predefined identity matrix array representing the standard basis vectors in 3D space.
@@ -39,6 +40,17 @@ func (ta *TagAxis) Reset() {
 	ta.data[0].X, ta.data[0].Y, ta.data[0].Z = _im[0].X, _im[0].Y, _im[0].Z
 	ta.data[1].X, ta.data[1].Y, ta.data[1].Z = _im[1].X, _im[1].Y, _im[1].Z
 	ta.data[2].X, ta.data[2].Y, ta.data[2].Z = _im[2].X, _im[2].Y, _im[2].Z
+}
+
+// SetFromQuaternion populates the 3x3 basis axes directly from the supplied orientation quaternion.
+func (ta *TagAxis) SetFromQuaternion(q *physics.Quaternion) {
+	if q == nil {
+		ta.Reset()
+		return
+	}
+	ta.data[0].X, ta.data[0].Y, ta.data[0].Z,
+		ta.data[1].X, ta.data[1].Y, ta.data[1].Z,
+		ta.data[2].X, ta.data[2].Y, ta.data[2].Z = q.ToAxes()
 }
 
 // RotatePointByTag performs a 3D vector transformation using the matrix of the current TagAxis and the origin of the input TagAxis.

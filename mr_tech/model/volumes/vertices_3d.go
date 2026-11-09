@@ -130,7 +130,7 @@ func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	v.joints.StepJoints(tick)
-	cx, cy, cz := v.VerticesGetCenter()
+	cx, cy, cz := v.elements.GetCenter()
 
 	for _, i := range v.links.executionOrder {
 		v.elements.Bind(i, tick)

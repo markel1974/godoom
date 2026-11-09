@@ -15,7 +15,6 @@ import (
 type VerticesMultiSprite struct {
 	//currentAngle  int
 	volumes       []*Volume
-	viewVolume    *Volume
 	actionVolume  *Volume
 	physicsVolume *Volume
 	renderMode    float64
@@ -61,7 +60,7 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 
 	f.actionVolume = f.volumes[0]
 	f.physicsVolume = f.volumes[0]
-	f.viewVolume = f.actionVolume
+	//f.viewVolume = f.actionVolume
 
 	for _, viewIdx := range cfg.MultiSprite.Clamps {
 		if viewIdx < len(f.volumes) {
@@ -94,13 +93,12 @@ func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 // VerticesCompile updates the view volume to the current action volume.
 // It returns false because no rebuild is performed.
 func (v *VerticesMultiSprite) VerticesCompile(tick uint64) bool {
-	v.viewVolume = v.actionVolume
 	return false
 }
 
 // VerticesGet returns the current view volume faces twice, a zero value, and the active render mode.
 func (v *VerticesMultiSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
-	f := v.viewVolume.GetFaces()
+	f := v.actionVolume.GetFaces()
 	return f, f, 0.0, v.renderMode
 }
 

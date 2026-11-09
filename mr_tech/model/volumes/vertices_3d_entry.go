@@ -347,6 +347,10 @@ func (v *Vertices3DEntry) VerticesGetCenter() (float64, float64, float64) {
 func (v *Vertices3DEntry) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
+// VerticesSetRagdoll switches the vertices entry to ragdoll behavior.
+func (v *Vertices3DEntry) VerticesSetRagdoll() {
+}
+
 // IsActionClamped reports whether the action at idx is clamped (such as a death animation).
 func (v *Vertices3DEntry) IsActionClamped(idx int) bool {
 	if idx < 0 || idx >= len(v.actions) || v.actions[idx] == nil {

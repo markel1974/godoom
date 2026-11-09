@@ -41,17 +41,6 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 	}
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
-	/*
-		v000 := geometry.XYZ{X: -halfX, Y: -halfY, Z: 0.0}
-		v100 := geometry.XYZ{X: halfX, Y: -halfY, Z: 0.0}
-		v110 := geometry.XYZ{X: halfX, Y: halfY, Z: 0.0}
-		v010 := geometry.XYZ{X: -halfX, Y: halfY, Z: 0.0}
-
-		v001 := geometry.XYZ{X: -halfX, Y: -halfY, Z: d}
-		v101 := geometry.XYZ{X: halfX, Y: -halfY, Z: d}
-		v111 := geometry.XYZ{X: halfX, Y: halfY, Z: d}
-		v011 := geometry.XYZ{X: -halfX, Y: halfY, Z: d}
-	*/
 	halfD := d * 0.5
 
 	v000 := geometry.XYZ{X: -halfX, Y: -halfY, Z: -halfD}
@@ -141,6 +130,9 @@ func (v *VerticesSprite) VerticesSetAction(idx int) {
 
 // VerticesApplyImpact is a no-op for billboard sprites without articulated sub-parts.
 func (v *VerticesSprite) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
+}
+
+func (v *VerticesSprite) VerticesSetRagdoll() {
 }
 
 // VerticesGetCenter returns the x, y, and z coordinates of the sprite volume's center.

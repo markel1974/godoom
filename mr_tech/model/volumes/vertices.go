@@ -33,6 +33,8 @@ type IVertices interface {
 	VerticesSetAction(idx int)
 
 	VerticesApplyImpact(fx, fy, fz, px, py, pz float64)
+
+	VerticesSetRagdoll()
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.

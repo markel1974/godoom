@@ -241,7 +241,7 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 	if !e.hasAnimationState(state) {
 		if state == config.EnemyStateDead {
 			e.activeAnimation = state
-			e.self.VerticesSetAction(-2)
+			e.self.VerticesSetRagdoll()
 		}
 		//fmt.Println("No animations for state:", e.self.GetId(), state)
 		return 0

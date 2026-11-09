@@ -139,6 +139,10 @@ func (v *VerticesMultiSprite) VerticesGetCenter() (float64, float64, float64) {
 func (v *VerticesMultiSprite) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
+// VerticesSetRagdoll is a no-op for multi-sprite volumes without ragdoll state.
+func (v *VerticesMultiSprite) VerticesSetRagdoll() {
+}
+
 // computeAction selects the action volume for action and reports whether the active volume changed.
 // Invalid actions fall back to the default volume; angle is currently unused.
 func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {

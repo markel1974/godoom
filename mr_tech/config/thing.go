@@ -27,6 +27,8 @@ type IThingConfig interface {
 
 	VerticesSetAction(idx int)
 
+	VerticesSetRagdoll()
+
 	GetAngle() float64
 
 	SetAngle(angle float64)

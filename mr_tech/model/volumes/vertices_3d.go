@@ -68,19 +68,18 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return nil
 }
 
-// VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
-// Passing idx == -2 triggers procedural ragdoll death and collapse when no baked death animation exists.
-func (v *Vertices3D) VerticesSetAction(idx int) {
-	if idx == -2 {
-		if v.currentAction == idx && v.joints.IsRagdoll() {
-			return
-		}
-		v.currentAction = idx
-		v.elements.Freeze()
-		v.joints.SetRagdollCollapse()
-		v.joints.ActivateRagdoll()
+// VerticesSetRagdoll freezes the model and activates ragdoll collapse if it is not already ragdoll.
+func (v *Vertices3D) VerticesSetRagdoll() {
+	if v.joints.IsRagdoll() {
 		return
 	}
+	v.elements.Freeze()
+	v.joints.SetRagdollCollapse()
+	v.joints.ActivateRagdoll()
+}
+
+// VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
+func (v *Vertices3D) VerticesSetAction(idx int) {
 	if idx < 0 {
 		return
 	}

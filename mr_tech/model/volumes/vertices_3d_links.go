@@ -2,12 +2,13 @@ package volumes
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
-// linkInvalidParent marks a link as disconnected or without a valid parent.
-const linkInvalidParent = -1
+// linkInvalidIndex marks a link as disconnected or without a valid parent.
+const linkInvalidIndex = -1
 
 // Defines DFS traversal states used to track node visitation progress.
 const (
@@ -44,8 +45,8 @@ func NewVertices3DLinks() *Vertices3DLinks {
 }
 
 // Setup initializes link data, validates parent relationships, resolves tag indices, and builds execution order.
-func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements []*Vertices3DEntry) error {
-	numParts := len(elements)
+func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElements) error {
+	numParts := elements.Len()
 	ls.data = make([]*Vertices3DLink, numParts)
 	ls.tagIndices = make([]int, numParts)
 	ls.executionOrder = make([]int, 0, numParts)
@@ -54,7 +55,7 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements []*Vertices3DEntr
 		if i < len(cfg.Links) {
 			ls.data[i] = NewVertices3DLink(cfg.Links[i].Parent, cfg.Links[i].Tag)
 		} else {
-			ls.data[i] = NewVertices3DLink(linkInvalidParent, "")
+			ls.data[i] = NewVertices3DLink(linkInvalidIndex, "")
 		}
 	}
 
@@ -62,11 +63,11 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements []*Vertices3DEntr
 	for i := 0; i < numParts; i++ {
 		if ls.data[i].parent == i {
 			fmt.Printf("[warning] Vertices3D: part %d links to itself, disconnecting link\n", i)
-			ls.data[i].parent = linkInvalidParent
+			ls.data[i].parent = linkInvalidIndex
 			ls.data[i].tag = ""
 		} else if ls.data[i].parent >= numParts {
 			fmt.Printf("[warning] Vertices3D: part %d links to invalid parent %d (numParts=%d), disconnecting link\n", i, ls.data[i].parent, numParts)
-			ls.data[i].parent = linkInvalidParent
+			ls.data[i].parent = linkInvalidIndex
 			ls.data[i].tag = ""
 		}
 	}
@@ -107,13 +108,13 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements []*Vertices3DEntr
 
 	for i, link := range ls.data {
 		ls.tagIndices[i] = -1
-		if link.parent >= 0 && link.parent < numParts && elements[link.parent] != nil {
-			tagIdx := elements[link.parent].GetTagIndex(link.tag)
+		if element := elements.GetElement(link.parent); element != nil {
+			tagIdx := element.GetTagIndex(link.tag)
 			ls.tagIndices[i] = tagIdx
 			if tagIdx < 0 {
 				fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, link.parent, i)
 			} else {
-				for frameIdx, vol := range elements[link.parent].volumes {
+				for frameIdx, vol := range element.volumes {
 					if vol != nil {
 						if !vol.HasVertexTag(tagIdx) {
 							fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, tagIdx, frameIdx, link.parent, i)
@@ -168,5 +169,27 @@ func (ls *Vertices3DLinks) GetParent(i int) int {
 	if i >= 0 && i < len(ls.data) {
 		return ls.data[i].parent
 	}
-	return linkInvalidParent
+	return linkInvalidIndex
+}
+
+// HasParent reports whether i refers to a stored link entry.
+func (ls *Vertices3DLinks) HasParent(i int) bool {
+	if i >= 0 && i < len(ls.data) {
+		return true
+	}
+	return false
+}
+
+func (ls *Vertices3DLinks) GetTag(i int) string {
+	if i >= 0 && i < len(ls.data) {
+		return strings.ToLower(ls.data[i].tag)
+	}
+	return ""
+}
+
+func (ls *Vertices3DLinks) GetTagIndex(i int) int {
+	if i >= 0 && i < len(ls.tagIndices) {
+		return ls.tagIndices[i]
+	}
+	return linkInvalidIndex
 }

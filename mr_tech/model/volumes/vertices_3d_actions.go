@@ -17,8 +17,8 @@ func NewVertices3DActions() *Vertices3DActions {
 }
 
 // Setup initializes per-part action maps from the model config, validating entries and defaulting invalid mappings to 0.
-func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements []*Vertices3DEntry) error {
-	numParts := len(elements)
+func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DElements) error {
+	numParts := elements.Len()
 	v.actions = make([][]int, numParts)
 
 	// Validate and normalize ActionMaps
@@ -34,8 +34,8 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements []*Vertices3DEnt
 		expectedActions = len(cfg.ActionDefinitions)
 	} else if len(rawActions) > 0 && len(rawActions[0]) > 0 {
 		expectedActions = len(rawActions[0])
-	} else if len(elements) > 0 && elements[0] != nil {
-		expectedActions = len(elements[0].actions)
+	} else {
+		expectedActions = len(elements.elements[0].actions)
 	}
 
 	for i := 0; i < numParts; i++ {
@@ -54,8 +54,8 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements []*Vertices3DEnt
 			action = make([]int, expectedActions)
 		}
 
-		if elements[i] != nil {
-			numActions := len(elements[i].actions)
+		if element := elements.GetElement(i); element != nil {
+			numActions := len(element.actions)
 			for actionIdx, targetIdx := range action {
 				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {
 					fmt.Printf("[warning] Vertices3D: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n", i, actionIdx, targetIdx, numActions-1)
@@ -66,4 +66,11 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements []*Vertices3DEnt
 		v.actions[i] = action
 	}
 	return nil
+}
+
+func (v *Vertices3DActions) Get(i, idx int) (int, bool) {
+	if i < len(v.actions) && idx < len(v.actions[i]) {
+		return v.actions[i][idx], true
+	}
+	return -1, false
 }

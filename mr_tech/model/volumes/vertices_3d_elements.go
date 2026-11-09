@@ -116,7 +116,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	}
 
 	element := v.entries[0]
-	v.vVolume = NewVirtualVolume(v, element.VerticesGetEntity())
+	v.vVolume = NewVirtualVolume(v, element.viewVolume.GetEntity())
 	return nil
 }
 

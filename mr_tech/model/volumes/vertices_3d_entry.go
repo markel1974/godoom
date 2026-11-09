@@ -9,7 +9,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -191,11 +190,6 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 // VerticesGetVolume returns the current view volume for this vertices entry.
 func (v *Vertices3DEntry) VerticesGetVolume() IVolume {
 	return v.viewVolume
-}
-
-// VerticesGetEntity returns the physics entity associated with the current view volume.
-func (v *Vertices3DEntry) VerticesGetEntity() *physics.Entity {
-	return v.viewVolume.GetEntity()
 }
 
 // VerticesSetAction selects the animation action at idx and resets timing for its frame interval.

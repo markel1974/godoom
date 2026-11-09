@@ -1,5 +1,7 @@
 package volumes
 
+import "math"
+
 // Faces represents a collection of face entries.
 type Faces struct {
 	container []*Face
@@ -62,4 +64,18 @@ func (f *Faces) At(idx int) *Face {
 // Clear resets the face count to zero, leaving allocated storage available for reuse.
 func (f *Faces) Clear() {
 	f.count = 0
+}
+
+// GetMinMax returns the minimum and maximum x, y, and z coordinates across all non-nil faces.
+func (f *Faces) GetMinMax() (float64, float64, float64, float64, float64, float64) {
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+	for x := 0; x < f.count; x++ {
+		face := f.container[x]
+		if face == nil {
+			continue
+		}
+		minX, minY, minZ, maxX, maxY, maxZ = face.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+	}
+	return minX, minY, minZ, maxX, maxY, maxZ
 }

@@ -204,3 +204,12 @@ func (v *Vertices3DElements) Freeze() {
 		}
 	}
 }
+
+// UpdateEntityBounds sets the entity size from current face bounds when all dimensions are positive.
+func (v *Vertices3DElements) UpdateEntityBounds() {
+	minX, minY, minZ, maxX, maxY, maxZ := v.facesA.GetMinMax()
+	w := maxX - minX
+	h := maxY - minY
+	d := maxZ - minZ
+	v.vVolume.entity.SetSize(w, h, d)
+}

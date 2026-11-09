@@ -21,10 +21,6 @@ type Vertices3D struct {
 // NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
-	if cfg.Model3D == nil {
-		panic(fmt.Sprintf("no Model3D for thing %s", cfg.Id))
-	}
-
 	v := &Vertices3D{
 		elements:      NewVertices3DElements(),
 		links:         NewVertices3DLinks(),
@@ -32,25 +28,25 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		actions:       NewVertices3DActions(),
 		currentAction: -1,
 	}
-
-	_ = v.elements.Setup(thing, cfg, materials)
-
-	_ = v.links.Setup(cfg.Model3D, v.elements)
-
-	_ = v.joints.Setup(cfg.Model3D, v.elements, v.links)
-
-	_ = v.actions.Setup(cfg.Model3D, v.elements)
-
+	if err := v.elements.Setup(thing, cfg, materials); err != nil {
+		panic("Error setting up vertices elements: " + err.Error())
+	}
+	if err := v.links.Setup(cfg.Model3D, v.elements); err != nil {
+		panic("Error setting up vertices elements: " + err.Error())
+	}
+	if err := v.joints.Setup(cfg.Model3D, v.elements, v.links); err != nil {
+		panic("Error setting up vertices elements: " + err.Error())
+	}
+	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
+		panic("Error setting up vertices elements: " + err.Error())
+	}
 	v.VerticesCompile(0)
 
 	numParts := v.elements.Len()
 	if numParts > 1 {
 		v.elements.Rebuild(thing, cfg)
-	} else {
-		fmt.Println("No parts to rebuild")
 	}
 
-	//v.VerticesCompile(0)
 	return v
 }
 
@@ -97,7 +93,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 	v.currentAction = idx
 	enteringRagdoll := false
 	for _, i := range v.links.executionOrder {
-		el := v.elements.GetElement(i)
+		el := v.elements.GetEntry(i)
 		if el == nil {
 			continue
 		}
@@ -105,14 +101,9 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 			continue
 		}
 		if targetAction, ok := v.actions.Get(i, idx); ok {
-			if targetAction >= 0 && targetAction < len(el.actions) {
-				el.VerticesSetAction(targetAction)
-				if el.IsActionClamped(targetAction) {
-					enteringRagdoll = true
-				}
-			} else {
-				fmt.Printf("[warning] Vertices3D: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n", i, idx, targetAction, len(el.actions)-1)
-				el.VerticesSetAction(0)
+			el.VerticesSetAction(targetAction)
+			if el.IsActionClamped(targetAction) {
+				enteringRagdoll = true
 			}
 		} else {
 			fmt.Printf("[warning] Vertices3D: part %d has no mapping for action %d, falling back to action 0\n", i, idx)
@@ -160,10 +151,3 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
 }
-
-// deepReset clears cached volumes and resets origin and rotation state for the part at i.
-//func (v *Vertices3D) deepReset(i int) {
-//	v.volsA[i] = nil
-//	v.volsB[i] = nil
-//	v.reset(i)
-//}

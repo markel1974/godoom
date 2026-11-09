@@ -35,7 +35,7 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DEleme
 	} else if len(rawActions) > 0 && len(rawActions[0]) > 0 {
 		expectedActions = len(rawActions[0])
 	} else {
-		expectedActions = len(elements.elements[0].actions)
+		expectedActions = len(elements.entries[0].actions)
 	}
 
 	for i := 0; i < numParts; i++ {
@@ -54,7 +54,7 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DEleme
 			action = make([]int, expectedActions)
 		}
 
-		if element := elements.GetElement(i); element != nil {
+		if element := elements.GetEntry(i); element != nil {
 			numActions := len(element.actions)
 			for actionIdx, targetIdx := range action {
 				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {

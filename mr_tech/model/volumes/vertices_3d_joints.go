@@ -158,7 +158,7 @@ func (v *Vertices3DJoints) Setup(_ *config.Model3D, elements2 *Vertices3DElement
 		j.combinedB.Reset()
 		j.partRadius = 8.0
 
-		if element := elements2.GetElement(i); element != nil {
+		if element := elements2.GetEntry(i); element != nil {
 			if vol := element.volumes[0]; vol != nil {
 				fc := vol.GetFaceCount()
 				if fc > 0 {
@@ -386,7 +386,7 @@ func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, d
 
 	for i := 0; i < v.elements.Len(); i++ {
 		if i == idx || v.IsPartDetached(i) {
-			if element := v.elements.GetElement(i); element != nil {
+			if element := v.elements.GetEntry(i); element != nil {
 				element.FreezeCurrentFrame()
 			}
 		}

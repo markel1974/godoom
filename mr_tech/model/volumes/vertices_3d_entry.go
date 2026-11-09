@@ -201,6 +201,7 @@ func (v *Vertices3DEntry) VerticesGetEntity() *physics.Entity {
 // VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
 func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
+		fmt.Printf("Invalid action index: %d\n", idx)
 		return
 	}
 	if v.currentAction == idx {

@@ -112,7 +112,7 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 
 	for i, link := range ls.data {
 		ls.tagIndices[i] = linkInvalidIndex
-		if element := elements.GetElement(link.parent); element != nil {
+		if element := elements.GetEntry(link.parent); element != nil {
 			tagIdx := element.GetTagIndex(link.tag)
 			ls.tagIndices[i] = tagIdx
 			if tagIdx < 0 {

@@ -131,8 +131,3 @@ func (v *VerticesSprite) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 
 func (v *VerticesSprite) VerticesSetRagdoll() {
 }
-
-// VerticesGetCenter returns the x, y, and z coordinates of the sprite volume's center.
-func (v *VerticesSprite) VerticesGetCenter() (float64, float64, float64) {
-	return v.volume.GetEntity().GetCenter()
-}

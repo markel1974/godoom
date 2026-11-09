@@ -60,11 +60,6 @@ func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
 	return v.elements.vVolume.entity
 }
 
-// VerticesGetCenter returns the center coordinates of the composite entity, or zero coordinates if none is available.
-func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
-	return v.elements.vVolume.entity.GetCenter()
-}
-
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return v.elements.vVolume.entity.GetAABB()

@@ -163,13 +163,13 @@ func (s *Cage) Commit(rCage *Cage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rOffX, rOffY, rOffZ = rCage.object.VerticesGetCenter()
+		rOffX, rOffY, rOffZ = rCage.object.VerticesGetVolume().GetEntity().GetCenter()
 		rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
 		rOffX += rDX
 		rOffY += rDY
 		rOffZ += rDZ
 
-		lOffX, lOffY, lOffZ = s.object.VerticesGetCenter()
+		lOffX, lOffY, lOffZ = s.object.VerticesGetVolume().GetEntity().GetCenter()
 		lOffX += s.dX
 		lOffY += s.dY
 		lOffZ += s.dZ
@@ -282,11 +282,11 @@ func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
 func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, float64, float64) {
-	lOx, lOy, lOz := s.object.VerticesGetCenter()
+	lOx, lOy, lOz := s.object.VerticesGetVolume().GetEntity().GetCenter()
 	lOx += s.dX
 	lOy += s.dY
 	lOz += s.dZ
-	rOx, rOy, rOz := rCage.object.VerticesGetCenter()
+	rOx, rOy, rOz := rCage.object.VerticesGetVolume().GetEntity().GetCenter()
 	rEnt := rCage.object.VerticesGetEntity()
 	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	rOx += rDX

@@ -18,6 +18,8 @@ const (
 
 type IVolume interface {
 	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
+
+	GetEntity() *physics.Entity
 }
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
@@ -28,11 +30,7 @@ type IVertices interface {
 
 	VerticesGet() (*Faces, *Faces, float64, float64)
 
-	VerticesGetCenter() (float64, float64, float64)
-
 	VerticesGetVolume() IVolume
-
-	VerticesGetEntity() *physics.Entity
 
 	VerticesSetAction(idx int)
 

@@ -198,11 +198,6 @@ func (v *Vertices3DEntry) VerticesGetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
 }
 
-// VerticesGetCenter returns the x, y, and z coordinates of the view volume entity's center.
-func (v *Vertices3DEntry) VerticesGetCenter() (float64, float64, float64) {
-	return v.viewVolume.GetEntity().GetCenter()
-}
-
 // VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
 func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {

@@ -259,7 +259,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		if renderMode == volumes.RenderModeModel3D {
 			yaw = 0.0
 		}
-		tPosX, tPosY, zBot := thing.VerticesGetCenter()
+		tPosX, tPosY, zBot := thing.VerticesGetEntity().GetCenter()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 
 		var currentMat *textures.Material

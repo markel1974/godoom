@@ -126,11 +126,6 @@ func (v *VerticesMultiSprite) VerticesSetAction(idx int) {
 	}
 }
 
-// VerticesGetCenter returns the x, y, and z coordinates of the center of the first volume's entity.
-func (v *VerticesMultiSprite) VerticesGetCenter() (float64, float64, float64) {
-	return v.actionVolume.GetEntity().GetCenter()
-}
-
 // VerticesApplyImpact is a no-op for multi-sprite views without articulated 3D sub-parts.
 func (v *VerticesMultiSprite) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// In vertices_3d_elements.go:
 type VirtualVolume struct {
 	entity   *physics.Entity
 	elements *Vertices3DElements
@@ -30,9 +29,7 @@ func (v *VirtualVolume) GetEntity() *physics.Entity {
 // QueryOverlaps interroga i volumi attivi di tutte le parti che compongono Vertices3D
 func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	for _, el := range v.elements.entries {
-		if el != nil && el.viewVolume != nil {
-			el.viewVolume.QueryOverlaps(object, callback)
-		}
+		el.viewVolume.QueryOverlaps(object, callback)
 	}
 }
 

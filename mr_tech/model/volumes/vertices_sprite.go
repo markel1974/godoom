@@ -95,7 +95,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 }
 
 // VerticesGetVolume returns the volume associated with the vertices sprite.
-func (v *VerticesSprite) VerticesGetVolume() *Volume {
+func (v *VerticesSprite) VerticesGetVolume() IVolume {
 	return v.volume
 }
 

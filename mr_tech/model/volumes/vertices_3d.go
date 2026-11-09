@@ -51,7 +51,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 }
 
 // VerticesGetVolume returns the composite view volume of the model, or nil if unavailable.
-func (v *Vertices3D) VerticesGetVolume() *Volume {
+func (v *Vertices3D) VerticesGetVolume() IVolume {
 	return v.elements.viewVolume
 }
 

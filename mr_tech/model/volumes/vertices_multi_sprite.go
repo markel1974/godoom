@@ -76,7 +76,7 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 }
 
 // VerticesGetVolume returns the currently active action volume.
-func (v *VerticesMultiSprite) VerticesGetVolume() *Volume {
+func (v *VerticesMultiSprite) VerticesGetVolume() IVolume {
 	return v.actionVolume
 }
 

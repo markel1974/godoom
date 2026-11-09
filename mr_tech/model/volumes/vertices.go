@@ -16,6 +16,10 @@ const (
 	RenderModeInterface          = 3.0
 )
 
+type IVolume interface {
+	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
+}
+
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
 type IVertices interface {
 	GetAABB() *aabb.AABB
@@ -26,7 +30,7 @@ type IVertices interface {
 
 	VerticesGetCenter() (float64, float64, float64)
 
-	VerticesGetVolume() *Volume
+	VerticesGetVolume() IVolume
 
 	VerticesGetEntity() *physics.Entity
 

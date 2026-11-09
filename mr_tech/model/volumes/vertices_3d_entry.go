@@ -189,7 +189,7 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 }
 
 // VerticesGetVolume returns the current view volume for this vertices entry.
-func (v *Vertices3DEntry) VerticesGetVolume() *Volume {
+func (v *Vertices3DEntry) VerticesGetVolume() IVolume {
 	return v.viewVolume
 }
 

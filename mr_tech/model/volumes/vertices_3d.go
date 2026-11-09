@@ -42,32 +42,32 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	}
 	v.VerticesCompile(0)
 
-	numParts := v.elements.Len()
-	if numParts > 1 {
-		v.elements.Rebuild(thing, cfg)
-	}
+	//numParts := v.elements.Len()
+	//if numParts > 1 {
+	//	v.elements.Rebuild(thing, cfg)
+	//}
 
 	return v
 }
 
 // VerticesGetVolume returns the composite view volume of the model, or nil if unavailable.
 func (v *Vertices3D) VerticesGetVolume() IVolume {
-	return v.elements.viewVolume
+	return v.elements.vVolume.viewVolume
 }
 
 // VerticesGetEntity returns the physics entity for the composite model, or the first element's entity if unset.
 func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
-	return v.elements.entity
+	return v.elements.vVolume.entity
 }
 
 // VerticesGetCenter returns the center coordinates of the composite entity, or zero coordinates if none is available.
 func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
-	return v.elements.entity.GetCenter()
+	return v.elements.vVolume.entity.GetCenter()
 }
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	return v.elements.entity.GetAABB()
+	return v.elements.vVolume.entity.GetAABB()
 }
 
 // VerticesSetRagdoll freezes the model and activates ragdoll collapse if it is not already ragdoll.
@@ -127,7 +127,7 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	v.joints.StepJoints(tick)
-	cx, cy, cz := v.elements.entity.GetCenter()
+	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
 
 	for _, i := range v.links.executionOrder {
 		v.elements.Bind(i, tick)

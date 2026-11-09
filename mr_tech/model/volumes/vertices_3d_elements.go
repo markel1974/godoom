@@ -9,15 +9,30 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+type VirtualVolume struct {
+	viewVolume *Volume
+	entity     *physics.Entity
+}
+
+func NewVirtualVolume(viewVolume *Volume, entity *physics.Entity) *VirtualVolume {
+	return &VirtualVolume{
+		viewVolume: viewVolume,
+		entity:     entity,
+	}
+}
+
+func (v *VirtualVolume) GetEntity() *physics.Entity {
+	return v.entity
+}
+
 // Vertices3DElements stores face, volume, and physics state for managing 3D vertex element entries.
 type Vertices3DElements struct {
 	facesA          *Faces
 	facesB          *Faces
 	partFaceOffsets []int
 	partFaceCounts  []int
-	viewVolume      *Volume
-	entity          *physics.Entity
 	entries         []*Vertices3DEntry
+	vVolume         *VirtualVolume
 	volsA           []*Volume
 	volsB           []*Volume
 	lerpT           float64
@@ -93,32 +108,8 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	}
 
 	element := v.entries[0]
-	v.viewVolume = element.viewVolume
-	v.entity = element.VerticesGetEntity()
+	v.vVolume = NewVirtualVolume(element.viewVolume, element.VerticesGetEntity())
 	return nil
-}
-
-// Rebuild reconstructs the composite view volume from source faces and updates the linked physics entity.
-func (v *Vertices3DElements) Rebuild(thing IThing, cfg *config.Thing) {
-	facesA := v.facesA
-	compVol := NewVolume(0, fmt.Sprintf("%s_md3_composite", cfg.Id), "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
-	for idx := 0; idx < facesA.Len(); idx++ {
-		src := facesA.At(idx)
-		if src == nil {
-			continue
-		}
-		fCopy := NewFace(src.ClonePoints(), fmt.Sprintf("%s_md3_f_%d", cfg.Id, idx), src.material)
-		u0, v0 := src.GetUV0()
-		u1, v1 := src.GetUV1()
-		u2, v2 := src.GetUV2()
-		fCopy.SetUV(u0, v0, u1, v1, u2, v2)
-		fCopy.LockUV(true)
-		compVol.AddFace(fCopy)
-	}
-	compVol.Rebuild()
-	compVol.SetThing(thing)
-	v.viewVolume = compVol
-	v.entity = compVol.GetEntity()
 }
 
 // Bind compiles element i for tick, caches its volumes, and records the first element's interpolation factor.

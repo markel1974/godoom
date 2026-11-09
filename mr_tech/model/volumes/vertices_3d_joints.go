@@ -342,7 +342,7 @@ func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, d
 	j.detWorldY = cy + v.originsA[idx].Y
 	j.detWorldZ = cz + v.originsA[idx].Z
 
-	_, _, halfD := v.elements.entity.GetSizeCenter()
+	_, _, halfD := v.elements.vVolume.entity.GetSizeCenter()
 
 	j.detFloorZ = (cz - halfD) + math.Min(j.partRadius*0.30, 5.0)
 	if j.detWorldZ < j.detFloorZ {
@@ -412,7 +412,7 @@ func (v *Vertices3DJoints) ActivateRagdoll() {
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			cx, cy, cz := v.elements.entity.GetCenter()
+			cx, cy, cz := v.elements.vVolume.entity.GetCenter()
 			v.detachPart(cx, cy, cz, v.lastHitPart, dx, dy, dz, v.lastHitForce)
 		}
 	}
@@ -521,7 +521,7 @@ func (v *Vertices3DJoints) StepJoints(tick uint64) {
 			}
 		}
 
-		_, _, halfD := v.elements.entity.GetSizeCenter()
+		_, _, halfD := v.elements.vVolume.entity.GetSizeCenter()
 
 		collapseDrop := 0.0
 		if v.ragdollCollapse {
@@ -703,7 +703,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		return
 	}
 
-	cx, cy, cz := v.elements.entity.GetCenter()
+	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
 	relPx, relPy, relPz := px-cx, py-cy, pz-cz
 
 	// Locate the closest non-detached articulated part to the impact ray/point
@@ -853,21 +853,14 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 func (v *Vertices3DJoints) reset(i int) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.rootDropZ
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.rootDropZ
-	if v.elements.entity != nil {
-		q := v.elements.entity.GetQuaternion()
-		if v.hasRootTransform {
-			v.rootQuat.Multiplies(q, v.rootCombinedQuat)
-			v.rotationsA[i].SetFromQuaternion(v.rootCombinedQuat)
-			v.rotationsB[i].SetFromQuaternion(v.rootCombinedQuat)
-		} else {
-			v.rotationsA[i].SetFromQuaternion(q)
-			v.rotationsB[i].SetFromQuaternion(q)
-		}
-	} else if v.hasRootTransform {
-		v.rotationsA[i].SetFromQuaternion(v.rootQuat)
-		v.rotationsB[i].SetFromQuaternion(v.rootQuat)
+
+	q := v.elements.vVolume.entity.GetQuaternion()
+	if v.hasRootTransform {
+		v.rootQuat.Multiplies(q, v.rootCombinedQuat)
+		v.rotationsA[i].SetFromQuaternion(v.rootCombinedQuat)
+		v.rotationsB[i].SetFromQuaternion(v.rootCombinedQuat)
 	} else {
-		v.rotationsA[i].Reset()
-		v.rotationsB[i].Reset()
+		v.rotationsA[i].SetFromQuaternion(q)
+		v.rotationsB[i].SetFromQuaternion(q)
 	}
 }

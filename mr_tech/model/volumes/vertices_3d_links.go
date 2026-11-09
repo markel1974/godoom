@@ -175,7 +175,7 @@ func (ls *Vertices3DLinks) GetParent(i int) int {
 	return linkInvalidIndex
 }
 
-// HasParent reports whether i refers to a stored link entry.
+// HasParent reports whether i is within the stored link range.
 func (ls *Vertices3DLinks) HasParent(i int) bool {
 	if i >= 0 && i < len(ls.data) {
 		return true
@@ -183,6 +183,7 @@ func (ls *Vertices3DLinks) HasParent(i int) bool {
 	return false
 }
 
+// GetTag returns the lowercase tag for i, or an empty string when i is out of range.
 func (ls *Vertices3DLinks) GetTag(i int) string {
 	if i >= 0 && i < len(ls.data) {
 		return strings.ToLower(ls.data[i].tag)
@@ -190,6 +191,7 @@ func (ls *Vertices3DLinks) GetTag(i int) string {
 	return ""
 }
 
+// GetTagIndex returns the resolved tag index for i, or the invalid index when i is out of range.
 func (ls *Vertices3DLinks) GetTagIndex(i int) int {
 	if i >= 0 && i < len(ls.tagIndices) {
 		return ls.tagIndices[i]

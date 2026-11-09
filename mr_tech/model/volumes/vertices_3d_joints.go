@@ -10,7 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-// Vertices3DJoint stores the physical state and configuration of a joint connecting articulated parts.
+// Vertices3DJoint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
 type Vertices3DJoint struct {
 	localCenter     geometry.XYZ
 	partRadius      float64
@@ -56,7 +56,7 @@ type Vertices3DJoint struct {
 	combinedB *TagAxis
 }
 
-// NewVertices3DJoint creates a Vertices3DJoint initialized with identity quaternions and axes.
+// NewVertices3DJoint creates a new 3D vertex joint with identity rotations and axes.
 func NewVertices3DJoint() *Vertices3DJoint {
 	return &Vertices3DJoint{
 		quat:      physics.NewQuaternionIdentity(),
@@ -67,7 +67,7 @@ func NewVertices3DJoint() *Vertices3DJoint {
 	}
 }
 
-// Vertices3DJoints stores joint state data for model parts during animated and ragdoll physics.
+// Vertices3DJoints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
 type Vertices3DJoints struct {
 	links             *Vertices3DLinks
 	data              []*Vertices3DJoint
@@ -112,7 +112,7 @@ type Vertices3DJoints struct {
 	elements *Vertices3DElements
 }
 
-// NewVertices3DJoints creates a Vertices3DJoints collection with the specified number of initialized joint states.
+// NewVertices3DJoints creates a Vertices3DJoints instance with default state and identity root quaternions.
 func NewVertices3DJoints() *Vertices3DJoints {
 	pj := &Vertices3DJoints{
 		fallAxisX:        1.0,
@@ -125,7 +125,7 @@ func NewVertices3DJoints() *Vertices3DJoints {
 	return pj
 }
 
-// Setup configures anatomical joint parameters, local bounds, and pre-allocated matrices for each part.
+// Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
 func (v *Vertices3DJoints) Setup(_ *config.Model3D, elements2 *Vertices3DElements, links *Vertices3DLinks) error {
 	v.links = links
 	v.elements = elements2
@@ -252,36 +252,37 @@ func (v *Vertices3DJoints) Setup(_ *config.Model3D, elements2 *Vertices3DElement
 	return nil
 }
 
-// IsRagdoll reports whether the joint set is currently using ragdoll physics.
+// IsRagdoll reports whether the joints are currently in ragdoll mode.
 func (v *Vertices3DJoints) IsRagdoll() bool {
 	return v.isRagdoll
 }
 
-// SetRagdollCollapse marks the joints to perform a root ragdoll collapse on activation.
+// SetRagdollCollapse marks the joint system to collapse when ragdoll mode is activated.
 func (v *Vertices3DJoints) SetRagdollCollapse() {
 	v.ragdollCollapse = true
 }
 
-// GetOriginsA returns the X, Y, and Z origin offsets for part i in the first interpolated pose.
+// GetOriginsA returns the X, Y, and Z components of the A-side origin for the joint at index i.
 func (v *Vertices3DJoints) GetOriginsA(i int) (float64, float64, float64) {
 	return v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z
 }
 
-// GetOriginsB returns the X, Y, and Z origin offsets for the B pose of the part at index i.
+// GetOriginsB returns the X, Y, and Z coordinates of origin B for the joint at index i.
 func (v *Vertices3DJoints) GetOriginsB(i int) (float64, float64, float64) {
 	return v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z
 }
 
-// GetRotationA returns the primary rotation axis matrix for joint i.
+// GetRotationA returns the primary rotation axis for the joint at index i.
 func (v *Vertices3DJoints) GetRotationA(i int) *TagAxis {
 	return v.rotationsA[i]
 }
 
-// GetRotationB returns the secondary rotation axis for joint i.
+// GetRotationB returns the secondary rotation axis for the joint at index i.
 func (v *Vertices3DJoints) GetRotationB(i int) *TagAxis {
 	return v.rotationsB[i]
 }
 
+// Compile updates joint origins and rotations for part i relative to its parent, tags, deflection, or detached state.
 func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
 	if i > 0 && v.data[i].detached {
 		j := v.data[i]
@@ -295,70 +296,81 @@ func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
 	}
 
 	pIdx := v.links.GetParent(i)
+	if pIdx < 0 || pIdx == i {
+		v.reset(i)
+		return
+	}
+	volA := v.elements.volsA[pIdx]
+	volB := v.elements.volsB[pIdx]
+	if volA == nil || volB == nil {
+		v.reset(i)
+		return
+	}
 
-	if pIdx >= 0 && pIdx != i && v.elements.volsA[pIdx] != nil && v.elements.volsB[pIdx] != nil {
-		tagIdx := v.links.GetTagIndex(i)
-		j := v.data[i]
-		if tagIdx >= 0 {
-			if tagAxisA := v.elements.volsA[pIdx].GetVertexTag(tagIdx); tagAxisA != nil {
-				rotOrigAX, rotOrigAY, rotOrigAZ := v.rotationsA[pIdx].RotatePointByTag(tagAxisA)
-				v.originsA[i].X = v.originsA[pIdx].X + rotOrigAX
-				v.originsA[i].Y = v.originsA[pIdx].Y + rotOrigAY
-				v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigAZ
-				if j.hasDeflection {
-					v.rotationsA[pIdx].MultiplyMatrix(tagAxisA, j.combinedA)
-					j.combinedA.MultiplyMatrix(j.axis, v.rotationsA[i])
-				} else {
-					v.rotationsA[pIdx].MultiplyMatrix(tagAxisA, v.rotationsA[i])
-				}
-			} else {
-				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
-				v.originsA[i] = v.originsA[pIdx]
-				if j.hasDeflection {
-					v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
-				} else {
-					*v.rotationsA[i] = *v.rotationsA[pIdx]
-				}
-			}
-			if tagAxisB := v.elements.volsB[pIdx].GetVertexTag(tagIdx); tagAxisB != nil {
-				rotOrigBX, rotOrigBY, rotOrigBZ := v.rotationsB[pIdx].RotatePointByTag(tagAxisB)
-				v.originsB[i].X = v.originsB[pIdx].X + rotOrigBX
-				v.originsB[i].Y = v.originsB[pIdx].Y + rotOrigBY
-				v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigBZ
-				if j.hasDeflection {
-					v.rotationsB[pIdx].MultiplyMatrix(tagAxisB, j.combinedB)
-					j.combinedB.MultiplyMatrix(j.axis, v.rotationsB[i])
-				} else {
-					v.rotationsB[pIdx].MultiplyMatrix(tagAxisB, v.rotationsB[i])
-				}
-			} else {
-				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
-				v.originsB[i] = v.originsB[pIdx]
-				if j.hasDeflection {
-					v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
-				} else {
-					*v.rotationsB[i] = *v.rotationsB[pIdx]
-				}
-			}
+	j := v.data[i]
+	tagIdx := v.links.GetTagIndex(i)
+	if tagIdx < 0 {
+		fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
+		v.originsA[i] = v.originsA[pIdx]
+		v.originsB[i] = v.originsB[pIdx]
+		if j.hasDeflection {
+			v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
+			v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
 		} else {
-			fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
-			v.originsA[i] = v.originsA[pIdx]
-			v.originsB[i] = v.originsB[pIdx]
-			if j.hasDeflection {
-				v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
-				v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
-			} else {
-				*v.rotationsA[i] = *v.rotationsA[pIdx]
-				*v.rotationsB[i] = *v.rotationsB[pIdx]
-			}
+			*v.rotationsA[i] = *v.rotationsA[pIdx]
+			*v.rotationsB[i] = *v.rotationsB[pIdx]
+		}
+		return
+	}
+
+	if tagAxisA := volA.GetVertexTag(tagIdx); tagAxisA != nil {
+		pRotA := v.rotationsA[pIdx]
+		rotA := v.rotationsA[i]
+		rotOrigAX, rotOrigAY, rotOrigAZ := pRotA.RotatePointByTag(tagAxisA)
+		v.originsA[i].X = v.originsA[pIdx].X + rotOrigAX
+		v.originsA[i].Y = v.originsA[pIdx].Y + rotOrigAY
+		v.originsA[i].Z = v.originsA[pIdx].Z + rotOrigAZ
+		if j.hasDeflection {
+			pRotA.MultiplyMatrix(tagAxisA, j.combinedA)
+			j.combinedA.MultiplyMatrix(j.axis, rotA)
+		} else {
+			pRotA.MultiplyMatrix(tagAxisA, rotA)
 		}
 	} else {
-		//fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
-		v.reset(i)
+		fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
+		v.originsA[i] = v.originsA[pIdx]
+		if j.hasDeflection {
+			v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
+		} else {
+			*v.rotationsA[i] = *v.rotationsA[pIdx]
+		}
+	}
+
+	if tagAxisB := volB.GetVertexTag(tagIdx); tagAxisB != nil {
+		pRotB := v.rotationsB[pIdx]
+		rotB := v.rotationsB[i]
+		rotOrigBX, rotOrigBY, rotOrigBZ := pRotB.RotatePointByTag(tagAxisB)
+		v.originsB[i].X = v.originsB[pIdx].X + rotOrigBX
+		v.originsB[i].Y = v.originsB[pIdx].Y + rotOrigBY
+		v.originsB[i].Z = v.originsB[pIdx].Z + rotOrigBZ
+		if j.hasDeflection {
+			pRotB.MultiplyMatrix(tagAxisB, j.combinedB)
+			j.combinedB.MultiplyMatrix(j.axis, rotB)
+		} else {
+			pRotB.MultiplyMatrix(tagAxisB, rotB)
+		}
+	} else {
+		fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
+		v.originsB[i] = v.originsB[pIdx]
+		if j.hasDeflection {
+			v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
+		} else {
+			*v.rotationsB[i] = *v.rotationsB[pIdx]
+		}
 	}
 }
 
-// detachPart severs part idx from its parent joint and launches it on an independent 6-DoF ballistic & tumbling trajectory.
+// detachPart marks a detachable joint as detached and initializes its frozen frame and ballistic dynamics.
 func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, dirZ, fMag float64) {
 	if idx <= 0 || idx >= len(v.data) || v.dismemberedCount >= 3 {
 		return
@@ -373,14 +385,13 @@ func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, d
 	v.hasActiveDynamics = true
 
 	for i := 0; i < v.elements.Len(); i++ {
-		if i == idx || v.IsPartOrAncestorDetached(i) {
+		if i == idx || v.IsPartDetached(i) {
 			if element := v.elements.GetElement(i); element != nil {
 				element.FreezeCurrentFrame()
 			}
 		}
 	}
 
-	//cx, cy, cz := v.VerticesGetCenter()
 	j.detWorldX = cx + v.originsA[idx].X
 	j.detWorldY = cy + v.originsA[idx].Y
 	j.detWorldZ = cz + v.originsA[idx].Z
@@ -410,8 +421,8 @@ func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, d
 	j.detWz = sideSign * 7.0
 }
 
-// IsPartOrAncestorDetached reports whether part i or any ancestor along its parent chain is detached.
-func (v *Vertices3DJoints) IsPartOrAncestorDetached(i int) bool {
+// IsPartDetached reports whether the part at i or any valid ancestor is marked detached.
+func (v *Vertices3DJoints) IsPartDetached(i int) bool {
 	curr := i
 	for steps := 0; steps < len(v.data) && curr > 0 && curr < len(v.data); steps++ {
 		if v.data[curr].detached {
@@ -425,8 +436,7 @@ func (v *Vertices3DJoints) IsPartOrAncestorDetached(i int) bool {
 	return false
 }
 
-// ActivateRagdoll transitions all connected joints into relaxed ragdoll physics, initiates root collapse if needed,
-// and dismembers any critically hit limb on death.
+// ActivateRagdoll enables ragdoll dynamics, seeds fall motion from the last hit, and may detach a damaged part.
 func (v *Vertices3DJoints) ActivateRagdoll() {
 	v.isRagdoll = true
 	v.hasActiveDynamics = true
@@ -485,8 +495,8 @@ func (v *Vertices3DJoints) ActivateRagdoll() {
 	}
 }
 
-// StepJoints integrates root ragdoll collapse/jolts, all 11-DoF articulated joint spring-dampers,
-// and severed limb ballistic trajectories over timestep dt.
+// StepJoints advances joint and ragdoll dynamics to the given simulation tick.
+// It ignores zero, repeated, or older ticks and clamps large time steps for stability.
 func (v *Vertices3DJoints) StepJoints(tick uint64) {
 	if tick == 0 {
 		return
@@ -705,6 +715,7 @@ func (v *Vertices3DJoints) StepJoints(tick uint64) {
 	v.hasActiveDynamics = anyActive
 }
 
+// ApplyImpact applies an external force at a point, updating ragdoll motion, joint impulses, and detachment damage.
 func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	numParts := v.elements.Len()
 	if numParts == 0 {
@@ -756,7 +767,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	bestDetachScore := math.MaxFloat64
 
 	for i := 0; i < numParts; i++ {
-		if i > 0 && v.IsPartOrAncestorDetached(i) {
+		if i > 0 && v.IsPartDetached(i) {
 			continue
 		}
 		j := v.data[i]
@@ -892,8 +903,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	}
 }
 
-// reset clears the origin offsets and restores the rotation axes at index i to the entity's orientation (or identity if unset),
-// composing any active procedural root ragdoll collapse/jolt transform.
+// reset restores joint origins and rotations at index i using root and entity transforms.
 func (v *Vertices3DJoints) reset(i int) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.rootDropZ
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.rootDropZ

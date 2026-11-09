@@ -46,7 +46,11 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	numParts := v.elements.Len()
 	if numParts > 1 {
 		v.elements.Rebuild(thing, cfg)
+	} else {
+		fmt.Println("No parts to rebuild")
 	}
+
+	//v.VerticesCompile(0)
 	return v
 }
 
@@ -87,6 +91,9 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 	if v.currentAction == idx {
 		return
 	}
+	if v.joints.IsRagdoll() {
+		return
+	}
 	v.currentAction = idx
 	enteringRagdoll := false
 	for _, i := range v.links.executionOrder {
@@ -94,7 +101,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 		if el == nil {
 			continue
 		}
-		if i > 0 && v.joints.IsPartOrAncestorDetached(i) {
+		if i > 0 && v.joints.IsPartDetached(i) {
 			continue
 		}
 		if targetAction, ok := v.actions.Get(i, idx); ok {
@@ -112,7 +119,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 			el.VerticesSetAction(0)
 		}
 	}
-	if enteringRagdoll && !v.joints.IsRagdoll() {
+	if enteringRagdoll {
 		v.joints.ActivateRagdoll()
 	}
 }

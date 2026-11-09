@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+// Vertices3DElements stores face, volume, and physics state for managing 3D vertex element entries.
 type Vertices3DElements struct {
 	facesA          *Faces
 	facesB          *Faces
@@ -21,10 +22,12 @@ type Vertices3DElements struct {
 	lerpT           float64
 }
 
+// NewVertices3DElements creates an empty Vertices3DElements collection.
 func NewVertices3DElements() *Vertices3DElements {
 	return &Vertices3DElements{}
 }
 
+// Setup initializes 3D vertex elements, face buffers, view volume, and entity from the given configuration.
 func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *materials.Materials) error {
 	numParts := len(cfg.Model3D.Parts)
 	if numParts == 0 {
@@ -89,6 +92,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	return nil
 }
 
+// Rebuild reconstructs the composite view volume from source faces and updates the linked physics entity.
 func (v *Vertices3DElements) Rebuild(thing IThing, cfg *config.Thing) {
 	facesA := v.facesA
 	compVol := NewVolume(0, fmt.Sprintf("%s_md3_composite", cfg.Id), "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
@@ -111,6 +115,7 @@ func (v *Vertices3DElements) Rebuild(thing IThing, cfg *config.Thing) {
 	v.entity = compVol.GetEntity()
 }
 
+// Bind compiles element i for tick, caches its volumes, and records the first element's interpolation factor.
 func (v *Vertices3DElements) Bind(i int, tick uint64) {
 	element := v.elements[i]
 	_ = element.VerticesCompile(tick)
@@ -122,6 +127,7 @@ func (v *Vertices3DElements) Bind(i int, tick uint64) {
 	v.volsB[i] = volB
 }
 
+// Compile transforms frame faces for part i into the A and B buffers and clears unused face slots.
 func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *TagAxis) {
 	volA := v.volsA[i]
 	volB := v.volsB[i]
@@ -180,10 +186,12 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 	}
 }
 
+// Len returns the number of 3D vertex elements.
 func (v *Vertices3DElements) Len() int {
 	return len(v.elements)
 }
 
+// GetElement returns the vertices entry at index i, or nil if i is out of range.
 func (v *Vertices3DElements) GetElement(i int) *Vertices3DEntry {
 	if i >= 0 && i < len(v.elements) {
 		return v.elements[i]
@@ -191,6 +199,7 @@ func (v *Vertices3DElements) GetElement(i int) *Vertices3DEntry {
 	return nil
 }
 
+// Freeze locks all non-nil 3D elements on their current animation frame.
 func (v *Vertices3DElements) Freeze() {
 	for _, el := range v.elements {
 		if el != nil {
@@ -199,6 +208,7 @@ func (v *Vertices3DElements) Freeze() {
 	}
 }
 
+// GetCenter returns the x, y, and z coordinates of the elements' current center.
 func (v *Vertices3DElements) GetCenter() (float64, float64, float64) {
 	return v.entity.GetCenter()
 }

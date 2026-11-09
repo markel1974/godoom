@@ -31,6 +31,12 @@ func NewVertices3DLink(parent int, tag string) *Vertices3DLink {
 	}
 }
 
+// Invalidate disconnects the link by clearing its parent and tag.
+func (vl *Vertices3DLink) Invalidate() {
+	vl.parent = linkInvalidIndex
+	vl.tag = ""
+}
+
 // Vertices3DLinks manages hierarchical parent connections and update ordering for linked 3D model parts.
 type Vertices3DLinks struct {
 	data           []*Vertices3DLink
@@ -63,12 +69,10 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 	for i := 0; i < numParts; i++ {
 		if ls.data[i].parent == i {
 			fmt.Printf("[warning] Vertices3D: part %d links to itself, disconnecting link\n", i)
-			ls.data[i].parent = linkInvalidIndex
-			ls.data[i].tag = ""
+			ls.data[i].Invalidate()
 		} else if ls.data[i].parent >= numParts {
 			fmt.Printf("[warning] Vertices3D: part %d links to invalid parent %d (numParts=%d), disconnecting link\n", i, ls.data[i].parent, numParts)
-			ls.data[i].parent = linkInvalidIndex
-			ls.data[i].tag = ""
+			ls.data[i].Invalidate()
 		}
 	}
 
@@ -81,7 +85,7 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 			continue
 		}
 		for k := range pathIndex {
-			pathIndex[k] = -1
+			pathIndex[k] = linkInvalidIndex
 		}
 		path = path[:0]
 		curr := i
@@ -107,7 +111,7 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 	}
 
 	for i, link := range ls.data {
-		ls.tagIndices[i] = -1
+		ls.tagIndices[i] = linkInvalidIndex
 		if element := elements.GetElement(link.parent); element != nil {
 			tagIdx := element.GetTagIndex(link.tag)
 			ls.tagIndices[i] = tagIdx
@@ -159,8 +163,7 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 // It does nothing when i is outside the stored link range.
 func (ls *Vertices3DLinks) Invalidate(i int) {
 	if i >= 0 && i < len(ls.data) {
-		ls.data[i].parent = -1
-		ls.data[i].tag = ""
+		ls.data[i].Invalidate()
 	}
 }
 

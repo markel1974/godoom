@@ -3,78 +3,11 @@ package volumes
 import (
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
-
-func JointMapping(j *Vertices3DJoint, tag string) {
-	tagLow := strings.ToLower(tag)
-
-	switch {
-	case strings.Contains(tagLow, "torso") || strings.Contains(tagLow, "chest") ||
-		strings.Contains(tagLow, "waist") || strings.Contains(tagLow, "pelvis") ||
-		strings.Contains(tagLow, "hips") || strings.Contains(tagLow, "belly") ||
-		strings.Contains(tagLow, "spine") || strings.Contains(tagLow, "shoulders") ||
-		strings.Contains(tagLow, "upper"):
-		// Torso / Spine: 3 DoF (Pitch, Roll, Yaw), core trunk stays connected
-		j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.85
-		j.maxAngleAlive = 0.48
-		j.maxAngleRagdoll = 0.85
-		j.stiffness = 58.0
-		j.damping = 7.5
-		j.canDetach = false
-
-	case strings.Contains(tagLow, "head") || strings.Contains(tagLow, "neck") || strings.Contains(tagLow, "jaw"):
-		// Head / Neck: 2-3 DoF with decapitation threshold
-		j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.75
-		j.maxAngleAlive = 0.60
-		j.maxAngleRagdoll = 1.15
-		j.stiffness = 48.0
-		j.damping = 6.5
-		//j.canDetach = true
-		j.canDetach = false
-		j.detachThreshold = 1.25
-
-	case strings.Contains(tagLow, "lloarm") || strings.Contains(tagLow, "rloarm") ||
-		strings.Contains(tagLow, "lhand") || strings.Contains(tagLow, "rhand") ||
-		strings.Contains(tagLow, "lloleg") || strings.Contains(tagLow, "rloleg") ||
-		strings.Contains(tagLow, "lfoot") || strings.Contains(tagLow, "rfoot"):
-		// Distal limbs (forearms, hands, lower legs): 1-2 DoF hinge, detachable
-		j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 0.90, 0.40
-		j.maxAngleAlive = 0.72
-		j.maxAngleRagdoll = 1.35
-		j.stiffness = 40.0
-		j.damping = 5.5
-		//j.canDetach = true
-		j.canDetach = false
-		j.detachThreshold = 1.05
-
-	case strings.Contains(tagLow, "weapon"):
-		// Held weapon: disarms/flies off on hit
-		j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.65
-		j.maxAngleAlive = 0.68
-		j.maxAngleRagdoll = 1.35
-		j.stiffness = 42.0
-		j.damping = 5.5
-		//j.canDetach = true
-		j.canDetach = false
-		j.detachThreshold = 0.95
-
-	default:
-		// Upper arms and upper legs (luparm, ruparm, lupleg, rupleg, tail, etc.): 2-3 DoF ball joint, detachable on heavy/ragdoll hits
-		j.dofScaleX, j.dofScaleY, j.dofScaleZ = 1.0, 1.0, 0.65
-		j.maxAngleAlive = 0.62
-		j.maxAngleRagdoll = 1.20
-		j.stiffness = 46.0
-		j.damping = 6.2
-		//j.canDetach = true
-		j.canDetach = false
-		j.detachThreshold = 1.30
-	}
-}
 
 // Vertices3DJoint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
 type Vertices3DJoint struct {
@@ -192,7 +125,7 @@ func NewVertices3DJoints() *Vertices3DJoints {
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Vertices3DJoints) Setup(_ *config.Model3D, elements2 *Vertices3DElements, links *Vertices3DLinks) error {
+func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements2 *Vertices3DElements, links *Vertices3DLinks) error {
 	v.links = links
 	v.elements = elements2
 
@@ -250,8 +183,15 @@ func (v *Vertices3DJoints) Setup(_ *config.Model3D, elements2 *Vertices3DElement
 			j.damping = 10.0
 			j.canDetach = false
 		} else {
-			//TODO MOVE IN CONFIG
-			JointMapping(j, v.links.GetTag(i))
+			tag := v.links.GetTag(i)
+			z := cfg.Joints.Get(tag)
+			j.dofScaleX, j.dofScaleY, j.dofScaleZ = z.DofScale.X, z.DofScale.Y, z.DofScale.Z
+			j.maxAngleAlive = z.MaxAngleAlive
+			j.maxAngleRagdoll = z.MaxAngleRagdoll
+			j.stiffness = z.Stiffness
+			j.damping = z.Damping
+			j.detachThreshold = z.DetachThreshold
+			j.canDetach = z.CanDetach
 		}
 	}
 

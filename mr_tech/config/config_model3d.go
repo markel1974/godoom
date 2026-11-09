@@ -13,12 +13,14 @@ type Model3D struct {
 	ActionMaps        [][]int
 	ActionDefinitions []string
 	ActionIntervals   [][2]int
+	Joints            *JointsConfig
 }
 
 // NewMD3 creates a new Model3D structure holding multiple parts.
 func NewMD3(parts []*Model3DEntry, links []Model3DLink) *Model3D {
 	return &Model3D{
-		Parts: parts,
-		Links: links,
+		Parts:  parts,
+		Links:  links,
+		Joints: NewJointsConfig(),
 	}
 }

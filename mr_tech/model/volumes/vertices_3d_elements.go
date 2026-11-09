@@ -7,22 +7,33 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+// In vertices_3d_elements.go:
 type VirtualVolume struct {
-	viewVolume *Volume
-	entity     *physics.Entity
+	entity   *physics.Entity
+	elements *Vertices3DElements
 }
 
-func NewVirtualVolume(viewVolume *Volume, entity *physics.Entity) *VirtualVolume {
+func NewVirtualVolume(elements *Vertices3DElements, entity *physics.Entity) *VirtualVolume {
 	return &VirtualVolume{
-		viewVolume: viewVolume,
-		entity:     entity,
+		elements: elements,
+		entity:   entity,
 	}
 }
 
 func (v *VirtualVolume) GetEntity() *physics.Entity {
 	return v.entity
+}
+
+// QueryOverlaps interroga i volumi attivi di tutte le parti che compongono Vertices3D
+func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	for _, el := range v.elements.entries {
+		if el != nil && el.viewVolume != nil {
+			el.viewVolume.QueryOverlaps(object, callback)
+		}
+	}
 }
 
 // Vertices3DElements stores face, volume, and physics state for managing 3D vertex element entries.
@@ -108,7 +119,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	}
 
 	element := v.entries[0]
-	v.vVolume = NewVirtualVolume(element.viewVolume, element.VerticesGetEntity())
+	v.vVolume = NewVirtualVolume(v, element.VerticesGetEntity())
 	return nil
 }
 

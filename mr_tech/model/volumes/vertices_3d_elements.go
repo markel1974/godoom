@@ -213,8 +213,3 @@ func (v *Vertices3DElements) Freeze() {
 		}
 	}
 }
-
-// GetCenter returns the x, y, and z coordinates of the elements' current center.
-func (v *Vertices3DElements) GetCenter() (float64, float64, float64) {
-	return v.entity.GetCenter()
-}

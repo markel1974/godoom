@@ -14,12 +14,11 @@ import (
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
 	//currentAngle  int
-	volumes       []*Volume
-	actionVolume  *Volume
-	physicsVolume *Volume
-	renderMode    float64
-	debug         bool
-	clampAnim     []bool
+	volumes      []*Volume
+	actionVolume *Volume
+	renderMode   float64
+	debug        bool
+	clampAnim    []bool
 }
 
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
@@ -59,7 +58,6 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 	}
 
 	f.actionVolume = f.volumes[0]
-	f.physicsVolume = f.volumes[0]
 	//f.viewVolume = f.actionVolume
 
 	for _, viewIdx := range cfg.MultiSprite.Clamps {
@@ -87,7 +85,7 @@ func (v *VerticesMultiSprite) VerticesGetEntity() *physics.Entity {
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
-	return v.physicsVolume.GetEntity().GetAABB()
+	return v.actionVolume.GetEntity().GetAABB()
 }
 
 // VerticesCompile updates the view volume to the current action volume.
@@ -130,7 +128,7 @@ func (v *VerticesMultiSprite) VerticesSetAction(idx int) {
 
 // VerticesGetCenter returns the x, y, and z coordinates of the center of the first volume's entity.
 func (v *VerticesMultiSprite) VerticesGetCenter() (float64, float64, float64) {
-	return v.volumes[0].GetEntity().GetCenter()
+	return v.actionVolume.GetEntity().GetCenter()
 }
 
 // VerticesApplyImpact is a no-op for multi-sprite views without articulated 3D sub-parts.

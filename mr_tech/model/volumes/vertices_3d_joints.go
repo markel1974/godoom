@@ -412,7 +412,7 @@ func (v *Vertices3DJoints) ActivateRagdoll() {
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			cx, cy, cz := v.elements.GetCenter()
+			cx, cy, cz := v.elements.entity.GetCenter()
 			v.detachPart(cx, cy, cz, v.lastHitPart, dx, dy, dz, v.lastHitForce)
 		}
 	}
@@ -703,7 +703,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		return
 	}
 
-	cx, cy, cz := v.elements.GetCenter()
+	cx, cy, cz := v.elements.entity.GetCenter()
 	relPx, relPy, relPz := px-cx, py-cy, pz-cz
 
 	// Locate the closest non-detached articulated part to the impact ray/point

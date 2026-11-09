@@ -11,8 +11,7 @@ import (
 
 // VerticesSprite represents sprite data backed by a source volume and a view-specific volume.
 type VerticesSprite struct {
-	volume     *Volume
-	viewVolume *Volume
+	volume *Volume
 }
 
 // NewVerticesSprite creates a billboard-rendered vertex sprite for thing from cfg and optional sprite material.
@@ -36,8 +35,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 
 	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
 	f := &VerticesSprite{
-		volume:     volume,
-		viewVolume: volume,
+		volume: volume,
 	}
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
@@ -112,13 +110,12 @@ func (v *VerticesSprite) GetAABB() *aabb.AABB {
 // VerticesCompile updates the sprite's view volume from its current volume.
 // It ignores tick and returns false because no geometry is rebuilt.
 func (v *VerticesSprite) VerticesCompile(tick uint64) bool {
-	v.viewVolume = v.volume
 	return false
 }
 
 // VerticesGet returns the view volume faces for both face sets, zero offset, and the render mode.
 func (v *VerticesSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
-	f := v.viewVolume.GetFaces()
+	f := v.volume.GetFaces()
 	return f, f, 0.0, RenderModeBillboard
 }
 

@@ -198,6 +198,11 @@ func (v *Vertices3DEntry) VerticesGetEntity() *physics.Entity {
 	return v.viewVolume.GetEntity()
 }
 
+// VerticesGetCenter returns the x, y, and z coordinates of the view volume entity's center.
+func (v *Vertices3DEntry) VerticesGetCenter() (float64, float64, float64) {
+	return v.viewVolume.GetEntity().GetCenter()
+}
+
 // VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
 func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
@@ -336,11 +341,6 @@ func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 // GetVolumes returns the current source and target volumes with the interpolation factor between them.
 func (v *Vertices3DEntry) GetVolumes() (*Volume, *Volume, float64) {
 	return v.volA, v.volB, v.lerpT
-}
-
-// VerticesGetCenter returns the x, y, and z coordinates of the view volume entity's center.
-func (v *Vertices3DEntry) VerticesGetCenter() (float64, float64, float64) {
-	return v.viewVolume.GetEntity().GetCenter()
 }
 
 // VerticesApplyImpact is a no-op for single-part 3D entries (handled by 6-DoF Entity dynamics).

@@ -60,12 +60,14 @@ func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
 	return v.elements.entity
 }
 
+// VerticesGetCenter returns the center coordinates of the composite entity, or zero coordinates if none is available.
+func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
+	return v.elements.entity.GetCenter()
+}
+
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	if e := v.VerticesGetEntity(); e != nil {
-		return e.GetAABB()
-	}
-	return nil
+	return v.elements.entity.GetAABB()
 }
 
 // VerticesSetRagdoll freezes the model and activates ragdoll collapse if it is not already ragdoll.
@@ -121,16 +123,11 @@ func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
 	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
 }
 
-// VerticesGetCenter returns the center coordinates of the composite entity, or zero coordinates if none is available.
-func (v *Vertices3D) VerticesGetCenter() (float64, float64, float64) {
-	return v.elements.GetCenter()
-}
-
 // VerticesCompile updates all model parts for the tick and writes transformed frame data into render buffers.
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	v.joints.StepJoints(tick)
-	cx, cy, cz := v.elements.GetCenter()
+	cx, cy, cz := v.elements.entity.GetCenter()
 
 	for _, i := range v.links.executionOrder {
 		v.elements.Bind(i, tick)

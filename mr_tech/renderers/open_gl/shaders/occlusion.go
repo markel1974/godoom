@@ -10,26 +10,30 @@ type ShaderOccLoc int
 
 // ShaderOccLocProjection represents the projection matrix location in the shader.
 // ShaderOccLocView represents the view matrix location in the shader.
+// ShaderOccLocDebug represents the debug mode toggle location in the shader.
 // ShaderOccLocLast marks the end of ShaderOccLoc values.
 const (
 	ShaderOccLocProjection = ShaderOccLoc(iota)
 	ShaderOccLocView
+	ShaderOccLocDebug
 	ShaderOccLocLast
 )
 
 // Occlusion represents a shader-based rendering system for managing occlusion queries in a graphics pipeline.
 // It encapsulates context, compiled program ID, and uniform location mappings for shader operations.
 type Occlusion struct {
-	ctx     api.IContext
-	prg     uint32
-	table   [ShaderOccLocLast]int32
-	metrics *metrics.Map
+	ctx        api.IContext
+	prg        uint32
+	table      [ShaderOccLocLast]int32
+	metrics    *metrics.Map
+	debugBoxes int
 }
 
 // NewOcclusion creates and initializes a new Occlusion instance using the provided graphics context.
 func NewOcclusion() *Occlusion {
 	return &Occlusion{
-		prg: 0,
+		prg:        0,
+		debugBoxes: 0,
 	}
 }
 
@@ -82,8 +86,23 @@ func (s *Occlusion) Compile(a IAssets) error {
 
 	s.table[ShaderOccLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
 	s.table[ShaderOccLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
+	s.table[ShaderOccLocDebug] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_debug\x00"))
 
 	return nil
+}
+
+// SetDebug enables or disables the visual wireframe debug mode for occlusion bounding boxes.
+func (s *Occlusion) SetDebug(debug bool) {
+	if debug {
+		s.debugBoxes = 1
+	} else {
+		s.debugBoxes = 0
+	}
+}
+
+// GetDebug reports whether visual wireframe debug mode is enabled.
+func (s *Occlusion) GetDebug() bool {
+	return s.debugBoxes != 0
 }
 
 // Init initializes the Occlusion instance and prepares it for use. Returns an error if initialization fails.
@@ -96,17 +115,28 @@ func (s *Occlusion) Render(renderQueries func()) {
 	view := s.metrics.GetViewPtr()
 	proj := s.metrics.GetProjPtr()
 
-	s.ctx.ColorMask(false, false, false, false)
+	if s.debugBoxes != 0 {
+		s.ctx.ColorMask(true, true, true, true)
+		s.ctx.Enable(api.BLEND)
+		s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
+		s.ctx.Disable(api.CULL_FACE)
+	} else {
+		s.ctx.ColorMask(false, false, false, false)
+		s.ctx.Enable(api.CULL_FACE)
+	}
 	s.ctx.DepthMask(false)
 	s.ctx.DepthFunc(api.LEQUAL)
-	s.ctx.Enable(api.CULL_FACE)
 
 	s.ctx.UseProgram(s.prg)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocView), 1, false, view)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderOccLocProjection), 1, false, proj)
+	s.ctx.Uniform1i(s.GetUniform(ShaderOccLocDebug), int32(s.debugBoxes))
 
 	renderQueries()
 
+	if s.debugBoxes != 0 {
+		s.ctx.Disable(api.BLEND)
+	}
 	s.ctx.Disable(api.CULL_FACE)
 	s.ctx.ColorMask(true, true, true, true)
 	s.ctx.DepthMask(true)

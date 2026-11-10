@@ -47,6 +47,7 @@ type OcclusionHW struct {
 	frameCounter   int
 	activeStates   []*OcclusionState
 	activeLen      int
+	debug          bool
 }
 
 const defaultOcclusionInterval = 4
@@ -65,6 +66,7 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 		frameCounter: 0,
 		activeStates: make([]*OcclusionState, maxEntities),
 		activeLen:    0,
+		debug:        true,
 	}
 	hw.allVerticesPtr = ctx.Ptr(hw.allVertices)
 
@@ -127,6 +129,16 @@ func (hw *OcclusionHW) HasDrawTests() bool {
 	return hw.testsLen > 0
 }
 
+// SetDebug enables or disables continuous rendering of bounding box meshes for debugging.
+func (hw *OcclusionHW) SetDebug(debug bool) {
+	hw.debug = debug
+}
+
+// GetDebug reports whether debug bounding box rendering is active.
+func (hw *OcclusionHW) GetDebug() bool {
+	return hw.debug
+}
+
 // SetInterval sets the frame interval between occlusion query draw passes.
 func (hw *OcclusionHW) SetInterval(interval int) {
 	if interval < 1 {
@@ -142,7 +154,10 @@ func (hw *OcclusionHW) GetInterval() int {
 
 // Add appends a new AABBTest containing the given AABB and OcclusionState to the tests slice if state is not nil and scheduling is active.
 func (hw *OcclusionHW) Add(aabb *aabb.AABB, state *OcclusionState) {
-	if state == nil || !hw.CanSchedule() || state.QueryActive {
+	if state == nil {
+		return
+	}
+	if !hw.debug && (!hw.CanSchedule() || state.QueryActive) {
 		return
 	}
 	if hw.testsLen >= len(hw.tests) {
@@ -199,7 +214,7 @@ func (hw *OcclusionHW) Render() {
 		tc := 0
 		for i := 0; i < hw.testsLen; i++ {
 			test := hw.tests[i]
-			if !test.State.QueryActive {
+			if hw.debug || !test.State.QueryActive {
 				if tc+108 >= len(hw.allVertices) {
 					hw.growAllVertices()
 				}
@@ -346,6 +361,9 @@ func (hw *OcclusionHW) Render() {
 					}
 					hw.activeStates[hw.activeLen] = test.State
 					hw.activeLen++
+					idx++
+				} else if hw.debug {
+					hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
 					idx++
 				}
 			}

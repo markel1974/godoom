@@ -45,25 +45,29 @@ func (vm *VerticeMultiSpriteComposed) GetFaces() *Faces {
 	return vm.volume.GetFaces()
 }
 
-// SetVolume updates the current volume of the entity, adjusting its size if the volume changes.
+// SetVolume updates the current volume of the entity.
 func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
-	//activeVolume := v.volumes[v.currentAngle]
 	if activeVolume == vm.volume {
 		return
 	}
 	vm.volume = activeVolume
-	w, h, d := vm.volume.GetEntity().GetSize()
-	vm.entity.SetSize(w, h, d)
 }
 
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
 	//currentAngle  int
-	volumes    []*Volume
-	comp       *VerticeMultiSpriteComposed
-	renderMode float64
-	debug      bool
-	clampAnim  []bool
+	volumes       []*Volume
+	comp          *VerticeMultiSpriteComposed
+	renderMode    float64
+	debug         bool
+	clampAnim     []bool
+	standingHalfH float64
+	minX          float64
+	minY          float64
+	minZ          float64
+	maxX          float64
+	maxY          float64
+	maxZ          float64
 }
 
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
@@ -76,6 +80,18 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 		renderMode: RenderModeBillboard,
 		clampAnim:  make([]bool, len(cfg.MultiSprite.Views)),
 		debug:      false,
+	}
+	f.standingHalfH = cfg.Height * 0.5
+	if f.standingHalfH <= 0 && len(cfg.MultiSprite.Views) > 0 {
+		if mat0 := materials.GetMaterial(cfg.MultiSprite.Views[0]); mat0 != nil {
+			if head0 := mat0.GetHeadFrame(); head0 != nil {
+				_, h0 := head0.GetSize()
+				f.standingHalfH = h0 * 0.5
+			}
+		}
+	}
+	if f.standingHalfH <= 0 {
+		f.standingHalfH = 28.0
 	}
 	if f.debug {
 		f.renderMode = RenderModeModel3D
@@ -115,7 +131,25 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 	for _, volume := range f.volumes {
 		volume.SetThing(thing)
 	}
+
+	f.updateBounds()
+	f.VerticesCompile(0)
 	return f
+}
+
+// updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
+func (v *VerticesMultiSprite) updateBounds() {
+	if v.comp == nil || v.comp.volume == nil {
+		return
+	}
+	w, _, d := v.comp.volume.GetEntity().GetSize()
+	halfW := w * 0.5
+	v.minX = -halfW
+	v.maxX = halfW
+	v.minY = -halfW
+	v.maxY = halfW
+	v.minZ = -v.standingHalfH
+	v.maxZ = -v.standingHalfH + d
 }
 
 // VerticesGetVolume returns the currently active action volume.
@@ -125,14 +159,18 @@ func (v *VerticesMultiSprite) VerticesGetVolume() IVolume {
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
-	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
-	return v.comp.GetAABB()
+	cx, cy, cz := v.comp.GetEntity().GetCenter()
+	b := v.comp.GetEntity().GetAABB()
+	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	return b
 }
 
-// VerticesCompile updates the view volume to the current action volume.
-// It returns false because no rebuild is performed.
+// VerticesCompile updates the view volume to the current action volume and refreshes the enclosing AABB.
 func (v *VerticesMultiSprite) VerticesCompile(tick uint64) bool {
-	return false
+	v.updateBounds()
+	cx, cy, cz := v.comp.GetEntity().GetCenter()
+	v.comp.GetEntity().GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	return true
 }
 
 // VerticesGet returns the current view volume faces twice, a zero value, and the active render mode.
@@ -184,6 +222,7 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	activeVolume := v.volumes[action]
 	//activeVolume := v.volumes[v.currentAngle]
 	v.comp.SetVolume(activeVolume)
+	v.updateBounds()
 	return true
 }
 
@@ -200,19 +239,20 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	width, height := tex.GetSize()
 	halfW := width * 0.5
 	halfY := halfW
-	halfH := height * 0.5
+	zMin := -v.standingHalfH
+	zMax := -v.standingHalfH + height
 
 	var faces []*Face
 
-	// PIANO VISIVO (Render) Posizionato ESATTAMENTE al centro (Y=0) con il materiale visibile.
+	// PIANO VISIVO (Render) Posizionato ESATTAMENTE ancorato a zMin/zMax con il materiale visibile.
 	// TL BL BR
-	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: halfH}, {X: -halfW, Y: 0.0, Z: -halfH}, {X: halfW, Y: 0.0, Z: -halfH}}
+	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: zMax}, {X: -halfW, Y: 0.0, Z: zMin}, {X: halfW, Y: 0.0, Z: zMin}}
 	f0 := NewFace(t0, "", material)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
 	faces = append(faces, f0)
 	// TL BR TR
-	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: halfH}, {X: halfW, Y: 0.0, Z: -halfH}, {X: halfW, Y: 0.0, Z: halfH}}
+	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: zMax}, {X: halfW, Y: 0.0, Z: zMin}, {X: halfW, Y: 0.0, Z: zMax}}
 	f1 := NewFace(t1, "", material)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
@@ -229,15 +269,15 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 		debug = material
 	}
 
-	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: -halfH}
-	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: -halfH}
-	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: -halfH}
-	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: -halfH}
+	v000 := geometry.XYZ{X: -halfW, Y: -halfY, Z: zMin}
+	v100 := geometry.XYZ{X: halfW, Y: -halfY, Z: zMin}
+	v110 := geometry.XYZ{X: halfW, Y: halfY, Z: zMin}
+	v010 := geometry.XYZ{X: -halfW, Y: halfY, Z: zMin}
 
-	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: halfH}
-	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: halfH}
-	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: halfH}
-	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: halfH}
+	v001 := geometry.XYZ{X: -halfW, Y: -halfY, Z: zMax}
+	v101 := geometry.XYZ{X: halfW, Y: -halfY, Z: zMax}
+	v111 := geometry.XYZ{X: halfW, Y: halfY, Z: zMax}
+	v011 := geometry.XYZ{X: -halfW, Y: halfY, Z: zMax}
 
 	addPhysicsQuad(v001, v000, v100, v101, "Front", debug)  // Front
 	addPhysicsQuad(v111, v110, v010, v011, "Back", debug)   // Back

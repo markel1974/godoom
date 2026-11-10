@@ -2,6 +2,7 @@ package volumes
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -132,7 +133,7 @@ func (v *Vertices3DElements) Bind(i int, tick uint64) {
 }
 
 // Compile transforms frame faces for part i into the A and B buffers and clears unused face slots.
-func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *TagAxis) {
+func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *TagAxis) (float64, float64, float64, float64, float64, float64) {
 	volA := v.volsA[i]
 	volB := v.volsB[i]
 
@@ -153,6 +154,9 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 		count = partCount
 	}
 
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+
 	for j := 0; j < count; j++ {
 		srcA := volA.GetFace(j)
 		dstA := v.facesA.At(offset + j)
@@ -165,6 +169,7 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 		} else {
 			rotA.TransformPointsWithMatrix(dstA, srcA, origAX, origAY, origAZ)
 		}
+		minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 
 		srcB := volB.GetFace(j)
 		dstB := v.facesB.At(offset + j)
@@ -177,6 +182,7 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 		} else {
 			rotB.TransformPointsWithMatrix(dstB, srcB, origBX, origBY, origBZ)
 		}
+		minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 	}
 
 	// Zero out any leftover faces in this part's buffer slot to avoid displaying stale frame data
@@ -188,6 +194,8 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 			faceB.Zero()
 		}
 	}
+
+	return minX, minY, minZ, maxX, maxY, maxZ
 }
 
 // Len returns the number of 3D vertex elements.

@@ -2,6 +2,7 @@ package volumes
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
@@ -16,6 +17,12 @@ type Vertices3D struct {
 	links         *Vertices3DLinks
 	elements      *Vertices3DElements
 	joints        *Vertices3DJoints
+	minX          float64
+	minY          float64
+	minZ          float64
+	maxX          float64
+	maxY          float64
+	maxZ          float64
 }
 
 // NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
@@ -64,7 +71,12 @@ func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	return v.elements.vVolume.entity.GetAABB()
+	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
+	b := v.elements.vVolume.entity.GetAABB()
+	if v.minX <= v.maxX {
+		b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	}
+	return b
 }
 
 // VerticesSetRagdoll freezes the model and activates ragdoll collapse if it is not already ragdoll.
@@ -126,6 +138,9 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	v.joints.StepJoints(tick)
 	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
 
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+
 	for _, i := range v.links.executionOrder {
 		v.elements.Bind(i, tick)
 
@@ -135,8 +150,35 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 		rotA := v.joints.GetRotationA(i)
 		rotB := v.joints.GetRotationB(i)
 
-		v.elements.Compile(i, origAX, origAY, origAZ, origBX, origBY, origBZ, rotA, rotB)
+		pMinX, pMinY, pMinZ, pMaxX, pMaxY, pMaxZ := v.elements.Compile(i, origAX, origAY, origAZ, origBX, origBY, origBZ, rotA, rotB)
+		if !v.joints.IsPartDetached(i) {
+			if pMinX < minX {
+				minX = pMinX
+			}
+			if pMinY < minY {
+				minY = pMinY
+			}
+			if pMinZ < minZ {
+				minZ = pMinZ
+			}
+			if pMaxX > maxX {
+				maxX = pMaxX
+			}
+			if pMaxY > maxY {
+				maxY = pMaxY
+			}
+			if pMaxZ > maxZ {
+				maxZ = pMaxZ
+			}
+		}
 	}
+
+	if minX <= maxX {
+		v.minX, v.minY, v.minZ = minX, minY, minZ
+		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
+		v.elements.vVolume.entity.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	}
+
 	return false
 }
 

@@ -116,6 +116,7 @@ func (a *Tree) UpdateObject(object IObject) {
 	// Se esce dal margine, rimuoviamo e reinseriamo in modo pulito
 	a.RemoveObject(object)
 	a.InsertObject(object)
+	fmt.Println("[Info] Object updated in the tree:", object)
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.

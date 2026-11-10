@@ -4,7 +4,6 @@ import "fmt"
 
 // Tree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
 type Tree struct {
-	//objectNodeIndexMap map[IObject]uint
 	nodes              []*Node
 	rootNodeIndex      uint
 	allocatedNodeCount uint
@@ -27,9 +26,8 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		nodeCapacity:       initialSize,
 		growthSize:         initialSize,
 		nodes:              make([]*Node, initialSize),
-		//objectNodeIndexMap: make(map[IObject]uint),
-		stack:  make([]uint, initialSize),
-		margin: margin,
+		stack:              make([]uint, initialSize),
+		margin:             margin,
 	}
 	var nodeIndex uint
 
@@ -50,11 +48,6 @@ func (a *Tree) GetRoot() (*AABB, bool) {
 	}
 	return a.nodes[a.rootNodeIndex].aabb, true
 }
-
-// Nodes returns a map linking objects implementing IAABB to their corresponding node indices in the AABB tree.
-//func (a *Tree) Nodes() map[IObject]uint {
-//	return a.objectNodeIndexMap
-//}
 
 // Clear resets the Tree to its initial empty state without deallocating the underlying structures.
 // It rebuilds the internal free-node list and clears the object map, making it ready for reuse.
@@ -116,7 +109,7 @@ func (a *Tree) UpdateObject(object IObject) {
 	// Se esce dal margine, rimuoviamo e reinseriamo in modo pulito
 	a.RemoveObject(object)
 	a.InsertObject(object)
-	fmt.Println("[Info] Object updated in the tree:", object)
+	//fmt.Println("[Info] Object updated in the tree:", object)
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.

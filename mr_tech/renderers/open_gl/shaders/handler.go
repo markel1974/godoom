@@ -316,6 +316,11 @@ func (h *Handler) GetHvPassages() int32 {
 	return h.hvPassages
 }
 
+// SetBoundingBoxDebug enables or disables bounding box debug rendering for occlusion.
+func (h *Handler) SetBoundingBoxDebug(debug bool) {
+	h.occlusion.SetDebug(debug)
+}
+
 // GetInternalPassages returns the value of the internalPassage field from the Handler.
 func (h *Handler) GetInternalPassages() int32 {
 	return h.internalPassages

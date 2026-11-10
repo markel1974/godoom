@@ -63,19 +63,20 @@ type Window struct {
 	releaseEvents, tempReleaseEvents [KeyLast + 1]bool
 	prevJoy, currJoy, tempJoy        GLJoystick
 
-	renderPrepareFn       func() error
-	renderAdvanceFn       func()
-	renderStartFn         func(int, int, int, int)
-	playerMouseMoveFn     func(float64, float64)
-	playerMovesFn         func(float64, bool, bool, bool, bool)
-	playerThrowFn         func()
-	playerFireFn          func()
-	playerDuckingToggleFn func()
-	playerJumpFn          func(multi bool)
-	toggleShadowsFn       func()
-	enableClearFn         func()
-	decreaseFlashFactorFn func()
-	increaseFlashFactorFn func()
+	renderPrepareFn          func() error
+	renderAdvanceFn          func()
+	renderStartFn            func(int, int, int, int)
+	playerMouseMoveFn        func(float64, float64)
+	playerMovesFn            func(float64, bool, bool, bool, bool)
+	playerThrowFn            func()
+	playerFireFn             func()
+	playerDuckingToggleFn    func()
+	playerJumpFn             func(multi bool)
+	toggleShadowsFn          func()
+	toggleBoundingBoxDebugFn func()
+	enableClearFn            func()
+	decreaseFlashFactorFn    func()
+	increaseFlashFactorFn    func()
 }
 
 // currWin holds a pointer to the currently active Window instance, ensuring only one context is active at a time.
@@ -111,6 +112,7 @@ func (w *Window) Setup(r api.IRender) error {
 	w.playerDuckingToggleFn = r.RenderPlayerDuckingToggle
 	w.playerJumpFn = r.RenderPlayerJump
 	w.toggleShadowsFn = r.RenderToggleShadows
+	w.toggleBoundingBoxDebugFn = r.RenderToggleBoundingBoxDebug
 	w.enableClearFn = r.RenderEnableClear
 	w.decreaseFlashFactorFn = r.RenderDecreaseFlashFactor
 	w.increaseFlashFactorFn = r.RenderIncreaseFlashFactor
@@ -766,6 +768,10 @@ func (w *Window) doRun() {
 		}
 		if w.JustPressed(KeyN) {
 			w.toggleShadowsFn()
+		}
+
+		if w.JustPressed(KeyZ) {
+			w.toggleBoundingBoxDebugFn()
 		}
 		w.th.Call(func() {
 			glfw.PollEvents()

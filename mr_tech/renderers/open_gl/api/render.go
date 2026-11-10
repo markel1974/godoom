@@ -13,6 +13,8 @@ type IRender interface {
 
 	RenderToggleShadows()
 
+	RenderToggleBoundingBoxDebug()
+
 	RenderEnableClear()
 
 	RenderPlayerThrow()

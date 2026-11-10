@@ -48,9 +48,10 @@ type RenderOpenGL struct {
 	builder     *BuilderVolume
 	enableClear bool
 
-	flash         *things.Flash
-	container     []IShader
-	enableShadows bool
+	flash                  *things.Flash
+	container              []IShader
+	enableShadows          bool
+	enableBoundingBoxDebug bool
 
 	mapMetrics          *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
@@ -154,6 +155,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.additive = w.handler.GetAdditive()
 	w.liquid = w.handler.GetLiquid()
 	w.enableShadows = false
+	w.enableBoundingBoxDebug = false
 	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
 	w.SetShadowsEnabled(w.cal.EnableShadows)
 
@@ -265,6 +267,10 @@ func (w *RenderOpenGL) RenderToggleShadows() {
 	w.SetShadowsEnabled(!w.enableShadows)
 }
 
+func (w *RenderOpenGL) RenderToggleBoundingBoxDebug() {
+	w.SetBoundingBoxDebug(!w.enableBoundingBoxDebug)
+}
+
 // RenderEnableClear sets the enableClear flag to true, indicating that the rendering system should clear buffers.
 func (w *RenderOpenGL) RenderEnableClear() {
 	w.enableClear = true
@@ -326,4 +332,10 @@ func (w *RenderOpenGL) SetShadowsEnabled(shadows bool) {
 	w.flashlight.SetShadowsEnabled(w.enableShadows)
 	w.lights.SetShadowsEnabled(w.enableShadows)
 	w.depth.SetShadowsEnabled(w.enableShadows)
+}
+
+// SetBoundingBoxDebug enables or disables bounding box debug rendering.
+func (w *RenderOpenGL) SetBoundingBoxDebug(debug bool) {
+	w.enableBoundingBoxDebug = debug
+	w.handler.SetBoundingBoxDebug(w.enableBoundingBoxDebug)
 }

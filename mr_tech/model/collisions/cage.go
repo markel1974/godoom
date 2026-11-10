@@ -70,6 +70,9 @@ type Cage struct {
 	facesIdx            int
 	hasFloor            bool
 	applied             bool
+	appliedX            float64
+	appliedY            float64
+	appliedZ            float64
 }
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.
@@ -104,13 +107,30 @@ func (s *Cage) GetObject() volumes.IThing {
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
 func (s *Cage) Rebuild(maxStep float64) {
 	entity := s.object.VerticesGetEntity()
-	// Calculate Oriented Horizontal Half-Extents and Canonical Vertical Half-Extent
-	s.eRadX, s.eRadY, _ = entity.GetOrientedHalfExtents()
-	_, _, s.eRadZ = entity.GetSizeCenter()
-	// Calculate center for Broad-Phase
-	s.cX, s.cY, s.cZ = entity.GetCenter()
 	// Calculate Position
 	s.dX, s.dY, s.dZ = entity.GetFrameDisplacement()
+
+	// Default fallback: entity's oriented extents
+	s.eRadX, s.eRadY, _ = entity.GetOrientedHalfExtents()
+	_, _, s.eRadZ = entity.GetSizeCenter()
+	s.cX, s.cY, s.cZ = entity.GetCenter()
+
+	if objAABB := s.object.GetAABB(); objAABB != nil {
+		minX := objAABB.GetMinX()
+		maxX := objAABB.GetMaxX()
+		minY := objAABB.GetMinY()
+		maxY := objAABB.GetMaxY()
+		minZ := objAABB.GetMinZ()
+		maxZ := objAABB.GetMaxZ()
+		if maxX > minX && maxY > minY && maxZ > minZ {
+			s.cX = (minX + maxX) * 0.5
+			s.cY = (minY + maxY) * 0.5
+			s.cZ = (minZ + maxZ) * 0.5
+			s.eRadX = (maxX - minX) * 0.5
+			s.eRadY = (maxY - minY) * 0.5
+			s.eRadZ = (maxZ - minZ) * 0.5
+		}
+	}
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
@@ -427,16 +447,17 @@ func (s *Cage) GetEntity() *physics.Entity {
 	return s.object.VerticesGetEntity()
 }
 
-// SetApplied marks the collision cage as having applied its frame displacement.
+// SetApplied marks the collision cage as having applied its frame displacement and records entity center for tracking push-out offset.
 func (s *Cage) SetApplied() {
 	s.applied = true
+	s.appliedX, s.appliedY, s.appliedZ = s.object.VerticesGetEntity().GetCenter()
 }
 
 // GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
 func (s *Cage) GetPushOffset() (float64, float64, float64) {
 	curX, curY, curZ := s.object.VerticesGetEntity().GetCenter()
 	if s.applied {
-		return curX - s.tX, curY - s.tY, curZ - s.tZ
+		return curX - s.appliedX, curY - s.appliedY, curZ - s.appliedZ
 	}
 	return curX - s.cX, curY - s.cY, curZ - s.cZ
 }
@@ -544,7 +565,15 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, of
 	if !solidWE && !solidNS && nAbsZ > 1e-5 && nAbsZ < 1.0 {
 		normOZ = oZ / nAbsZ
 	}
-	minOverlap := math.Min(normOX, math.Min(normOY, normOZ)) + deltaPen
+	var axisOverlap float64
+	if solidWE {
+		axisOverlap = normOX
+	} else if solidNS {
+		axisOverlap = normOY
+	} else {
+		axisOverlap = normOZ
+	}
+	minOverlap := axisOverlap + deltaPen
 
 	if penetration > minOverlap+satFilterEpsilon {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ

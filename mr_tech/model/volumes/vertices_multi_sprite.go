@@ -23,7 +23,7 @@ type VerticesMultiSprite struct {
 
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
 // It initializes per-view volumes, rendering mode, animation clamps, and binds each volume to thing.
-// It panics if a view is nil, has no textures, or face creation fails.
+// It panics if a view is nil, has no textures, or face creation fails
 func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
 		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
@@ -140,10 +140,11 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	if activeVolume == v.actionVolume {
 		return false
 	}
+	//TODO REBUILD ENTITY
 	v.actionVolume = activeVolume
-	if v.actionVolume == nil {
-		v.actionVolume = v.volumes[0]
-	}
+	//if v.actionVolume == nil {
+	//	v.actionVolume = v.volumes[0]
+	//}
 	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
 	return true
 }

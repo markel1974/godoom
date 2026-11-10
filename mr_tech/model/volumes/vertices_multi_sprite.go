@@ -6,19 +6,64 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// VerticeMultiSpriteComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
+type VerticeMultiSpriteComposed struct {
+	volume *Volume
+	entity *physics.Entity
+}
+
+// NewVerticeMultiSpriteComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
+func NewVerticeMultiSpriteComposed(volume *Volume) *VerticeMultiSpriteComposed {
+	return &VerticeMultiSpriteComposed{
+		entity: volume.GetEntity(),
+		volume: volume,
+	}
+}
+
+// QueryOverlaps checks for overlaps between the entity's volume and the given object, invoking the callback for each match.
+func (vm *VerticeMultiSpriteComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	vm.volume.QueryOverlaps(object, callback)
+}
+
+// GetEntity returns the physics.Entity associated with the VerticeMultiSpriteEntity.
+func (vm *VerticeMultiSpriteComposed) GetEntity() *physics.Entity {
+	return vm.entity
+}
+
+// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity encapsulated by this instance.
+func (vm *VerticeMultiSpriteComposed) GetAABB() *aabb.AABB {
+	return vm.entity.GetAABB()
+}
+
+// GetFaces retrieves the collection of faces associated with the entity's current volume.
+func (vm *VerticeMultiSpriteComposed) GetFaces() *Faces {
+	return vm.volume.GetFaces()
+}
+
+// SetVolume updates the current volume of the entity, adjusting its size if the volume changes.
+func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
+	//activeVolume := v.volumes[v.currentAngle]
+	if activeVolume == vm.volume {
+		return
+	}
+	vm.volume = activeVolume
+	w, h, d := vm.volume.GetEntity().GetSize()
+	vm.entity.SetSize(w, h, d)
+}
+
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
 	//currentAngle  int
-	volumes      []*Volume
-	actionVolume *Volume
-	entityVolume *Volume
-	renderMode   float64
-	debug        bool
-	clampAnim    []bool
+	volumes    []*Volume
+	comp       *VerticeMultiSpriteComposed
+	renderMode float64
+	debug      bool
+	clampAnim  []bool
 }
 
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
@@ -57,8 +102,9 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 		f.volumes[viewIdx] = volume
 	}
 
-	f.entityVolume = f.volumes[0]
-	f.actionVolume = f.volumes[0]
+	f.comp = NewVerticeMultiSpriteComposed(f.volumes[0])
+	//f.ent = f.volumes[0].entity
+	//f.actionVolume = f.volumes[0]
 
 	for _, viewIdx := range cfg.MultiSprite.Clamps {
 		if viewIdx < len(f.volumes) {
@@ -74,13 +120,13 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 
 // VerticesGetVolume returns the currently active action volume.
 func (v *VerticesMultiSprite) VerticesGetVolume() IVolume {
-	return v.entityVolume
+	return v.comp
 }
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
-	return v.entityVolume.GetEntity().GetAABB()
+	return v.comp.GetAABB()
 }
 
 // VerticesCompile updates the view volume to the current action volume.
@@ -91,7 +137,7 @@ func (v *VerticesMultiSprite) VerticesCompile(tick uint64) bool {
 
 // VerticesGet returns the current view volume faces twice, a zero value, and the active render mode.
 func (v *VerticesMultiSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
-	f := v.actionVolume.GetFaces()
+	f := v.comp.GetFaces()
 	return f, f, 0.0, v.renderMode
 }
 
@@ -105,7 +151,7 @@ func (v *VerticesMultiSprite) VerticesSetAction(idx int) {
 	}
 
 	// Restart animation for all faces in the new action volume
-	if faces := v.actionVolume.GetFaces(); faces != nil {
+	if faces := v.comp.GetFaces(); faces != nil {
 		for i := 0; i < faces.Len(); i++ {
 			f := faces.At(i)
 			if f == nil {
@@ -137,15 +183,7 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 	}
 	activeVolume := v.volumes[action]
 	//activeVolume := v.volumes[v.currentAngle]
-	if activeVolume == v.actionVolume {
-		return false
-	}
-	//TODO REBUILD ENTITY
-	v.actionVolume = activeVolume
-	//if v.actionVolume == nil {
-	//	v.actionVolume = v.volumes[0]
-	//}
-	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
+	v.comp.SetVolume(activeVolume)
 	return true
 }
 

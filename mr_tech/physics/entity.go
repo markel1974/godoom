@@ -61,6 +61,11 @@ func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
+// GetSize returns the width, height, and depth of the entity's bounding box as three float64 values.
+func (e *Entity) GetSize() (float64, float64, float64) {
+	return e.BoundingBox.GetSize()
+}
+
 // SetSize updates the bounding box dimensions and refreshes the cuboid inertia tensor.
 func (e *Entity) SetSize(w, h, d float64) {
 	e.BoundingBox.SetSize(w, h, d)

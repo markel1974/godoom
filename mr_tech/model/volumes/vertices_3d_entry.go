@@ -48,9 +48,11 @@ func (vm *Vertices3DEntryComposed) GetFaces() *Faces {
 	return vm.volume.GetFaces()
 }
 
-// SetVolume updates the current active volume for spatial queries.
+// SetVolume updates the current volume of the entity, adjusting its size if the volume changes.
 func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *Volume) {
 	vm.volume = activeVolume
+	//w, h, d := vm.volume.GetEntity().GetSize()
+	//vm.entity.SetSize(w, h, d)
 }
 
 // VAction defines a named animation action with frame bounds and optional clamping behavior.
@@ -184,12 +186,13 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		facesB.Set(j, &Face{material: mat, u: u, v: v})
 	}
 
+	endFrame := len(model.Frames) - 1
 	v := &Vertices3DEntry{
 		volumes:       vols,
 		groupSize:     float64(model.GroupSize),
 		actions:       actions,
 		startFrame:    0,
-		endFrame:      len(model.Frames) - 1,
+		endFrame:      endFrame,
 		currentAction: -1,
 		tagMap:        tagMap,
 		volA:          vols[0],
@@ -202,13 +205,12 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		facesB:        facesB,
 		rot:           NewTagAxis(geometry.XYZ{}, _im),
 		lastQw:        1.0,
-	}
-	if v.startFrame == v.endFrame {
-		v.singleFrame = true
+		singleFrame:   endFrame == 0,
 	}
 	if len(v.actions) > 0 {
 		v.VerticesSetAction(0)
 	}
+	v.VerticesCompile(0)
 	for _, f := range v.volumes {
 		f.SetThing(thing)
 	}
@@ -252,72 +254,55 @@ func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 
 // VerticesCompile updates the active animation frames and interpolation factor for the given tick.
 func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
-	v.tick = tick + v.salt
 	if v.singleFrame {
-		if v.lastVolA != v.volA {
-			v.comp2.SetVolume(v.volA)
-			v.lastVolA = v.volA
-			return true
-		}
-		return false
-	}
-
-	animLength := v.endFrame - v.startFrame + 1
-	if animLength <= 0 {
-		animLength = 1
-	}
-
-	lerpT := 0.0
-	var relativeFrameA int
-	var relativeFrameB int
-	if v.clampAnim {
-		frameFloat := 0.0
-		if v.tick > v.startTick {
-			frameFloat = float64(v.tick-v.startTick) / v.groupSize
-		}
-		lastAnim := animLength - 1
-		if relativeFrameA = int(frameFloat); relativeFrameA >= lastAnim {
-			v.singleFrame = true
-			relativeFrameA = lastAnim
-			relativeFrameB = lastAnim
-			lerpT = 0.0 // Fermo sull'ultimo frame
-		} else {
-			lerpT = frameFloat - math.Floor(frameFloat)
-			if relativeFrameB = relativeFrameA + 1; relativeFrameB >= lastAnim {
-				relativeFrameB = lastAnim
-			}
-		}
+		v.lerpT = 0.0
 	} else {
-		// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
-		frameFloat := float64(v.tick) / v.groupSize
-		lerpT = frameFloat - math.Floor(frameFloat)
-		relativeFrameA = int(frameFloat) % animLength
-		relativeFrameB = (int(frameFloat) + 1) % animLength
+		v.tick = tick + v.salt
+		animLength := v.endFrame - v.startFrame + 1
+		if animLength <= 0 {
+			animLength = 1
+		}
+		lerpT := 0.0
+		var relativeFrameA int
+		var relativeFrameB int
+		if v.clampAnim {
+			frameFloat := 0.0
+			if v.tick > v.startTick {
+				frameFloat = float64(v.tick-v.startTick) / v.groupSize
+			}
+			lastAnim := animLength - 1
+			if relativeFrameA = int(frameFloat); relativeFrameA >= lastAnim {
+				v.singleFrame = true
+				relativeFrameA = lastAnim
+				relativeFrameB = lastAnim
+				lerpT = 0.0 // Fermo sull'ultimo frame
+			} else {
+				lerpT = frameFloat - math.Floor(frameFloat)
+				if relativeFrameB = relativeFrameA + 1; relativeFrameB >= lastAnim {
+					relativeFrameB = lastAnim
+				}
+			}
+		} else {
+			// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
+			frameFloat := float64(v.tick) / v.groupSize
+			lerpT = frameFloat - math.Floor(frameFloat)
+			relativeFrameA = int(frameFloat) % animLength
+			relativeFrameB = (int(frameFloat) + 1) % animLength
+		}
+		v.volA = v.volumes[v.startFrame+relativeFrameA]
+		v.volB = v.volumes[v.startFrame+relativeFrameB]
+		v.lerpT = lerpT
 	}
 
-	v.volA = v.volumes[v.startFrame+relativeFrameA]
-	v.volB = v.volumes[v.startFrame+relativeFrameB]
-	v.lerpT = lerpT
-
-	if v.lastVolA != v.volA {
-		v.comp2.SetVolume(v.volA)
-		v.lastVolA = v.volA
-	}
-
-	return true
-}
-
-// VerticesGet returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
-func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 	entity := v.comp2.GetEntity()
 	q := entity.GetQuaternion()
 	qx, qy, qz, qw := q.Get()
-	if qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0 {
-		return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
-	}
+	isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
 
 	if v.volA != v.lastRotVolA || v.volB != v.lastRotVolB || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
-		v.rot.SetFromQuaternion(q)
+		if !isIdent {
+			v.rot.SetFromQuaternion(q)
+		}
 		v.lastQx, v.lastQy, v.lastQz, v.lastQw = qx, qy, qz, qw
 		v.lastRotVolA = v.volA
 		v.lastRotVolB = v.volB
@@ -329,7 +314,11 @@ func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 			dstA.material = srcA.material
 			dstA.u = srcA.u
 			dstA.v = srcA.v
-			v.rot.TransformPointsWithMatrix(dstA, srcA, 0, 0, 0)
+			if isIdent {
+				dstA.CopyPoints(srcA)
+			} else {
+				v.rot.TransformPointsWithMatrix(dstA, srcA, 0, 0, 0)
+			}
 		}
 		for j := countA; j < v.facesA.Len(); j++ {
 			if faceA := v.facesA.At(j); faceA != nil {
@@ -345,7 +334,30 @@ func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 				dstB.material = srcB.material
 				dstB.u = srcB.u
 				dstB.v = srcB.v
-				v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
+				if isIdent {
+					dstB.CopyPoints(srcB)
+				} else {
+					v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
+				}
+			}
+			for j := countB; j < v.facesB.Len(); j++ {
+				if faceB := v.facesB.At(j); faceB != nil {
+					faceB.Zero()
+				}
+			}
+		} else {
+			countB := countA
+			for j := 0; j < countB; j++ {
+				srcB := v.volA.GetFace(j)
+				dstB := v.facesB.At(j)
+				dstB.material = srcB.material
+				dstB.u = srcB.u
+				dstB.v = srcB.v
+				if isIdent {
+					dstB.CopyPoints(srcB)
+				} else {
+					v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
+				}
 			}
 			for j := countB; j < v.facesB.Len(); j++ {
 				if faceB := v.facesB.At(j); faceB != nil {
@@ -355,9 +367,16 @@ func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 		}
 	}
 
-	if v.volB == v.volA {
-		return v.facesA, v.facesA, v.lerpT, RenderModeModel3D
+	if v.lastVolA != v.volA {
+		v.comp2.SetVolume(v.volA)
+		v.lastVolA = v.volA
 	}
+
+	return true
+}
+
+// VerticesGet returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
+func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 

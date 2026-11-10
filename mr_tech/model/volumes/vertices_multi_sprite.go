@@ -6,7 +6,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -16,6 +15,7 @@ type VerticesMultiSprite struct {
 	//currentAngle  int
 	volumes      []*Volume
 	actionVolume *Volume
+	entityVolume *Volume
 	renderMode   float64
 	debug        bool
 	clampAnim    []bool
@@ -57,8 +57,8 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 		f.volumes[viewIdx] = volume
 	}
 
+	f.entityVolume = f.volumes[0]
 	f.actionVolume = f.volumes[0]
-	//f.viewVolume = f.actionVolume
 
 	for _, viewIdx := range cfg.MultiSprite.Clamps {
 		if viewIdx < len(f.volumes) {
@@ -74,18 +74,13 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 
 // VerticesGetVolume returns the currently active action volume.
 func (v *VerticesMultiSprite) VerticesGetVolume() IVolume {
-	return v.actionVolume
-}
-
-// VerticesGetEntity returns the entity associated with the current action volume.
-func (v *VerticesMultiSprite) VerticesGetEntity() *physics.Entity {
-	return v.actionVolume.GetEntity()
+	return v.entityVolume
 }
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 	//TODO BUG UNA VOLTA INSERITO L'AABB DEVE RIMANERE COSTANTE, DOBBIAMO NOTIFICARE IL CAMBIAMENTO
-	return v.actionVolume.GetEntity().GetAABB()
+	return v.entityVolume.GetEntity().GetAABB()
 }
 
 // VerticesCompile updates the view volume to the current action volume.

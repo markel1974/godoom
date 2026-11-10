@@ -48,11 +48,9 @@ func (vm *Vertices3DEntryComposed) GetFaces() *Faces {
 	return vm.volume.GetFaces()
 }
 
-// SetVolume updates the current volume of the entity, adjusting its size if the volume changes.
+// SetVolume updates the current volume of the entity.
 func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *Volume) {
 	vm.volume = activeVolume
-	//w, h, d := vm.volume.GetEntity().GetSize()
-	//vm.entity.SetSize(w, h, d)
 }
 
 // VAction defines a named animation action with frame bounds and optional clamping behavior.
@@ -102,6 +100,12 @@ type Vertices3DEntry struct {
 	lastQw        float64
 	lastRotVolA   *Volume
 	lastRotVolB   *Volume
+	minX          float64
+	minY          float64
+	minZ          float64
+	maxX          float64
+	maxY          float64
+	maxZ          float64
 }
 
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
@@ -219,7 +223,10 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
-	return v.comp2.GetAABB()
+	cx, cy, cz := v.comp2.GetEntity().GetCenter()
+	b := v.comp2.GetEntity().GetAABB()
+	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	return b
 }
 
 // VerticesGetVolume returns the current view volume for this vertices entry.
@@ -307,6 +314,9 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 		v.lastRotVolA = v.volA
 		v.lastRotVolB = v.volB
 
+		minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+		maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+
 		countA := v.volA.GetFaceCount()
 		for j := 0; j < countA; j++ {
 			srcA := v.volA.GetFace(j)
@@ -319,6 +329,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 			} else {
 				v.rot.TransformPointsWithMatrix(dstA, srcA, 0, 0, 0)
 			}
+			minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 		}
 		for j := countA; j < v.facesA.Len(); j++ {
 			if faceA := v.facesA.At(j); faceA != nil {
@@ -339,6 +350,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 				} else {
 					v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
 				}
+				minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 			}
 			for j := countB; j < v.facesB.Len(); j++ {
 				if faceB := v.facesB.At(j); faceB != nil {
@@ -365,12 +377,22 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 				}
 			}
 		}
+
+		if minX > maxX {
+			minX, minY, minZ = 0, 0, 0
+			maxX, maxY, maxZ = 0, 0, 0
+		}
+		v.minX, v.minY, v.minZ = minX, minY, minZ
+		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
 	}
 
 	if v.lastVolA != v.volA {
 		v.comp2.SetVolume(v.volA)
 		v.lastVolA = v.volA
 	}
+
+	cx, cy, cz := entity.GetCenter()
+	entity.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 
 	return true
 }

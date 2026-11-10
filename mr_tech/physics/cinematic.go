@@ -142,17 +142,17 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 
 // SyncWorldInertia updates the symmetric 3x3 world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T
 // from the OBB orthonormal local axes (a0, a1, a2).
-func (e *Cinematic) SyncWorldInertia(a0, a1, a2 [3]float64) {
+func (e *Cinematic) SyncWorldInertia(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
 	if e.invMass == 0.0 {
 		return
 	}
 	ix, iy, iz := e.invIx, e.invIy, e.invIz
-	e.invIxx = ix*a0[0]*a0[0] + iy*a1[0]*a1[0] + iz*a2[0]*a2[0]
-	e.invIxy = ix*a0[0]*a0[1] + iy*a1[0]*a1[1] + iz*a2[0]*a2[1]
-	e.invIxz = ix*a0[0]*a0[2] + iy*a1[0]*a1[2] + iz*a2[0]*a2[2]
-	e.invIyy = ix*a0[1]*a0[1] + iy*a1[1]*a1[1] + iz*a2[1]*a2[1]
-	e.invIyz = ix*a0[1]*a0[2] + iy*a1[1]*a1[2] + iz*a2[1]*a2[2]
-	e.invIzz = ix*a0[2]*a0[2] + iy*a1[2]*a1[2] + iz*a2[2]*a2[2]
+	e.invIxx = ix*a00*a00 + iy*a10*a10 + iz*a20*a20
+	e.invIxy = ix*a00*a01 + iy*a10*a11 + iz*a20*a21
+	e.invIxz = ix*a00*a02 + iy*a10*a12 + iz*a20*a22
+	e.invIyy = ix*a01*a01 + iy*a11*a11 + iz*a21*a21
+	e.invIyz = ix*a01*a02 + iy*a11*a12 + iz*a21*a22
+	e.invIzz = ix*a02*a02 + iy*a12*a12 + iz*a22*a22
 }
 
 // ApplyWorldInvInertia multiplies a world-space vector by the 3x3 world-space inverse inertia tensor I_world^-1.

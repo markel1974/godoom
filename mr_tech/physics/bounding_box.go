@@ -6,29 +6,22 @@ import (
 	aabb "github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// BoundingBox represents a 3D oriented bounding box (OBB)
-// and its enclosing axis-aligned bounding box (AABB).
+// obbVector is a fixed-size 3D vector used by the SAT implementation.
+type obbVector [3]float64
+
+// BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
 	bottomLeft   Point
 	bottomCenter Point
 	center       Point
 	size         Size
 	aabb         *aabb.AABB
-
-	// Local axes transformed into world space.
-	axis [3]obbVector
-
-	// Orientation quaternion.
-	rotation Quaternion
-
-	// Oriented half-extents projected onto world axes.
-	ex float64
-	ey float64
-	ez float64
+	axis         [3]obbVector // Local axes transformed into world space.
+	rotation     *Quaternion  // Orientation quaternion.
+	ex           float64      // Oriented half-extents projected onto world axes.
+	ey           float64      // Oriented half-extents projected onto world axes.
+	ez           float64      // Oriented half-extents projected onto world axes.
 }
-
-// obbVector is a fixed-size 3D vector used by the SAT implementation.
-type obbVector [3]float64
 
 // NewBoundingBox creates a bounding box with identity rotation.
 func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
@@ -38,6 +31,7 @@ func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
 		center:       NewPoint(0, 0, 0),
 		size:         NewSize(w, h, d),
 		aabb:         aabb.NewAABB(),
+		rotation:     NewQuaternionEmpty(),
 	}
 	r.rotation.SetIdentity()
 	r.rebuild()
@@ -78,18 +72,35 @@ func (r *BoundingBox) SyncRotation() {
 }
 
 // GetRotationQuaternion returns the orientation in x, y, z, w order.
-func (r *BoundingBox) GetRotationQuaternion() (x, y, z, w float64) {
+func (r *BoundingBox) GetRotationQuaternion() (float64, float64, float64, float64) {
 	return r.rotation.Get()
 }
 
 // GetQuaternion returns a pointer to the internal orientation Quaternion.
 func (r *BoundingBox) GetQuaternion() *Quaternion {
-	return &r.rotation
+	return r.rotation
 }
 
 // GetAxes returns the three orthonormal local axes (X, Y, Z) in world space.
-func (r *BoundingBox) GetAxes() ([3]float64, [3]float64, [3]float64) {
-	return r.axis[0], r.axis[1], r.axis[2]
+func (r *BoundingBox) GetAxes() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	return r.axis[0][0], r.axis[0][1], r.axis[0][2],
+		r.axis[1][0], r.axis[1][1], r.axis[1][2],
+		r.axis[2][0], r.axis[2][1], r.axis[2][2]
+}
+
+// GetAxes0 returns the x, y, and z components of the first bounding box axis.
+func (r *BoundingBox) GetAxes0() (float64, float64, float64) {
+	return r.axis[0][0], r.axis[0][1], r.axis[0][2]
+}
+
+// GetAxes1 returns the x, y, and z components of the bounding box's second axis.
+func (r *BoundingBox) GetAxes1() (float64, float64, float64) {
+	return r.axis[1][0], r.axis[1][1], r.axis[1][2]
+}
+
+// GetAxes2 returns the three components of the bounding box's third axis.
+func (r *BoundingBox) GetAxes2() (float64, float64, float64) {
+	return r.axis[2][0], r.axis[2][1], r.axis[2][2]
 }
 
 // GetYaw returns the current horizontal yaw angle in radians derived from the local X axis in world space.
@@ -244,6 +255,8 @@ func (r *BoundingBox) Distance(target *BoundingBox) float64 {
 	return math.Sqrt(d)
 }
 
+var _oobId = [3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+
 // Intersect tests this OBB against an axis-aligned box defined by
 // its reference position and dimensions.
 func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
@@ -252,7 +265,7 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 		r.axis,
 		obbVector{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
 		obbVector{x + w*0.5, y + h*0.5, z + d*0.5},
-		[3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}},
+		_oobId,
 		obbVector{w * 0.5, h * 0.5, d * 0.5},
 	)
 }

@@ -115,16 +115,16 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	r0x, r0y, r0z := px-cx, py-cy, pz-cz
 
 	hx, hy, hz := e.GetSizeCenter()
-	a0, a1, a2 := e.GetAxes()
+	a00, a01, a02, a10, a11, a12, a20, a21, a22 := e.GetAxes()
 
 	// Project impact point and ray direction into OBB local frame
-	plx := r0x*a0[0] + r0y*a0[1] + r0z*a0[2]
-	ply := r0x*a1[0] + r0y*a1[1] + r0z*a1[2]
-	plz := r0x*a2[0] + r0y*a2[1] + r0z*a2[2]
+	plx := r0x*a00 + r0y*a01 + r0z*a02
+	ply := r0x*a10 + r0y*a11 + r0z*a12
+	plz := r0x*a20 + r0y*a21 + r0z*a22
 
-	dlx := (fx*a0[0] + fy*a0[1] + fz*a0[2]) * invF
-	dly := (fx*a1[0] + fy*a1[1] + fz*a1[2]) * invF
-	dlz := (fx*a2[0] + fy*a2[1] + fz*a2[2]) * invF
+	dlx := (fx*a00 + fy*a01 + fz*a02) * invF
+	dly := (fx*a10 + fy*a11 + fz*a12) * invF
+	dlz := (fx*a20 + fy*a21 + fz*a22) * invF
 
 	// Shift to closest point on the ray to OBB center, clamped within the OBB interior
 	tProj := plx*dlx + ply*dly + plz*dlz
@@ -176,9 +176,9 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	}
 
 	// Reconstruct world-space lever arm r from OBB center to surface entry point
-	rx := a0[0]*plx + a1[0]*ply + a2[0]*plz
-	ry := a0[1]*plx + a1[1]*ply + a2[1]*plz
-	rz := (a0[2]*plx + a1[2]*ply + a2[2]*plz) * 0.25
+	rx := a00*plx + a10*ply + a20*plz
+	ry := a01*plx + a11*ply + a21*plz
+	rz := (a02*plx + a12*ply + a22*plz) * 0.25
 
 	// Direct moment of force: τ = r × F
 	tx := ry*fz - rz*fy
@@ -189,11 +189,11 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	var fnX, fnY, fnZ float64
 	switch hitAxis {
 	case 0:
-		fnX, fnY, fnZ = hitSign*a0[0], hitSign*a0[1], hitSign*a0[2]
+		fnX, fnY, fnZ = hitSign*a00, hitSign*a01, hitSign*a02
 	case 1:
-		fnX, fnY, fnZ = hitSign*a1[0], hitSign*a1[1], hitSign*a1[2]
+		fnX, fnY, fnZ = hitSign*a10, hitSign*a11, hitSign*a12
 	default:
-		fnX, fnY, fnZ = hitSign*a2[0], hitSign*a2[1], hitSign*a2[2]
+		fnX, fnY, fnZ = hitSign*a20, hitSign*a21, hitSign*a22
 	}
 	if fDotN := fx*fnX + fy*fnY + fz*fnZ; fDotN < 0.0 {
 		fnFx, fnFy, fnFz := fDotN*fnX, fDotN*fnY, fDotN*fnZ
@@ -212,9 +212,9 @@ func (e *Entity) Update() {
 		return
 	}
 
-	_, _, a2 := e.GetAxes()
-	tiltSq := a2[0]*a2[0] + a2[1]*a2[1]
-	isTilted := tiltSq > 1e-7 || a2[2] < 0.999999
+	a20, a21, a22 := e.GetAxes2()
+	tiltSq := a20*a20 + a21*a21
+	isTilted := tiltSq > 1e-7 || a22 < 0.999999
 
 	if isTilted {
 		stiffness := 140.0
@@ -223,9 +223,9 @@ func (e *Entity) Update() {
 			stiffness = 60.0
 			damping = 10.0
 		}
-		errX := a2[1]
-		errY := -a2[0]
-		if a2[2] < 0.0 {
+		errX := a21
+		errY := -a20
+		if a22 < 0.0 {
 			lenXY := math.Hypot(errX, errY)
 			if lenXY > 1e-6 {
 				errX /= lenXY
@@ -248,17 +248,17 @@ func (e *Entity) Update() {
 
 		// Clamp maximum tilt angle (~18 degrees) so objects rock dynamically when hit
 		// without ever flipping sideways/upside-down or getting stuck in an unnatural pose.
-		_, _, a2Post := e.GetAxes()
-		tiltSin := math.Hypot(a2Post[0], a2Post[1])
+		a2Post0, a2Post1, a2Post2 := e.GetAxes2()
+		tiltSin := math.Hypot(a2Post0, a2Post1)
 		const maxTiltSin = 0.30
-		if tiltSin > maxTiltSin || a2Post[2] < 0.95 {
+		if tiltSin > maxTiltSin || a2Post2 < 0.95 {
 			yaw := e.GetYaw()
 			var qYaw, qTilt Quaternion
 			qYaw.SetAxisAngle(0.0, 0.0, 1.0, yaw)
 			var txAxis, tyAxis float64
 			if tiltSin > 1e-6 {
-				txAxis = -a2Post[1] / tiltSin
-				tyAxis = a2Post[0] / tiltSin
+				txAxis = -a2Post1 / tiltSin
+				tyAxis = a2Post0 / tiltSin
 			} else {
 				txAxis = 1.0
 			}

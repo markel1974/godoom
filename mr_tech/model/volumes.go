@@ -21,10 +21,11 @@ func NewVolumes(container []*volumes.Volume) *Volumes {
 	for _, sec := range container {
 		cache[sec.GetId()] = sec
 	}
+	const fatMargin = 2.0
 	vs := &Volumes{
 		container: container,
 		cache:     cache,
-		tree:      aabb.NewTree(uint(len(container)), 4.0),
+		tree:      aabb.NewTree(uint(len(container)), fatMargin),
 	}
 	return vs
 }

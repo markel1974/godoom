@@ -301,14 +301,14 @@ func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, floa
 	wCx, wCy, wCz := (wMinX+wMaxX)*0.5, (wMinY+wMaxY)*0.5, (wMinZ+wMaxZ)*0.5
 	wHx, wHy, wHz := (wMaxX-wMinX)*0.5, (wMaxY-wMinY)*0.5, (wMaxZ-wMinZ)*0.5
 
-	a0, a1, a2 := rEnt.GetAxes()
-	locCx := wCx*a0[0] + wCy*a0[1] + wCz*a0[2]
-	locCy := wCx*a1[0] + wCy*a1[1] + wCz*a1[2]
-	locCz := wCx*a2[0] + wCy*a2[1] + wCz*a2[2]
+	a00, a01, a02, a10, a11, a12, a20, a21, a22 := rEnt.GetAxes()
+	locCx := wCx*a00 + wCy*a01 + wCz*a02
+	locCy := wCx*a10 + wCy*a11 + wCz*a12
+	locCz := wCx*a20 + wCy*a21 + wCz*a22
 
-	locHx := math.Abs(a0[0])*wHx + math.Abs(a0[1])*wHy + math.Abs(a0[2])*wHz
-	locHy := math.Abs(a1[0])*wHx + math.Abs(a1[1])*wHy + math.Abs(a1[2])*wHz
-	locHz := math.Abs(a2[0])*wHx + math.Abs(a2[1])*wHy + math.Abs(a2[2])*wHz
+	locHx := math.Abs(a00)*wHx + math.Abs(a01)*wHy + math.Abs(a02)*wHz
+	locHy := math.Abs(a10)*wHx + math.Abs(a11)*wHy + math.Abs(a12)*wHz
+	locHz := math.Abs(a20)*wHx + math.Abs(a21)*wHy + math.Abs(a22)*wHz
 
 	w := s.ellipsoidLocal[slot]
 	w.Rebuild(locCx-locHx, locCy-locHy, locCz-locHz, locHx*2.0, locHy*2.0, locHz*2.0)
@@ -333,17 +333,17 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 		nX, nY, nZ := f.GetNormal()
 		if p := f.GetParent(); p != nil {
 			if rEnt := p.GetEntity(); rEnt != nil {
-				rA0, rA1, rA2 := rEnt.GetAxes()
-				wCx = rA0[0]*rLocCx + rA1[0]*rLocCy + rA2[0]*rLocCz + deltaX
-				wCy = rA0[1]*rLocCx + rA1[1]*rLocCy + rA2[1]*rLocCz + deltaY
-				wCz = rA0[2]*rLocCx + rA1[2]*rLocCy + rA2[2]*rLocCz + deltaZ
-				wHx = math.Abs(rA0[0])*rLocHx + math.Abs(rA1[0])*rLocHy + math.Abs(rA2[0])*rLocHz
-				wHy = math.Abs(rA0[1])*rLocHx + math.Abs(rA1[1])*rLocHy + math.Abs(rA2[1])*rLocHz
-				wHz = math.Abs(rA0[2])*rLocHx + math.Abs(rA1[2])*rLocHy + math.Abs(rA2[2])*rLocHz
+				rA00, rA01, rA02, rA10, rA11, rA12, rA20, rA21, rA22 := rEnt.GetAxes()
+				wCx = rA00*rLocCx + rA10*rLocCy + rA20*rLocCz + deltaX
+				wCy = rA01*rLocCx + rA11*rLocCy + rA21*rLocCz + deltaY
+				wCz = rA02*rLocCx + rA12*rLocCy + rA22*rLocCz + deltaZ
+				wHx = math.Abs(rA00)*rLocHx + math.Abs(rA10)*rLocHy + math.Abs(rA20)*rLocHz
+				wHy = math.Abs(rA01)*rLocHx + math.Abs(rA11)*rLocHy + math.Abs(rA21)*rLocHz
+				wHz = math.Abs(rA02)*rLocHx + math.Abs(rA12)*rLocHy + math.Abs(rA22)*rLocHz
 				fnX, fnY, fnZ := nX, nY, nZ
-				nX = rA0[0]*fnX + rA1[0]*fnY + rA2[0]*fnZ
-				nY = rA0[1]*fnX + rA1[1]*fnY + rA2[1]*fnZ
-				nZ = rA0[2]*fnX + rA1[2]*fnY + rA2[2]*fnZ
+				nX = rA00*fnX + rA10*fnY + rA20*fnZ
+				nY = rA01*fnX + rA11*fnY + rA21*fnZ
+				nZ = rA02*fnX + rA12*fnY + rA22*fnZ
 			}
 		}
 		wHx += math.Abs(nX) * s.eRadX * 2.0
@@ -351,14 +351,14 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 		wHz += math.Abs(nZ) * s.eRadZ * 2.0
 	}
 
-	lA0, lA1, lA2 := s.object.VerticesGetEntity().GetAxes()
-	lLocCx := wCx*lA0[0] + wCy*lA0[1] + wCz*lA0[2]
-	lLocCy := wCx*lA1[0] + wCy*lA1[1] + wCz*lA1[2]
-	lLocCz := wCx*lA2[0] + wCy*lA2[1] + wCz*lA2[2]
+	lA00, lA01, lA02, lA10, lA11, lA12, lA20, lA21, lA22 := s.object.VerticesGetEntity().GetAxes()
+	lLocCx := wCx*lA00 + wCy*lA01 + wCz*lA02
+	lLocCy := wCx*lA10 + wCy*lA11 + wCz*lA12
+	lLocCz := wCx*lA20 + wCy*lA21 + wCz*lA22
 
-	lLocHx := math.Abs(lA0[0])*wHx + math.Abs(lA0[1])*wHy + math.Abs(lA0[2])*wHz
-	lLocHy := math.Abs(lA1[0])*wHx + math.Abs(lA1[1])*wHy + math.Abs(lA1[2])*wHz
-	lLocHz := math.Abs(lA2[0])*wHx + math.Abs(lA2[1])*wHy + math.Abs(lA2[2])*wHz
+	lLocHx := math.Abs(lA00)*wHx + math.Abs(lA01)*wHy + math.Abs(lA02)*wHz
+	lLocHy := math.Abs(lA10)*wHx + math.Abs(lA11)*wHy + math.Abs(lA12)*wHz
+	lLocHz := math.Abs(lA20)*wHx + math.Abs(lA21)*wHy + math.Abs(lA22)*wHz
 
 	w.Rebuild(lLocCx-lLocHx, lLocCy-lLocHy, lLocCz-lLocHz, lLocHx*2.0, lLocHy*2.0, lLocHz*2.0)
 	return w

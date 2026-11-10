@@ -65,6 +65,7 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		impulse:        cfg.Impulse,
 		wakeupDistance: cfg.WakeupDistance,
 		jumpForce:      cfg.JumpForce,
+		acceleration:   cfg.Acceleration,
 		location:       location,
 		things:         things,
 		maxStep:        0,

@@ -29,7 +29,7 @@ func (v *VirtualVolume) GetEntity() *physics.Entity {
 // QueryOverlaps interroga i volumi attivi di tutte le parti che compongono Vertices3D
 func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	for _, el := range v.elements.entries {
-		el.viewVolume.QueryOverlaps(object, callback)
+		el.comp2.QueryOverlaps(object, callback)
 	}
 }
 
@@ -116,7 +116,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	}
 
 	element := v.entries[0]
-	v.vVolume = NewVirtualVolume(v, element.viewVolume.GetEntity())
+	v.vVolume = NewVirtualVolume(v, element.comp2.GetEntity())
 	return nil
 }
 

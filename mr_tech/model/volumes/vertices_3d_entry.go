@@ -9,9 +9,49 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+// Vertices3DEntryComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
+type Vertices3DEntryComposed struct {
+	volume *Volume
+	entity *physics.Entity
+}
+
+// NewVertices3DEntryComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
+func NewVertices3DEntryComposed(volume *Volume) *Vertices3DEntryComposed {
+	return &Vertices3DEntryComposed{
+		entity: volume.GetEntity(),
+		volume: volume,
+	}
+}
+
+// QueryOverlaps checks for overlaps between the entity's volume and the given object, invoking the callback for each match.
+func (vm *Vertices3DEntryComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	vm.volume.QueryOverlaps(object, callback)
+}
+
+// GetEntity returns the physics.Entity associated with the VerticeMultiSpriteEntity.
+func (vm *Vertices3DEntryComposed) GetEntity() *physics.Entity {
+	return vm.entity
+}
+
+// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity encapsulated by this instance.
+func (vm *Vertices3DEntryComposed) GetAABB() *aabb.AABB {
+	return vm.entity.GetAABB()
+}
+
+// GetFaces retrieves the collection of faces associated with the entity's current volume.
+func (vm *Vertices3DEntryComposed) GetFaces() *Faces {
+	return vm.volume.GetFaces()
+}
+
+// SetVolume updates the current active volume for spatial queries.
+func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *Volume) {
+	vm.volume = activeVolume
+}
 
 // VAction defines a named animation action with frame bounds and optional clamping behavior.
 type VAction struct {
@@ -33,7 +73,8 @@ func NewVAction(name string, start int, end int) *VAction {
 
 // Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
-	viewVolume    *Volume
+	//viewVolume    *Volume
+	comp2         *Vertices3DEntryComposed
 	volumes       []*Volume
 	startFrame    int
 	endFrame      int
@@ -151,8 +192,9 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		endFrame:      len(model.Frames) - 1,
 		currentAction: -1,
 		tagMap:        tagMap,
-		volA:          nil,
-		volB:          nil,
+		volA:          vols[0],
+		volB:          vols[0],
+		comp2:         NewVertices3DEntryComposed(vols[0]),
 		lerpT:         0.0,
 		lastVolA:      nil,
 		salt:          uint64(rand.Intn(len(model.Frames))),
@@ -161,35 +203,26 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		rot:           NewTagAxis(geometry.XYZ{}, _im),
 		lastQw:        1.0,
 	}
-
+	if v.startFrame == v.endFrame {
+		v.singleFrame = true
+	}
 	if len(v.actions) > 0 {
 		v.VerticesSetAction(0)
 	}
-
-	if v.startFrame == v.endFrame {
-		v.singleFrame = true
-		v.volA = v.volumes[v.startFrame]
-		v.volB = v.volumes[v.startFrame]
-		v.lerpT = 0.0
-	}
-
-	v.viewVolume = v.volumes[0]
-
 	for _, f := range v.volumes {
 		f.SetThing(thing)
 	}
-
 	return v
 }
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
-	return v.viewVolume.GetEntity().GetAABB()
+	return v.comp2.GetAABB()
 }
 
 // VerticesGetVolume returns the current view volume for this vertices entry.
 func (v *Vertices3DEntry) VerticesGetVolume() IVolume {
-	return v.viewVolume
+	return v.comp2
 }
 
 // VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
@@ -212,6 +245,8 @@ func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 		v.volA = v.volumes[v.startFrame]
 		v.volB = v.volumes[v.startFrame]
 		v.lerpT = 0.0
+		v.comp2.SetVolume(v.volA)
+		v.lastVolA = v.volA
 	}
 }
 
@@ -219,6 +254,11 @@ func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	v.tick = tick + v.salt
 	if v.singleFrame {
+		if v.lastVolA != v.volA {
+			v.comp2.SetVolume(v.volA)
+			v.lastVolA = v.volA
+			return true
+		}
 		return false
 	}
 
@@ -260,8 +300,8 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	v.lerpT = lerpT
 
 	if v.lastVolA != v.volA {
+		v.comp2.SetVolume(v.volA)
 		v.lastVolA = v.volA
-		return true
 	}
 
 	return true
@@ -269,13 +309,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 
 // VerticesGet returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
 func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
-	if v.volA == nil || v.volB == nil {
-		return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
-	}
-	entity := v.viewVolume.GetEntity()
-	if entity == nil {
-		return v.volA.GetFaces(), v.volB.GetFaces(), v.lerpT, RenderModeModel3D
-	}
+	entity := v.comp2.GetEntity()
 	q := entity.GetQuaternion()
 	qx, qy, qz, qw := q.Get()
 	if qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0 {

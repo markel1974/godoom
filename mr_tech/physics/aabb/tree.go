@@ -1,7 +1,5 @@
 package aabb
 
-import "fmt"
-
 // Tree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
 type Tree struct {
 	nodes              []*Node
@@ -71,6 +69,9 @@ func (a *Tree) Clear() {
 
 // InsertObject inserts a new object into the Tree, updates its AABB, and associates it with a node index.
 func (a *Tree) InsertObject(object IObject) {
+	if object == nil {
+		return
+	}
 	nodeIndex, node := a.allocateNode()
 	node.object = object
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
@@ -80,36 +81,51 @@ func (a *Tree) InsertObject(object IObject) {
 
 // RemoveObject removes the specified object from the Tree if it exists.
 func (a *Tree) RemoveObject(object IObject) {
+	if object == nil {
+		return
+	}
 	aabb := object.GetAABB()
+	if aabb == nil {
+		return
+	}
 	nodeIdx := aabb.GetIndex()
 	aabb.SetIndex(-1)
 	if nodeIdx < 0 || nodeIdx >= int64(len(a.nodes)) {
-		fmt.Println("[Warning] RemoveObject object not found in the tree:", object)
 		return
 	}
 	nodeIndex := uint(nodeIdx)
+	node := a.nodes[nodeIndex]
+	if node.object != object {
+		return
+	}
 	a.removeLeaf(nodeIndex)
 	a.deallocateNode(nodeIndex)
 }
 
 // UpdateObject updates the position of an object in the tree by modifying its AABB and repositioning it if necessary.
 func (a *Tree) UpdateObject(object IObject) {
-	aabb := object.GetAABB()
-	nodeIdx := aabb.GetIndex()
-	if nodeIdx < 0 || nodeIdx > int64(len(a.nodes)) {
-		fmt.Println("[Warning] UpdateObject object not found in the tree:", object)
+	if object == nil {
 		return
 	}
-	nodeIndex := int(nodeIdx)
+	aabb := object.GetAABB()
+	if aabb == nil {
+		return
+	}
+	nodeIdx := aabb.GetIndex()
+	if nodeIdx < 0 || nodeIdx >= int64(len(a.nodes)) {
+		return
+	}
+	nodeIndex := uint(nodeIdx)
 	node := a.nodes[nodeIndex]
+	if node.object != object {
+		return
+	}
 	// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
 	if node.aabb.Contains(aabb) {
 		return
 	}
-	// Se esce dal margine, rimuoviamo e reinseriamo in modo pulito
-	a.RemoveObject(object)
-	a.InsertObject(object)
-	//fmt.Println("[Info] Object updated in the tree:", object)
+	// Riaggiorna la foglia direttamente senza deallocare/riallocare il nodo
+	a.updateLeaf(nodeIndex, aabb)
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.

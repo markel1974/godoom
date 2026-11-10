@@ -1,8 +1,10 @@
 package aabb
 
+import "fmt"
+
 // Tree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
 type Tree struct {
-	objectNodeIndexMap map[IObject]uint
+	//objectNodeIndexMap map[IObject]uint
 	nodes              []*Node
 	rootNodeIndex      uint
 	allocatedNodeCount uint
@@ -25,9 +27,9 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		nodeCapacity:       initialSize,
 		growthSize:         initialSize,
 		nodes:              make([]*Node, initialSize),
-		objectNodeIndexMap: make(map[IObject]uint),
-		stack:              make([]uint, initialSize),
-		margin:             margin,
+		//objectNodeIndexMap: make(map[IObject]uint),
+		stack:  make([]uint, initialSize),
+		margin: margin,
 	}
 	var nodeIndex uint
 
@@ -50,9 +52,9 @@ func (a *Tree) GetRoot() (*AABB, bool) {
 }
 
 // Nodes returns a map linking objects implementing IAABB to their corresponding node indices in the AABB tree.
-func (a *Tree) Nodes() map[IObject]uint {
-	return a.objectNodeIndexMap
-}
+//func (a *Tree) Nodes() map[IObject]uint {
+//	return a.objectNodeIndexMap
+//}
 
 // Clear resets the Tree to its initial empty state without deallocating the underlying structures.
 // It rebuilds the internal free-node list and clears the object map, making it ready for reuse.
@@ -71,7 +73,7 @@ func (a *Tree) Clear() {
 	if a.nodeCapacity > 0 {
 		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
 	}
-	a.objectNodeIndexMap = make(map[IObject]uint)
+	//a.objectNodeIndexMap = make(map[IObject]uint)
 }
 
 // InsertObject inserts a new object into the Tree, updates its AABB, and associates it with a node index.
@@ -80,30 +82,40 @@ func (a *Tree) InsertObject(object IObject) {
 	node.object = object
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
 	a.insertLeaf(nodeIndex)
-	a.objectNodeIndexMap[object] = nodeIndex
+	object.GetAABB().SetIndex(int64(nodeIndex))
 }
 
 // RemoveObject removes the specified object from the Tree if it exists.
 func (a *Tree) RemoveObject(object IObject) {
-	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
-		a.removeLeaf(nodeIndex)
-		a.deallocateNode(nodeIndex)
-		delete(a.objectNodeIndexMap, object)
+	aabb := object.GetAABB()
+	nodeIdx := aabb.GetIndex()
+	aabb.SetIndex(-1)
+	if nodeIdx < 0 || nodeIdx >= int64(len(a.nodes)) {
+		fmt.Println("[Warning] RemoveObject object not found in the tree:", object)
+		return
 	}
+	nodeIndex := uint(nodeIdx)
+	a.removeLeaf(nodeIndex)
+	a.deallocateNode(nodeIndex)
 }
 
 // UpdateObject updates the position of an object in the tree by modifying its AABB and repositioning it if necessary.
 func (a *Tree) UpdateObject(object IObject) {
-	if nodeIndex, ok := a.objectNodeIndexMap[object]; ok {
-		node := a.nodes[nodeIndex]
-		// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
-		if node.aabb.Contains(object.GetAABB()) {
-			return
-		}
-		// Se esce dal margine, rimuoviamo e reinseriamo in modo pulito
-		a.RemoveObject(object)
-		a.InsertObject(object)
+	aabb := object.GetAABB()
+	nodeIdx := aabb.GetIndex()
+	if nodeIdx < 0 || nodeIdx > int64(len(a.nodes)) {
+		fmt.Println("[Warning] UpdateObject object not found in the tree:", object)
+		return
 	}
+	nodeIndex := int(nodeIdx)
+	node := a.nodes[nodeIndex]
+	// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
+	if node.aabb.Contains(aabb) {
+		return
+	}
+	// Se esce dal margine, rimuoviamo e reinseriamo in modo pulito
+	a.RemoveObject(object)
+	a.InsertObject(object)
 }
 
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.

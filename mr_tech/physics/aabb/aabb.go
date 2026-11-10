@@ -8,17 +8,20 @@ type IObject interface {
 
 // AABB represents an axis-aligned bounding box in 3D space, defined by its minimum and maximum coordinates.
 type AABB struct {
-	minX float64
-	minY float64
-	minZ float64
-	maxX float64
-	maxY float64
-	maxZ float64
+	index int64
+	minX  float64
+	minY  float64
+	minZ  float64
+	maxX  float64
+	maxY  float64
+	maxZ  float64
 }
 
 // NewAABB creates and returns a new axis-aligned bounding box (AABB) with default uninitialized properties.
 func NewAABB() *AABB {
-	a := &AABB{}
+	a := &AABB{
+		index: -1,
+	}
 	return a
 }
 
@@ -30,6 +33,16 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxX = maxX
 	a.maxY = maxY
 	a.maxZ = maxZ
+}
+
+// GetIndex returns the current index value of the AABB instance as an int64.
+func (a *AABB) GetIndex() int64 {
+	return a.index
+}
+
+// SetIndex sets the index of the AABB to the specified value.
+func (a *AABB) SetIndex(index int64) {
+	a.index = index
 }
 
 // GetWidth calculates and returns the width of the AABB by subtracting minX from maxX.

@@ -343,7 +343,7 @@ func (pr *Player) Throw(throwableIndex int, speed float64) {
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.
 func (pr *Player) Fire(id string) {
-	// Origine della vista (include Bobbing e Crouch)
+	// Origine della vista (camera eye, include Bobbing e Crouch)
 	camX, camY, camZ := pr.GetVisualPosition()
 	// Calcolo del vettore direzione (Radianti)
 	// Usiamo lo angle invertito per la telecamera e lo scaliamo per il FOV
@@ -351,13 +351,10 @@ func (pr *Player) Fire(id string) {
 	dirX := pr.angleCos * math.Cos(pitchRad)
 	dirY := pr.angleSin * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
-	// Punto di spawn fuori dalla hitbox del player
-	// Usiamo il raggio dinamico per evitare l'auto-collisione nel BVH
-	weaponForward := pr.VerticesGetEntity().GetWidth()
+
 	const weaponForce = 50000.0 * 10.0 // TODO CONFIG
-	spawnX := camX + (pr.angleCos * weaponForward)
-	spawnY := camY + (pr.angleSin * weaponForward)
-	spawnZ := camZ - (pr.getEyeHeight() * 0.5)
-	spawnPos := geometry.XYZ{X: spawnX, Y: spawnY, Z: spawnZ}
+	// Il raggio hitscan parte direttamente dal punto di vista (camera eye) per collimare
+	// perfettamente con il mirino a schermo. Il self-culling è gestito nativamente in Base.FireHitscan.
+	spawnPos := geometry.XYZ{X: camX, Y: camY, Z: camZ}
 	pr.FireHitscan(id, spawnPos, weaponForce, dirX, dirY, dirZ)
 }

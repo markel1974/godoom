@@ -120,9 +120,14 @@ func (a *Tree) UpdateObject(object IObject) {
 	if node.object != object {
 		return
 	}
-	// Branch Prediction amichevole: se è nel Fat Margin, non facciamo nulla
+	// Branch Prediction amichevole: se è nel Fat Margin e non si è ristretto eccessivamente, non facciamo nulla
 	if node.aabb.Contains(aabb) {
-		return
+		maxExcess := a.margin * 4.0
+		if (node.aabb.maxX-node.aabb.minX)-(aabb.maxX-aabb.minX) <= maxExcess &&
+			(node.aabb.maxY-node.aabb.minY)-(aabb.maxY-aabb.minY) <= maxExcess &&
+			(node.aabb.maxZ-node.aabb.minZ)-(aabb.maxZ-aabb.minZ) <= maxExcess {
+			return
+		}
 	}
 	// Riaggiorna la foglia direttamente senza deallocare/riallocare il nodo
 	a.updateLeaf(nodeIndex, aabb)
@@ -317,10 +322,16 @@ func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float6
 		// Ray Culling: scartiamo l'intero ramo se è più lontano del nostro limite attuale
 		if hit && tMin <= maxDistance {
 			if node.IsLeaf() {
-				// Segnaliamo l'oggetto e permettiamo alla logica di restringere il raggio
-				if newMax, ok := callback(node.object, tMin); ok {
-					if newMax < maxDistance {
-						maxDistance = newMax
+				// Narrow-phase test: verifichiamo l'intersezione esatta contro l'AABB tight dell'oggetto
+				tightAABB := node.object.GetAABB()
+				if tightAABB != nil {
+					tMinTight, hitTight := tightAABB.IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ)
+					if hitTight && tMinTight <= maxDistance {
+						if newMax, ok := callback(node.object, tMinTight); ok {
+							if newMax < maxDistance {
+								maxDistance = newMax
+							}
+						}
 					}
 				}
 			} else {

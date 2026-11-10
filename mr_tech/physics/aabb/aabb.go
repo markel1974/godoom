@@ -214,7 +214,7 @@ func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (floa
 
 	// Intersezione valida se tMax >= tMin e il volume è davanti al raggio (tMax >= 0)
 	if tMax >= max(tMin, 0.0) {
-		return tMin, true
+		return max(tMin, 0.0), true
 	}
 	return 0.0, false
 }

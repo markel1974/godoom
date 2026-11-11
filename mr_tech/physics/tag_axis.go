@@ -36,6 +36,12 @@ func NewTagAxis(origin geometry.XYZ, data [3]geometry.XYZ) *TagAxis {
 	return a
 }
 
+// Copy copies the origin coordinates and axis point data from other into ta.
+func (ta *TagAxis) Copy(other *TagAxis) {
+	ta.originX, ta.originY, ta.originZ = other.originX, other.originY, other.originZ
+	ta.data.CopyPoints(other.data)
+}
+
 // Reset resets the axis data to the predefined identity matrix (_im), representing standard basis vectors in 3D space.
 func (ta *TagAxis) Reset() {
 	ta.data.Points[0].X, ta.data.Points[0].Y, ta.data.Points[0].Z = _im[0].X, _im[0].Y, _im[0].Z

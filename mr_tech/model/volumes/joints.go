@@ -268,8 +268,6 @@ type Joints struct {
 	elems []IElements
 
 	ent *physics.Entity
-
-	//elements *Vertices3DElements
 }
 
 // NewJoints creates a Joints instance with default state and identity root quaternions.
@@ -400,9 +398,9 @@ func (v *Joints) CompileDetached(i int) {
 	v.rotationsB[i].SetFromQuaternion(j.detQuat)
 }
 
-// CompileNormale derives joint origins and rotations from parent transforms and optional tag axes.
+// CompileNormal derives joint origins and rotations from parent transforms and optional tag axes.
 // Missing tags inherit parent transforms; configured deflection is applied when present.
-func (v *Joints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *physics.TagAxis) {
+func (v *Joints) CompileNormal(i int, pIdx int, tagAxisA, tagAxisB *physics.TagAxis) {
 	j := v.data[i]
 	if tagAxisA != nil {
 		pRotA := v.rotationsA[pIdx]
@@ -418,12 +416,12 @@ func (v *Joints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *physics.Tag
 			pRotA.MultiplyMatrix(tagAxisA, rotA)
 		}
 	} else {
-		fmt.Printf("[warning] Vertices3D: tag %q not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
+		fmt.Printf("[warning] Vertices3D: tag not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", pIdx, i)
 		v.originsA[i] = v.originsA[pIdx]
 		if j.hasDeflection {
 			v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
 		} else {
-			*v.rotationsA[i] = *v.rotationsA[pIdx]
+			v.rotationsA[i].Copy(v.rotationsA[pIdx])
 		}
 	}
 
@@ -441,12 +439,12 @@ func (v *Joints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *physics.Tag
 			pRotB.MultiplyMatrix(tagAxisB, rotB)
 		}
 	} else {
-		fmt.Printf("[warning] Vertices3D: tag %q not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
+		fmt.Printf("[warning] Vertices3D: tag not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", pIdx, i)
 		v.originsB[i] = v.originsB[pIdx]
 		if j.hasDeflection {
 			v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
 		} else {
-			*v.rotationsB[i] = *v.rotationsB[pIdx]
+			v.rotationsB[i].Copy(v.rotationsB[pIdx])
 		}
 	}
 }

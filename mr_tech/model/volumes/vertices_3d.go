@@ -161,7 +161,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 					} else {
 						tagAxisA := volA.GetVertexTag(tagIdx)
 						tagAxisB := volB.GetVertexTag(tagIdx)
-						v.joints.CompileNormale(i, pIdx, tagAxisA, tagAxisB)
+						v.joints.CompileNormal(i, pIdx, tagAxisA, tagAxisB)
 					}
 				}
 			}

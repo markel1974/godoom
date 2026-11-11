@@ -17,51 +17,51 @@ const (
 	dfsVisited   = 2
 )
 
-// Vertices3DLink represents a hierarchical attachment from a model part to its parent through a tag.
-type Vertices3DLink struct {
+// Link represents a hierarchical attachment from a model part to its parent through a tag.
+type Link struct {
 	parent int
 	tag    string
 }
 
-// NewVertices3DLink creates a link to the specified parent element and tag.
-func NewVertices3DLink(parent int, tag string) *Vertices3DLink {
-	return &Vertices3DLink{
+// NewLink creates a link to the specified parent element and tag.
+func NewLink(parent int, tag string) *Link {
+	return &Link{
 		parent: parent,
 		tag:    tag,
 	}
 }
 
 // Invalidate disconnects the link by clearing its parent and tag.
-func (vl *Vertices3DLink) Invalidate() {
+func (vl *Link) Invalidate() {
 	vl.parent = linkInvalidIndex
 	vl.tag = ""
 }
 
-// Vertices3DLinks manages hierarchical parent connections and update ordering for linked 3D model parts.
-type Vertices3DLinks struct {
-	data           []*Vertices3DLink
+// Links manages hierarchical parent connections and update ordering for linked 3D model parts.
+type Links struct {
+	data           []*Link
 	tagIndices     []int
 	executionOrder []int
 }
 
-// NewVertices3DLinks creates an empty Vertices3DLinks collection.
-func NewVertices3DLinks() *Vertices3DLinks {
-	ls := &Vertices3DLinks{}
+// NewLinks creates an empty Links collection.
+func NewLinks() *Links {
+	ls := &Links{}
 	return ls
 }
 
 // Setup initializes link data, validates parent relationships, resolves tag indices, and builds execution order.
-func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElements) error {
+func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error {
 	numParts := elements.Len()
-	ls.data = make([]*Vertices3DLink, numParts)
+	ls.data = make([]*Link, numParts)
 	ls.tagIndices = make([]int, numParts)
 	ls.executionOrder = make([]int, 0, numParts)
 
 	for i := 0; i < numParts; i++ {
 		if i < len(cfg.Links) {
-			ls.data[i] = NewVertices3DLink(cfg.Links[i].Parent, cfg.Links[i].Tag)
+			ls.data[i] = NewLink(cfg.Links[i].Parent, cfg.Links[i].Tag)
 		} else {
-			ls.data[i] = NewVertices3DLink(linkInvalidIndex, "")
+			ls.data[i] = NewLink(linkInvalidIndex, "")
 		}
 	}
 
@@ -161,14 +161,14 @@ func (ls *Vertices3DLinks) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 
 // Invalidate disconnects the link at index i by clearing its parent and tag.
 // It does nothing when i is outside the stored link range.
-func (ls *Vertices3DLinks) Invalidate(i int) {
+func (ls *Links) Invalidate(i int) {
 	if i >= 0 && i < len(ls.data) {
 		ls.data[i].Invalidate()
 	}
 }
 
 // GetParent returns the parent index for i, or the invalid parent value if i is out of range.
-func (ls *Vertices3DLinks) GetParent(i int) int {
+func (ls *Links) GetParent(i int) int {
 	if i >= 0 && i < len(ls.data) {
 		return ls.data[i].parent
 	}
@@ -176,7 +176,7 @@ func (ls *Vertices3DLinks) GetParent(i int) int {
 }
 
 // HasParent reports whether i is within the stored link range.
-func (ls *Vertices3DLinks) HasParent(i int) bool {
+func (ls *Links) HasParent(i int) bool {
 	if i >= 0 && i < len(ls.data) {
 		return true
 	}
@@ -184,7 +184,7 @@ func (ls *Vertices3DLinks) HasParent(i int) bool {
 }
 
 // GetTag returns the lowercase tag for i, or an empty string when i is out of range.
-func (ls *Vertices3DLinks) GetTag(i int) string {
+func (ls *Links) GetTag(i int) string {
 	if i >= 0 && i < len(ls.data) {
 		return strings.ToLower(ls.data[i].tag)
 	}
@@ -192,7 +192,7 @@ func (ls *Vertices3DLinks) GetTag(i int) string {
 }
 
 // GetTagIndex returns the resolved tag index for i, or the invalid index when i is out of range.
-func (ls *Vertices3DLinks) GetTagIndex(i int) int {
+func (ls *Links) GetTagIndex(i int) int {
 	if i >= 0 && i < len(ls.tagIndices) {
 		return ls.tagIndices[i]
 	}

@@ -14,9 +14,9 @@ import (
 type Vertices3D struct {
 	actions       *Vertices3DActions
 	currentAction int
-	links         *Vertices3DLinks
+	links         *Links
 	elements      *Vertices3DElements
-	joints        *Vertices3DJoints
+	joints        *Joints
 	minX          float64
 	minY          float64
 	minZ          float64
@@ -29,9 +29,9 @@ type Vertices3D struct {
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
+		links:         NewLinks(),
+		joints:        NewJoints(),
 		elements:      NewVertices3DElements(),
-		links:         NewVertices3DLinks(),
-		joints:        NewVertices3DJoints(),
 		actions:       NewVertices3DActions(),
 		currentAction: -1,
 	}
@@ -41,7 +41,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	if err := v.links.Setup(cfg.Model3D, v.elements); err != nil {
 		panic("Error setting up vertices elements: " + err.Error())
 	}
-	if err := v.joints.Setup(cfg.Model3D, v.elements, v.links); err != nil {
+	if err := v.joints.Setup(cfg.Model3D, v.elements.vVolume.entity, v.elements, v.links); err != nil {
 		panic("Error setting up vertices elements: " + err.Error())
 	}
 	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
@@ -87,10 +87,7 @@ func (v *Vertices3D) VerticesSetRagdoll() {
 	}
 	v.elements.Freeze()
 	v.joints.SetRagdollCollapse()
-	ent := v.elements.vVolume.entity
-	_, _, halfD := ent.GetSizeCenter()
-	cx, cy, cz := ent.GetCenter()
-	v.joints.ActivateRagdoll(halfD, cx, cy, cz)
+	v.joints.ActivateRagdoll()
 }
 
 // VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
@@ -125,10 +122,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 		}
 	}
 	if enteringRagdoll {
-		ent := v.elements.vVolume.entity
-		_, _, halfD := ent.GetSizeCenter()
-		cx, cy, cz := ent.GetCenter()
-		v.joints.ActivateRagdoll(halfD, cx, cy, cz)
+		v.joints.ActivateRagdoll()
 	}
 }
 
@@ -136,19 +130,16 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 // to the closest articulated part, exciting the 5+ joint DoFs along the kinematic chain, jolting ragdoll bodies,
 // and triggering dismemberment on critical or post-mortem hits.
 func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
-	ent := v.elements.vVolume.entity
-	_, _, halfD := ent.GetSizeCenter()
-	cx, cy, cz := ent.GetCenter()
-	v.joints.ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz)
+	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
 }
 
 // VerticesCompile updates all model parts for the tick and writes transformed frame data into render buffers.
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	ent := v.elements.vVolume.entity
-	_, _, halfD := ent.GetSizeCenter()
+
 	cx, cy, cz := ent.GetCenter()
-	v.joints.StepJoints(halfD, tick)
+	v.joints.StepJoints(tick)
 
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
@@ -157,7 +148,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 		v.elements.Bind(i, tick)
 
 		if i > 0 && v.joints.IsDetached(i) {
-			v.joints.CompileDetached(i, cx, cy, cz)
+			v.joints.CompileDetached(i)
 		} else {
 			pIdx := v.links.GetParent(i)
 			if pIdx < 0 || pIdx == i {

@@ -13,8 +13,8 @@ type IElements interface {
 	FreezeCurrentFrame()
 }
 
-// Vertices3DJoint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
-type Vertices3DJoint struct {
+// Joint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
+type Joint struct {
 	localCenterX    float64
 	localCenterY    float64
 	localCenterZ    float64
@@ -61,9 +61,9 @@ type Vertices3DJoint struct {
 	combinedB *physics.TagAxis
 }
 
-// NewVertices3DJoint creates a new 3D vertex joint with identity rotations and axes.
-func NewVertices3DJoint() *Vertices3DJoint {
-	return &Vertices3DJoint{
+// NewJoint creates a Joint with identity orientation quaternions and axes.
+func NewJoint() *Joint {
+	return &Joint{
 		quat:      physics.NewQuaternionIdentity(),
 		detQuat:   physics.NewQuaternionIdentity(),
 		axis:      physics.NewTagAxisIdentity(),
@@ -72,7 +72,9 @@ func NewVertices3DJoint() *Vertices3DJoint {
 	}
 }
 
-func (j *Vertices3DJoint) ActivateRagdoll(lx, ly, lz float64, sign float64) {
+// ActivateRagdoll sets clamped ragdoll targets from local motion inputs and applies angular velocity impulses.
+// sign biases the Y-axis target to vary the collapse direction.
+func (j *Joint) ActivateRagdoll(lx, ly, lz float64, sign float64) {
 	j.ragdollTargetX = math.Max(-j.maxAngleRagdoll*0.85, math.Min(j.maxAngleRagdoll*0.85, lx*j.dofScaleX*0.95))
 	j.ragdollTargetY = math.Max(-j.maxAngleRagdoll*0.85, math.Min(j.maxAngleRagdoll*0.85, (ly+0.28*sign)*j.dofScaleY*0.95))
 	j.ragdollTargetZ = math.Max(-j.maxAngleRagdoll*0.70, math.Min(j.maxAngleRagdoll*0.70, lz*j.dofScaleZ*0.80))
@@ -82,7 +84,8 @@ func (j *Vertices3DJoint) ActivateRagdoll(lx, ly, lz float64, sign float64) {
 	j.velZ += j.ragdollTargetZ * 4.0
 }
 
-func (j *Vertices3DJoint) Detach(halfD float64, cx, cy, cz float64, dirX, dirY, dirZ, fMag float64, orX, orY, orZ float64, sideSign float64) {
+// Detach marks the joint as detached and initializes its world position, floor height, launch velocity, and tumble.
+func (j *Joint) Detach(halfD float64, cx, cy, cz float64, dirX, dirY, dirZ, fMag float64, orX, orY, orZ float64, sideSign float64) {
 	if j.detached || !j.canDetach {
 		return
 	}
@@ -106,7 +109,8 @@ func (j *Vertices3DJoint) Detach(halfD float64, cx, cy, cz float64, dirX, dirY, 
 	j.detWz = sideSign * 7.0
 }
 
-func (j *Vertices3DJoint) Settle(dt float64) {
+// Settle advances detached joint motion by dt, applying gravity, damping, floor bounce, friction, and rest detection.
+func (j *Joint) Settle(dt float64) {
 	const limbGravity = 560.0
 	j.detVz -= limbGravity * dt
 
@@ -127,14 +131,14 @@ func (j *Vertices3DJoint) Settle(dt float64) {
 		} else {
 			j.detVz = 0.0
 		}
-		groundFric := math.Pow(0.015, dt)
-		j.detVx *= groundFric
-		j.detVy *= groundFric
+		groundFriction := math.Pow(0.015, dt)
+		j.detVx *= groundFriction
+		j.detVy *= groundFriction
 
-		angFric := math.Pow(0.025, dt)
-		j.detWx *= angFric
-		j.detWy *= angFric
-		j.detWz *= angFric
+		angFriction := math.Pow(0.025, dt)
+		j.detWx *= angFriction
+		j.detWy *= angFriction
+		j.detWz *= angFriction
 
 		if j.detVz == 0.0 && (j.detVx*j.detVx+j.detVy*j.detVy) < 1.0 &&
 			(j.detWx*j.detWx+j.detWy*j.detWy+j.detWz*j.detWz) < 0.02 {
@@ -146,7 +150,8 @@ func (j *Vertices3DJoint) Settle(dt float64) {
 	j.detQuat.IntegrateAngular(j.detWx, j.detWy, j.detWz, dt)
 }
 
-func (j *Vertices3DJoint) Connect(isRagdoll bool, dt float64) bool {
+// Connect advances the joint spring-damper state and cone limits, returning true while motion remains active.
+func (j *Joint) Connect(isRagdoll bool, dt float64) bool {
 	// Connected articulated joint (PD spring-damper + cone joint limits)
 	ks := j.stiffness
 	kd := j.damping
@@ -217,10 +222,10 @@ func (j *Vertices3DJoint) Connect(isRagdoll bool, dt float64) bool {
 	return active
 }
 
-// Vertices3DJoints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
-type Vertices3DJoints struct {
-	links             *Vertices3DLinks
-	data              []*Vertices3DJoint
+// Joints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
+type Joints struct {
+	links             *Links
+	data              []*Joint
 	dismemberedCount  int
 	hasActiveDynamics bool
 	lastHitDirX       float64
@@ -262,12 +267,14 @@ type Vertices3DJoints struct {
 
 	elems []IElements
 
+	ent *physics.Entity
+
 	//elements *Vertices3DElements
 }
 
-// NewVertices3DJoints creates a Vertices3DJoints instance with default state and identity root quaternions.
-func NewVertices3DJoints() *Vertices3DJoints {
-	pj := &Vertices3DJoints{
+// NewJoints creates a Joints instance with default state and identity root quaternions.
+func NewJoints() *Joints {
+	pj := &Joints{
 		fallAxisX:        1.0,
 		lastHitPart:      -1,
 		rootQuat:         physics.NewQuaternionIdentity(),
@@ -279,20 +286,20 @@ func NewVertices3DJoints() *Vertices3DJoints {
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements *Vertices3DElements, links *Vertices3DLinks) error {
-	v.links = links
-
+func (v *Joints) Setup(cfg *config.Model3D, ent *physics.Entity, elements *Vertices3DElements, links *Links) error {
+	v.ent = ent
 	v.numParts = elements.Len()
+	v.links = links
 	v.elems = make([]IElements, v.numParts)
 	v.rotationsA = make([]*physics.TagAxis, v.numParts)
 	v.rotationsB = make([]*physics.TagAxis, v.numParts)
-	v.data = make([]*Vertices3DJoint, v.numParts)
+	v.data = make([]*Joint, v.numParts)
 
 	for i := 0; i < v.numParts; i++ {
 		v.elems[i] = elements.GetEntry(i)
 		v.rotationsA[i] = physics.NewTagAxisIdentity()
 		v.rotationsB[i] = physics.NewTagAxisIdentity()
-		v.data[i] = NewVertices3DJoint()
+		v.data[i] = NewJoint()
 	}
 
 	v.originsA = make([]geometry.XYZ, v.numParts)
@@ -352,37 +359,38 @@ func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements *Vertices3DElemen
 }
 
 // IsRagdoll reports whether the joints are currently in ragdoll mode.
-func (v *Vertices3DJoints) IsRagdoll() bool {
+func (v *Joints) IsRagdoll() bool {
 	return v.isRagdoll
 }
 
 // SetRagdollCollapse marks the joint system to collapse when ragdoll mode is activated.
-func (v *Vertices3DJoints) SetRagdollCollapse() {
+func (v *Joints) SetRagdollCollapse() {
 	v.ragdollCollapse = true
 }
 
 // GetOriginsA returns the X, Y, and Z components of the A-side origin for the joint at index i.
-func (v *Vertices3DJoints) GetOriginsA(i int) (float64, float64, float64) {
+func (v *Joints) GetOriginsA(i int) (float64, float64, float64) {
 	return v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z
 }
 
 // GetOriginsB returns the X, Y, and Z coordinates of origin B for the joint at index i.
-func (v *Vertices3DJoints) GetOriginsB(i int) (float64, float64, float64) {
+func (v *Joints) GetOriginsB(i int) (float64, float64, float64) {
 	return v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z
 }
 
 // GetRotationA returns the primary rotation axis for the joint at index i.
-func (v *Vertices3DJoints) GetRotationA(i int) *physics.TagAxis {
+func (v *Joints) GetRotationA(i int) *physics.TagAxis {
 	return v.rotationsA[i]
 }
 
 // GetRotationB returns the secondary rotation axis for the joint at index i.
-func (v *Vertices3DJoints) GetRotationB(i int) *physics.TagAxis {
+func (v *Joints) GetRotationB(i int) *physics.TagAxis {
 	return v.rotationsB[i]
 }
 
 // CompileDetached updates detached joint origins relative to the center and applies its stored detached rotation.
-func (v *Vertices3DJoints) CompileDetached(i int, cx, cy, cz float64) {
+func (v *Joints) CompileDetached(i int) {
+	cx, cy, cz := v.ent.GetCenter()
 	j := v.data[i]
 	v.originsA[i].X = j.detWorldX - cx
 	v.originsA[i].Y = j.detWorldY - cy
@@ -394,7 +402,7 @@ func (v *Vertices3DJoints) CompileDetached(i int, cx, cy, cz float64) {
 
 // CompileNormale derives joint origins and rotations from parent transforms and optional tag axes.
 // Missing tags inherit parent transforms; configured deflection is applied when present.
-func (v *Vertices3DJoints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *physics.TagAxis) {
+func (v *Joints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *physics.TagAxis) {
 	j := v.data[i]
 	if tagAxisA != nil {
 		pRotA := v.rotationsA[pIdx]
@@ -444,7 +452,7 @@ func (v *Vertices3DJoints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *p
 }
 
 // detachPart marks a detachable joint as detached and initializes its frozen frame and ballistic dynamics.
-func (v *Vertices3DJoints) detachPart(halfD float64, cx, cy, cz float64, idx int, dirX, dirY, dirZ, fMag float64) {
+func (v *Joints) detachPart(idx int, cx, cy, cz, dirX, dirY, dirZ, fMag float64) {
 	if idx <= 0 || idx >= len(v.data) || v.dismemberedCount >= 3 {
 		return
 	}
@@ -465,11 +473,12 @@ func (v *Vertices3DJoints) detachPart(halfD float64, cx, cy, cz float64, idx int
 	if idx&1 == 1 {
 		sideSign = -1.0
 	}
+	_, _, halfD := v.ent.GetSizeCenter()
 	j.Detach(halfD, cx, cy, cz, dirX, dirY, dirZ, fMag, orX, orY, orZ, sideSign)
 }
 
 // IsPartDetached reports whether the part at i or any valid ancestor is marked detached.
-func (v *Vertices3DJoints) IsPartDetached(i int) bool {
+func (v *Joints) IsPartDetached(i int) bool {
 	curr := i
 	for steps := 0; steps < len(v.data) && curr > 0 && curr < len(v.data); steps++ {
 		if v.data[curr].detached {
@@ -484,7 +493,7 @@ func (v *Vertices3DJoints) IsPartDetached(i int) bool {
 }
 
 // ActivateRagdoll enables ragdoll dynamics, seeds fall motion from the last hit, and may detach a damaged part.
-func (v *Vertices3DJoints) ActivateRagdoll(halfD float64, cx, cy, cz float64) {
+func (v *Joints) ActivateRagdoll() {
 	v.isRagdoll = true
 	v.hasActiveDynamics = true
 
@@ -513,8 +522,8 @@ func (v *Vertices3DJoints) ActivateRagdoll(halfD float64, cx, cy, cz float64) {
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			//cx, cy, cz := v.elements.vVolume.entity.GetCenter()
-			v.detachPart(halfD, cx, cy, cz, v.lastHitPart, dx, dy, dz, v.lastHitForce)
+			cx, cy, cz := v.ent.GetCenter()
+			v.detachPart(v.lastHitPart, cx, cy, cz, dx, dy, dz, v.lastHitForce)
 		}
 	}
 
@@ -539,7 +548,7 @@ func (v *Vertices3DJoints) ActivateRagdoll(halfD float64, cx, cy, cz float64) {
 
 // StepJoints advances joint and ragdoll dynamics to the given simulation tick.
 // It ignores zero, repeated, or older ticks and clamps large time steps for stability.
-func (v *Vertices3DJoints) StepJoints(halfD float64, tick uint64) {
+func (v *Joints) StepJoints(tick uint64) {
 	if tick == 0 {
 		return
 	}
@@ -619,6 +628,7 @@ func (v *Vertices3DJoints) StepJoints(halfD float64, tick uint64) {
 
 		collapseDrop := 0.0
 		if v.ragdollCollapse {
+			_, _, halfD := v.ent.GetSizeCenter()
 			collapseDrop = -math.Max(halfD-6.0, 0.0) * math.Sin(v.fallAngle)
 		}
 		v.rootDropZ = collapseDrop + v.rootBounceZ
@@ -657,7 +667,7 @@ func (v *Vertices3DJoints) StepJoints(halfD float64, tick uint64) {
 }
 
 // ApplyImpact applies an external force at a point, updating ragdoll motion, joint impulses, and detachment damage.
-func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz float64) {
+func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	if v.numParts == 0 {
 		return
 	}
@@ -697,7 +707,7 @@ func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz
 		return
 	}
 
-	//cx, cy, cz := v.elements.vVolume.entity.GetCenter()
+	cx, cy, cz := v.ent.GetCenter()
 	relPx, relPy, relPz := px-cx, py-cy, pz-cz
 
 	// Locate the closest non-detached articulated part to the impact ray/point
@@ -762,7 +772,7 @@ func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz
 
 	// Propagate joint torque up the kinematic chain (hit limb -> parent -> grandparent)
 	curr := targetPart
-	atten := 1.0
+	attenuation := 1.0
 	for depth := 0; depth < 3 && curr > 0 && curr < len(v.data); depth++ {
 		j := v.data[curr]
 		if j.detached {
@@ -792,7 +802,7 @@ func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz
 
 		// Transform torque into the joint's local coordinate system
 		ltx, lty, ltz := v.rotationsA[curr].RotatePointInverse(tx, ty, tz)
-		kick := 9.5 * normImpulse * atten
+		kick := 9.5 * normImpulse * attenuation
 		if v.isRagdoll {
 			kick *= 1.45
 		}
@@ -803,19 +813,19 @@ func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz
 		j.velZ = math.Max(-maxJointVel, math.Min(maxJointVel, j.velZ+ltz*kick*j.dofScaleZ))
 
 		if j.canDetach && v.dismemberedCount < 3 {
-			stress := 0.75 * normImpulse * atten
+			stress := 0.75 * normImpulse * attenuation
 			if v.isRagdoll {
 				stress *= 1.65
 			}
 			j.damage += stress
 			if j.damage >= j.detachThreshold {
-				v.detachPart(halfD, cx, cy, cz, curr, dirX, dirY, dirZ, fMag)
+				v.detachPart(curr, cx, cy, cz, dirX, dirY, dirZ, fMag)
 				break
 			}
 		}
 
 		curr = v.links.data[curr].parent
-		atten *= 0.60
+		attenuation *= 0.60
 	}
 
 	// When shooting a ragdoll corpse on the torso, also whip all connected limbs and stress the nearest detachable limb
@@ -837,18 +847,17 @@ func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz
 			dj := v.data[bestDetachPart]
 			dj.damage += 0.85 * normImpulse
 			if dj.damage >= dj.detachThreshold {
-				v.detachPart(halfD, cx, cy, cz, bestDetachPart, dirX, dirY, dirZ, fMag)
+				v.detachPart(bestDetachPart, cx, cy, cz, dirX, dirY, dirZ, fMag)
 			}
 		}
 	}
 }
 
 // Restore resets the joint origins and rotations at i using q and any active root transform.
-func (v *Vertices3DJoints) Restore(i int, q *physics.Quaternion) {
+func (v *Joints) Restore(i int, q *physics.Quaternion) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.rootDropZ
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.rootDropZ
 
-	//q := v.elements.vVolume.entity.GetQuaternion()
 	if v.hasRootTransform {
 		v.rootQuat.Multiplies(q, v.rootCombinedQuat)
 		v.rotationsA[i].SetFromQuaternion(v.rootCombinedQuat)
@@ -860,7 +869,7 @@ func (v *Vertices3DJoints) Restore(i int, q *physics.Quaternion) {
 }
 
 // Reset copies parent origins to joint i and updates its rotations, applying deflection when configured.
-func (v *Vertices3DJoints) Reset(i int, pIdx int) {
+func (v *Joints) Reset(i int, pIdx int) {
 	v.originsA[i] = v.originsA[pIdx]
 	v.originsB[i] = v.originsB[pIdx]
 	j := v.data[i]
@@ -874,6 +883,6 @@ func (v *Vertices3DJoints) Reset(i int, pIdx int) {
 }
 
 // IsDetached reports whether the joint at index i is detached.
-func (v *Vertices3DJoints) IsDetached(i int) bool {
+func (v *Joints) IsDetached(i int) bool {
 	return v.data[i].detached
 }

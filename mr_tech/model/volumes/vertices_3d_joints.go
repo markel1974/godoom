@@ -9,6 +9,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
+type IElements interface {
+	FreezeCurrentFrame()
+}
+
 // Vertices3DJoint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
 type Vertices3DJoint struct {
 	localCenterX    float64
@@ -68,6 +72,48 @@ func NewVertices3DJoint() *Vertices3DJoint {
 	}
 }
 
+func (j *Vertices3DJoint) Detach(halfD float64, cx, cy, cz float64, dirX, dirY, dirZ, fMag float64, orX, orY, orZ float64, sideSign float64) {
+	if j.detached || !j.canDetach {
+		return
+	}
+	j.detached = true
+	j.detSettled = false
+	//v.dismemberedCount++
+	//v.hasActiveDynamics = true
+
+	//for i := 0; i < v.numParts; i++ {
+	//	if i == idx || v.IsPartDetached(i) {
+	//		v.elems[i].FreezeCurrentFrame()
+	//	}
+	//}
+
+	j.detWorldX = cx + orX
+	j.detWorldY = cy + orY
+	j.detWorldZ = cz + orZ
+
+	j.detFloorZ = (cz - halfD) + math.Min(j.partRadius*0.30, 5.0)
+	if j.detWorldZ < j.detFloorZ {
+		j.detWorldZ = j.detFloorZ
+	}
+
+	//v.rotationsA[idx].ToQuaternion(j.detQuat)
+
+	// Ballistic launch velocity along impact ray + upward pop + slight lateral scatter
+	launchSpeed := 125.0 + math.Min(fMag/500000.0, 2.5)*70.0
+	///sideSign := 1.0
+	//if idx&1 == 1 {
+	//	sideSign = -1.0
+	//}
+	j.detVx = dirX*launchSpeed - dirY*(25.0*sideSign)
+	j.detVy = dirY*launchSpeed + dirX*(25.0*sideSign)
+	j.detVz = math.Max(dirZ*launchSpeed+105.0, 75.0)
+
+	// 3D tumbling angular velocity
+	j.detWx = -dirY*8.5 + sideSign*3.5
+	j.detWy = dirX*8.5 - 3.0
+	j.detWz = sideSign * 7.0
+}
+
 // Vertices3DJoints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
 type Vertices3DJoints struct {
 	links             *Vertices3DLinks
@@ -109,8 +155,11 @@ type Vertices3DJoints struct {
 
 	originsA []geometry.XYZ
 	originsB []geometry.XYZ
+	numParts int
 
-	elements *Vertices3DElements
+	elems []IElements
+
+	//elements *Vertices3DElements
 }
 
 // NewVertices3DJoints creates a Vertices3DJoints instance with default state and identity root quaternions.
@@ -127,27 +176,29 @@ func NewVertices3DJoints() *Vertices3DJoints {
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements2 *Vertices3DElements, links *Vertices3DLinks) error {
+func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements *Vertices3DElements, links *Vertices3DLinks) error {
 	v.links = links
-	v.elements = elements2
+	//v.elements = elements2
 
-	numParts := elements2.Len()
+	v.numParts = elements.Len()
+	v.elems = make([]IElements, v.numParts)
 
-	v.rotationsA = make([]*physics.TagAxis, numParts)
-	v.rotationsB = make([]*physics.TagAxis, numParts)
+	v.rotationsA = make([]*physics.TagAxis, v.numParts)
+	v.rotationsB = make([]*physics.TagAxis, v.numParts)
 
-	for i := 0; i < numParts; i++ {
+	for i := 0; i < v.numParts; i++ {
+		v.elems[i] = elements.GetEntry(i)
 		v.rotationsA[i] = physics.NewTagAxisIdentity()
 		v.rotationsB[i] = physics.NewTagAxisIdentity()
 	}
 
-	v.data = make([]*Vertices3DJoint, numParts)
-	for i := 0; i < numParts; i++ {
+	v.data = make([]*Vertices3DJoint, v.numParts)
+	for i := 0; i < v.numParts; i++ {
 		v.data[i] = NewVertices3DJoint()
 	}
 
-	v.originsA = make([]geometry.XYZ, numParts)
-	v.originsB = make([]geometry.XYZ, numParts)
+	v.originsA = make([]geometry.XYZ, v.numParts)
+	v.originsB = make([]geometry.XYZ, v.numParts)
 
 	for i := range v.data {
 		j := v.data[i]
@@ -159,7 +210,7 @@ func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements2 *Vertices3DEleme
 		//TODO FROM CONFIG
 		j.partRadius = 8.0
 
-		if element := elements2.GetEntry(i); element != nil {
+		if element := elements.GetEntry(i); element != nil {
 			if vol := element.volumes[0]; vol != nil {
 				fc := vol.GetFaceCount()
 				if fc > 0 {
@@ -232,48 +283,22 @@ func (v *Vertices3DJoints) GetRotationB(i int) *physics.TagAxis {
 	return v.rotationsB[i]
 }
 
-// Compile updates joint origins and rotations for part i relative to its parent, tags, deflection, or detached state.
-func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
-	if i > 0 && v.data[i].detached {
-		j := v.data[i]
-		v.originsA[i].X = j.detWorldX - cx
-		v.originsA[i].Y = j.detWorldY - cy
-		v.originsA[i].Z = j.detWorldZ - cz
-		v.originsB[i] = v.originsA[i]
-		v.rotationsA[i].SetFromQuaternion(j.detQuat)
-		v.rotationsB[i].SetFromQuaternion(j.detQuat)
-		return
-	}
-
-	pIdx := v.links.GetParent(i)
-	if pIdx < 0 || pIdx == i {
-		v.reset(i)
-		return
-	}
-	volA := v.elements.volsA[pIdx]
-	volB := v.elements.volsB[pIdx]
-	if volA == nil || volB == nil {
-		v.reset(i)
-		return
-	}
-
+// CompileDetached updates detached joint origins relative to the center and applies its stored detached rotation.
+func (v *Vertices3DJoints) CompileDetached(i int, cx, cy, cz float64) {
 	j := v.data[i]
-	tagIdx := v.links.GetTagIndex(i)
-	if tagIdx < 0 {
-		fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
-		v.originsA[i] = v.originsA[pIdx]
-		v.originsB[i] = v.originsB[pIdx]
-		if j.hasDeflection {
-			v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
-			v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
-		} else {
-			*v.rotationsA[i] = *v.rotationsA[pIdx]
-			*v.rotationsB[i] = *v.rotationsB[pIdx]
-		}
-		return
-	}
+	v.originsA[i].X = j.detWorldX - cx
+	v.originsA[i].Y = j.detWorldY - cy
+	v.originsA[i].Z = j.detWorldZ - cz
+	v.originsB[i] = v.originsA[i]
+	v.rotationsA[i].SetFromQuaternion(j.detQuat)
+	v.rotationsB[i].SetFromQuaternion(j.detQuat)
+}
 
-	if tagAxisA := volA.GetVertexTag(tagIdx); tagAxisA != nil {
+// CompileNormale derives joint origins and rotations from parent transforms and optional tag axes.
+// Missing tags inherit parent transforms; configured deflection is applied when present.
+func (v *Vertices3DJoints) CompileNormale(i int, pIdx int, tagAxisA, tagAxisB *physics.TagAxis) {
+	j := v.data[i]
+	if tagAxisA != nil {
 		pRotA := v.rotationsA[pIdx]
 		rotA := v.rotationsA[i]
 		rotOrigAX, rotOrigAY, rotOrigAZ := pRotA.RotatePointByTag(tagAxisA)
@@ -287,7 +312,7 @@ func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
 			pRotA.MultiplyMatrix(tagAxisA, rotA)
 		}
 	} else {
-		fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
+		fmt.Printf("[warning] Vertices3D: tag %q not found in frame A of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
 		v.originsA[i] = v.originsA[pIdx]
 		if j.hasDeflection {
 			v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
@@ -296,7 +321,7 @@ func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
 		}
 	}
 
-	if tagAxisB := volB.GetVertexTag(tagIdx); tagAxisB != nil {
+	if tagAxisB != nil {
 		pRotB := v.rotationsB[pIdx]
 		rotB := v.rotationsB[i]
 		rotOrigBX, rotOrigBY, rotOrigBZ := pRotB.RotatePointByTag(tagAxisB)
@@ -310,7 +335,7 @@ func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
 			pRotB.MultiplyMatrix(tagAxisB, rotB)
 		}
 	} else {
-		fmt.Printf("[warning] Vertices3D: tag %q (idx %d) not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, tagIdx, pIdx, i)
+		fmt.Printf("[warning] Vertices3D: tag %q not found in frame B of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
 		v.originsB[i] = v.originsB[pIdx]
 		if j.hasDeflection {
 			v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
@@ -321,7 +346,7 @@ func (v *Vertices3DJoints) Compile(i int, cx, cy, cz float64) {
 }
 
 // detachPart marks a detachable joint as detached and initializes its frozen frame and ballistic dynamics.
-func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, dirZ, fMag float64) {
+func (v *Vertices3DJoints) detachPart(halfD float64, cx, cy, cz float64, idx int, dirX, dirY, dirZ, fMag float64) {
 	if idx <= 0 || idx >= len(v.data) || v.dismemberedCount >= 3 {
 		return
 	}
@@ -329,46 +354,19 @@ func (v *Vertices3DJoints) detachPart(cx, cy, cz float64, idx int, dirX, dirY, d
 	if j.detached || !j.canDetach {
 		return
 	}
-	j.detached = true
-	j.detSettled = false
 	v.dismemberedCount++
 	v.hasActiveDynamics = true
-
-	for i := 0; i < v.elements.Len(); i++ {
+	for i := 0; i < v.numParts; i++ {
 		if i == idx || v.IsPartDetached(i) {
-			if element := v.elements.GetEntry(i); element != nil {
-				element.FreezeCurrentFrame()
-			}
+			v.elems[i].FreezeCurrentFrame()
 		}
 	}
-
-	j.detWorldX = cx + v.originsA[idx].X
-	j.detWorldY = cy + v.originsA[idx].Y
-	j.detWorldZ = cz + v.originsA[idx].Z
-
-	_, _, halfD := v.elements.vVolume.entity.GetSizeCenter()
-
-	j.detFloorZ = (cz - halfD) + math.Min(j.partRadius*0.30, 5.0)
-	if j.detWorldZ < j.detFloorZ {
-		j.detWorldZ = j.detFloorZ
-	}
-
-	v.rotationsA[idx].ToQuaternion(j.detQuat)
-
-	// Ballistic launch velocity along impact ray + upward pop + slight lateral scatter
-	launchSpeed := 125.0 + math.Min(fMag/500000.0, 2.5)*70.0
+	orX, orY, orZ := v.originsA[idx].X, v.originsA[idx].Y, v.originsA[idx].Z
 	sideSign := 1.0
 	if idx&1 == 1 {
 		sideSign = -1.0
 	}
-	j.detVx = dirX*launchSpeed - dirY*(25.0*sideSign)
-	j.detVy = dirY*launchSpeed + dirX*(25.0*sideSign)
-	j.detVz = math.Max(dirZ*launchSpeed+105.0, 75.0)
-
-	// 3D tumbling angular velocity
-	j.detWx = -dirY*8.5 + sideSign*3.5
-	j.detWy = dirX*8.5 - 3.0
-	j.detWz = sideSign * 7.0
+	j.Detach(halfD, cx, cy, cz, dirX, dirY, dirZ, fMag, orX, orY, orZ, sideSign)
 }
 
 // IsPartDetached reports whether the part at i or any valid ancestor is marked detached.
@@ -387,7 +385,7 @@ func (v *Vertices3DJoints) IsPartDetached(i int) bool {
 }
 
 // ActivateRagdoll enables ragdoll dynamics, seeds fall motion from the last hit, and may detach a damaged part.
-func (v *Vertices3DJoints) ActivateRagdoll() {
+func (v *Vertices3DJoints) ActivateRagdoll(halfD float64, cx, cy, cz float64) {
 	v.isRagdoll = true
 	v.hasActiveDynamics = true
 
@@ -416,8 +414,8 @@ func (v *Vertices3DJoints) ActivateRagdoll() {
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			cx, cy, cz := v.elements.vVolume.entity.GetCenter()
-			v.detachPart(cx, cy, cz, v.lastHitPart, dx, dy, dz, v.lastHitForce)
+			//cx, cy, cz := v.elements.vVolume.entity.GetCenter()
+			v.detachPart(halfD, cx, cy, cz, v.lastHitPart, dx, dy, dz, v.lastHitForce)
 		}
 	}
 
@@ -447,7 +445,7 @@ func (v *Vertices3DJoints) ActivateRagdoll() {
 
 // StepJoints advances joint and ragdoll dynamics to the given simulation tick.
 // It ignores zero, repeated, or older ticks and clamps large time steps for stability.
-func (v *Vertices3DJoints) StepJoints(tick uint64) {
+func (v *Vertices3DJoints) StepJoints(halfD float64, tick uint64) {
 	if tick == 0 {
 		return
 	}
@@ -525,7 +523,7 @@ func (v *Vertices3DJoints) StepJoints(tick uint64) {
 			}
 		}
 
-		_, _, halfD := v.elements.vVolume.entity.GetSizeCenter()
+		//_, _, halfD := v.elements.vVolume.entity.GetSizeCenter()
 
 		collapseDrop := 0.0
 		if v.ragdollCollapse {
@@ -666,9 +664,8 @@ func (v *Vertices3DJoints) StepJoints(tick uint64) {
 }
 
 // ApplyImpact applies an external force at a point, updating ragdoll motion, joint impulses, and detachment damage.
-func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-	numParts := v.elements.Len()
-	if numParts == 0 {
+func (v *Vertices3DJoints) ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz float64) {
+	if v.numParts == 0 {
 		return
 	}
 	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
@@ -703,11 +700,11 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		v.rootBounceVz = math.Max(v.rootBounceVz, 60.0*normImpulse)
 	}
 
-	if numParts <= 1 {
+	if v.numParts <= 1 {
 		return
 	}
 
-	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
+	//cx, cy, cz := v.elements.vVolume.entity.GetCenter()
 	relPx, relPy, relPz := px-cx, py-cy, pz-cz
 
 	// Locate the closest non-detached articulated part to the impact ray/point
@@ -716,7 +713,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	bestDetachPart := -1
 	bestDetachScore := math.MaxFloat64
 
-	for i := 0; i < numParts; i++ {
+	for i := 0; i < v.numParts; i++ {
 		if i > 0 && v.IsPartDetached(i) {
 			continue
 		}
@@ -819,7 +816,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 			}
 			j.damage += stress
 			if j.damage >= j.detachThreshold {
-				v.detachPart(cx, cy, cz, curr, dirX, dirY, dirZ, fMag)
+				v.detachPart(halfD, cx, cy, cz, curr, dirX, dirY, dirZ, fMag)
 				break
 			}
 		}
@@ -847,18 +844,18 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 			dj := v.data[bestDetachPart]
 			dj.damage += 0.85 * normImpulse
 			if dj.damage >= dj.detachThreshold {
-				v.detachPart(cx, cy, cz, bestDetachPart, dirX, dirY, dirZ, fMag)
+				v.detachPart(halfD, cx, cy, cz, bestDetachPart, dirX, dirY, dirZ, fMag)
 			}
 		}
 	}
 }
 
-// reset restores joint origins and rotations at index i using root and entity transforms.
-func (v *Vertices3DJoints) reset(i int) {
+// Restore resets the joint origins and rotations at i using q and any active root transform.
+func (v *Vertices3DJoints) Restore(i int, q *physics.Quaternion) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.rootDropZ
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.rootDropZ
 
-	q := v.elements.vVolume.entity.GetQuaternion()
+	//q := v.elements.vVolume.entity.GetQuaternion()
 	if v.hasRootTransform {
 		v.rootQuat.Multiplies(q, v.rootCombinedQuat)
 		v.rotationsA[i].SetFromQuaternion(v.rootCombinedQuat)
@@ -867,4 +864,23 @@ func (v *Vertices3DJoints) reset(i int) {
 		v.rotationsA[i].SetFromQuaternion(q)
 		v.rotationsB[i].SetFromQuaternion(q)
 	}
+}
+
+// Reset copies parent origins to joint i and updates its rotations, applying deflection when configured.
+func (v *Vertices3DJoints) Reset(i int, pIdx int) {
+	v.originsA[i] = v.originsA[pIdx]
+	v.originsB[i] = v.originsB[pIdx]
+	j := v.data[i]
+	if j.hasDeflection {
+		v.rotationsA[pIdx].MultiplyMatrix(j.axis, v.rotationsA[i])
+		v.rotationsB[pIdx].MultiplyMatrix(j.axis, v.rotationsB[i])
+	} else {
+		*v.rotationsA[i] = *v.rotationsA[pIdx]
+		*v.rotationsB[i] = *v.rotationsB[pIdx]
+	}
+}
+
+// IsDetached reports whether the joint at index i is detached.
+func (v *Vertices3DJoints) IsDetached(i int) bool {
+	return v.data[i].detached
 }

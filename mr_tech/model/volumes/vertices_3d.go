@@ -71,8 +71,9 @@ func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
-	b := v.elements.vVolume.entity.GetAABB()
+	ent := v.elements.vVolume.entity
+	cx, cy, cz := ent.GetCenter()
+	b := ent.GetAABB()
 	if v.minX <= v.maxX {
 		b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 	}
@@ -86,7 +87,10 @@ func (v *Vertices3D) VerticesSetRagdoll() {
 	}
 	v.elements.Freeze()
 	v.joints.SetRagdollCollapse()
-	v.joints.ActivateRagdoll()
+	ent := v.elements.vVolume.entity
+	_, _, halfD := ent.GetSizeCenter()
+	cx, cy, cz := ent.GetCenter()
+	v.joints.ActivateRagdoll(halfD, cx, cy, cz)
 }
 
 // VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
@@ -121,7 +125,10 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 		}
 	}
 	if enteringRagdoll {
-		v.joints.ActivateRagdoll()
+		ent := v.elements.vVolume.entity
+		_, _, halfD := ent.GetSizeCenter()
+		cx, cy, cz := ent.GetCenter()
+		v.joints.ActivateRagdoll(halfD, cx, cy, cz)
 	}
 }
 
@@ -129,14 +136,19 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 // to the closest articulated part, exciting the 5+ joint DoFs along the kinematic chain, jolting ragdoll bodies,
 // and triggering dismemberment on critical or post-mortem hits.
 func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
-	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
+	ent := v.elements.vVolume.entity
+	_, _, halfD := ent.GetSizeCenter()
+	cx, cy, cz := ent.GetCenter()
+	v.joints.ApplyImpact(halfD, cx, cy, cz, fx, fy, fz, px, py, pz)
 }
 
 // VerticesCompile updates all model parts for the tick and writes transformed frame data into render buffers.
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) VerticesCompile(tick uint64) bool {
-	v.joints.StepJoints(tick)
-	cx, cy, cz := v.elements.vVolume.entity.GetCenter()
+	ent := v.elements.vVolume.entity
+	_, _, halfD := ent.GetSizeCenter()
+	cx, cy, cz := ent.GetCenter()
+	v.joints.StepJoints(halfD, tick)
 
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
@@ -144,7 +156,31 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	for _, i := range v.links.executionOrder {
 		v.elements.Bind(i, tick)
 
-		v.joints.Compile(i, cx, cy, cz)
+		if i > 0 && v.joints.IsDetached(i) {
+			v.joints.CompileDetached(i, cx, cy, cz)
+		} else {
+			pIdx := v.links.GetParent(i)
+			if pIdx < 0 || pIdx == i {
+				v.joints.Restore(i, ent.GetQuaternion())
+			} else {
+				volA := v.elements.volsA[pIdx]
+				volB := v.elements.volsB[pIdx]
+				if volA == nil || volB == nil {
+					v.joints.Restore(i, ent.GetQuaternion())
+				} else {
+					tagIdx := v.links.GetTagIndex(i)
+					if tagIdx < 0 {
+						fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
+						v.joints.Reset(i, pIdx)
+					} else {
+						tagAxisA := volA.GetVertexTag(tagIdx)
+						tagAxisB := volB.GetVertexTag(tagIdx)
+						v.joints.CompileNormale(i, pIdx, tagAxisA, tagAxisB)
+					}
+				}
+			}
+		}
+
 		origAX, origAY, origAZ := v.joints.GetOriginsA(i)
 		origBX, origBY, origBZ := v.joints.GetOriginsB(i)
 		rotA := v.joints.GetRotationA(i)
@@ -176,7 +212,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	if minX <= maxX {
 		v.minX, v.minY, v.minZ = minX, minY, minZ
 		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
-		v.elements.vVolume.entity.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+		ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 	}
 
 	return false

@@ -133,7 +133,7 @@ func (v *Vertices3DElements) Bind(i int, tick uint64) {
 }
 
 // Compile transforms frame faces for part i into the A and B buffers and clears unused face slots.
-func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *TagAxis) (float64, float64, float64, float64, float64, float64) {
+func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *physics.TagAxis) (float64, float64, float64, float64, float64, float64) {
 	volA := v.volsA[i]
 	volB := v.volsB[i]
 
@@ -167,7 +167,7 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 				dstA.TransformPoints(srcA, origAX, origAY, origAZ)
 			}
 		} else {
-			rotA.TransformPointsWithMatrix(dstA, srcA, origAX, origAY, origAZ)
+			rotA.TransformPointsWithMatrix(dstA.tri, srcA.tri, origAX, origAY, origAZ)
 		}
 		minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 
@@ -180,7 +180,7 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 				dstB.TransformPoints(srcB, origBX, origBY, origBZ)
 			}
 		} else {
-			rotB.TransformPointsWithMatrix(dstB, srcB, origBX, origBY, origBZ)
+			rotB.TransformPointsWithMatrix(dstB.tri, srcB.tri, origBX, origBY, origBZ)
 		}
 		minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 	}

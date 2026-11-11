@@ -21,7 +21,7 @@ type Volume struct {
 	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *sectors.Sector
-	vertexTags []*TagAxis
+	vertexTags []*physics.TagAxis
 	marker     int
 	dirty      bool
 }
@@ -34,7 +34,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		faces:      NewFaces(128, false),
 		entity:     physics.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
-		vertexTags: make([]*TagAxis, 0),
+		vertexTags: make([]*physics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
 	}
@@ -182,11 +182,11 @@ func (v *Volume) SetSector(s *sectors.Sector) {
 // SetVertexTag sets the vertex tag at idx with the given origin and axis, growing storage as needed.
 func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ) {
 	if idx >= len(v.vertexTags) {
-		newTags := make([]*TagAxis, idx+1)
+		newTags := make([]*physics.TagAxis, idx+1)
 		copy(newTags, v.vertexTags)
 		v.vertexTags = newTags
 	}
-	v.vertexTags[idx] = NewTagAxis(origin, axis)
+	v.vertexTags[idx] = physics.NewTagAxis(origin, axis)
 }
 
 // HasVertexTag reports whether idx is a valid vertex tag index.
@@ -195,7 +195,7 @@ func (v *Volume) HasVertexTag(idx int) bool {
 }
 
 // GetVertexTag returns the vertex tag at idx, or nil if idx is out of range.
-func (v *Volume) GetVertexTag(idx int) *TagAxis {
+func (v *Volume) GetVertexTag(idx int) *physics.TagAxis {
 	if idx >= 0 && idx < len(v.vertexTags) {
 		return v.vertexTags[idx]
 	}

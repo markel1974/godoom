@@ -93,7 +93,7 @@ type Vertices3DEntry struct {
 	tick          uint64
 	facesA        *Faces
 	facesB        *Faces
-	rot           *TagAxis
+	rot           *physics.TagAxis
 	lastQx        float64
 	lastQy        float64
 	lastQz        float64
@@ -207,7 +207,7 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		salt:          uint64(rand.Intn(len(model.Frames))),
 		facesA:        facesA,
 		facesB:        facesB,
-		rot:           NewTagAxis(geometry.XYZ{}, _im),
+		rot:           physics.NewTagAxisIdentity(),
 		lastQw:        1.0,
 		singleFrame:   endFrame == 0,
 	}
@@ -327,7 +327,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 			if isIdent {
 				dstA.CopyPoints(srcA)
 			} else {
-				v.rot.TransformPointsWithMatrix(dstA, srcA, 0, 0, 0)
+				v.rot.TransformPointsWithMatrix(dstA.tri, srcA.tri, 0, 0, 0)
 			}
 			minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 		}
@@ -348,7 +348,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 				if isIdent {
 					dstB.CopyPoints(srcB)
 				} else {
-					v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
+					v.rot.TransformPointsWithMatrix(dstB.tri, srcB.tri, 0, 0, 0)
 				}
 				minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 			}
@@ -368,7 +368,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 				if isIdent {
 					dstB.CopyPoints(srcB)
 				} else {
-					v.rot.TransformPointsWithMatrix(dstB, srcB, 0, 0, 0)
+					v.rot.TransformPointsWithMatrix(dstB.tri, srcB.tri, 0, 0, 0)
 				}
 			}
 			for j := countB; j < v.facesB.Len(); j++ {

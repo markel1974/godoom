@@ -1,8 +1,7 @@
-package volumes
+package physics
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
 // _im is a predefined identity matrix array representing the standard basis vectors in 3D space.
@@ -18,6 +17,10 @@ type TagAxis struct {
 	originY float64
 	originZ float64
 	data    *geometry.Triangle3D
+}
+
+func NewTagAxisIdentity() *TagAxis {
+	return NewTagAxis(geometry.XYZ{}, _im)
 }
 
 // NewTagAxis creates and returns a new TagAxis instance initialized with the provided 3D vectors as its basis data.
@@ -41,7 +44,7 @@ func (ta *TagAxis) Reset() {
 }
 
 // SetFromQuaternion populates the 3x3 basis axes directly from the supplied orientation quaternion.
-func (ta *TagAxis) SetFromQuaternion(q *physics.Quaternion) {
+func (ta *TagAxis) SetFromQuaternion(q *Quaternion) {
 	if q == nil {
 		ta.Reset()
 		return
@@ -52,7 +55,7 @@ func (ta *TagAxis) SetFromQuaternion(q *physics.Quaternion) {
 }
 
 // ToQuaternion extracts the 3x3 basis orientation of the TagAxis into the supplied Quaternion without allocating.
-func (ta *TagAxis) ToQuaternion(q *physics.Quaternion) {
+func (ta *TagAxis) ToQuaternion(q *Quaternion) {
 	if q == nil {
 		return
 	}
@@ -89,8 +92,8 @@ func (ta *TagAxis) IsIdentity() bool {
 }
 
 // TransformPointsWithMatrix applies a transformation matrix to points in the source face and stores the result in the destination face.
-func (ta *TagAxis) TransformPointsWithMatrix(dst *Face, src *Face, originX, originY, originZ float64) {
-	ta.data.TransformPointsWithMatrix(dst.tri, src.tri, originX, originY, originZ)
+func (ta *TagAxis) TransformPointsWithMatrix(dst *geometry.Triangle3D, src *geometry.Triangle3D, originX, originY, originZ float64) {
+	ta.data.TransformPointsWithMatrix(dst, src, originX, originY, originZ)
 }
 
 // MultiplyMatrix performs matrix multiplication between the current axis and a child axis, storing the result in the target axis.

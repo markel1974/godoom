@@ -52,9 +52,9 @@ type Vertices3DJoint struct {
 
 	quat      *physics.Quaternion
 	detQuat   *physics.Quaternion
-	axis      *TagAxis
-	combinedA *TagAxis
-	combinedB *TagAxis
+	axis      *physics.TagAxis
+	combinedA *physics.TagAxis
+	combinedB *physics.TagAxis
 }
 
 // NewVertices3DJoint creates a new 3D vertex joint with identity rotations and axes.
@@ -62,9 +62,9 @@ func NewVertices3DJoint() *Vertices3DJoint {
 	return &Vertices3DJoint{
 		quat:      physics.NewQuaternionIdentity(),
 		detQuat:   physics.NewQuaternionIdentity(),
-		axis:      NewTagAxis(geometry.XYZ{}, _im),
-		combinedA: NewTagAxis(geometry.XYZ{}, _im),
-		combinedB: NewTagAxis(geometry.XYZ{}, _im),
+		axis:      physics.NewTagAxisIdentity(),
+		combinedA: physics.NewTagAxisIdentity(),
+		combinedB: physics.NewTagAxisIdentity(),
 	}
 }
 
@@ -92,8 +92,8 @@ type Vertices3DJoints struct {
 	rootDropZ        float64
 	hasRootTransform bool
 
-	rotationsA []*TagAxis
-	rotationsB []*TagAxis
+	rotationsA []*physics.TagAxis
+	rotationsB []*physics.TagAxis
 
 	lastHitPart  int
 	lastHitForce float64
@@ -133,12 +133,12 @@ func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements2 *Vertices3DEleme
 
 	numParts := elements2.Len()
 
-	v.rotationsA = make([]*TagAxis, numParts)
-	v.rotationsB = make([]*TagAxis, numParts)
+	v.rotationsA = make([]*physics.TagAxis, numParts)
+	v.rotationsB = make([]*physics.TagAxis, numParts)
 
 	for i := 0; i < numParts; i++ {
-		v.rotationsA[i] = NewTagAxis(geometry.XYZ{}, _im)
-		v.rotationsB[i] = NewTagAxis(geometry.XYZ{}, _im)
+		v.rotationsA[i] = physics.NewTagAxisIdentity()
+		v.rotationsB[i] = physics.NewTagAxisIdentity()
 	}
 
 	v.data = make([]*Vertices3DJoint, numParts)
@@ -223,12 +223,12 @@ func (v *Vertices3DJoints) GetOriginsB(i int) (float64, float64, float64) {
 }
 
 // GetRotationA returns the primary rotation axis for the joint at index i.
-func (v *Vertices3DJoints) GetRotationA(i int) *TagAxis {
+func (v *Vertices3DJoints) GetRotationA(i int) *physics.TagAxis {
 	return v.rotationsA[i]
 }
 
 // GetRotationB returns the secondary rotation axis for the joint at index i.
-func (v *Vertices3DJoints) GetRotationB(i int) *TagAxis {
+func (v *Vertices3DJoints) GetRotationB(i int) *physics.TagAxis {
 	return v.rotationsB[i]
 }
 

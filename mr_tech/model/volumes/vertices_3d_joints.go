@@ -72,46 +72,149 @@ func NewVertices3DJoint() *Vertices3DJoint {
 	}
 }
 
+func (j *Vertices3DJoint) ActivateRagdoll(lx, ly, lz float64, sign float64) {
+	j.ragdollTargetX = math.Max(-j.maxAngleRagdoll*0.85, math.Min(j.maxAngleRagdoll*0.85, lx*j.dofScaleX*0.95))
+	j.ragdollTargetY = math.Max(-j.maxAngleRagdoll*0.85, math.Min(j.maxAngleRagdoll*0.85, (ly+0.28*sign)*j.dofScaleY*0.95))
+	j.ragdollTargetZ = math.Max(-j.maxAngleRagdoll*0.70, math.Min(j.maxAngleRagdoll*0.70, lz*j.dofScaleZ*0.80))
+
+	j.velX += j.ragdollTargetX * 5.0
+	j.velY += j.ragdollTargetY * 5.0
+	j.velZ += j.ragdollTargetZ * 4.0
+}
+
 func (j *Vertices3DJoint) Detach(halfD float64, cx, cy, cz float64, dirX, dirY, dirZ, fMag float64, orX, orY, orZ float64, sideSign float64) {
 	if j.detached || !j.canDetach {
 		return
 	}
 	j.detached = true
 	j.detSettled = false
-	//v.dismemberedCount++
-	//v.hasActiveDynamics = true
-
-	//for i := 0; i < v.numParts; i++ {
-	//	if i == idx || v.IsPartDetached(i) {
-	//		v.elems[i].FreezeCurrentFrame()
-	//	}
-	//}
-
 	j.detWorldX = cx + orX
 	j.detWorldY = cy + orY
 	j.detWorldZ = cz + orZ
-
 	j.detFloorZ = (cz - halfD) + math.Min(j.partRadius*0.30, 5.0)
 	if j.detWorldZ < j.detFloorZ {
 		j.detWorldZ = j.detFloorZ
 	}
-
-	//v.rotationsA[idx].ToQuaternion(j.detQuat)
-
-	// Ballistic launch velocity along impact ray + upward pop + slight lateral scatter
+	// TODO Ballistic launch velocity along impact ray + upward pop + slight lateral scatter
 	launchSpeed := 125.0 + math.Min(fMag/500000.0, 2.5)*70.0
-	///sideSign := 1.0
-	//if idx&1 == 1 {
-	//	sideSign = -1.0
-	//}
 	j.detVx = dirX*launchSpeed - dirY*(25.0*sideSign)
 	j.detVy = dirY*launchSpeed + dirX*(25.0*sideSign)
 	j.detVz = math.Max(dirZ*launchSpeed+105.0, 75.0)
-
 	// 3D tumbling angular velocity
 	j.detWx = -dirY*8.5 + sideSign*3.5
 	j.detWy = dirX*8.5 - 3.0
 	j.detWz = sideSign * 7.0
+}
+
+func (j *Vertices3DJoint) Settle(dt float64) {
+	const limbGravity = 560.0
+	j.detVz -= limbGravity * dt
+
+	airDamp := math.Pow(0.65, dt)
+	j.detVx *= airDamp
+	j.detVy *= airDamp
+
+	j.detWorldX += j.detVx * dt
+	j.detWorldY += j.detVy * dt
+	j.detWorldZ += j.detVz * dt
+
+	if j.detWorldZ <= j.detFloorZ {
+		j.detWorldZ = j.detFloorZ
+		if j.detVz < -28.0 {
+			j.detVz = -j.detVz * 0.34
+			j.detWx += -j.detVy * 0.04
+			j.detWy += j.detVx * 0.04
+		} else {
+			j.detVz = 0.0
+		}
+		groundFric := math.Pow(0.015, dt)
+		j.detVx *= groundFric
+		j.detVy *= groundFric
+
+		angFric := math.Pow(0.025, dt)
+		j.detWx *= angFric
+		j.detWy *= angFric
+		j.detWz *= angFric
+
+		if j.detVz == 0.0 && (j.detVx*j.detVx+j.detVy*j.detVy) < 1.0 &&
+			(j.detWx*j.detWx+j.detWy*j.detWy+j.detWz*j.detWz) < 0.02 {
+			j.detVx, j.detVy, j.detVz = 0, 0, 0
+			j.detWx, j.detWy, j.detWz = 0, 0, 0
+			j.detSettled = true
+		}
+	}
+	j.detQuat.IntegrateAngular(j.detWx, j.detWy, j.detWz, dt)
+}
+
+func (j *Vertices3DJoint) Connect(isRagdoll bool, dt float64) bool {
+	// Connected articulated joint (PD spring-damper + cone joint limits)
+	ks := j.stiffness
+	kd := j.damping
+	maxAng := j.maxAngleAlive
+	var targetX, targetY, targetZ float64
+	active := false
+
+	if isRagdoll {
+		ks *= 0.12
+		kd *= 0.55
+		maxAng = j.maxAngleRagdoll
+		targetX, targetY, targetZ = j.ragdollTargetX, j.ragdollTargetY, j.ragdollTargetZ
+	} else if j.damage > 0 {
+		j.damage = math.Max(0.0, j.damage-0.10*dt)
+	}
+
+	alphaX := -ks*(j.angX-targetX) - kd*j.velX
+	alphaY := -ks*(j.angY-targetY) - kd*j.velY
+	alphaZ := -ks*(j.angZ-targetZ) - kd*j.velZ
+
+	j.velX += alphaX * dt
+	j.velY += alphaY * dt
+	j.velZ += alphaZ * dt
+
+	j.angX += j.velX * dt
+	j.angY += j.velY * dt
+	j.angZ += j.velZ * dt
+
+	angMagSq := j.angX*j.angX + j.angY*j.angY + j.angZ*j.angZ
+	if maxAng > 0.0 && angMagSq > maxAng*maxAng {
+		angMag := math.Sqrt(angMagSq)
+		nx, ny, nz := j.angX/angMag, j.angY/angMag, j.angZ/angMag
+		j.angX, j.angY, j.angZ = nx*maxAng, ny*maxAng, nz*maxAng
+		angMagSq = maxAng * maxAng
+		vDotN := j.velX*nx + j.velY*ny + j.velZ*nz
+		if vDotN > 0.0 {
+			j.velX -= 1.30 * vDotN * nx
+			j.velY -= 1.30 * vDotN * ny
+			j.velZ -= 1.30 * vDotN * nz
+		}
+	}
+
+	diffX := j.angX - targetX
+	diffY := j.angY - targetY
+	diffZ := j.angZ - targetZ
+	diffSq := diffX*diffX + diffY*diffY + diffZ*diffZ
+	velMagSq := j.velX*j.velX + j.velY*j.velY + j.velZ*j.velZ
+
+	if diffSq > 1e-6 || velMagSq > 1e-5 {
+		active = true
+	}
+
+	if angMagSq > 1e-6 {
+		angMag := math.Sqrt(angMagSq)
+		j.quat.SetAxisAngle(j.angX/angMag, j.angY/angMag, j.angZ/angMag, angMag)
+		j.axis.SetFromQuaternion(j.quat)
+		j.hasDeflection = true
+	} else {
+		j.axis.Reset()
+		j.hasDeflection = false
+	}
+
+	if diffSq <= 1e-6 && velMagSq <= 1e-5 {
+		j.angX, j.angY, j.angZ = targetX, targetY, targetZ
+		j.velX, j.velY, j.velZ = 0, 0, 0
+	}
+
+	return active
 }
 
 // Vertices3DJoints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
@@ -178,22 +281,17 @@ func NewVertices3DJoints() *Vertices3DJoints {
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
 func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements *Vertices3DElements, links *Vertices3DLinks) error {
 	v.links = links
-	//v.elements = elements2
 
 	v.numParts = elements.Len()
 	v.elems = make([]IElements, v.numParts)
-
 	v.rotationsA = make([]*physics.TagAxis, v.numParts)
 	v.rotationsB = make([]*physics.TagAxis, v.numParts)
+	v.data = make([]*Vertices3DJoint, v.numParts)
 
 	for i := 0; i < v.numParts; i++ {
 		v.elems[i] = elements.GetEntry(i)
 		v.rotationsA[i] = physics.NewTagAxisIdentity()
 		v.rotationsB[i] = physics.NewTagAxisIdentity()
-	}
-
-	v.data = make([]*Vertices3DJoint, v.numParts)
-	for i := 0; i < v.numParts; i++ {
 		v.data[i] = NewVertices3DJoint()
 	}
 
@@ -361,6 +459,7 @@ func (v *Vertices3DJoints) detachPart(halfD float64, cx, cy, cz float64, idx int
 			v.elems[i].FreezeCurrentFrame()
 		}
 	}
+	v.rotationsA[idx].ToQuaternion(j.detQuat)
 	orX, orY, orZ := v.originsA[idx].X, v.originsA[idx].Y, v.originsA[idx].Z
 	sideSign := 1.0
 	if idx&1 == 1 {
@@ -419,27 +518,22 @@ func (v *Vertices3DJoints) ActivateRagdoll(halfD float64, cx, cy, cz float64) {
 		}
 	}
 
+	tx := dy*0.55 - dz*0.25
+	ty := -dx*0.55 + dz*0.40
+	tz := (dx - dy) * 0.30
+
 	for i := 1; i < len(v.data); i++ {
 		j := v.data[i]
 		if j.detached {
 			continue
 		}
 		// Compute gravitational/impact slump target in the joint's local frame
-		tx := dy*0.55 - dz*0.25
-		ty := -dx*0.55 + dz*0.40
-		tz := (dx - dy) * 0.30
 		lx, ly, lz := v.rotationsA[i].RotatePointInverse(tx, ty, tz)
 		sign := 1.0
 		if i&1 == 1 {
 			sign = -0.90
 		}
-		j.ragdollTargetX = math.Max(-j.maxAngleRagdoll*0.85, math.Min(j.maxAngleRagdoll*0.85, lx*j.dofScaleX*0.95))
-		j.ragdollTargetY = math.Max(-j.maxAngleRagdoll*0.85, math.Min(j.maxAngleRagdoll*0.85, (ly+0.28*sign)*j.dofScaleY*0.95))
-		j.ragdollTargetZ = math.Max(-j.maxAngleRagdoll*0.70, math.Min(j.maxAngleRagdoll*0.70, lz*j.dofScaleZ*0.80))
-
-		j.velX += j.ragdollTargetX * 5.0
-		j.velY += j.ragdollTargetY * 5.0
-		j.velZ += j.ragdollTargetZ * 4.0
+		j.ActivateRagdoll(lx, ly, lz, sign)
 	}
 }
 
@@ -523,8 +617,6 @@ func (v *Vertices3DJoints) StepJoints(halfD float64, tick uint64) {
 			}
 		}
 
-		//_, _, halfD := v.elements.vVolume.entity.GetSizeCenter()
-
 		collapseDrop := 0.0
 		if v.ragdollCollapse {
 			collapseDrop = -math.Max(halfD-6.0, 0.0) * math.Sin(v.fallAngle)
@@ -553,111 +645,12 @@ func (v *Vertices3DJoints) StepJoints(halfD float64, tick uint64) {
 		if j.detached {
 			if !j.detSettled {
 				anyActive = true
-				const limbGravity = 560.0
-				j.detVz -= limbGravity * dt
-
-				airDamp := math.Pow(0.65, dt)
-				j.detVx *= airDamp
-				j.detVy *= airDamp
-
-				j.detWorldX += j.detVx * dt
-				j.detWorldY += j.detVy * dt
-				j.detWorldZ += j.detVz * dt
-
-				if j.detWorldZ <= j.detFloorZ {
-					j.detWorldZ = j.detFloorZ
-					if j.detVz < -28.0 {
-						j.detVz = -j.detVz * 0.34
-						j.detWx += -j.detVy * 0.04
-						j.detWy += j.detVx * 0.04
-					} else {
-						j.detVz = 0.0
-					}
-					groundFric := math.Pow(0.015, dt)
-					j.detVx *= groundFric
-					j.detVy *= groundFric
-
-					angFric := math.Pow(0.025, dt)
-					j.detWx *= angFric
-					j.detWy *= angFric
-					j.detWz *= angFric
-
-					if j.detVz == 0.0 && (j.detVx*j.detVx+j.detVy*j.detVy) < 1.0 &&
-						(j.detWx*j.detWx+j.detWy*j.detWy+j.detWz*j.detWz) < 0.02 {
-						j.detVx, j.detVy, j.detVz = 0, 0, 0
-						j.detWx, j.detWy, j.detWz = 0, 0, 0
-						j.detSettled = true
-					}
-				}
-				j.detQuat.IntegrateAngular(j.detWx, j.detWy, j.detWz, dt)
+				j.Settle(dt)
 			}
 			continue
 		}
-
-		// Connected articulated joint (PD spring-damper + cone joint limits)
-		ks := j.stiffness
-		kd := j.damping
-		maxAng := j.maxAngleAlive
-		var targetX, targetY, targetZ float64
-
-		if v.isRagdoll {
-			ks *= 0.12
-			kd *= 0.55
-			maxAng = j.maxAngleRagdoll
-			targetX, targetY, targetZ = j.ragdollTargetX, j.ragdollTargetY, j.ragdollTargetZ
-		} else if j.damage > 0 {
-			j.damage = math.Max(0.0, j.damage-0.10*dt)
-		}
-
-		alphaX := -ks*(j.angX-targetX) - kd*j.velX
-		alphaY := -ks*(j.angY-targetY) - kd*j.velY
-		alphaZ := -ks*(j.angZ-targetZ) - kd*j.velZ
-
-		j.velX += alphaX * dt
-		j.velY += alphaY * dt
-		j.velZ += alphaZ * dt
-
-		j.angX += j.velX * dt
-		j.angY += j.velY * dt
-		j.angZ += j.velZ * dt
-
-		angMagSq := j.angX*j.angX + j.angY*j.angY + j.angZ*j.angZ
-		if maxAng > 0.0 && angMagSq > maxAng*maxAng {
-			angMag := math.Sqrt(angMagSq)
-			nx, ny, nz := j.angX/angMag, j.angY/angMag, j.angZ/angMag
-			j.angX, j.angY, j.angZ = nx*maxAng, ny*maxAng, nz*maxAng
-			angMagSq = maxAng * maxAng
-			vDotN := j.velX*nx + j.velY*ny + j.velZ*nz
-			if vDotN > 0.0 {
-				j.velX -= 1.30 * vDotN * nx
-				j.velY -= 1.30 * vDotN * ny
-				j.velZ -= 1.30 * vDotN * nz
-			}
-		}
-
-		diffX := j.angX - targetX
-		diffY := j.angY - targetY
-		diffZ := j.angZ - targetZ
-		diffSq := diffX*diffX + diffY*diffY + diffZ*diffZ
-		velMagSq := j.velX*j.velX + j.velY*j.velY + j.velZ*j.velZ
-
-		if diffSq > 1e-6 || velMagSq > 1e-5 {
+		if j.Connect(v.isRagdoll, dt) {
 			anyActive = true
-		}
-
-		if angMagSq > 1e-6 {
-			angMag := math.Sqrt(angMagSq)
-			j.quat.SetAxisAngle(j.angX/angMag, j.angY/angMag, j.angZ/angMag, angMag)
-			j.axis.SetFromQuaternion(j.quat)
-			j.hasDeflection = true
-		} else {
-			j.axis.Reset()
-			j.hasDeflection = false
-		}
-
-		if diffSq <= 1e-6 && velMagSq <= 1e-5 {
-			j.angX, j.angY, j.angZ = targetX, targetY, targetZ
-			j.velX, j.velY, j.velZ = 0, 0, 0
 		}
 	}
 	v.hasActiveDynamics = anyActive

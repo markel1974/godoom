@@ -186,8 +186,8 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 			u = src.u
 			v = src.v
 		}
-		facesA.Set(j, &Face{material: mat, u: u, v: v})
-		facesB.Set(j, &Face{material: mat, u: u, v: v})
+		facesA.Set(j, NewFaceEmpty(mat, u, v))
+		facesB.Set(j, NewFaceEmpty(mat, u, v))
 	}
 
 	endFrame := len(model.Frames) - 1

@@ -819,9 +819,9 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *vo
 	}
 
 	tri := rFace.GetTri()
-	_, _, z0 := rQ.Rotate(tri[0].X, tri[0].Y, tri[0].Z)
-	_, _, z1 := rQ.Rotate(tri[1].X, tri[1].Y, tri[1].Z)
-	_, _, z2 := rQ.Rotate(tri[2].X, tri[2].Y, tri[2].Z)
+	_, _, z0 := rQ.Rotate(tri.Points[0].X, tri.Points[0].Y, tri.Points[0].Z)
+	_, _, z1 := rQ.Rotate(tri.Points[1].X, tri.Points[1].Y, tri.Points[1].Z)
+	_, _, z2 := rQ.Rotate(tri.Points[2].X, tri.Points[2].Y, tri.Points[2].Z)
 	rMaxZ := math.Max(z0, math.Max(z1, z2)) + rOffZ
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ

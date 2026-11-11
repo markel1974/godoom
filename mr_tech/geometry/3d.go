@@ -2,43 +2,6 @@ package geometry
 
 import "math"
 
-type Triangle3D struct {
-	Points [3]XYZ
-}
-
-// FindDeepestPoint computes the vertex in a triangle with the smallest projection onto a given direction vector.
-// dir is the reference direction for projection.
-// v is an array of three 3D points representing the vertices of a triangle.
-// Returns the X, Y, and Z coordinates of the vertex with the smallest projection.
-func (tri *Triangle3D) FindDeepestPoint(dir XYZ) (float64, float64, float64) {
-	bestP := dir.DotXYZ(tri.Points[0])
-	bestIdx := 0
-	for i := 1; i < 3; i++ {
-		p := dir.DotXYZ(tri.Points[i])
-		if p < bestP {
-			bestP = p
-			bestIdx = i
-		}
-	}
-	return tri.Points[bestIdx].X, tri.Points[bestIdx].Y, tri.Points[bestIdx].Z
-}
-
-// Project projects a triangle's vertices onto a given axis and returns the minimum and maximum projection values.
-func (tri *Triangle3D) Project(axis XYZ) (float64, float64) {
-	minP := axis.DotXYZ(tri.Points[0])
-	maxP := minP
-	for i := 1; i < 3; i++ {
-		p := axis.DotXYZ(tri.Points[i])
-		if p < minP {
-			minP = p
-		}
-		if p > maxP {
-			maxP = p
-		}
-	}
-	return minP, maxP
-}
-
 // Triangulate3d decomposes a 3D polygon into a set of non-overlapping triangles with 3D coordinates.
 func Triangulate3d(pts []XYZ) [][]XYZ {
 	pLen := len(pts)

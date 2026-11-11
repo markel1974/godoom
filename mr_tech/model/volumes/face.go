@@ -14,7 +14,7 @@ type Face struct {
 	parent   *Volume
 	label    string
 	aabb     *aabb.AABB
-	tri      [3]geometry.XYZ
+	tri      *geometry.Triangle3D
 	n        geometry.XYZ
 	nAbs     geometry.XYZ
 	material *textures.Material
@@ -23,31 +23,40 @@ type Face struct {
 	lockUV   bool
 }
 
+func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
+	out := &Face{
+		material: material,
+		tri:      geometry.NewTriangle3D([3]geometry.XYZ{}),
+		u:        u,
+		v:        v,
+	}
+	return out
+}
+
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
 func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Face {
 	out := &Face{
 		label:    label,
 		material: material,
 		aabb:     aabb.NewAABB(),
-		tri:      tri,
+		tri:      geometry.NewTriangle3D(tri),
 	}
 	out.Rebuild()
 	return out
 }
 
 // GetTri returns the three vertices that define the face triangle.
-func (fc *Face) GetTri() [3]geometry.XYZ {
+func (fc *Face) GetTri() *geometry.Triangle3D {
 	return fc.tri
 }
 
 func (fc *Face) Get0() (float64, float64, float64) {
-	return fc.tri[0].X, fc.tri[0].Y, fc.tri[0].Z
+	return fc.tri.Points[0].X, fc.tri.Points[0].Y, fc.tri.Points[0].Z
 }
 
 // Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.
 func (fc *Face) Translate(idx int, offX, offY, offZ float64) (float64, float64, float64) {
-	p0x, p0y, p0z := fc.tri[idx].X+offX, fc.tri[idx].Y+offY, fc.tri[idx].Z+offZ
-	return p0x, p0y, p0z
+	return fc.tri.Translate(idx, offX, offY, offZ)
 }
 
 // LockUV locks or unlocks the UV coordinates of a Face based on the provided staticUV parameter.
@@ -119,34 +128,27 @@ func (fc *Face) GetMaterial() *textures.Material {
 
 // ClonePoints returns a copy of the face's three triangle points.
 func (fc *Face) ClonePoints() [3]geometry.XYZ {
-	return fc.tri
+	return fc.tri.Points
 }
 
 // GetPoint0 returns the X, Y, and Z coordinates of the first vertex of the triangle that defines the face.
 func (fc *Face) GetPoint0() (float64, float64, float64) {
-	return fc.tri[0].X, fc.tri[0].Y, fc.tri[0].Z
+	return fc.tri.GetPoint0()
 }
 
 // GetPoint1 retrieves the coordinates (X, Y, Z) of the second vertex of the triangle defining the Face.
 func (fc *Face) GetPoint1() (float64, float64, float64) {
-	return fc.tri[1].X, fc.tri[1].Y, fc.tri[1].Z
+	return fc.tri.GetPoint1()
 }
 
 // GetPoint2 returns the X, Y, and Z coordinates of the third vertex in the Face's triangular geometry.
 func (fc *Face) GetPoint2() (float64, float64, float64) {
-	return fc.tri[2].X, fc.tri[2].Y, fc.tri[2].Z
+	return fc.tri.GetPoint2()
 }
 
 // PointInside2d determines if the provided 2D point (px, py) lies inside the tri defined by the Face's first three points.
 func (fc *Face) PointInside2d(px, py float64) bool {
-	p0, p1, p2 := fc.tri[0], fc.tri[1], fc.tri[2]
-	d1 := (px-p0.X)*(p1.Y-p0.Y) - (py-p0.Y)*(p1.X-p0.X)
-	d2 := (px-p1.X)*(p2.Y-p1.Y) - (py-p1.Y)*(p2.X-p1.X)
-	d3 := (px-p2.X)*(p0.Y-p2.Y) - (py-p2.Y)*(p0.X-p2.X)
-	const eps = -0.001
-	hasNeg := (d1 < eps) || (d2 < eps) || (d3 < eps)
-	hasPos := (d1 > -eps) || (d2 > -eps) || (d3 > -eps)
-	return !(hasNeg && hasPos)
+	return fc.tri.PointInside2d(px, py)
 }
 
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
@@ -163,41 +165,17 @@ func (fc *Face) GetAABB() *aabb.AABB {
 
 // Zero resets all triangle vertex coordinates of the face to the origin.
 func (fc *Face) Zero() {
-	fc.tri[0].X = 0
-	fc.tri[0].Y = 0
-	fc.tri[0].Z = 0
-	fc.tri[1].X = 0
-	fc.tri[1].Y = 0
-	fc.tri[1].Z = 0
-	fc.tri[2].X = 0
-	fc.tri[2].Y = 0
-	fc.tri[2].Z = 0
+	fc.tri.Zero()
 }
 
 // TransformPoints copies the source face points into this face, offset by the given origin coordinates.
 func (fc *Face) TransformPoints(src *Face, originX, originY, originZ float64) {
-	fc.tri[0].X = src.tri[0].X + originX
-	fc.tri[0].Y = src.tri[0].Y + originY
-	fc.tri[0].Z = src.tri[0].Z + originZ
-	fc.tri[1].X = src.tri[1].X + originX
-	fc.tri[1].Y = src.tri[1].Y + originY
-	fc.tri[1].Z = src.tri[1].Z + originZ
-	fc.tri[2].X = src.tri[2].X + originX
-	fc.tri[2].Y = src.tri[2].Y + originY
-	fc.tri[2].Z = src.tri[2].Z + originZ
+	fc.tri.TransformPoints(src.tri, originX, originY, originZ)
 }
 
 // CopyPoints copies the coordinates of all triangle points from src into fc.
 func (fc *Face) CopyPoints(src *Face) {
-	fc.tri[0].X = src.tri[0].X
-	fc.tri[0].Y = src.tri[0].Y
-	fc.tri[0].Z = src.tri[0].Z
-	fc.tri[1].X = src.tri[1].X
-	fc.tri[1].Y = src.tri[1].Y
-	fc.tri[1].Z = src.tri[1].Z
-	fc.tri[2].X = src.tri[2].X
-	fc.tri[2].Y = src.tri[2].Y
-	fc.tri[2].Z = src.tri[2].Z
+	fc.tri.CopyPoints(src.tri)
 }
 
 // computeNormal calculates and assigns the n vector (geometry.XYZ) for the Face based on its points and geometry.
@@ -207,7 +185,7 @@ func (fc *Face) computeNormal() {
 
 	fc.n = geometry.XYZ{X: 0, Y: 0, Z: 1}
 	// Prodotto vettoriale standard per poligoni 3D
-	p0, p1, p2 := fc.tri[0], fc.tri[1], fc.tri[2]
+	p0, p1, p2 := fc.tri.Points[0], fc.tri.Points[1], fc.tri.Points[2]
 	v1x, v1y, v1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
 	v2x, v2y, v2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
 	nx := v1y*v2z - v1z*v2y
@@ -240,28 +218,7 @@ func (fc *Face) computeNormal() {
 // computeAABB calculates the axis-aligned bounding box (AABB) for the Face using its points and optional Z bounds.
 func (fc *Face) computeAABB() {
 	const eps = 0.001
-	minX, minY, minZ := fc.tri[0].X, fc.tri[0].Y, fc.tri[0].Z
-	maxX, maxY, maxZ := minX, minY, minZ
-	for _, p := range fc.tri {
-		if p.X < minX {
-			minX = p.X
-		}
-		if p.X > maxX {
-			maxX = p.X
-		}
-		if p.Y < minY {
-			minY = p.Y
-		}
-		if p.Y > maxY {
-			maxY = p.Y
-		}
-		if p.Z < minZ {
-			minZ = p.Z
-		}
-		if p.Z > maxZ {
-			maxZ = p.Z
-		}
-	}
+	minX, minY, minZ, maxX, maxY, maxZ := fc.tri.MinMax()
 	if minZ == maxZ {
 		minZ -= eps
 		maxZ += eps
@@ -286,53 +243,27 @@ func (fc *Face) computeUV() {
 	// Pure Triplanar Projection.
 	if nAbsZ >= nAbsX && nAbsZ >= nAbsY {
 		// Upper / Lower (Floors and Ceilings)
-		u0, v0 := fc.tri[0].X/w, fc.tri[0].Y/h
-		u1, v1 := fc.tri[1].X/w, fc.tri[1].Y/h
-		u2, v2 := fc.tri[2].X/w, fc.tri[2].Y/h
+		u0, v0 := fc.tri.Points[0].X/w, fc.tri.Points[0].Y/h
+		u1, v1 := fc.tri.Points[1].X/w, fc.tri.Points[1].Y/h
+		u2, v2 := fc.tri.Points[2].X/w, fc.tri.Points[2].Y/h
 		fc.SetUV(u0, v0, u1, v1, u2, v2)
 	} else if nAbsY >= nAbsX && nAbsY >= nAbsZ {
 		// Walls facing Y
-		fc.SetUV(fc.tri[0].X/w, fc.tri[0].Z/h, fc.tri[1].X/w, fc.tri[1].Z/h, fc.tri[2].X/w, fc.tri[2].Z/h)
+		fc.SetUV(fc.tri.Points[0].X/w, fc.tri.Points[0].Z/h, fc.tri.Points[1].X/w, fc.tri.Points[1].Z/h, fc.tri.Points[2].X/w, fc.tri.Points[2].Z/h)
 	} else {
 		// Walls facing X
-		fc.SetUV(fc.tri[0].Y/w, fc.tri[0].Z/h, fc.tri[1].Y/w, fc.tri[1].Z/h, fc.tri[2].Y/w, fc.tri[2].Z/h)
+		fc.SetUV(fc.tri.Points[0].Y/w, fc.tri.Points[0].Z/h, fc.tri.Points[1].Y/w, fc.tri.Points[1].Z/h, fc.tri.Points[2].Y/w, fc.tri.Points[2].Z/h)
 	}
 }
 
 // SumPoints adds the face's triangle point coordinates to the provided totals and returns the updated sums and count.
 func (fc *Face) SumPoints(cx, cy, cz float64, count int) (float64, float64, float64, int) {
-	for _, p := range fc.tri {
-		cx += p.X
-		cy += p.Y
-		cz += p.Z
-		count++
-	}
-	return cx, cy, cz, count
+	return fc.tri.SumPoints(cx, cy, cz, count)
 }
 
 // GetMinMax returns the bounds expanded to include all vertices of the face.
 func (fc *Face) GetMinMax(minX, minY, minZ, maxX, maxY, maxZ float64) (float64, float64, float64, float64, float64, float64) {
-	for _, p := range fc.tri {
-		if p.X < minX {
-			minX = p.X
-		}
-		if p.X > maxX {
-			maxX = p.X
-		}
-		if p.Y < minY {
-			minY = p.Y
-		}
-		if p.Y > maxY {
-			maxY = p.Y
-		}
-		if p.Z < minZ {
-			minZ = p.Z
-		}
-		if p.Z > maxZ {
-			maxZ = p.Z
-		}
-	}
-	return minX, minY, minZ, maxX, maxY, maxZ
+	return fc.tri.MinMaxExpands(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
 /*

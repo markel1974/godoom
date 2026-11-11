@@ -111,8 +111,8 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 		for j := 0; j < count; j++ {
 			src := target.GetFace(j)
 			idx := offset + j
-			v.facesA.Set(idx, &Face{material: src.material, u: src.u, v: src.v})
-			v.facesB.Set(idx, &Face{material: src.material, u: src.u, v: src.v})
+			v.facesA.Set(idx, NewFaceEmpty(src.material, src.u, src.v))
+			v.facesB.Set(idx, NewFaceEmpty(src.material, src.u, src.v))
 		}
 	}
 

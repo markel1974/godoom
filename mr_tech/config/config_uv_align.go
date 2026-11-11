@@ -157,7 +157,7 @@ func (an *UVAlign) ComputeVertical(w, h float64, t1, t2 float64, s geometry.XY, 
 }
 
 // ComputePlanar calculates UV coordinates for a triangle based on planar mapping and alignment settings of the UVAlign struct.
-func (an *UVAlign) ComputePlanar(w, h float64, tri [3]geometry.XYZ) (float64, float64, float64, float64, float64, float64) {
+func (an *UVAlign) ComputePlanar(w, h float64, tri *geometry.Triangle3D) (float64, float64, float64, float64, float64, float64) {
 	var tx, ty, nx, ny float64
 	if an.AlignWall {
 		dx := an.End.X - an.Start.X
@@ -185,13 +185,13 @@ func (an *UVAlign) ComputePlanar(w, h float64, tri [3]geometry.XYZ) (float64, fl
 	for i := 0; i < 3; i++ {
 		var u, v float64
 		if an.AlignWall {
-			relX := tri[i].X - an.Start.X
-			relY := tri[i].Y - an.Start.Y
+			relX := tri.Points[i].X - an.Start.X
+			relY := tri.Points[i].Y - an.Start.Y
 			u = relX*tx + relY*ty
 			v = relX*nx + relY*ny
 		} else {
-			u = tri[i].X
-			v = tri[i].Y
+			u = tri.Points[i].X
+			v = tri.Points[i].Y
 		}
 		u *= scaleX
 		v *= scaleY

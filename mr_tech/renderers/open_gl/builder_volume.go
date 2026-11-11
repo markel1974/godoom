@@ -70,8 +70,8 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)
 
 	//prjScaleLights := bv.cal.PrjScaleLights
-	//bv.frustumLightFront.Setup(1.0, float32(bv.cal.ZLightFarFront), float32(bv.cal.ZNear), prjScaleLights, prjScaleLights)
-	//.frustumLightRear.Setup(1.0, float32(bv.cal.ZLightFarRear), float32(bv.cal.ZNear), prjScaleLights, prjScaleLights)
+	//bv.frustumLightFront.Setup(1.0, float32(bv.cal.ZLightFar), float32(bv.cal.ZNear), prjScaleLights, prjScaleLights)
+	//.frustumLightRear.Setup(1.0, float32(bv.cal.ZLightFar), float32(bv.cal.ZNear), prjScaleLights, prjScaleLights)
 
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
@@ -430,8 +430,8 @@ func (w *BuilderVolume) pushLights(ls *model.Lights, frustumFront *aabb.Frustum,
 	w.fl.Prepare()
 	//counter := 0
 
-	maxDistFrontSq := w.cal.ZLightFarFront * w.cal.ZLightFarFront
-	maxDistBackSq := w.cal.ZLightFarRear * w.cal.ZLightFarRear
+	maxDistFrontSq := w.cal.ZLightFar * w.cal.ZLightFar
+	maxDistBackSq := maxDistFrontSq
 
 	for _, light := range ls.Get() {
 		if light.GetKind() == config.LightKindNone {

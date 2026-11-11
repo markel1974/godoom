@@ -64,7 +64,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		//frustumLightRear:  metrics.NewFrustum(),
 		//lightFrontFrustum: aabb.NewFrustum(),
 		//lightRearFrustum:  aabb.NewFrustum(),
-		lightBB: physics.NewBoundingBox(0, 0, 0, 2048, 2048, 2048),
+		lightBB: physics.NewBoundingBox(),
 	}
 	prjScale := bv.cal.PrjScale
 	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)
@@ -116,8 +116,8 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 	frustumFront := vi.GetFrontFrustum(w.frustumFront.Get())
 	//frustumLightFront := w.lightFrontFrustum.Rebuild(w.frustumLightFront.Get())
 	//frustumLightRear := w.lightRearFrustum.Rebuild(w.frustumLightRear.Get())
-	zLightFar := w.cal.ZLightFarFront
-	w.lightBB.Rebuild(px, py, pz, zLightFar, zLightFar, zLightFar)
+	size := w.cal.ZLightFar
+	w.lightBB.RebuildCenter(px, py, pz, size, size, size)
 
 	// Ripristina VBO e Comandi allo stato congelato
 	//w.fv.Reset()

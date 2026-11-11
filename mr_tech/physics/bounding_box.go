@@ -24,12 +24,12 @@ type BoundingBox struct {
 }
 
 // NewBoundingBox creates a bounding box with identity rotation.
-func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
+func NewBoundingBox() *BoundingBox {
 	r := &BoundingBox{
-		bottomLeft:   NewPoint(x, y, z),
+		bottomLeft:   NewPoint(0, 0, 0),
 		bottomCenter: NewPoint(0, 0, 0),
 		center:       NewPoint(0, 0, 0),
-		size:         NewSize(w, h, d),
+		size:         NewSize(0, 0, 0),
 		aabb:         aabb.NewAABB(),
 		rotation:     NewQuaternionEmpty(),
 	}
@@ -40,8 +40,16 @@ func NewBoundingBox(x, y, w, h, z, d float64) *BoundingBox {
 
 // Rebuild updates the reference position and dimensions,
 // then recalculates the derived bounding-box data.
-func (r *BoundingBox) Rebuild(x, y, z, w, h, d float64) {
-	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = x, y, z
+func (r *BoundingBox) Rebuild(blx, bly, blz, w, h, d float64) {
+	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = blx, bly, blz
+	r.size.w, r.size.h, r.size.d = w, h, d
+	r.rebuild()
+}
+
+// RebuildCenter updates the bounding box centered at (cx, cy, cz) with dimensions w, h, d,
+// then recalculates the derived bounding-box data.
+func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
+	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = cx-w*0.5, cy-h*0.5, cz-d*0.5
 	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
 }

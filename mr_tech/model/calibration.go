@@ -16,8 +16,7 @@ type Calibration struct {
 	ZFarMax            float64
 	ZNear              float64
 	ZFar               float64
-	ZLightFarFront     float64
-	ZLightFarRear      float64
+	ZLightFar          float64
 	AspectRatio        float64
 	FovVerticalDegrees float64
 	BeamRatio          float64
@@ -40,8 +39,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		ZFarMax:            cfg.ZFarMax,
 		ZNear:              cfg.ZNear,
 		ZFar:               cfg.ZFar,
-		ZLightFarFront:     cfg.ZLightFarFront,
-		ZLightFarRear:      cfg.ZLightFarRear,
+		ZLightFar:          cfg.ZLightFar,
 		AspectRatio:        cfg.AspectRatio,
 		FovVerticalDegrees: cfg.FovVerticalDegrees,
 		BeamRatio:          cfg.BeamRatio,
@@ -90,16 +88,10 @@ func (c *Calibration) Setup() error {
 		return fmt.Errorf("invalid far plane")
 	}
 	if c.ZFar <= 0 {
-		c.ZFar = maxFar / 2
+		c.ZFar = maxFar * 0.5
 	}
-	if c.ZFar <= 0 {
-		c.ZFar = maxFar / 4
-	}
-	if c.ZLightFarFront <= 0 {
-		c.ZLightFarFront = maxFar
-	}
-	if c.ZLightFarRear <= 0 {
-		c.ZLightFarRear = maxFar / 4
+	if c.ZLightFar <= 0 {
+		c.ZLightFar = maxFar
 	}
 	fovY := c.FovVerticalDegrees
 	if fovY <= 0 || fovY >= 180 || math.IsNaN(fovY) || math.IsInf(fovY, 0) {

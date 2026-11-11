@@ -43,7 +43,7 @@ type Entity struct {
 func NewEntity(mass, restitution, groundFriction, gForce float64) *Entity {
 	e := &Entity{
 		id:          uint64(GetGlobalId()),
-		BoundingBox: NewBoundingBox(0, 0, 0, 0, 0, 0),
+		BoundingBox: NewBoundingBox(),
 		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, gForce),
 	}
 	return e

@@ -9,8 +9,7 @@ type Calibration struct {
 	ZFarMax            float64 `json:"zFarMax"`
 	ZNear              float64 `json:"zNearFront"`
 	ZFar               float64 `json:"zFarFront"`
-	ZLightFarFront     float64 `json:"zLightFarFront"`
-	ZLightFarRear      float64 `json:"zLightFarRear"`
+	ZLightFar          float64 `json:"zLightFarFront"`
 	AspectRatio        float64 `json:"aspectRatio"`
 	FovVerticalDegrees float64 `json:"fovVerticalDegrees"`
 	BeamRatio          float64 `json:"beamRatio"`

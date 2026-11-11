@@ -56,8 +56,12 @@ func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error 
 	ls.data = make([]*Link, numParts)
 	ls.tagIndices = make([]int, numParts)
 	ls.executionOrder = make([]int, 0, numParts)
+	dfsState := make([]int, numParts)
 
+	//Initialization
 	for i := 0; i < numParts; i++ {
+		ls.tagIndices[i] = linkInvalidIndex
+		dfsState[i] = dfsUnvisited
 		if i < len(cfg.Links) {
 			ls.data[i] = NewLink(cfg.Links[i].Parent, cfg.Links[i].Tag)
 		} else {
@@ -111,25 +115,32 @@ func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error 
 	}
 
 	for i, link := range ls.data {
-		ls.tagIndices[i] = linkInvalidIndex
-		if element := elements.GetEntry(link.parent); element != nil {
-			tagIdx := element.GetTagIndex(link.tag)
-			ls.tagIndices[i] = tagIdx
-			if tagIdx < 0 {
-				fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, link.parent, i)
-			} else {
-				for frameIdx, vol := range element.volumes {
-					if vol != nil {
-						if !vol.HasVertexTag(tagIdx) {
-							fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, tagIdx, frameIdx, link.parent, i)
-						}
-					}
-				}
+		if link.parent < 0 {
+			continue
+		}
+		element := elements.GetEntry(link.parent)
+		if element == nil {
+			fmt.Printf("[warning] Vertices3D: parent %d not found for part %d, inheriting parent origin and rotation without tag offset\n", link.parent, i)
+			continue
+		}
+		tagIdx := element.GetTagIndex(link.tag)
+		if tagIdx < 0 {
+			fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, link.parent, i)
+			continue
+		}
+		ls.tagIndices[i] = tagIdx
+		for frameIdx, vol := range element.volumes {
+			if vol == nil {
+				fmt.Printf("[warning] Vertices3D: volume not found in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", frameIdx, link.parent, i)
+				continue
+			}
+			if !vol.HasVertexTag(tagIdx) {
+				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, tagIdx, frameIdx, link.parent, i)
+				continue
 			}
 		}
 	}
 
-	dfsState := make([]int, numParts)
 	var visit func(int)
 	visit = func(node int) {
 		if node < 0 || node >= numParts || dfsState[node] == dfsVisited {

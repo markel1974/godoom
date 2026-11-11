@@ -241,7 +241,8 @@ func (s *Cage) Commit(rCage *Cage) {
 
 		if b.IsWall() {
 			baseZ := s.GetBaseZ()
-			if rMaxZ <= baseZ+satFilterEpsilon { // down-hill (going downhill) or within floor penetration slop
+			minBaseZ := math.Min(baseZ, baseZ+s.dZ)
+			if rMaxZ <= minBaseZ+satFilterEpsilon { // down-hill (going downhill) or within floor penetration slop
 				continue
 			}
 			stepZ := baseZ + s.maxStep
@@ -568,31 +569,16 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, of
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	sepX := math.Abs(relX) - sumRadX
-	sepY := math.Abs(relY) - sumRadY
-	sepZ := math.Abs(relZ) - sumRadZ
-	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
-
 	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
-	suppStart := distStart - rayEff
-	tWindowEnd := math.Min(1.0, tExit)
+	tPlaneEnter, tPlaneExit, okPlane := sweptAxisInterval(distStart, rayEff, impDot)
+	if !okPlane {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
 
-	if sweptMode {
-		if suppStart > planeEpsilon {
-			if impDot >= -1e-9 {
-				return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
-			}
-			tEnterPlane := suppStart / (-impDot)
-			if tEnterPlane < tEnter-toiTieEpsilon || tEnterPlane > tWindowEnd+toiTieEpsilon {
-				return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
-			}
-		} else if distStart+tEnter*impDot < -planeEpsilon {
-			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
-		}
-	} else {
-		if distStart+rayEff < -planeEpsilon {
-			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
-		}
+	overlapStart := math.Max(tEnter, tPlaneEnter)
+	overlapEnd := math.Min(math.Min(1.0, tExit), tPlaneExit)
+	if overlapStart > overlapEnd+toiTieEpsilon || overlapEnd < -toiTieEpsilon || overlapStart > 1.0+toiTieEpsilon {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).

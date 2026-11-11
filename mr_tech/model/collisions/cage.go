@@ -547,6 +547,54 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, of
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
+	// Calcolo TOI (Time Of Impact) tra il moto dell'ellissoide e la faccia statica
+	rCx := (rMinX + rMaxX) * 0.5
+	rCy := (rMinY + rMaxY) * 0.5
+	rCz := (rMinZ + rMaxZ) * 0.5
+	rRadX := (rMaxX - rMinX) * 0.5
+	rRadY := (rMaxY - rMinY) * 0.5
+	rRadZ := (rMaxZ - rMinZ) * 0.5
+
+	relX := s.cX - rCx
+	relY := s.cY - rCy
+	relZ := s.cZ - rCz
+
+	sumRadX := s.eRadX + rRadX
+	sumRadY := s.eRadY + rRadY
+	sumRadZ := s.eRadZ + rRadZ
+
+	tEnter, tExit, _, _, _, ok := computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, s.dX, s.dY, s.dZ)
+	if !ok {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+
+	sepX := math.Abs(relX) - sumRadX
+	sepY := math.Abs(relY) - sumRadY
+	sepZ := math.Abs(relZ) - sumRadZ
+	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
+
+	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
+	suppStart := distStart - rayEff
+	tWindowEnd := math.Min(1.0, tExit)
+
+	if sweptMode {
+		if suppStart > planeEpsilon {
+			if impDot >= -1e-9 {
+				return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+			}
+			tEnterPlane := suppStart / (-impDot)
+			if tEnterPlane < tEnter-toiTieEpsilon || tEnterPlane > tWindowEnd+toiTieEpsilon {
+				return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+			}
+		} else if distStart+tEnter*impDot < -planeEpsilon {
+			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		}
+	} else {
+		if distStart+rayEff < -planeEpsilon {
+			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		}
+	}
+
 	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).
 	// Un piano infinito è fantasma se la compenetrazione proiettata eccede l'overlap fisico effettivo dell'AABB
 	// lungo l'asse principale della normale del piano.

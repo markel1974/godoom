@@ -51,11 +51,6 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 
 	v.elements.UpdateEntityBounds()
 
-	//numParts := v.elements.Len()
-	//if numParts > 1 {
-	//	v.elements.Rebuild(thing, cfg)
-	//}
-
 	return v
 }
 

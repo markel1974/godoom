@@ -399,7 +399,7 @@ func (poly Polygon) BuildConstraints() [][2]XY {
 }
 
 // BowyerWatson performs unconstrained Delaunay triangulation of the polygon's vertices using the Bowyer-Watson algorithm.
-func (poly Polygon) BowyerWatson() []Triangle {
+func (poly Polygon) BowyerWatson() []Triangle2D {
 	minX, minY := math.MaxFloat64, math.MaxFloat64
 	maxX, maxY := -math.MaxFloat64, -math.MaxFloat64
 
@@ -430,10 +430,10 @@ func (poly Polygon) BowyerWatson() []Triangle {
 	stB := XY{X: midX, Y: midY + 20*deltaMax}
 	stC := XY{X: midX + 20*deltaMax, Y: midY - deltaMax}
 
-	triangles := []Triangle{{stA, stB, stC}}
+	triangles := []Triangle2D{{stA, stB, stC}}
 
 	for _, p := range poly {
-		var badTriangles []Triangle
+		var badTriangles []Triangle2D
 		var polygon [][2]XY
 
 		for _, t := range triangles {
@@ -468,7 +468,7 @@ func (poly Polygon) BowyerWatson() []Triangle {
 			}
 		}
 
-		var nextTriangles []Triangle
+		var nextTriangles []Triangle2D
 		for _, t := range triangles {
 			isBad := false
 			for _, bt := range badTriangles {
@@ -484,12 +484,12 @@ func (poly Polygon) BowyerWatson() []Triangle {
 		triangles = nextTriangles
 
 		for _, edge := range polygon {
-			triangles = append(triangles, Triangle{edge[0], edge[1], p})
+			triangles = append(triangles, Triangle2D{edge[0], edge[1], p})
 		}
 	}
 
 	// Topological purge pass: removal of triangles contaminated by the super-triangle's magnitude
-	var finalMesh []Triangle
+	var finalMesh []Triangle2D
 	for _, t := range triangles {
 		if t.HasVertex(stA) || t.HasVertex(stB) || t.HasVertex(stC) {
 			continue

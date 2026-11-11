@@ -2,7 +2,13 @@ package geometry
 
 import (
 	"math"
+	"math/big"
 )
+
+// BigFloat creates a new *big.Float with 256 bits of precision and sets its value to the given float64.
+func BigFloat(f float64) *big.Float {
+	return new(big.Float).SetPrec(256).SetFloat64(f)
+}
 
 // ClampF restricts a float64 value to a specified range [mi, ma].
 func ClampF(a float64, mi float64, ma float64) float64 {

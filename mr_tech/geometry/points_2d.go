@@ -34,46 +34,8 @@ func (xy *XY) Scale(scale XY) {
 	xy.Y *= scale.Y
 }
 
-// XYZ represents a point or vector in 3D space with X, Y, and Z coordinates.
-type XYZ struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	Z float64 `json:"z"`
-}
-
-// Scale divides the X, Y and Z components of the XYZ struct by the given scale factor.
-func (xyz *XYZ) Scale(scale XYZ) {
-	xyz.X *= scale.X
-	xyz.Y *= scale.Y
-	xyz.Z *= scale.Z
-}
-
-// SubXYZ subtracts two geometry.XYZ vectors component-wise and returns the resulting vector.
-func SubXYZ(a, b XYZ) XYZ {
-	return XYZ{X: a.X - b.X, Y: a.Y - b.Y, Z: a.Z - b.Z}
-}
-
-// DotXYZ computes the dot product of two 3D vectors represented by geometry.XYZ structs.
-func DotXYZ(a, b XYZ) float64 { return a.X*b.X + a.Y*b.Y + a.Z*b.Z }
-
-// CrossXYZ computes the cross product of two 3D vectors a and b, returning the resulting vector as geometry.XYZ.
-func CrossXYZ(a, b XYZ) XYZ {
-	return XYZ{X: a.Y*b.Z - a.Z*b.Y, Y: a.Z*b.X - a.X*b.Z, Z: a.X*b.Y - a.Y*b.X}
-}
-
-// NormalizeXYZ normalizes a 3D vector to unit length and returns the resulting vector.
-func NormalizeXYZ(v XYZ) XYZ {
-	lenInv := 1.0 / math.Sqrt(v.X*v.X+v.Y*v.Y+v.Z*v.Z)
-	return XYZ{X: v.X * lenInv, Y: v.Y * lenInv, Z: v.Z * lenInv}
-}
-
-// BigFloat creates a new *big.Float with 256 bits of precision and sets its value to the given float64.
-func BigFloat(f float64) *big.Float {
-	return new(big.Float).SetPrec(256).SetFloat64(f)
-}
-
 // RecoverConstraints ensures that a set of constraints is respected in a Delaunay triangulated mesh by edge flipping.
-func RecoverConstraints(constraints [][2]XY, triangles []Triangle) []Triangle {
+func RecoverConstraints(constraints [][2]XY, triangles []Triangle2D) []Triangle2D {
 	for _, c := range constraints {
 		var queue [][2]XY
 
@@ -112,8 +74,8 @@ func RecoverConstraints(constraints [][2]XY, triangles []Triangle) []Triangle {
 			// Only diagonals of strictly convex quadrilaterals can be flipped
 			if IsConvexQuadrilateral(e[0], e[1], pOpp1, pOpp2) {
 				consecutiveFailures = 0 // Reset on success
-				triangles[t1Idx] = Triangle{pOpp1, pOpp2, e[0]}
-				triangles[t2Idx] = Triangle{pOpp1, pOpp2, e[1]}
+				triangles[t1Idx] = Triangle2D{pOpp1, pOpp2, e[0]}
+				triangles[t2Idx] = Triangle2D{pOpp1, pOpp2, e[1]}
 
 				newEdge := [2]XY{pOpp1, pOpp2}
 				if SegmentsCross(newEdge[0], newEdge[1], c[0], c[1]) {
@@ -179,7 +141,7 @@ func AppendUniqueEdge(queue [][2]XY, edge [2]XY) [][2]XY {
 
 // FindAdjacentTriangles finds the indices of two triangles sharing the specified edge in a given list of triangles.
 // Returns -1 for an index if no triangle with the edge is found.
-func FindAdjacentTriangles(triangles []Triangle, e [2]XY) (int, int) {
+func FindAdjacentTriangles(triangles []Triangle2D, e [2]XY) (int, int) {
 	idx1, idx2 := -1, -1
 	for i, t := range triangles {
 		if t.HasEdge(e) {

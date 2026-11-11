@@ -2,6 +2,43 @@ package geometry
 
 import "math"
 
+type Triangle3D struct {
+	Points [3]XYZ
+}
+
+// FindDeepestPoint computes the vertex in a triangle with the smallest projection onto a given direction vector.
+// dir is the reference direction for projection.
+// v is an array of three 3D points representing the vertices of a triangle.
+// Returns the X, Y, and Z coordinates of the vertex with the smallest projection.
+func (tri *Triangle3D) FindDeepestPoint(dir XYZ) (float64, float64, float64) {
+	bestP := dir.DotXYZ(tri.Points[0])
+	bestIdx := 0
+	for i := 1; i < 3; i++ {
+		p := dir.DotXYZ(tri.Points[i])
+		if p < bestP {
+			bestP = p
+			bestIdx = i
+		}
+	}
+	return tri.Points[bestIdx].X, tri.Points[bestIdx].Y, tri.Points[bestIdx].Z
+}
+
+// Project projects a triangle's vertices onto a given axis and returns the minimum and maximum projection values.
+func (tri *Triangle3D) Project(axis XYZ) (float64, float64) {
+	minP := axis.DotXYZ(tri.Points[0])
+	maxP := minP
+	for i := 1; i < 3; i++ {
+		p := axis.DotXYZ(tri.Points[i])
+		if p < minP {
+			minP = p
+		}
+		if p > maxP {
+			maxP = p
+		}
+	}
+	return minP, maxP
+}
+
 // Triangulate3d decomposes a 3D polygon into a set of non-overlapping triangles with 3D coordinates.
 func Triangulate3d(pts []XYZ) [][]XYZ {
 	pLen := len(pts)
@@ -19,7 +56,7 @@ func Triangulate3d(pts []XYZ) [][]XYZ {
 		nz += (curr.X - next.X) * (curr.Y + next.Y)
 	}
 
-	// 2. Find the dominant projection plane to maximize 2D area
+	// Find the dominant projection plane to maximize 2D area
 	absX, absY, absZ := math.Abs(nx), math.Abs(ny), math.Abs(nz)
 	axis := 2 // 0: drop X, 1: drop Y, 2: drop Z
 	if absX >= absY && absX >= absZ {
@@ -28,7 +65,7 @@ func Triangulate3d(pts []XYZ) [][]XYZ {
 		axis = 1
 	}
 
-	// 3. Project onto 2D plane using the native Polygon type
+	// Project onto 2D plane using the native Polygon type
 	poly2d := make(Polygon, pLen)
 	for i, p := range pts {
 		switch axis {
@@ -41,10 +78,10 @@ func Triangulate3d(pts []XYZ) [][]XYZ {
 		}
 	}
 
-	// 4. Delegate to CDT engine (Bowyer-Watson + PSLG)
+	// Delegate to CDT engine (Bowyer-Watson + PSLG)
 	mesh2d := poly2d.Triangulate()
 
-	// 5. Un-project: Reconstruct the 3D mesh
+	// Un-project: Reconstruct the 3D mesh
 	var output [][]XYZ
 	for _, t2d := range mesh2d {
 		if len(t2d) != 3 {
@@ -103,10 +140,10 @@ func resolve3dPoint(p2d XY, originalPts []XYZ, nx, ny, nz float64, axis int) XYZ
 // p2 and d2 define the starting point and direction vector of the second segment, respectively.
 // Returns the closest points on the two segments as two geometry.XYZ instances.
 func ClosestPointSegmentSegment(p1, d1, p2, d2 XYZ) (XYZ, XYZ) {
-	r := SubXYZ(p1, p2)
-	a, e, f := DotXYZ(d1, d1), DotXYZ(d2, d2), DotXYZ(d2, r)
-	c := DotXYZ(d1, r)
-	b := DotXYZ(d1, d2)
+	r := p1.SubXYZ(p2)
+	a, e, f := d1.DotXYZ(d1), d2.DotXYZ(d2), d2.DotXYZ(r)
+	c := d1.DotXYZ(r)
+	b := d1.DotXYZ(d2)
 	denom := a*e - b*b
 	s, t := 0.0, 0.0
 	if denom != 0.0 {
@@ -119,37 +156,4 @@ func ClosestPointSegmentSegment(p1, d1, p2, d2 XYZ) (XYZ, XYZ) {
 	c1 := XYZ{X: p1.X + d1.X*s, Y: p1.Y + d1.Y*s, Z: p1.Z + d1.Z*s}
 	c2 := XYZ{X: p2.X + d2.X*t, Y: p2.Y + d2.Y*t, Z: p2.Z + d2.Z*t}
 	return c1, c2
-}
-
-// TriangleProject projects a triangle's vertices onto a given axis and returns the minimum and maximum projection values.
-func TriangleProject(tri [3]XYZ, axis XYZ) (float64, float64) {
-	minP := DotXYZ(axis, tri[0])
-	maxP := minP
-	for i := 1; i < 3; i++ {
-		p := DotXYZ(axis, tri[i])
-		if p < minP {
-			minP = p
-		}
-		if p > maxP {
-			maxP = p
-		}
-	}
-	return minP, maxP
-}
-
-// TriangleFindDeepestPoint computes the vertex in a triangle with the smallest projection onto a given direction vector.
-// dir is the reference direction for projection.
-// v is an array of three 3D points representing the vertices of a triangle.
-// Returns the X, Y, and Z coordinates of the vertex with the smallest projection.
-func TriangleFindDeepestPoint(tri [3]XYZ, dir XYZ) (float64, float64, float64) {
-	bestP := DotXYZ(dir, tri[0])
-	bestIdx := 0
-	for i := 1; i < 3; i++ {
-		p := DotXYZ(dir, tri[i])
-		if p < bestP {
-			bestP = p
-			bestIdx = i
-		}
-	}
-	return tri[bestIdx].X, tri[bestIdx].Y, tri[bestIdx].Z
 }

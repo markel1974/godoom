@@ -11,7 +11,9 @@ import (
 
 // Vertices3DJoint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
 type Vertices3DJoint struct {
-	localCenter     geometry.XYZ
+	localCenterX    float64
+	localCenterY    float64
+	localCenterZ    float64
 	partRadius      float64
 	dofScaleX       float64
 	dofScaleY       float64
@@ -167,7 +169,9 @@ func (v *Vertices3DJoints) Setup(cfg *config.Model3D, elements2 *Vertices3DEleme
 						f := vol.GetFace(fIdx)
 						minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 					}
-					j.localCenter = geometry.XYZ{X: (minX + maxX) * 0.5, Y: (minY + maxY) * 0.5, Z: (minZ + maxZ) * 0.5}
+					j.localCenterX = (minX + maxX) * 0.5
+					j.localCenterY = (minY + maxY) * 0.5
+					j.localCenterZ = (minZ + maxZ) * 0.5
 					dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
 					r := math.Max(dx, math.Max(dy, dz)) * 0.5
 					j.partRadius = math.Max(4.0, math.Min(48.0, r))
@@ -717,7 +721,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 			continue
 		}
 		j := v.data[i]
-		lcX, lcY, lcZ := v.rotationsA[i].RotatePoint(j.localCenter.X, j.localCenter.Y, j.localCenter.Z)
+		lcX, lcY, lcZ := v.rotationsA[i].RotatePoint(j.localCenterX, j.localCenterY, j.localCenterZ)
 		partCx := v.originsA[i].X + lcX
 		partCy := v.originsA[i].Y + lcY
 		partCz := v.originsA[i].Z + lcZ
@@ -775,7 +779,7 @@ func (v *Vertices3DJoints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 			break
 		}
 		pivX, pivY, pivZ := v.originsA[curr].X, v.originsA[curr].Y, v.originsA[curr].Z
-		lcX, lcY, lcZ := v.rotationsA[curr].RotatePoint(j.localCenter.X, j.localCenter.Y, j.localCenter.Z)
+		lcX, lcY, lcZ := v.rotationsA[curr].RotatePoint(j.localCenterX, j.localCenterY, j.localCenterZ)
 
 		// Blend impact lever arm with limb center-of-mass lever arm so direct hits always bend the joint backward
 		rx := 0.45*(relPx-pivX) + 0.55*lcX

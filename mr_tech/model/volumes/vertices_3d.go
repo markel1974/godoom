@@ -164,12 +164,12 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 		} else {
 			pIdx := v.links.GetParent(i)
 			if pIdx < 0 || pIdx == i {
-				v.joints.Restore(i, ent.GetQuaternion())
+				v.joints.Restore(i, ent.GetQRotation())
 			} else {
 				volA := v.elements.volsA[pIdx]
 				volB := v.elements.volsB[pIdx]
 				if volA == nil || volB == nil {
-					v.joints.Restore(i, ent.GetQuaternion())
+					v.joints.Restore(i, ent.GetQRotation())
 				} else {
 					tagIdx := v.links.GetTagIndex(i)
 					if tagIdx < 0 {

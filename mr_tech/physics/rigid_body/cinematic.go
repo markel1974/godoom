@@ -288,6 +288,11 @@ func (e *Cinematic) IsRotating() bool {
 	return e.wx != 0.0 || e.wy != 0.0 || e.wz != 0.0
 }
 
+// IsTilted reports whether the cinematic is tilted.
+func (e *Cinematic) IsTilted() bool {
+	return e.isTilted
+}
+
 // SetDt updates the time step (dt) and recalculates damping and velocity limits based on current friction values.
 func (e *Cinematic) SetDt(dt float64) {
 	e.SetOptions(dt, e.groundFriction, e.airFriction)
@@ -515,9 +520,12 @@ func (e *Cinematic) AddForceAtPoint(fx, fy, fz, px, py, pz float64, cx, cy, cz f
 	e.AddTorque(tx, ty, tz)
 }
 
-// UpdatePrepare detects tilt from the local Z axis and applies roll/pitch righting angular velocity.
-func (e *Cinematic) UpdatePrepare(a20, a21, a22 float64) {
-	//a20, a21, a22 := e.GetAxes2()
+// Update advances the cinematic physics state using the supplied orientation axis components.
+func (e *Cinematic) Update(a20, a21, a22 float64) {
+	if e.invMass == 0.0 {
+		return
+	}
+
 	tiltSq := a20*a20 + a21*a21
 	e.isTilted = tiltSq > 1e-7 || a22 < 0.999999
 
@@ -543,10 +551,7 @@ func (e *Cinematic) UpdatePrepare(a20, a21, a22 float64) {
 		e.wx += (errX*stiffness - e.wx*damping) * dt
 		e.wy += (errY*stiffness - e.wy*damping) * dt
 	}
-}
 
-// UpdateCommit updates the state of the Cinematic object by integrating acceleration, velocity, angular velocity, and damping forces over time.
-func (e *Cinematic) UpdateCommit() {
 	const sleepEpsilon = 0.005
 	const maxTiltVel = 2.5
 	const maxYawVel = 4.5

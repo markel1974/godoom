@@ -645,7 +645,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *vo
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
 
-	rQ := rCage.GetEntity().GetQuaternion()
+	rQ := rCage.GetEntity().GetQRotation()
 	nX, nY, nZ = rQ.Rotate(nX, nY, nZ)
 	nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), math.Abs(nZ)
 

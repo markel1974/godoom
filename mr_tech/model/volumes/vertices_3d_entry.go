@@ -303,7 +303,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 	}
 
 	entity := v.comp2.GetEntity()
-	q := entity.GetQuaternion()
+	q := entity.GetQRotation()
 	qx, qy, qz, qw := q.Get()
 	isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
 

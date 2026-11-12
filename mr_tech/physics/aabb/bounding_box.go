@@ -15,10 +15,12 @@ type BoundingBox struct {
 	size         Size
 	aabb         *AABB
 	axis         [3]obbVector // Local axes transformed into world space.
-	rotation     *Quaternion  // Orientation quaternion.
-	ex           float64      // Oriented half-extents projected onto world axes.
-	ey           float64      // Oriented half-extents projected onto world axes.
-	ez           float64      // Oriented half-extents projected onto world axes.
+	qRotation    *Quaternion  // Orientation quaternion.
+	qYaw         *Quaternion
+	qTilt        *Quaternion
+	ex           float64 // Oriented half-extents projected onto world axes.
+	ey           float64 // Oriented half-extents projected onto world axes.
+	ez           float64 // Oriented half-extents projected onto world axes.
 }
 
 // NewBoundingBox creates a bounding box with identity rotation.
@@ -29,9 +31,11 @@ func NewBoundingBox() *BoundingBox {
 		center:       NewPoint(0, 0, 0),
 		size:         NewSize(0, 0, 0),
 		aabb:         NewAABB(),
-		rotation:     NewQuaternionEmpty(),
+		qRotation:    NewQuaternionEmpty(),
+		qYaw:         NewQuaternionEmpty(),
+		qTilt:        NewQuaternionEmpty(),
 	}
-	r.rotation.SetIdentity()
+	r.qRotation.SetIdentity()
 	r.rebuild()
 	return r
 }
@@ -55,20 +59,20 @@ func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
 // SetRotationQuaternion sets the orientation using a quaternion (x, y, z, w).
 // The quaternion is normalized before being stored.
 func (r *BoundingBox) SetRotationQuaternion(x, y, z, w float64) {
-	r.rotation.Set(x, y, z, w)
-	r.rotation.Normalize()
+	r.qRotation.Set(x, y, z, w)
+	r.qRotation.Normalize()
 	r.rebuild()
 }
 
 // SetRotationAngleZ sets the orientation to a rotation around the world Z axis by angleRad radians.
 func (r *BoundingBox) SetRotationAngleZ(angleRad float64) {
-	r.rotation.SetAxisAngle(0, 0, 1, angleRad)
+	r.qRotation.SetAxisAngle(0, 0, 1, angleRad)
 	r.rebuild()
 }
 
 // SetRotationEuler sets the orientation from roll (X), pitch (Y), and yaw (Z) angles in radians.
 func (r *BoundingBox) SetRotationEuler(rollX, pitchY, yawZ float64) {
-	r.rotation.SetEulerZYX(rollX, pitchY, yawZ)
+	r.qRotation.SetEulerZYX(rollX, pitchY, yawZ)
 	r.rebuild()
 }
 
@@ -79,12 +83,22 @@ func (r *BoundingBox) SyncRotation() {
 
 // GetRotationQuaternion returns the orientation in x, y, z, w order.
 func (r *BoundingBox) GetRotationQuaternion() (float64, float64, float64, float64) {
-	return r.rotation.Get()
+	return r.qRotation.Get()
 }
 
-// GetQuaternion returns a pointer to the internal orientation Quaternion.
-func (r *BoundingBox) GetQuaternion() *Quaternion {
-	return r.rotation
+// GetQRotation returns a pointer to the internal orientation Quaternion.
+func (r *BoundingBox) GetQRotation() *Quaternion {
+	return r.qRotation
+}
+
+// GetQYaw returns the yaw rotation quaternion for the bounding box.
+func (r *BoundingBox) GetQYaw() *Quaternion {
+	return r.qYaw
+}
+
+// GetQTilt returns the tilt quaternion for the bounding box.
+func (r *BoundingBox) GetQTilt() *Quaternion {
+	return r.qTilt
 }
 
 // GetAxes returns the three orthonormal local axes (X, Y, Z) in world space.
@@ -146,7 +160,7 @@ func (r *BoundingBox) rebuild() {
 func (r *BoundingBox) updateAxes() {
 	r.axis[0][0], r.axis[0][1], r.axis[0][2],
 		r.axis[1][0], r.axis[1][1], r.axis[1][2],
-		r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.rotation.ToAxes()
+		r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.qRotation.ToAxes()
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.
@@ -197,6 +211,50 @@ func (r *BoundingBox) GetBottomCenter() (float64, float64, float64) {
 // GetCenter returns the geometric center.
 func (r *BoundingBox) GetCenter() (float64, float64, float64) {
 	return r.center.x, r.center.y, r.center.z
+}
+
+const maxTiltSin = 0.30
+
+var _maxTiltSin = math.Asin(maxTiltSin)
+
+func (r *BoundingBox) Rotate(wx, wy, wz float64, dt float64) bool {
+	qBB := r.qRotation
+	qBB.IntegrateAngular(wx, wy, wz, dt)
+	r.SyncRotation()
+	reset := false
+	// Clamp maximum tilt angle (~18 degrees) so objects rock dynamically when hit
+	// without ever flipping sideways/upside-down or getting stuck in an unnatural pose.
+	a2Post0, a2Post1, a2Post2 := r.axis[2][0], r.axis[2][1], r.axis[2][2]
+	tiltSin := math.Hypot(a2Post0, a2Post1)
+
+	if tiltSin > maxTiltSin || a2Post2 < 0.95 {
+		qYaw := r.qYaw
+		qTilt := r.qTilt
+		yaw := r.GetYaw()
+		qYaw.Set(0, 0, 0, 0)
+		qTilt.Set(0, 0, 0, 0)
+		qYaw.SetAxisAngle(0.0, 0.0, 1.0, yaw)
+		var txAxis, tyAxis float64
+		if tiltSin > 1e-6 {
+			txAxis = -a2Post1 / tiltSin
+			tyAxis = a2Post0 / tiltSin
+		} else {
+			txAxis = 1.0
+		}
+
+		qTilt.SetAxisAngle(txAxis, tyAxis, 0.0, _maxTiltSin)
+		qTilt.Multiplies(qYaw, qBB)
+		qBB.Normalize()
+		r.SyncRotation()
+		// Zero outward Roll/Pitch angular velocity
+		if wx*txAxis+wy*tyAxis > 0.0 {
+			reset = true
+		}
+	} else if tiltSin < 0.005 && math.Abs(wx) < 0.05 && math.Abs(wy) < 0.05 {
+		r.SetRotationAngleZ(r.GetYaw())
+		reset = true
+	}
+	return reset
 }
 
 // SetSize updates the dimensions and derived data.

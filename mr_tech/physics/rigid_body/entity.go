@@ -104,7 +104,7 @@ func (e *Entity) SyncRotation() {
 // using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	cx, cy, cz := e.BoundingBox.GetCenter()
-	hx, hy, hz := e.GetSizeCenter()
+	hx, hy, hz := e.BoundingBox.GetSizeCenter()
 	a00, a01, a02, a10, a11, a12, a20, a21, a22 := e.GetAxes()
 
 	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz, hx, hy, hz, a00, a01, a02, a10, a11, a12, a20, a21, a22)
@@ -112,49 +112,11 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
 func (e *Entity) Update() {
-	if e.GetInvMass() == 0.0 {
-		e.Cinematic.UpdateCommit()
-		return
-	}
-
-	e.Cinematic.UpdatePrepare(e.GetAxes2())
-
-	e.Cinematic.UpdateCommit()
-
-	if e.IsRotating() || e.isTilted {
-		q := e.BoundingBox.GetQuaternion()
-		q.IntegrateAngular(e.wx, e.wy, e.wz, e.GetDt())
-		e.SyncRotation()
-
-		// Clamp maximum tilt angle (~18 degrees) so objects rock dynamically when hit
-		// without ever flipping sideways/upside-down or getting stuck in an unnatural pose.
-		a2Post0, a2Post1, a2Post2 := e.GetAxes2()
-		tiltSin := math.Hypot(a2Post0, a2Post1)
-		const maxTiltSin = 0.30
-		if tiltSin > maxTiltSin || a2Post2 < 0.95 {
-			yaw := e.GetYaw()
-			var qYaw, qTilt aabb.Quaternion
-			qYaw.SetAxisAngle(0.0, 0.0, 1.0, yaw)
-			var txAxis, tyAxis float64
-			if tiltSin > 1e-6 {
-				txAxis = -a2Post1 / tiltSin
-				tyAxis = a2Post0 / tiltSin
-			} else {
-				txAxis = 1.0
-			}
-			qTilt.SetAxisAngle(txAxis, tyAxis, 0.0, math.Asin(maxTiltSin))
-			qTilt.Multiplies(&qYaw, q)
-			q.Normalize()
-			e.SyncRotation()
-			// Zero outward Roll/Pitch angular velocity
-			if e.wx*txAxis+e.wy*tyAxis > 0.0 {
-				e.wx = 0.0
-				e.wy = 0.0
-			}
-		} else if tiltSin < 0.005 && math.Abs(e.wx) < 0.05 && math.Abs(e.wy) < 0.05 {
+	e.Cinematic.Update(e.BoundingBox.GetAxes2())
+	if e.Cinematic.GetInvMass() > 0.0 && (e.Cinematic.IsRotating() || e.Cinematic.IsTilted()) {
+		if e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt()) {
 			e.wx = 0.0
 			e.wy = 0.0
-			e.SetRotationAngleZ(e.GetYaw())
 		}
 	}
 }
@@ -162,15 +124,15 @@ func (e *Entity) Update() {
 // ResolveImpact resolves a 6-DoF collision impact with another entity using the supplied collision normal,
 // computing the contact manifold point on the OBBs and applying both linear and rotational impulses.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
-	cx1, cy1, cz1 := e.GetCenter()
-	ex1, ey1, ez1 := e.GetOrientedHalfExtents()
+	cx1, cy1, cz1 := e.BoundingBox.GetCenter()
+	ex1, ey1, ez1 := e.BoundingBox.GetOrientedHalfExtents()
 
 	var r1x, r1y, r1z float64
 	var r2x, r2y, r2z float64
 
 	if e2.GetInvMass() > 0.0 {
-		cx2, cy2, cz2 := e2.GetCenter()
-		ex2, ey2, ez2 := e2.GetOrientedHalfExtents()
+		cx2, cy2, cz2 := e2.BoundingBox.GetCenter()
+		ex2, ey2, ez2 := e2.BoundingBox.GetOrientedHalfExtents()
 
 		minX := math.Max(cx1-ex1, cx2-ex2)
 		maxX := math.Min(cx1+ex1, cx2+ex2)

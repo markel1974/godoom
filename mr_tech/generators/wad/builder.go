@@ -37,10 +37,10 @@ const ScaleHThings = 1.0
 const GForce = 9.8 * 50
 
 // playerHeight defines the height of a player entity in game units, used for calculations related to geometry and physics.
-const playerHeight = 62.0
+const playerHeight = 46.0
 
 // playerRadius defines the constant radius of the player character used for collision detection and bounding operations.
-const playerRadius = 30
+const playerRadius = 20
 
 // playerSpeed defines the constant speed value for the player, represented in units per second.
 const playerSpeed = 1800
@@ -76,21 +76,38 @@ func NewBuilder() *Builder {
 }
 
 // Build generates a Root configuration by loading level data from a WAD file and populating sectors, things, and player.
-func (bld *Builder) Build(fs common.IResources, wadFile string, levelNumber int) (*config.Root, error) {
+func (bld *Builder) Build(fs common.IResources, inFile2 string, levelNumber int) (*config.Root, error) {
+
+	parts := strings.Split(inFile2, "||")
+	wadFile := parts[0]
+	var wadLevelFile string
+	if len(parts) > 1 {
+		wadLevelFile = parts[1]
+	}
 	wad := New()
 	if err := wad.Load(fs, wadFile); err != nil {
 		return nil, err
 	}
+	wadLevel := wad
+	if len(wadLevelFile) > 0 {
+		iWadFile := wadLevelFile
+		wadLevel = New()
+		if err := wadLevel.Load(fs, iWadFile); err != nil {
+			fmt.Printf("can't find iWad:%q\n", err)
+		}
+	}
+
 	levelIdx := levelNumber - 1
-	levelNames := wad.GetLevels()
+	levelNames := wadLevel.GetLevels()
 	if levelIdx < 0 || levelIdx >= len(levelNames) {
 		return nil, fmt.Errorf("invalid level number: %d", levelIdx)
 	}
 	levelName := levelNames[levelIdx]
-	level, err := wad.GetLevel(levelName)
+	level, err := wadLevel.GetLevel(levelName)
 	if err != nil {
 		return nil, err
 	}
+
 	texHandler := wad.CreateTextures()
 
 	vertexes := make(geometry.Polygon, len(level.Vertexes))
@@ -306,7 +323,8 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.Flash.Falloff = 2000
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
-	player.Bobbing.SwayScale = 2.0
+
+	player.Bobbing.SwayScale = 1.0
 	player.Bobbing.SwayOffsetX = 20
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = playerHeight * 0.15

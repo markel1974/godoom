@@ -38,7 +38,7 @@ func NewLumpInfos(f io.ReadSeekCloser) ([]*LumpInfo, error) {
 	if err := binary.Read(f, binary.LittleEndian, header); err != nil {
 		return nil, err
 	}
-	if string(header.Magic[:]) != "IWAD" {
+	if string(header.Magic[:]) != "IWAD" && string(header.Magic[:]) != "PWAD" {
 		return nil, fmt.Errorf("bad magic: %s\n", header.Magic)
 	}
 

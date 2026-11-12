@@ -77,7 +77,7 @@ func NewBuilder() *Builder {
 
 // Build generates a Root configuration by loading level data from a WAD file and populating sectors, things, and player.
 func (bld *Builder) Build(fs common.IResources, inFile2 string, levelNumber int) (*config.Root, error) {
-
+	const difficulty = 2
 	parts := strings.Split(inFile2, "||")
 	wadFile := parts[0]
 	var wadLevelFile string
@@ -142,7 +142,15 @@ func (bld *Builder) Build(fs common.IResources, inFile2 string, levelNumber int)
 
 	var things []*config.Thing
 	for i, lThing := range level.Things {
-		if lThing.Type == 1 || lThing.Type == 2 || lThing.Type == 3 || lThing.Type == 4 || lThing.Type == 11 {
+		kind := lThing.GetType()
+		if kind == lumps.ThingTypePlayer1Start ||
+			kind == lumps.ThingTypePlayer2Start ||
+			kind == lumps.ThingTypePlayer3Start ||
+			kind == lumps.ThingTypePlayer4Start ||
+			kind == lumps.ThingTypeDeathmatchStart {
+			continue
+		}
+		if !lThing.IsLevelAvailable(difficulty) {
 			continue
 		}
 		thing, tErr := bld.buildThings(lThing, i, texHandler)

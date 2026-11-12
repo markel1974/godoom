@@ -1,10 +1,23 @@
 
 
+
+Iterazioni di Rilassamento per Torri/Stacking Multiplo:
+Attualmente la compenetrazione viene risolta in un'unica passata per frame. Se impili 2 oggetti (es. cassa su nemico o cassa su pavimento) funziona perfettamente; se crei torri di 4-5 casse una sopra l'altra, una singola passata può mostrare una leggera compressione "spugnosa" alla base. Aggiungere 2 o 3 sub-iterazioni nel ciclo di push-out renderebbe le pile alte rigide al 100%.
+
+
+Sleeping State Formale (IsSleeping):
+Quando una cassa o un nemico morto è fermo da più di N frame sotto la soglia di velocità (vMin), metterlo in modalità "sonno" permetterebbe di saltare i calcoli fisici dettagliati finché un altro oggetto in movimento non lo tocca o non si muove il supporto sottostante.
+
+
+Punti di Contatto Multipli (Contact Manifold):
+Al momento il punto di contatto tra due OBB viene stimato con il centro e gli half-extents orientati. La stabilizzazione verticale (upright stabilization) fa già un lavoro eccellente per evitare che i corpi si ribaltino in modo anomalo; un manifold a 2-4 punti sarebbe lo step successivo solo se volessi simulare bilanciamenti precisi di assi o travi in bilico su uno spigolo.
+
+
+
 A. Risposta agli impatti
 
 In Cinematic.ResolveImpact() utilizzi:
 actualRestitution := e2.restitution
-
 
 Quindi il coefficiente di restituzione dipende esclusivamente dal secondo corpo. Scambiando l'ordine dei due oggetti, il risultato può cambiare.
 

@@ -1,12 +1,11 @@
-package volumes
+package physics
 
 import (
 	"fmt"
-	"strings"
 )
 
-// linkInvalidIndex marks a link as disconnected or without a valid parent.
-const linkInvalidIndex = -1
+// LinkInvalidIndex marks a link as disconnected or without a valid parent.
+const LinkInvalidIndex = -1
 
 // Defines DFS traversal states used to track node visitation progress.
 const (
@@ -14,39 +13,6 @@ const (
 	dfsVisiting  = 1
 	dfsVisited   = 2
 )
-
-// Link represents a hierarchical attachment from a model part to its parent through a tag.
-type Link struct {
-	parent   int
-	tag      string
-	tagIndex int
-}
-
-// NewLink creates a link to the specified parent element and tag.
-func NewLink(parent int, tag string) *Link {
-	return &Link{
-		parent:   parent,
-		tag:      tag,
-		tagIndex: linkInvalidIndex,
-	}
-}
-
-// Invalidate disconnects the link by clearing its parent and tag.
-func (vl *Link) Invalidate() {
-	vl.parent = linkInvalidIndex
-	vl.tag = ""
-	vl.tagIndex = linkInvalidIndex
-}
-
-// SetTagIndex sets the tag index value for the Link object to the specified integer.
-func (vl *Link) SetTagIndex(i int) {
-	vl.tagIndex = i
-}
-
-// GetTagIndex returns the current tag index value of the Link instance.
-func (vl *Link) GetTagIndex() int {
-	return vl.tagIndex
-}
 
 // Links manages hierarchical parent connections and update ordering for linked 3D model parts.
 type Links struct {
@@ -87,7 +53,7 @@ func (ls *Links) Setup(links []*Link) error {
 	invalidIndices := make([]int, numParts)
 
 	for k := range invalidIndices {
-		invalidIndices[k] = linkInvalidIndex
+		invalidIndices[k] = LinkInvalidIndex
 	}
 
 	for i := 0; i < numParts; i++ {
@@ -147,6 +113,16 @@ func (ls *Links) Setup(links []*Link) error {
 	return nil
 }
 
+// ExecutionOrderLen returns the number of elements in the execution order slice.
+func (ls *Links) ExecutionOrderLen() int {
+	return len(ls.executionOrder)
+}
+
+// ExecutionOrderAt returns the execution order index at the specified position in the execution order list.
+func (ls *Links) ExecutionOrderAt(idx int) int {
+	return ls.executionOrder[idx]
+}
+
 // Invalidate disconnects the link at index i by clearing its parent and tag.
 // It does nothing when i is outside the stored link range.
 func (ls *Links) Invalidate(i int) {
@@ -160,7 +136,7 @@ func (ls *Links) GetParent(i int) int {
 	if i >= 0 && i < len(ls.data) {
 		return ls.data[i].parent
 	}
-	return linkInvalidIndex
+	return LinkInvalidIndex
 }
 
 // HasParent reports whether i is within the stored link range.
@@ -174,7 +150,7 @@ func (ls *Links) HasParent(i int) bool {
 // GetTag returns the lowercase tag for i, or an empty string when i is out of range.
 func (ls *Links) GetTag(i int) string {
 	if i >= 0 && i < len(ls.data) {
-		return strings.ToLower(ls.data[i].tag)
+		return ls.data[i].tag
 	}
 	return ""
 }
@@ -184,5 +160,5 @@ func (ls *Links) GetTagIndex(i int) int {
 	if i >= 0 && i < len(ls.data) {
 		return ls.data[i].GetTagIndex()
 	}
-	return linkInvalidIndex
+	return LinkInvalidIndex
 }

@@ -14,9 +14,9 @@ import (
 type Vertices3D struct {
 	actions       *Vertices3DActions
 	currentAction int
-	links         *Links
+	links         *physics.Links
 	elements      *Vertices3DElements
-	joints        *Joints
+	joints        *physics.Joints
 	minX          float64
 	minY          float64
 	minZ          float64
@@ -29,8 +29,8 @@ type Vertices3D struct {
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
-		links:         NewLinks(),
-		joints:        NewJoints(),
+		links:         physics.NewLinks(),
+		joints:        physics.NewJoints(),
 		elements:      NewVertices3DElements(),
 		actions:       NewVertices3DActions(),
 		currentAction: -1,
@@ -109,7 +109,9 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 	}
 	v.currentAction = idx
 	enteringRagdoll := false
-	for _, i := range v.links.executionOrder {
+	eoLen := v.links.ExecutionOrderLen()
+	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
+		i := v.links.ExecutionOrderAt(eoIdx)
 		el := v.elements.GetEntry(i)
 		if el == nil {
 			continue
@@ -150,7 +152,10 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 
-	for _, i := range v.links.executionOrder {
+	eoLen := v.links.ExecutionOrderLen()
+	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
+		i := v.links.ExecutionOrderAt(eoIdx)
+
 		v.elements.Bind(i, tick)
 
 		if i > 0 && v.joints.IsDetached(i) {
@@ -167,7 +172,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 				} else {
 					tagIdx := v.links.GetTagIndex(i)
 					if tagIdx < 0 {
-						fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.data[i].tag, pIdx, i)
+						fmt.Printf("[warning] Vertices3D: missing tag %q on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", v.links.GetTag(i), pIdx, i)
 						v.joints.Reset(i, pIdx)
 					} else {
 						tagAxisA := volA.GetVertexTag(tagIdx)
@@ -220,95 +225,86 @@ func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
 }
 
-func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*Joint, error) {
+func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*physics.Joint, error) {
 	numParts := len(cfg.Parts)
-	joints := make([]*Joint, numParts)
+	joints := make([]*physics.Joint, numParts)
 	for i := 0; i < numParts; i++ {
 		element := elements.GetEntry(i)
 		if element == nil {
 			return nil, fmt.Errorf("entry %d is nil", i)
 		}
-		j := NewJoint(element)
+		// TODO FROM CONFIG default partRadius
+		j := physics.NewJoint2(element, 8.0)
 		joints[i] = j
-		j.quat.SetIdentity()
-		j.detQuat.SetIdentity()
-		j.axis.Reset()
-		j.combinedA.Reset()
-		j.combinedB.Reset()
-		//TODO FROM CONFIG
-		j.partRadius = 8.0
 
 		if vol := element.volumes[0]; vol != nil {
-			fc := vol.GetFaceCount()
-			if fc > 0 {
+			if fc := vol.GetFaceCount(); fc > 0 {
 				minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 				maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 				for fIdx := 0; fIdx < fc; fIdx++ {
 					f := vol.GetFace(fIdx)
 					minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 				}
-				j.localCenterX = (minX + maxX) * 0.5
-				j.localCenterY = (minY + maxY) * 0.5
-				j.localCenterZ = (minZ + maxZ) * 0.5
-				dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
-				r := math.Max(dx, math.Max(dy, dz)) * 0.5
-				j.partRadius = math.Max(4.0, math.Min(48.0, r))
+				j.SetLocalCenter(minX, minY, minZ, maxX, maxY, maxZ)
 			}
 		}
-
 		if i == 0 || v.links.GetParent(i) < 0 {
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
-			j.maxAngleAlive = 0
-			j.maxAngleRagdoll = 0
-			j.stiffness = 80.0
-			j.damping = 10.0
-			j.canDetach = false
+			j.SetDofScale(0, 0, 0)
+			j.SetMaxAngleAlive(0)
+			j.SetMaxAngleRagdoll(0)
+			j.SetStiffness(80.0)
+			j.SetDamping(10.0)
+			j.SetCanDetach(false)
 		} else {
 			tag := v.links.GetTag(i)
 			z := cfg.Joints.Get(tag)
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = z.DofScale.X, z.DofScale.Y, z.DofScale.Z
-			j.maxAngleAlive = z.MaxAngleAlive
-			j.maxAngleRagdoll = z.MaxAngleRagdoll
-			j.stiffness = z.Stiffness
-			j.damping = z.Damping
-			j.detachThreshold = z.DetachThreshold
-			j.canDetach = z.CanDetach
+			j.SetDofScale(z.DofScale.X, z.DofScale.Y, z.DofScale.Z)
+			j.SetMaxAngleAlive(z.MaxAngleAlive)
+			j.SetMaxAngleRagdoll(z.MaxAngleRagdoll)
+			j.SetStiffness(z.Stiffness)
+			j.SetDamping(z.Damping)
+			j.SetDetachThreshold(z.DetachThreshold)
+			j.SetCanDetach(z.CanDetach)
 		}
 	}
 	return joints, nil
 }
 
-func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*Link, error) {
+// createConfigLinks creates and initializes physics.Link objects for each part in the given config.Model3D structure.
+// Returns the created links or an error if initialization fails.
+func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*physics.Link, error) {
 	numParts := len(cfg.Parts)
-	links := make([]*Link, numParts)
+	links := make([]*physics.Link, numParts)
 	for i := 0; i < numParts; i++ {
-		parent, tag := linkInvalidIndex, ""
+		parent, tag := physics.LinkInvalidIndex, ""
 		if i < len(cfg.Links) {
 			parent, tag = cfg.Links[i].Parent, cfg.Links[i].Tag
 		}
-		link := NewLink(parent, tag)
+		link := physics.NewLink(parent, tag)
 		links[i] = link
-		if link.parent < 0 {
+		lParent := link.GetParent()
+		if lParent < 0 {
 			continue
 		}
-		element := v.elements.GetEntry(link.parent)
+		element := v.elements.GetEntry(lParent)
 		if element == nil {
-			fmt.Printf("[warning] Vertices3D: parent %d not found for part %d, inheriting parent origin and rotation without tag offset\n", link.parent, i)
+			fmt.Printf("[warning] Vertices3D: parent %d not found for part %d, inheriting parent origin and rotation without tag offset\n", lParent, i)
 			continue
 		}
-		tagIdx := element.GetTagIndex(link.tag)
+		lTag := link.GetTag()
+		tagIdx := element.GetTagIndex(lTag)
 		if tagIdx < 0 {
-			fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, link.parent, i)
+			fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", lTag, lParent, i)
 			continue
 		}
 		link.SetTagIndex(tagIdx)
 		for frameIdx, vol := range element.volumes {
 			if vol == nil {
-				fmt.Printf("[warning] Vertices3D: volume not found in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", frameIdx, link.parent, i)
+				fmt.Printf("[warning] Vertices3D: volume not found in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", frameIdx, lParent, i)
 				continue
 			}
 			if !vol.HasVertexTag(tagIdx) {
-				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, tagIdx, frameIdx, link.parent, i)
+				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", lTag, tagIdx, frameIdx, lParent, i)
 				continue
 			}
 		}

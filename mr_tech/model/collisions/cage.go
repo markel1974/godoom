@@ -229,6 +229,18 @@ func (s *Cage) Commit(rCage *Cage) {
 			}
 		}
 
+		// Floor support detection: resting contacts within ground tolerance maintain hasFloor = true
+		const floorGroundTolerance = 0.25
+		if b == BucketFloor {
+			if dist <= floorGroundTolerance {
+				s.hasFloor = true
+			}
+		} else if b == BucketCeiling {
+			if rCage != nil && dist <= floorGroundTolerance {
+				rCage.hasFloor = true
+			}
+		}
+
 		if pen <= 0 {
 			continue
 		}
@@ -537,14 +549,18 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, of
 	rMinZ := rFaceAABB.GetMinZ() + offZ
 	rMaxZ := rFaceAABB.GetMaxZ() + offZ
 
+	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
+	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
+	if oX <= 0 || oY <= 0 {
+		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+	}
+
 	if penetration <= 0 {
 		return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
-	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
 	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
-	if oX <= 0 || oY <= 0 || oZ <= 0 {
+	if oZ <= 0 {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
@@ -817,12 +833,13 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *vo
 			matchedAxis = true
 		}
 	} else {
-		if activeZ && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
+		const contactSlop = 0.25
+		if (activeZ || (!sweptMode && boxOX > 0 && boxOY > 0 && boxOZ >= -contactSlop)) && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
 			axisOverlap = pickOverlap(entryOZ, boxOZ)
 			matchedAxis = true
 		}
 	}
-	if !matchedAxis || axisOverlap <= 0 {
+	if !matchedAxis || axisOverlap < -0.25 {
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 

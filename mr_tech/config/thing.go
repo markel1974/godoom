@@ -33,6 +33,8 @@ type IThingConfig interface {
 
 	SetAngle(angle float64)
 
+	SetMaxStep(maxStep float64)
+
 	GetAcceleration() float64
 
 	GetMaxStep() float64

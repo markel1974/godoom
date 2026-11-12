@@ -80,8 +80,10 @@ type Cinematic struct {
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
 // Mass and restitution values are clamped to ensure physical validity. Returns a pointer to the initialized Cinematic.
 func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64) *Cinematic {
-	if restitution <= 0.0 {
-		restitution = 0.2
+	if restitution < 0.0 {
+		restitution = 0.0
+	} else if restitution > 1.0 {
+		restitution = 1.0
 	}
 	if groundFriction <= 0.0 {
 		groundFriction = 0.2
@@ -407,7 +409,16 @@ func (e *Cinematic) Update() {
 
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
-	e.vz += (e.az - e.gForce) * e.dt // gravity always acts unconditionally
+	if e.onGround {
+		if e.vz < 0.0 {
+			e.vz = 0.0
+		}
+		if e.az > 0.0 {
+			e.vz += e.az * e.dt
+		}
+	} else {
+		e.vz += (e.az - e.gForce) * e.dt
+	}
 
 	// reset accumulator
 	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
@@ -432,7 +443,7 @@ func (e *Cinematic) Update() {
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
-	if e.onGround && math.Abs(e.vz) < e.vMin {
+	if e.onGround && e.vz <= 0.0 {
 		e.vz = 0.0
 	}
 	// terminal velocity clamping
@@ -505,12 +516,17 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz, r1x, r1y, r1z, r2x,
 	}
 
 	// restitution with threshold (micro-bounce slop)
-	actualRestitution := e2.restitution
-	if actualRestitution != 0 {
-		const restitutionSlop = 0.5
-		if math.Abs(vRelDotN) < restitutionSlop {
+	actualRestitution := e.restitution * e2.restitution
+	if math.Abs(actualRestitution) > 1e-6 {
+		restitutionSlop := 2.0 * math.Max(e.gForce, e2.gForce) * e.dt
+		if restitutionSlop < 2.0 {
+			restitutionSlop = 2.0
+		}
+		if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > defaultPenetrationDepth) || (e2.onGround && nz < -defaultPenetrationDepth) {
 			actualRestitution = 0.0
 		}
+	} else {
+		actualRestitution = 0.0
 	}
 
 	// normal impulse including rotational inertia denominator K_n

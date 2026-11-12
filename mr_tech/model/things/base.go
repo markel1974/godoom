@@ -168,6 +168,11 @@ func (t *Base) SetActive(active bool) {
 	t.isActive = active
 }
 
+// SetMaxStep sets the maximum step value for the Base instance, which determines the allowable step height.
+func (t *Base) SetMaxStep(maxStep float64) {
+	t.maxStep = maxStep
+}
+
 // IsVisible determines whether the Base instance is currently visible, returning true if it is visible.
 func (t *Base) IsVisible() bool {
 	return true

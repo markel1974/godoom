@@ -1,0 +1,64 @@
+
+
+A. Risposta agli impatti
+
+In Cinematic.ResolveImpact() utilizzi:
+actualRestitution := e2.restitution
+
+
+Quindi il coefficiente di restituzione dipende esclusivamente dal secondo corpo. Scambiando l'ordine dei due oggetti, il risultato può cambiare.
+
+Valuterei una regola di mixing simmetrica, oppure una proprietà esplicita del materiale di contatto.
+
+B. Punto di contatto tra OBB
+
+In Entity.ResolveImpact() ricavi il punto di contatto attraverso l'intersezione degli intervalli degli AABB globali.
+
+È una buona approssimazione per alcuni casi, ma non equivale a un vero contact manifold tra due OBB.
+
+Hai già implementato il SAT a 15 assi per stabilire l'intersezione geometrica. Il passo successivo sarebbe utilizzare anche l'asse di separazione minimo e ricavare un punto di contatto coerente con le superfici coinvolte.
+
+Questo migliorerebbe soprattutto la distribuzione degli impulsi rotazionali.
+
+C. Bilanciamento dell'albero AABB
+
+La strategia di inserimento usa il costo delle superfici per scegliere il ramo. È una buona euristica.
+
+Vorrei però verificare fino in fondo il comportamento dell'albero sotto carichi dinamici prolungati: un albero che continua a ricevere aggiornamenti e reinserimenti può diventare progressivamente sbilanciato.
+
+Il costo di inserimento non sostituisce necessariamente le rotazioni di bilanciamento.
+
+D. Integrazione temporale
+
+Hai un dt associato a Cinematic, un FPS globale e un tick specifico per Joints.
+
+La cosa che renderei rigorosa è l'esistenza di un unico riferimento temporale per tutti i sottosistemi, preferibilmente attraverso un timestep fisso indipendente dal framerate del rendering.
+
+Questo è importante soprattutto quando collisioni, ragdoll e corpi rigidi interagiscono nello stesso frame.
+6. Il punto architetturale più importante
+Secondo me devi distinguere due cose.
+
+Il tuo sistema attuale è già un motore di simulazione fisica personalizzato, ma non è ancora un motore general-purpose paragonabile, per completezza delle funzionalità, a Bullet o PhysX.
+
+Non lo considero un difetto.
+
+Per il tuo progetto, avere un sistema specializzato che conosce:
+- OBB e AABB;
+- le unità spaziali del motore;
+- la gerarchia dei modelli;
+- le articolazioni;
+- gli impatti;
+- il comportamento degli oggetti di gioco;
+può essere molto più vantaggioso che introdurre un framework esterno.
+
+Ci sono però alcune cose che sistemerei prima di considerarlo maturo:
+Area	Valutazione
+Modello matematico 3D	Buono
+Dinamica traslazionale	Buona
+Dinamica rotazionale	Buona base
+Collision detection OBB	Buona
+Risposta agli impatti	Da perfezionare
+Broadphase AABB	Buona base
+Ragdoll articolare	Molto interessante
+Stabilità numerica	Da verificare sistematicamente
+Architettura	Buona

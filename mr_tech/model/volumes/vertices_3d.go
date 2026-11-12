@@ -39,13 +39,20 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		panic("Error setting up vertices elements: " + err.Error())
 	}
 
-	configLinks := v.createConfigLinks(cfg.Model3D)
-
-	if err := v.links.Setup(configLinks); err != nil {
-		panic("Error setting up vertices elements: " + err.Error())
+	configLinks, cErr := v.createConfigLinks(cfg.Model3D)
+	if cErr != nil {
+		panic("Error setting up config links elements: " + cErr.Error())
 	}
-	if err := v.joints.Setup(cfg.Model3D, v.elements.vVolume.entity, v.elements, v.links); err != nil {
-		panic("Error setting up vertices elements: " + err.Error())
+	if err := v.links.Setup(configLinks); err != nil {
+		panic("Error setting up links elements: " + err.Error())
+	}
+
+	configJoints, cErr := v.createConfigJoints(cfg.Model3D, v.elements)
+	if cErr != nil {
+		panic("Error setting up config joints elements: " + cErr.Error())
+	}
+	if err := v.joints.Setup(v.elements.vVolume.entity, configJoints, v.links); err != nil {
+		panic("Error setting up joints elements: " + err.Error())
 	}
 	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
 		panic("Error setting up vertices elements: " + err.Error())
@@ -213,9 +220,68 @@ func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
 }
 
-func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) []*Link {
-	links := make([]*Link, v.elements.Len())
-	for i := 0; i < v.elements.Len(); i++ {
+func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*Joint, error) {
+	numParts := len(cfg.Parts)
+	joints := make([]*Joint, numParts)
+	for i := 0; i < numParts; i++ {
+		element := elements.GetEntry(i)
+		if element == nil {
+			return nil, fmt.Errorf("entry %d is nil", i)
+		}
+		j := NewJoint(element)
+		joints[i] = j
+		j.quat.SetIdentity()
+		j.detQuat.SetIdentity()
+		j.axis.Reset()
+		j.combinedA.Reset()
+		j.combinedB.Reset()
+		//TODO FROM CONFIG
+		j.partRadius = 8.0
+
+		if vol := element.volumes[0]; vol != nil {
+			fc := vol.GetFaceCount()
+			if fc > 0 {
+				minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+				maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+				for fIdx := 0; fIdx < fc; fIdx++ {
+					f := vol.GetFace(fIdx)
+					minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+				}
+				j.localCenterX = (minX + maxX) * 0.5
+				j.localCenterY = (minY + maxY) * 0.5
+				j.localCenterZ = (minZ + maxZ) * 0.5
+				dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
+				r := math.Max(dx, math.Max(dy, dz)) * 0.5
+				j.partRadius = math.Max(4.0, math.Min(48.0, r))
+			}
+		}
+
+		if i == 0 || v.links.GetParent(i) < 0 {
+			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
+			j.maxAngleAlive = 0
+			j.maxAngleRagdoll = 0
+			j.stiffness = 80.0
+			j.damping = 10.0
+			j.canDetach = false
+		} else {
+			tag := v.links.GetTag(i)
+			z := cfg.Joints.Get(tag)
+			j.dofScaleX, j.dofScaleY, j.dofScaleZ = z.DofScale.X, z.DofScale.Y, z.DofScale.Z
+			j.maxAngleAlive = z.MaxAngleAlive
+			j.maxAngleRagdoll = z.MaxAngleRagdoll
+			j.stiffness = z.Stiffness
+			j.damping = z.Damping
+			j.detachThreshold = z.DetachThreshold
+			j.canDetach = z.CanDetach
+		}
+	}
+	return joints, nil
+}
+
+func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*Link, error) {
+	numParts := len(cfg.Parts)
+	links := make([]*Link, numParts)
+	for i := 0; i < numParts; i++ {
 		parent, tag := linkInvalidIndex, ""
 		if i < len(cfg.Links) {
 			parent, tag = cfg.Links[i].Parent, cfg.Links[i].Tag
@@ -247,5 +313,5 @@ func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) []*Link {
 			}
 		}
 	}
-	return links
+	return links, nil
 }

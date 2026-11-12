@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics"
 )
 
-type IElements interface {
+type IElement interface {
 	FreezeCurrentFrame()
 }
 
 // Joint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
 type Joint struct {
+	elem            IElement
 	localCenterX    float64
 	localCenterY    float64
 	localCenterZ    float64
@@ -62,8 +62,9 @@ type Joint struct {
 }
 
 // NewJoint creates a Joint with identity orientation quaternions and axes.
-func NewJoint() *Joint {
+func NewJoint(elem IElement) *Joint {
 	return &Joint{
+		elem:      elem,
 		quat:      physics.NewQuaternionIdentity(),
 		detQuat:   physics.NewQuaternionIdentity(),
 		axis:      physics.NewTagAxisIdentity(),
@@ -265,7 +266,7 @@ type Joints struct {
 	originsB []geometry.XYZ
 	numParts int
 
-	elems []IElements
+	//elems []IElements
 
 	ent *physics.Entity
 }
@@ -284,74 +285,79 @@ func NewJoints() *Joints {
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Joints) Setup(cfg *config.Model3D, ent *physics.Entity, elements *Vertices3DElements, links *Links) error {
+func (v *Joints) Setup(ent *physics.Entity, configJoints []*Joint, links *Links) error {
 	v.ent = ent
-	v.numParts = elements.Len()
+	v.numParts = len(configJoints)
 	v.links = links
-	v.elems = make([]IElements, v.numParts)
+	//v.elems = make([]IElement, v.numParts)
 	v.rotationsA = make([]*physics.TagAxis, v.numParts)
 	v.rotationsB = make([]*physics.TagAxis, v.numParts)
 	v.data = make([]*Joint, v.numParts)
 
+	copy(v.data, configJoints)
+
 	for i := 0; i < v.numParts; i++ {
-		v.elems[i] = elements.GetEntry(i)
+		//v.elems[i] = elements.GetEntry(i)
 		v.rotationsA[i] = physics.NewTagAxisIdentity()
 		v.rotationsB[i] = physics.NewTagAxisIdentity()
-		v.data[i] = NewJoint()
+		//v.data[i] = NewJoint()
 	}
 
 	v.originsA = make([]geometry.XYZ, v.numParts)
 	v.originsB = make([]geometry.XYZ, v.numParts)
 
-	for i := range v.data {
-		j := v.data[i]
-		j.quat.SetIdentity()
-		j.detQuat.SetIdentity()
-		j.axis.Reset()
-		j.combinedA.Reset()
-		j.combinedB.Reset()
-		//TODO FROM CONFIG
-		j.partRadius = 8.0
+	/*
+		for i := range v.data {
+			j := v.data[i]
+			j.quat.SetIdentity()
+			j.detQuat.SetIdentity()
+			j.axis.Reset()
+			j.combinedA.Reset()
+			j.combinedB.Reset()
+			//TODO FROM CONFIG
+			j.partRadius = 8.0
 
-		if element := elements.GetEntry(i); element != nil {
-			if vol := element.volumes[0]; vol != nil {
-				fc := vol.GetFaceCount()
-				if fc > 0 {
-					minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-					maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-					for fIdx := 0; fIdx < fc; fIdx++ {
-						f := vol.GetFace(fIdx)
-						minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+			if element := elements.GetEntry(i); element != nil {
+				if vol := element.volumes[0]; vol != nil {
+					fc := vol.GetFaceCount()
+					if fc > 0 {
+						minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+						maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+						for fIdx := 0; fIdx < fc; fIdx++ {
+							f := vol.GetFace(fIdx)
+							minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+						}
+						j.localCenterX = (minX + maxX) * 0.5
+						j.localCenterY = (minY + maxY) * 0.5
+						j.localCenterZ = (minZ + maxZ) * 0.5
+						dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
+						r := math.Max(dx, math.Max(dy, dz)) * 0.5
+						j.partRadius = math.Max(4.0, math.Min(48.0, r))
 					}
-					j.localCenterX = (minX + maxX) * 0.5
-					j.localCenterY = (minY + maxY) * 0.5
-					j.localCenterZ = (minZ + maxZ) * 0.5
-					dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
-					r := math.Max(dx, math.Max(dy, dz)) * 0.5
-					j.partRadius = math.Max(4.0, math.Min(48.0, r))
 				}
+			}
+
+			if i == 0 || v.links.GetParent(i) < 0 {
+				j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
+				j.maxAngleAlive = 0
+				j.maxAngleRagdoll = 0
+				j.stiffness = 80.0
+				j.damping = 10.0
+				j.canDetach = false
+			} else {
+				tag := v.links.GetTag(i)
+				z := cfg.Joints.Get(tag)
+				j.dofScaleX, j.dofScaleY, j.dofScaleZ = z.DofScale.X, z.DofScale.Y, z.DofScale.Z
+				j.maxAngleAlive = z.MaxAngleAlive
+				j.maxAngleRagdoll = z.MaxAngleRagdoll
+				j.stiffness = z.Stiffness
+				j.damping = z.Damping
+				j.detachThreshold = z.DetachThreshold
+				j.canDetach = z.CanDetach
 			}
 		}
 
-		if i == 0 || v.links.GetParent(i) < 0 {
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
-			j.maxAngleAlive = 0
-			j.maxAngleRagdoll = 0
-			j.stiffness = 80.0
-			j.damping = 10.0
-			j.canDetach = false
-		} else {
-			tag := v.links.GetTag(i)
-			z := cfg.Joints.Get(tag)
-			j.dofScaleX, j.dofScaleY, j.dofScaleZ = z.DofScale.X, z.DofScale.Y, z.DofScale.Z
-			j.maxAngleAlive = z.MaxAngleAlive
-			j.maxAngleRagdoll = z.MaxAngleRagdoll
-			j.stiffness = z.Stiffness
-			j.damping = z.Damping
-			j.detachThreshold = z.DetachThreshold
-			j.canDetach = z.CanDetach
-		}
-	}
+	*/
 
 	return nil
 }
@@ -462,7 +468,7 @@ func (v *Joints) detachPart(idx int, cx, cy, cz, dirX, dirY, dirZ, fMag float64)
 	v.hasActiveDynamics = true
 	for i := 0; i < v.numParts; i++ {
 		if i == idx || v.IsPartDetached(i) {
-			v.elems[i].FreezeCurrentFrame()
+			v.data[i].elem.FreezeCurrentFrame()
 		}
 	}
 	v.rotationsA[idx].ToQuaternion(j.detQuat)

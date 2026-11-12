@@ -103,147 +103,25 @@ func (e *Entity) SyncRotation() {
 // AddForceAtPoint applies a linear force (fx, fy, fz) at world point (px, py, pz) and generates 3D torque τ = r × F on the OBB
 // using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
-	e.AddForce(fx, fy, fz)
-	if e.GetInvMass() == 0.0 {
-		return
-	}
-	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
-	if fMag <= 1e-9 {
-		return
-	}
-	invF := 1.0 / fMag
-
-	cx, cy, cz := e.GetCenter()
-	r0x, r0y, r0z := px-cx, py-cy, pz-cz
-
+	cx, cy, cz := e.BoundingBox.GetCenter()
 	hx, hy, hz := e.GetSizeCenter()
 	a00, a01, a02, a10, a11, a12, a20, a21, a22 := e.GetAxes()
 
-	// Project impact point and ray direction into OBB local frame
-	plx := r0x*a00 + r0y*a01 + r0z*a02
-	ply := r0x*a10 + r0y*a11 + r0z*a12
-	plz := r0x*a20 + r0y*a21 + r0z*a22
-
-	dlx := (fx*a00 + fy*a01 + fz*a02) * invF
-	dly := (fx*a10 + fy*a11 + fz*a12) * invF
-	dlz := (fx*a20 + fy*a21 + fz*a22) * invF
-
-	// Shift to closest point on the ray to OBB center, clamped within the OBB interior
-	tProj := plx*dlx + ply*dly + plz*dlz
-	plx = math.Max(-hx*0.98, math.Min(hx*0.98, plx-tProj*dlx))
-	ply = math.Max(-hy*0.98, math.Min(hy*0.98, ply-tProj*dly))
-	plz = math.Max(-hz*0.98, math.Min(hz*0.98, plz-tProj*dlz))
-
-	// March backward along -dl to find the exact entry point on the struck OBB face
-	tBack := math.MaxFloat64
-	hitAxis := 0
-	hitSign := 1.0
-	if math.Abs(dlx) > 1e-6 {
-		s := -1.0
-		if dlx < 0 {
-			s = 1.0
-		}
-		if tb := (plx - s*hx) / dlx; tb >= 0.0 && tb < tBack {
-			tBack = tb
-			hitAxis = 0
-			hitSign = s
-		}
-	}
-	if math.Abs(dly) > 1e-6 {
-		s := -1.0
-		if dly < 0 {
-			s = 1.0
-		}
-		if tb := (ply - s*hy) / dly; tb >= 0.0 && tb < tBack {
-			tBack = tb
-			hitAxis = 1
-			hitSign = s
-		}
-	}
-	if math.Abs(dlz) > 1e-6 {
-		s := -1.0
-		if dlz < 0 {
-			s = 1.0
-		}
-		if tb := (plz - s*hz) / dlz; tb >= 0.0 && tb < tBack {
-			tBack = tb
-			hitAxis = 2
-			hitSign = s
-		}
-	}
-	if tBack < math.MaxFloat64 {
-		plx -= tBack * dlx
-		ply -= tBack * dly
-		plz -= tBack * dlz
-	}
-
-	// Reconstruct world-space lever arm r from OBB center to surface entry point
-	rx := a00*plx + a10*ply + a20*plz
-	ry := a01*plx + a11*ply + a21*plz
-	rz := (a02*plx + a12*ply + a22*plz) * 0.25
-
-	// Direct moment of force: τ = r × F
-	tx := ry*fz - rz*fy
-	ty := rz*fx - rx*fz
-	tz := rx*fy - ry*fx
-
-	// Normal pressure moment on the struck OBB face: τ_n = r × F_n
-	var fnX, fnY, fnZ float64
-	switch hitAxis {
-	case 0:
-		fnX, fnY, fnZ = hitSign*a00, hitSign*a01, hitSign*a02
-	case 1:
-		fnX, fnY, fnZ = hitSign*a10, hitSign*a11, hitSign*a12
-	default:
-		fnX, fnY, fnZ = hitSign*a20, hitSign*a21, hitSign*a22
-	}
-	if fDotN := fx*fnX + fy*fnY + fz*fnZ; fDotN < 0.0 {
-		fnFx, fnFy, fnFz := fDotN*fnX, fDotN*fnY, fDotN*fnZ
-		tx += (ry*fnFz - rz*fnFy) * 0.25
-		ty += (rz*fnFx - rx*fnFz) * 0.25
-		tz += rx*fnFy - ry*fnFx
-	}
-
-	e.AddTorque(tx, ty, tz)
+	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz, hx, hy, hz, a00, a01, a02, a10, a11, a12, a20, a21, a22)
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
 func (e *Entity) Update() {
 	if e.GetInvMass() == 0.0 {
-		e.Cinematic.Update()
+		e.Cinematic.UpdateCommit()
 		return
 	}
 
-	a20, a21, a22 := e.GetAxes2()
-	tiltSq := a20*a20 + a21*a21
-	isTilted := tiltSq > 1e-7 || a22 < 0.999999
+	e.Cinematic.UpdatePrepare(e.GetAxes2())
 
-	if isTilted {
-		stiffness := 140.0
-		damping := 16.0
-		if !e.IsOnGround() {
-			stiffness = 60.0
-			damping = 10.0
-		}
-		errX := a21
-		errY := -a20
-		if a22 < 0.0 {
-			lenXY := math.Hypot(errX, errY)
-			if lenXY > 1e-6 {
-				errX /= lenXY
-				errY /= lenXY
-			} else {
-				errX = 1.0
-			}
-		}
-		dt := e.GetDt()
-		e.wx += (errX*stiffness - e.wx*damping) * dt
-		e.wy += (errY*stiffness - e.wy*damping) * dt
-	}
+	e.Cinematic.UpdateCommit()
 
-	e.Cinematic.Update()
-
-	if e.IsRotating() || isTilted {
+	if e.IsRotating() || e.isTilted {
 		q := e.BoundingBox.GetQuaternion()
 		q.IntegrateAngular(e.wx, e.wy, e.wz, e.GetDt())
 		e.SyncRotation()

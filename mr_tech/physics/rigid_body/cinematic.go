@@ -4,19 +4,6 @@ import (
 	"math"
 )
 
-/*
-Limiti Matematici dell'Implementazione Attuale
-Assenza di Dinamica Rotazionale (Torque e Inerzia)
-Il modulo Cinematic descrive il moto traslazionale di un punto materiale, non la dinamica di un corpo rigido vero e proprio.
-Manca totalmente il concetto di Momento d'Inerzia (tensore d'inerzia I), Velocità Angolare (omega) e Momento Torcente (tau).
-Attualmente, quando calcoli gli impulsi in ResolveImpact, assumi che la forza colpisca sempre esattamente il centro di massa dell'oggetto.
-In un motore fisico generico, l'impulso applicato a una distanza $\vec{r}$ dal centro di massa deve generare
-una rotazione $\Delta\omega = I^{-1} (\vec{r} \times \vec{J})$.
-Essendo il sistema basato su AABB (che per definizione non possono ruotare, altrimenti diventerebbero OBB - Oriented Bounding Boxes),
-Conclusione:
-l'architettura dovrà espandere il modulo Cinematic per includere i quaternioni e la matrice del tensore d'inerzia.
-*/
-
 const (
 	airFriction = 0.99
 
@@ -49,6 +36,12 @@ type Cinematic struct {
 	invIyy            float64
 	invIyz            float64
 	invIzz            float64
+	ixx               float64
+	ixy               float64
+	ixz               float64
+	iyy               float64
+	iyz               float64
+	izz               float64
 	vx                float64
 	vy                float64
 	vz                float64
@@ -58,9 +51,9 @@ type Cinematic struct {
 	wx                float64
 	wy                float64
 	wz                float64
-	alphaX            float64
-	alphaY            float64
-	alphaZ            float64
+	torqueX           float64
+	torqueY           float64
+	torqueZ           float64
 	vMin              float64
 	groundFriction    float64
 	airFriction       float64
@@ -75,6 +68,7 @@ type Cinematic struct {
 	dt                float64
 	terminalZVelocity float64
 	onGround          bool
+	isTilted          bool
 }
 
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
@@ -114,6 +108,8 @@ func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64)
 func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if e.invMass == 0.0 || e.mass <= 0.0 {
 		e.invIx, e.invIy, e.invIz = 0.0, 0.0, 0.0
+		e.ixx, e.ixy, e.ixz = 0.0, 0.0, 0.0
+		e.iyy, e.iyz, e.izz = 0.0, 0.0, 0.0
 		e.invIxx, e.invIxy, e.invIxz = 0.0, 0.0, 0.0
 		e.invIyy, e.invIyz, e.invIzz = 0.0, 0.0, 0.0
 		return
@@ -128,12 +124,20 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 		d = 32.0
 	}
 	effMass := math.Max(e.mass, 25.0)
-	// Solid cuboid principal moments scaled to map-unit/radian proportions: I_x = (rotScale/12)*m*(h^2 + d^2)
 	const rotScale = 8.0
 	factor := (effMass * rotScale) / 12.0
 	e.invIx = 1.0 / (factor * (h*h + d*d))
 	e.invIy = 1.0 / (factor * (w*w + d*d))
 	e.invIz = 1.0 / (factor * (w*w + h*h))
+	// Initialize body-space inertia tensor.
+	e.ixx = 1.0 / e.invIx
+	e.ixy = 0.0
+	e.ixz = 0.0
+	e.iyy = 1.0 / e.invIy
+	e.iyz = 0.0
+	e.izz = 1.0 / e.invIz
+	// Initialize world-space inverse inertia tensor.
+	// Initially the body has identity orientation.
 	e.invIxx = e.invIx
 	e.invIxy = 0.0
 	e.invIxz = 0.0
@@ -142,13 +146,32 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	e.invIzz = e.invIz
 }
 
-// SyncWorldInertia updates the symmetric 3x3 world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T
-// from the OBB orthonormal local axes (a0, a1, a2).
+// SyncWorldInertia updates the world-space inertia tensors:
+// I_world = R * I_body * R^T
+// I_world^-1 = R * I_body^-1 * R^T
 func (e *Cinematic) SyncWorldInertia(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
 	if e.invMass == 0.0 {
+		e.ixx, e.ixy, e.ixz = 0.0, 0.0, 0.0
+		e.iyy, e.iyz, e.izz = 0.0, 0.0, 0.0
+		e.invIxx, e.invIxy, e.invIxz = 0.0, 0.0, 0.0
+		e.invIyy, e.invIyz, e.invIzz = 0.0, 0.0, 0.0
 		return
 	}
+
 	ix, iy, iz := e.invIx, e.invIy, e.invIz
+	// Direct principal moments.
+	bix := 1.0 / ix
+	biy := 1.0 / iy
+	biz := 1.0 / iz
+	// World-space inertia tensor.
+	e.ixx = bix*a00*a00 + biy*a10*a10 + biz*a20*a20
+	e.ixy = bix*a00*a01 + biy*a10*a11 + biz*a20*a21
+	e.ixz = bix*a00*a02 + biy*a10*a12 + biz*a20*a22
+	e.iyy = bix*a01*a01 + biy*a11*a11 + biz*a21*a21
+	e.iyz = bix*a01*a02 + biy*a11*a12 + biz*a21*a22
+	e.izz = bix*a02*a02 + biy*a12*a12 + biz*a22*a22
+
+	// World-space inverse inertia tensor.
 	e.invIxx = ix*a00*a00 + iy*a10*a10 + iz*a20*a20
 	e.invIxy = ix*a00*a01 + iy*a10*a11 + iz*a20*a21
 	e.invIxz = ix*a00*a02 + iy*a10*a12 + iz*a20*a22
@@ -185,15 +208,18 @@ func (e *Cinematic) SetOptions(dt, gFriction, aFriction float64) {
 
 // Stop halts the entity's motion by setting its linear and angular velocity components to zero.
 func (e *Cinematic) Stop() {
+	e.ax = 0.0
+	e.ay = 0.0
+	e.az = 0.0
 	e.vx = 0.0
 	e.vy = 0.0
 	e.vz = 0.0
 	e.wx = 0.0
 	e.wy = 0.0
 	e.wz = 0.0
-	e.alphaX = 0.0
-	e.alphaY = 0.0
-	e.alphaZ = 0.0
+	e.torqueX = 0.0
+	e.torqueY = 0.0
+	e.torqueZ = 0.0
 }
 
 // StopAngular halts the entity's rotational motion by zeroing angular velocity and angular acceleration.
@@ -201,9 +227,9 @@ func (e *Cinematic) StopAngular() {
 	e.wx = 0.0
 	e.wy = 0.0
 	e.wz = 0.0
-	e.alphaX = 0.0
-	e.alphaY = 0.0
-	e.alphaZ = 0.0
+	e.torqueX = 0.0
+	e.torqueY = 0.0
+	e.torqueZ = 0.0
 }
 
 // GetAngularVelocity returns the current angular velocity components (wx, wy, wz) in rad/s.
@@ -221,9 +247,14 @@ func (e *Cinematic) SetAngularVelocity(wx, wy, wz float64) {
 // AddTorque applies a 3D torque vector (tx, ty, tz) in world space using the world-space inverse inertia tensor.
 func (e *Cinematic) AddTorque(tx, ty, tz float64) {
 	ax, ay, az := e.ApplyWorldInvInertia(tx, ty, tz)
-	e.alphaX += ax
-	e.alphaY += ay
-	e.alphaZ += az
+	e.torqueX += ax
+	e.torqueY += ay
+	e.torqueZ += az
+}
+
+// AngularMomentum returns the world-space angular momentum L = I_world * omega.
+func (e *Cinematic) AngularMomentum() (float64, float64, float64) {
+	return e.ixx*e.wx + e.ixy*e.wy + e.ixz*e.wz, e.ixy*e.wx + e.iyy*e.wy + e.iyz*e.wz, e.ixz*e.wx + e.iyz*e.wy + e.izz*e.wz
 }
 
 // AddImpulseAtOffset applies an angular impulse Δω = I_world^-1 (r × J) generated by linear impulse (jx, jy, jz) at lever arm (rx, ry, rz).
@@ -231,15 +262,22 @@ func (e *Cinematic) AddImpulseAtOffset(jx, jy, jz, rx, ry, rz float64) {
 	if e.invMass == 0.0 {
 		return
 	}
+
+	// Angular impulse: ΔL = r × J
 	tx := ry*jz - rz*jy
 	ty := rz*jx - rx*jz
 	tz := rx*jy - ry*jx
+
+	// Angular velocity variation: Δω = I_world^-1 * ΔL
 	dwx, dwy, dwz := e.ApplyWorldInvInertia(tx, ty, tz)
+
 	e.wx += dwx
 	e.wy += dwy
 	e.wz += dwz
+
 	const maxTiltVel = 2.5
 	const maxYawVel = 4.5
+
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz))
@@ -370,33 +408,191 @@ func (e *Cinematic) AddForce(fx, fy, fz float64) {
 	e.az += fz * e.invMass
 }
 
-// Update updates the state of the Cinematic object by integrating acceleration, velocity, angular velocity, and damping forces over time.
-func (e *Cinematic) Update() {
+// AddForceAtPoint applies a linear force (fx, fy, fz) at world point (px, py, pz) and generates 3D torque τ = r × F on the OBB
+// using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
+func (e *Cinematic) AddForceAtPoint(fx, fy, fz, px, py, pz float64, cx, cy, cz float64, hx, hy, hz float64, a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
+	e.AddForce(fx, fy, fz)
+	if e.GetInvMass() == 0.0 {
+		return
+	}
+	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
+	if fMag <= 1e-9 {
+		return
+	}
+	invF := 1.0 / fMag
+
+	//cx, cy, cz := bb.GetCenter()
+	r0x, r0y, r0z := px-cx, py-cy, pz-cz
+
+	//hx, hy, hz := bb.GetSizeCenter()
+	//a00, a01, a02, a10, a11, a12, a20, a21, a22 := bb.GetAxes()
+
+	// Project impact point and ray direction into OBB local frame
+	plx := r0x*a00 + r0y*a01 + r0z*a02
+	ply := r0x*a10 + r0y*a11 + r0z*a12
+	plz := r0x*a20 + r0y*a21 + r0z*a22
+
+	dlx := (fx*a00 + fy*a01 + fz*a02) * invF
+	dly := (fx*a10 + fy*a11 + fz*a12) * invF
+	dlz := (fx*a20 + fy*a21 + fz*a22) * invF
+
+	// Shift to closest point on the ray to OBB center, clamped within the OBB interior
+	tProj := plx*dlx + ply*dly + plz*dlz
+	plx = math.Max(-hx*0.98, math.Min(hx*0.98, plx-tProj*dlx))
+	ply = math.Max(-hy*0.98, math.Min(hy*0.98, ply-tProj*dly))
+	plz = math.Max(-hz*0.98, math.Min(hz*0.98, plz-tProj*dlz))
+
+	// March backward along -dl to find the exact entry point on the struck OBB face
+	tBack := math.MaxFloat64
+	hitAxis := 0
+	hitSign := 1.0
+	if math.Abs(dlx) > 1e-6 {
+		s := -1.0
+		if dlx < 0 {
+			s = 1.0
+		}
+		if tb := (plx - s*hx) / dlx; tb >= 0.0 && tb < tBack {
+			tBack = tb
+			hitAxis = 0
+			hitSign = s
+		}
+	}
+	if math.Abs(dly) > 1e-6 {
+		s := -1.0
+		if dly < 0 {
+			s = 1.0
+		}
+		if tb := (ply - s*hy) / dly; tb >= 0.0 && tb < tBack {
+			tBack = tb
+			hitAxis = 1
+			hitSign = s
+		}
+	}
+	if math.Abs(dlz) > 1e-6 {
+		s := -1.0
+		if dlz < 0 {
+			s = 1.0
+		}
+		if tb := (plz - s*hz) / dlz; tb >= 0.0 && tb < tBack {
+			tBack = tb
+			hitAxis = 2
+			hitSign = s
+		}
+	}
+	if tBack < math.MaxFloat64 {
+		plx -= tBack * dlx
+		ply -= tBack * dly
+		plz -= tBack * dlz
+	}
+
+	// Reconstruct world-space lever arm r from OBB center to surface entry point
+	rx := a00*plx + a10*ply + a20*plz
+	ry := a01*plx + a11*ply + a21*plz
+	rz := (a02*plx + a12*ply + a22*plz) * 0.25
+
+	// Direct moment of force: τ = r × F
+	tx := ry*fz - rz*fy
+	ty := rz*fx - rx*fz
+	tz := rx*fy - ry*fx
+
+	// Normal pressure moment on the struck OBB face: τ_n = r × F_n
+	var fnX, fnY, fnZ float64
+	switch hitAxis {
+	case 0:
+		fnX, fnY, fnZ = hitSign*a00, hitSign*a01, hitSign*a02
+	case 1:
+		fnX, fnY, fnZ = hitSign*a10, hitSign*a11, hitSign*a12
+	default:
+		fnX, fnY, fnZ = hitSign*a20, hitSign*a21, hitSign*a22
+	}
+	if fDotN := fx*fnX + fy*fnY + fz*fnZ; fDotN < 0.0 {
+		fnFx, fnFy, fnFz := fDotN*fnX, fDotN*fnY, fDotN*fnZ
+		tx += (ry*fnFz - rz*fnFy) * 0.25
+		ty += (rz*fnFx - rx*fnFz) * 0.25
+		tz += rx*fnFy - ry*fnFx
+	}
+
+	e.AddTorque(tx, ty, tz)
+}
+
+// UpdatePrepare detects tilt from the local Z axis and applies roll/pitch righting angular velocity.
+func (e *Cinematic) UpdatePrepare(a20, a21, a22 float64) {
+	//a20, a21, a22 := e.GetAxes2()
+	tiltSq := a20*a20 + a21*a21
+	e.isTilted = tiltSq > 1e-7 || a22 < 0.999999
+
+	if e.isTilted {
+		stiffness := 140.0
+		damping := 16.0
+		if !e.IsOnGround() {
+			stiffness = 60.0
+			damping = 10.0
+		}
+		errX := a21
+		errY := -a20
+		if a22 < 0.0 {
+			lenXY := math.Hypot(errX, errY)
+			if lenXY > 1e-6 {
+				errX /= lenXY
+				errY /= lenXY
+			} else {
+				errX = 1.0
+			}
+		}
+		dt := e.GetDt()
+		e.wx += (errX*stiffness - e.wx*damping) * dt
+		e.wy += (errY*stiffness - e.wy*damping) * dt
+	}
+}
+
+// UpdateCommit updates the state of the Cinematic object by integrating acceleration, velocity, angular velocity, and damping forces over time.
+func (e *Cinematic) UpdateCommit() {
 	const sleepEpsilon = 0.005
 	const maxTiltVel = 2.5
 	const maxYawVel = 4.5
 	const angSleepEpsilon = 0.05
 
-	// Integrate angular acceleration and damping
-	e.wx += e.alphaX * e.dt
-	e.wy += e.alphaY * e.dt
-	e.wz += e.alphaZ * e.dt
-	e.alphaX, e.alphaY, e.alphaZ = 0.0, 0.0, 0.0
+	// Angular momentum: L = I_world * omega
+	lx, ly, lz := e.AngularMomentum()
 
+	// Gyroscopic term: omega × L
+	gx := e.wy*lz - e.wz*ly
+	gy := e.wz*lx - e.wx*lz
+	gz := e.wx*ly - e.wy*lx
+
+	// Gyroscopic angular acceleration:
+	// alpha = I_world^-1 * (tau - omega × L)
+	ax, ay, az := e.ApplyWorldInvInertia(-gx, -gy, -gz)
+
+	// Integrate angular acceleration
+	e.wx += (e.torqueX + ax) * e.dt
+	e.wy += (e.torqueY + ay) * e.dt
+	e.wz += (e.torqueZ + az) * e.dt
+
+	// Reset angular acceleration accumulators
+	e.torqueX = 0.0
+	e.torqueY = 0.0
+	e.torqueZ = 0.0
+
+	// Angular damping
 	tiltDamping := e.airDamping
 	yawDamping := e.airDamping
+
 	if e.onGround {
 		tiltDamping = e.groundDamping
 		yawDamping = math.Pow(0.02, e.dt)
 	}
+
 	e.wx *= tiltDamping
 	e.wy *= tiltDamping
 	e.wz *= yawDamping
 
+	// Angular velocity limits
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz))
 
+	// Angular sleep
 	if math.Abs(e.wx) < angSleepEpsilon {
 		e.wx = 0.0
 	}
@@ -409,6 +605,7 @@ func (e *Cinematic) Update() {
 
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
+
 	if e.onGround {
 		if e.vz < 0.0 {
 			e.vz = 0.0
@@ -420,39 +617,48 @@ func (e *Cinematic) Update() {
 		e.vz += (e.az - e.gForce) * e.dt
 	}
 
-	// reset accumulator
-	e.ax, e.ay, e.az = 0.0, 0.0, 0.0
+	// Reset linear acceleration accumulators
+	e.ax = 0.0
+	e.ay = 0.0
+	e.az = 0.0
 
-	dx, dy, dz := e.vx*e.dt, e.vy*e.dt, e.vz*e.dt
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
+	// Frame displacement
+	dx := e.vx * e.dt
+	dy := e.vy * e.dt
+	dz := e.vz * e.dt
+
+	// Sleep check
+	if math.Abs(dx) < sleepEpsilon &&
+		math.Abs(dy) < sleepEpsilon &&
+		math.Abs(dz) < sleepEpsilon {
+
 		e.vx = 0.0
 		e.vy = 0.0
+
 		if e.onGround {
 			e.vz = 0.0
 		}
 		return
 	}
 
-	linearDamping := e.airDamping
-	if e.onGround {
-		linearDamping = e.groundDamping
-	}
+	// Linear damping
+	e.vx *= e.groundDamping
+	e.vy *= e.groundDamping
+	e.vz *= e.airDamping
 
-	e.vx *= linearDamping
-	e.vy *= linearDamping
-	e.vz *= linearDamping
-
-	// planar sleep - zero only xy to stop micro-sliding (jittering).
+	// Planar sleep
 	if math.Abs(e.vx) < e.vMin {
 		e.vx = 0.0
 	}
 	if math.Abs(e.vy) < e.vMin {
 		e.vy = 0.0
 	}
+
 	if e.onGround && e.vz <= 0.0 {
 		e.vz = 0.0
 	}
-	// terminal velocity clamping
+
+	// Terminal velocity clamping
 	if e.vz < e.terminalZVelocity {
 		e.vz = e.terminalZVelocity
 	}

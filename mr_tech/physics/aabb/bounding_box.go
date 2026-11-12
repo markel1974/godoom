@@ -89,9 +89,7 @@ func (r *BoundingBox) GetQuaternion() *Quaternion {
 
 // GetAxes returns the three orthonormal local axes (X, Y, Z) in world space.
 func (r *BoundingBox) GetAxes() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	return r.axis[0][0], r.axis[0][1], r.axis[0][2],
-		r.axis[1][0], r.axis[1][1], r.axis[1][2],
-		r.axis[2][0], r.axis[2][1], r.axis[2][2]
+	return r.axis[0][0], r.axis[0][1], r.axis[0][2], r.axis[1][0], r.axis[1][1], r.axis[1][2], r.axis[2][0], r.axis[2][1], r.axis[2][2]
 }
 
 // GetAxes0 returns the x, y, and z components of the first bounding box axis.

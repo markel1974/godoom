@@ -35,6 +35,11 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxZ = maxZ
 }
 
+// GetMinMax returns the minimum and maximum coordinates (minX, minY, minZ, maxX, maxY, maxZ) of the AABB.
+func (o *AABB) GetMinMax() (float64, float64, float64, float64, float64, float64) {
+	return o.minX, o.minY, o.minZ, o.maxX, o.maxY, o.maxZ
+}
+
 // GetIndex returns the current index value of the AABB instance as an int64.
 func (a *AABB) GetIndex() int64 {
 	return a.index

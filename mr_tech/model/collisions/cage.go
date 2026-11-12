@@ -106,14 +106,14 @@ func (s *Cage) GetObject() volumes.IThing {
 
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
 func (s *Cage) Rebuild(maxStep float64) {
-	entity := s.object.VerticesGetEntity()
+	lEnt := s.object.VerticesGetEntity()
 	// Calculate Position
-	s.dX, s.dY, s.dZ = entity.GetFrameDisplacement()
+	s.dX, s.dY, s.dZ = lEnt.GetFrameDisplacement()
 
 	// Default fallback: entity's oriented extents
-	s.eRadX, s.eRadY, _ = entity.GetOrientedHalfExtents()
-	_, _, s.eRadZ = entity.GetSizeCenter()
-	s.cX, s.cY, s.cZ = entity.GetCenter()
+	s.eRadX, s.eRadY, _ = lEnt.GetOrientedHalfExtents()
+	_, _, s.eRadZ = lEnt.GetSizeCenter()
+	s.cX, s.cY, s.cZ = lEnt.GetCenter()
 
 	if objAABB := s.object.GetAABB(); objAABB != nil {
 		minX := objAABB.GetMinX()
@@ -183,13 +183,15 @@ func (s *Cage) Commit(rCage *Cage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rOffX, rOffY, rOffZ = rCage.object.VerticesGetVolume().GetEntity().GetCenter()
-		rDX, rDY, rDZ := rCage.object.VerticesGetEntity().GetFrameDisplacement()
+		rEnt := rCage.object.VerticesGetEntity()
+		rOffX, rOffY, rOffZ = rEnt.GetCenter()
+		rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 		rOffX += rDX
 		rOffY += rDY
 		rOffZ += rDZ
 
-		lOffX, lOffY, lOffZ = s.object.VerticesGetVolume().GetEntity().GetCenter()
+		lEnt := s.object.VerticesGetEntity()
+		lOffX, lOffY, lOffZ = lEnt.GetCenter()
 		lOffX += s.dX
 		lOffY += s.dY
 		lOffZ += s.dZ
@@ -315,12 +317,13 @@ func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
 func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, float64, float64) {
-	lOx, lOy, lOz := s.object.VerticesGetVolume().GetEntity().GetCenter()
+	lEnt := s.object.VerticesGetEntity()
+	lOx, lOy, lOz := lEnt.GetCenter()
 	lOx += s.dX
 	lOy += s.dY
 	lOz += s.dZ
-	rOx, rOy, rOz := rCage.object.VerticesGetVolume().GetEntity().GetCenter()
 	rEnt := rCage.object.VerticesGetEntity()
+	rOx, rOy, rOz := rEnt.GetCenter()
 	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	rOx += rDX
 	rOy += rDY
@@ -384,7 +387,8 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 		wHz += math.Abs(nZ) * s.eRadZ * 2.0
 	}
 
-	lA00, lA01, lA02, lA10, lA11, lA12, lA20, lA21, lA22 := s.object.VerticesGetEntity().GetAxes()
+	lEnt := s.object.VerticesGetEntity()
+	lA00, lA01, lA02, lA10, lA11, lA12, lA20, lA21, lA22 := lEnt.GetAxes()
 	lLocCx := wCx*lA00 + wCy*lA01 + wCz*lA02
 	lLocCy := wCx*lA10 + wCy*lA11 + wCz*lA12
 	lLocCz := wCx*lA20 + wCy*lA21 + wCz*lA22
@@ -463,12 +467,14 @@ func (s *Cage) GetEntity() *rigid_body.Entity {
 // SetApplied marks the collision cage as having applied its frame displacement and records entity center for tracking push-out offset.
 func (s *Cage) SetApplied() {
 	s.applied = true
-	s.appliedX, s.appliedY, s.appliedZ = s.object.VerticesGetEntity().GetCenter()
+	lEnt := s.object.VerticesGetEntity()
+	s.appliedX, s.appliedY, s.appliedZ = lEnt.GetCenter()
 }
 
 // GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
 func (s *Cage) GetPushOffset() (float64, float64, float64) {
-	curX, curY, curZ := s.object.VerticesGetEntity().GetCenter()
+	lEnt := s.object.VerticesGetEntity()
+	curX, curY, curZ := lEnt.GetCenter()
 	if s.applied {
 		return curX - s.appliedX, curY - s.appliedY, curZ - s.appliedZ
 	}

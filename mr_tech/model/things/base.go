@@ -79,7 +79,9 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	entity := t.VerticesGetVolume().GetEntity()
 	entity.SetOnGround(false)
 	t.SetAngle(cfg.Angle)
-	t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
+	if cfg.MaxStepFactor > 0 {
+		t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
+	}
 	t.cage = collisions.NewCage(thing)
 
 	return t

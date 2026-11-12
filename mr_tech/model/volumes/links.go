@@ -3,8 +3,6 @@ package volumes
 import (
 	"fmt"
 	"strings"
-
-	"github.com/markel1974/godoom/mr_tech/config"
 )
 
 // linkInvalidIndex marks a link as disconnected or without a valid parent.
@@ -19,15 +17,17 @@ const (
 
 // Link represents a hierarchical attachment from a model part to its parent through a tag.
 type Link struct {
-	parent int
-	tag    string
+	parent   int
+	tag      string
+	tagIndex int
 }
 
 // NewLink creates a link to the specified parent element and tag.
 func NewLink(parent int, tag string) *Link {
 	return &Link{
-		parent: parent,
-		tag:    tag,
+		parent:   parent,
+		tag:      tag,
+		tagIndex: linkInvalidIndex,
 	}
 }
 
@@ -35,12 +35,22 @@ func NewLink(parent int, tag string) *Link {
 func (vl *Link) Invalidate() {
 	vl.parent = linkInvalidIndex
 	vl.tag = ""
+	vl.tagIndex = linkInvalidIndex
+}
+
+// SetTagIndex sets the tag index value for the Link object to the specified integer.
+func (vl *Link) SetTagIndex(i int) {
+	vl.tagIndex = i
+}
+
+// GetTagIndex returns the current tag index value of the Link instance.
+func (vl *Link) GetTagIndex() int {
+	return vl.tagIndex
 }
 
 // Links manages hierarchical parent connections and update ordering for linked 3D model parts.
 type Links struct {
 	data           []*Link
-	tagIndices     []int
 	executionOrder []int
 }
 
@@ -51,24 +61,14 @@ func NewLinks() *Links {
 }
 
 // Setup initializes link data, validates parent relationships, resolves tag indices, and builds execution order.
-func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error {
-	numParts := elements.Len()
+func (ls *Links) Setup(links []*Link) error {
+	numParts := len(links)
 	ls.data = make([]*Link, numParts)
-	ls.tagIndices = make([]int, numParts)
 	ls.executionOrder = make([]int, 0, numParts)
-	dfsState := make([]int, numParts)
+
+	copy(ls.data, links)
 
 	//Initialization
-	for i := 0; i < numParts; i++ {
-		ls.tagIndices[i] = linkInvalidIndex
-		dfsState[i] = dfsUnvisited
-		if i < len(cfg.Links) {
-			ls.data[i] = NewLink(cfg.Links[i].Parent, cfg.Links[i].Tag)
-		} else {
-			ls.data[i] = NewLink(linkInvalidIndex, "")
-		}
-	}
-
 	// Reject invalid parents and self-links
 	for i := 0; i < numParts; i++ {
 		if ls.data[i].parent == i {
@@ -84,13 +84,17 @@ func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error 
 	visited := make([]bool, numParts)
 	pathIndex := make([]int, numParts)
 	path := make([]int, 0, numParts)
+	invalidIndices := make([]int, numParts)
+
+	for k := range invalidIndices {
+		invalidIndices[k] = linkInvalidIndex
+	}
+
 	for i := 0; i < numParts; i++ {
 		if visited[i] {
 			continue
 		}
-		for k := range pathIndex {
-			pathIndex[k] = linkInvalidIndex
-		}
+		copy(pathIndex, invalidIndices)
 		path = path[:0]
 		curr := i
 		for curr >= 0 && curr < numParts {
@@ -114,33 +118,7 @@ func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error 
 		}
 	}
 
-	for i, link := range ls.data {
-		if link.parent < 0 {
-			continue
-		}
-		element := elements.GetEntry(link.parent)
-		if element == nil {
-			fmt.Printf("[warning] Vertices3D: parent %d not found for part %d, inheriting parent origin and rotation without tag offset\n", link.parent, i)
-			continue
-		}
-		tagIdx := element.GetTagIndex(link.tag)
-		if tagIdx < 0 {
-			fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, link.parent, i)
-			continue
-		}
-		ls.tagIndices[i] = tagIdx
-		for frameIdx, vol := range element.volumes {
-			if vol == nil {
-				fmt.Printf("[warning] Vertices3D: volume not found in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", frameIdx, link.parent, i)
-				continue
-			}
-			if !vol.HasVertexTag(tagIdx) {
-				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, tagIdx, frameIdx, link.parent, i)
-				continue
-			}
-		}
-	}
-
+	dfsState := make([]int, numParts)
 	var visit func(int)
 	visit = func(node int) {
 		if node < 0 || node >= numParts || dfsState[node] == dfsVisited {
@@ -159,7 +137,6 @@ func (ls *Links) Setup(cfg *config.Model3D, elements *Vertices3DElements) error 
 		dfsState[node] = dfsVisited
 		ls.executionOrder = append(ls.executionOrder, node)
 	}
-
 	// Ensure all nodes are visited (including disconnected sub-trees)
 	for i := 0; i < numParts; i++ {
 		if dfsState[i] == dfsUnvisited {
@@ -204,8 +181,8 @@ func (ls *Links) GetTag(i int) string {
 
 // GetTagIndex returns the resolved tag index for i, or the invalid index when i is out of range.
 func (ls *Links) GetTagIndex(i int) int {
-	if i >= 0 && i < len(ls.tagIndices) {
-		return ls.tagIndices[i]
+	if i >= 0 && i < len(ls.data) {
+		return ls.data[i].GetTagIndex()
 	}
 	return linkInvalidIndex
 }

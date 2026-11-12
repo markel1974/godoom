@@ -38,7 +38,10 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	if err := v.elements.Setup(thing, cfg, materials); err != nil {
 		panic("Error setting up vertices elements: " + err.Error())
 	}
-	if err := v.links.Setup(cfg.Model3D, v.elements); err != nil {
+
+	configLinks := v.createConfigLinks(cfg.Model3D)
+
+	if err := v.links.Setup(configLinks); err != nil {
 		panic("Error setting up vertices elements: " + err.Error())
 	}
 	if err := v.joints.Setup(cfg.Model3D, v.elements.vVolume.entity, v.elements, v.links); err != nil {
@@ -47,6 +50,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
 		panic("Error setting up vertices elements: " + err.Error())
 	}
+
 	v.VerticesCompile(0)
 
 	v.elements.UpdateEntityBounds()
@@ -207,4 +211,41 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 // VerticesGet returns the current face sets, interpolation factor, and render mode.
 func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
+}
+
+func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) []*Link {
+	links := make([]*Link, v.elements.Len())
+	for i := 0; i < v.elements.Len(); i++ {
+		parent, tag := linkInvalidIndex, ""
+		if i < len(cfg.Links) {
+			parent, tag = cfg.Links[i].Parent, cfg.Links[i].Tag
+		}
+		link := NewLink(parent, tag)
+		links[i] = link
+		if link.parent < 0 {
+			continue
+		}
+		element := v.elements.GetEntry(link.parent)
+		if element == nil {
+			fmt.Printf("[warning] Vertices3D: parent %d not found for part %d, inheriting parent origin and rotation without tag offset\n", link.parent, i)
+			continue
+		}
+		tagIdx := element.GetTagIndex(link.tag)
+		if tagIdx < 0 {
+			fmt.Printf("[warning] Vertices3D: tag %q not found on parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, link.parent, i)
+			continue
+		}
+		link.SetTagIndex(tagIdx)
+		for frameIdx, vol := range element.volumes {
+			if vol == nil {
+				fmt.Printf("[warning] Vertices3D: volume not found in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", frameIdx, link.parent, i)
+				continue
+			}
+			if !vol.HasVertexTag(tagIdx) {
+				fmt.Printf("[warning] Vertices3D: tag %q (idx %d) missing in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", link.tag, tagIdx, frameIdx, link.parent, i)
+				continue
+			}
+		}
+	}
+	return links
 }

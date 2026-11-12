@@ -339,7 +339,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.Flash.OffsetY = 0.1
 
 	player.Bobbing.SwayScale = 1.0
-	player.Bobbing.SwayOffsetX = 10
+	player.Bobbing.SwayOffsetX = 6
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = playerHeight * 0.15
 	player.Bobbing.MaxAmplitudeY = playerHeight * 0.15

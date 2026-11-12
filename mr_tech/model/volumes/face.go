@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/material"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -137,6 +138,14 @@ func (fc *Face) GetNormalAbs() (float64, float64, float64) {
 // GetMaterial retrieves the material object associated with the Face or nil if no material is set.
 func (fc *Face) GetMaterial() *textures.Material {
 	return fc.material
+}
+
+// GetPhysicsMaterial returns the surface physical properties of the face's material, or default if none.
+func (fc *Face) GetPhysicsMaterial() material.PhysicsMaterial {
+	if fc.material != nil {
+		return fc.material.GetPhysicsMaterial()
+	}
+	return material.DefaultPhysicsMaterial()
 }
 
 // ClonePoints returns a copy of the face's three triangle points.

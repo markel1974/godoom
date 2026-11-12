@@ -112,17 +112,21 @@ type Material struct {
 	NoPicMip        bool      `json:"noPicMip"`
 	EntityMergeable bool      `json:"entityMergeable"`
 	// Complex/Additional
-	DeformVertexes [][]string      `json:"deformVertexes"`
-	SurfaceParms   map[string]bool `json:"surfaceParms"`
-	SkyParms       []string        `json:"skyParms"`
-	CloudParms     []string        `json:"cloudParms"`
-	FogGen         []string        `json:"fogGen"`
-	IsLightning    bool            `json:"isLightning"`
-	IsBacksided    bool            `json:"isBacksided"`
-	SpecularBoost  float64         `json:"specularBoost"`
-	Shininess      float64         `json:"shininess"`
-	IsSolid        bool            `json:"isSolid"`
-	Amplitude      float64         `json:"amplitude"`
+	DeformVertexes     [][]string      `json:"deformVertexes"`
+	SurfaceParms       map[string]bool `json:"surfaceParms"`
+	SkyParms           []string        `json:"skyParms"`
+	CloudParms         []string        `json:"cloudParms"`
+	FogGen             []string        `json:"fogGen"`
+	IsLightning        bool            `json:"isLightning"`
+	IsBacksided        bool            `json:"isBacksided"`
+	SpecularBoost      float64         `json:"specularBoost"`
+	Shininess          float64         `json:"shininess"`
+	IsSolid            bool            `json:"isSolid"`
+	Amplitude          float64         `json:"amplitude"`
+	Restitution        float64         `json:"restitution"`
+	Friction           float64         `json:"friction"`
+	RestitutionCombine int             `json:"restitutionCombine"`
+	FrictionCombine    int             `json:"frictionCombine"`
 }
 
 // NewConfigMaterial creates and initializes a new Material instance with the provided animation and kind values.

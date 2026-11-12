@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/material"
 )
 
 var _dt float64
@@ -123,13 +124,18 @@ func (e *Entity) Update() {
 // ResolveImpact resolves a 6-DoF collision impact with another entity using the supplied collision normal,
 // computing the contact manifold point on the OBBs and applying both linear and rotational impulses.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
+	e.ResolveImpactWithMaterial(e2, nx, ny, nz, e2.GetPhysicsMaterial())
+}
+
+// ResolveImpactWithMaterial resolves a 6-DoF collision impact with another entity and explicit contact surface material properties.
+func (e *Entity) ResolveImpactWithMaterial(e2 *Entity, nx, ny, nz float64, matOther material.PhysicsMaterial) {
 	cx1, cy1, cz1 := e.BoundingBox.GetCenter()
 	ex1, ey1, ez1 := e.BoundingBox.GetOrientedHalfExtents()
 
 	cx2, cy2, cz2 := e2.BoundingBox.GetCenter()
 	ex2, ey2, ez2 := e2.BoundingBox.GetOrientedHalfExtents()
 
-	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2)
+	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2, matOther)
 }
 
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.

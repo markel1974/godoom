@@ -33,27 +33,29 @@ const (
 
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
-	Id             string        `json:"id"`
-	Position       geometry.XYZ  `json:"position"`
-	Kind           ThingType     `json:"kind"`
-	Angle          float64       `json:"angle"`
-	Mass           float64       `json:"mass"`
-	Restitution    float64       `json:"restitution"`
-	Friction       float64       `json:"friction"`
-	Radius         float64       `json:"radius"`
-	Height         float64       `json:"height"`
-	Speed          float64       `json:"speed"`
-	Impulse        float64       `json:"impulse"`
-	Acceleration   float64       `json:"acceleration"`
-	JumpForce      float64       `json:"jumpForce"`
-	Pitch          float64       `json:"pitch"`
-	WakeupDistance float64       `json:"wakeupDistance"`
-	GForce         float64       `json:"gForce"`
-	Model3DEntry   *Model3DEntry `json:"md1"`
-	Model3D        *Model3D      `json:"md3"`
-	MultiSprite    *MultiSprite  `json:"multiSprite"`
-	Sprite         *Sprite       `json:"sprite"`
-	MaxStepFactor  float64       `json:"maxStep"`
+	Id                 string        `json:"id"`
+	Position           geometry.XYZ  `json:"position"`
+	Kind               ThingType     `json:"kind"`
+	Angle              float64       `json:"angle"`
+	Mass               float64       `json:"mass"`
+	Restitution        float64       `json:"restitution"`
+	Friction           float64       `json:"friction"`
+	RestitutionCombine int           `json:"restitutionCombine"`
+	FrictionCombine    int           `json:"frictionCombine"`
+	Radius             float64       `json:"radius"`
+	Height             float64       `json:"height"`
+	Speed              float64       `json:"speed"`
+	Impulse            float64       `json:"impulse"`
+	Acceleration       float64       `json:"acceleration"`
+	JumpForce          float64       `json:"jumpForce"`
+	Pitch              float64       `json:"pitch"`
+	WakeupDistance     float64       `json:"wakeupDistance"`
+	GForce             float64       `json:"gForce"`
+	Model3DEntry       *Model3DEntry `json:"md1"`
+	Model3D            *Model3D      `json:"md3"`
+	MultiSprite        *MultiSprite  `json:"multiSprite"`
+	Sprite             *Sprite       `json:"sprite"`
+	MaxStepFactor      float64       `json:"maxStep"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc

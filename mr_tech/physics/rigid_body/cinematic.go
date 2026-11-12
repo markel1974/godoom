@@ -2,6 +2,8 @@ package rigid_body
 
 import (
 	"math"
+
+	"github.com/markel1974/godoom/mr_tech/physics/material"
 )
 
 const (
@@ -63,6 +65,7 @@ type Cinematic struct {
 	dampingActive     float64
 	gForce            float64
 	restitution       float64
+	material          material.PhysicsMaterial
 	maxVelocitySq     float64
 	sleepThresholdSq  float64
 	dt                float64
@@ -88,6 +91,7 @@ func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64)
 	} else {
 		invMass = 1.0 / mass
 	}
+	mat := material.NewPhysicsMaterial(restitution, groundFriction, material.CombineAverage, material.CombineAverage)
 	a := &Cinematic{
 		gForce:           gForce,
 		vMin:             vMin,
@@ -95,6 +99,7 @@ func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64)
 		mass:             mass,
 		invMass:          invMass,
 		restitution:      restitution,
+		material:         mat,
 		onGround:         false,
 	}
 	a.UpdateInertia(32.0, 32.0, 32.0)
@@ -385,6 +390,21 @@ func (e *Cinematic) GetRestitution() float64 {
 	return e.restitution
 }
 
+// GetPhysicsMaterial returns the surface physical characteristics of the cinematic object.
+func (e *Cinematic) GetPhysicsMaterial() material.PhysicsMaterial {
+	return e.material
+}
+
+// SetPhysicsMaterial sets the surface physical characteristics and updates internal restitution and ground friction.
+func (e *Cinematic) SetPhysicsMaterial(m material.PhysicsMaterial) {
+	e.material = m
+	e.restitution = m.Restitution
+	e.groundFriction = m.Friction
+	if e.onGround {
+		e.frictionActive = m.Friction
+	}
+}
+
 // GetGForce returns the value of the gravitational force acting on the Cinematic entity.
 func (e *Cinematic) GetGForce() float64 {
 	return e.gForce
@@ -670,8 +690,9 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 }
 
 // ResolveImpact resolves a 6-DoF rigid-body collision between two Cinematic objects at contact lever arms (r1x, r1y, r1z)
-// and (r2x, r2y, r2z), applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω.
-func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64) (float64, float64, float64, bool) {
+// and (r2x, r2y, r2z), applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω
+// using the explicit contact surface material properties (matOther).
+func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64, matOther material.PhysicsMaterial) (float64, float64, float64, bool) {
 	var r1x, r1y, r1z float64
 	var r2x, r2y, r2z float64
 
@@ -756,8 +777,8 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 		return 0, 0, 0, false
 	}
 
-	// restitution with threshold (micro-bounce slop)
-	actualRestitution := e.restitution * e2.restitution
+	// restitution combining with threshold (micro-bounce slop)
+	actualRestitution := material.CombineRestitution(e.material, matOther)
 	if math.Abs(actualRestitution) > 1e-6 {
 		restitutionSlop := 2.0 * math.Max(e.gForce, e2.gForce) * e.dt
 		if restitutionSlop < 2.0 {
@@ -847,8 +868,8 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 			vRelDotT := vrx*tx + vry*ty + vrz*tz
 			jt := -vRelDotT / effMassT
 
-			// friction mixing: geometric mean of the two friction coefficients
-			mu := math.Sqrt(e.frictionActive * e2.frictionActive)
+			// friction mixing: explicit contact material properties
+			mu := material.CombineFriction(e.material, matOther)
 			maxFriction := j * mu
 
 			// clamp tangential impulse within coulomb cone

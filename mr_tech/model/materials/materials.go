@@ -2,6 +2,7 @@ package materials
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	physmat "github.com/markel1974/godoom/mr_tech/physics/material"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -87,6 +88,21 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	material.SetClampU(ca.ClampU)
 	material.SetClampV(ca.ClampV)
 	material.SetVertexLitGeneric(ca.VertexLitGeneric)
+
+	pm := physmat.DefaultPhysicsMaterial()
+	if ca.Restitution != 0 {
+		pm.Restitution = ca.Restitution
+	}
+	if ca.Friction != 0 {
+		pm.Friction = ca.Friction
+	}
+	if ca.RestitutionCombine != 0 {
+		pm.RestitutionCombine = physmat.CombineMode(ca.RestitutionCombine)
+	}
+	if ca.FrictionCombine != 0 {
+		pm.FrictionCombine = physmat.CombineMode(ca.FrictionCombine)
+	}
+	material.SetPhysicsMaterial(pm)
 
 	r.container[key] = material
 	return material

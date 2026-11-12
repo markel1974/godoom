@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/material"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -25,6 +26,7 @@ type IFace interface {
 	Get1() (float64, float64, float64)
 	Get2() (float64, float64, float64)
 	IsSolid() bool
+	GetPhysicsMaterial() material.PhysicsMaterial
 }
 
 // ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.

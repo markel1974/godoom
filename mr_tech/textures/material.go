@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+
+	"github.com/markel1974/godoom/mr_tech/physics/material"
 )
 
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
@@ -64,11 +66,12 @@ type Material struct {
 	// Pipeline Flags
 	vertexLitGeneric bool
 
-	isSolid      bool
-	amplitude    float64
-	packed       float32
-	tickInterval uint64
-	salt         uint64
+	isSolid         bool
+	amplitude       float64
+	packed          float32
+	tickInterval    uint64
+	salt            uint64
+	physicsMaterial material.PhysicsMaterial
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
@@ -85,10 +88,11 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		scaleU:       1.0,
 		scaleV:       1.0,
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
-		tickInterval: 32,
-		isSolid:      true,
-		amplitude:    0.0,
-		salt:         uint64(rand.Intn(100)),
+		tickInterval:    32,
+		isSolid:         true,
+		amplitude:       0.0,
+		salt:            uint64(rand.Intn(100)),
+		physicsMaterial: material.DefaultPhysicsMaterial(),
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -227,6 +231,16 @@ func (m *Material) GetClampV() bool { return m.clampV }
 
 // IsVertexLitGeneric returns whether the material uses VertexLitGeneric shading.
 func (m *Material) IsVertexLitGeneric() bool { return m.vertexLitGeneric }
+
+// GetPhysicsMaterial returns the surface physical characteristics of this material.
+func (m *Material) GetPhysicsMaterial() material.PhysicsMaterial {
+	return m.physicsMaterial
+}
+
+// SetPhysicsMaterial sets the surface physical characteristics of this material.
+func (m *Material) SetPhysicsMaterial(pm material.PhysicsMaterial) {
+	m.physicsMaterial = pm
+}
 
 // GetBlendMode returns the current blend mode identifier as an integer.
 func (m *Material) GetBlendMode() int {

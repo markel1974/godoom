@@ -3,14 +3,29 @@ package collisions
 import (
 	"math"
 
-	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // ImpactMode identifies how a collision impact should be resolved and prioritized.
 type ImpactMode int
+
+type IObject interface {
+	GetAABB() *aabb.AABB
+	GetEntity() *rigid_body.Entity
+}
+
+type IFace interface {
+	GetAABB() *aabb.AABB
+	GetNormal() (float64, float64, float64)
+	GetNormalAbs() (float64, float64, float64)
+	Translate(int, float64, float64, float64) (float64, float64, float64)
+	GetParent() IObject
+	Get0() (float64, float64, float64)
+	Get1() (float64, float64, float64)
+	Get2() (float64, float64, float64)
+	IsSolid() bool
+}
 
 // ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
 // ImpactElastic represents a collision impact mode where entities respond elastically, maintaining relative motion post-impact.
@@ -53,7 +68,7 @@ const TotalSlots = BucketSize * FacesPerBucket
 // Cage represents a data structure for managing collision information for a physical entity.
 type Cage struct {
 	seen                map[*Cage]bool
-	object              volumes.IThing
+	object              IObject
 	buckets             [BucketSize]*Bucket
 	ellipsoid           *rigid_body.Entity
 	ellipsoidLocal      [4]*rigid_body.Entity
@@ -61,7 +76,7 @@ type Cage struct {
 	dX, dY, dZ          float64
 	tX, tY, tZ          float64
 	eRadX, eRadY, eRadZ float64
-	volume              *volumes.Volume
+	volume              IObject
 	distance            float64
 	slots               []*Entry
 	slotsLen            int
@@ -76,7 +91,7 @@ type Cage struct {
 }
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.
-func NewCage(object volumes.IThing) *Cage {
+func NewCage(object IObject) *Cage {
 	c := &Cage{
 		seen:      make(map[*Cage]bool),
 		object:    object,
@@ -100,13 +115,13 @@ func NewCage(object volumes.IThing) *Cage {
 	return c
 }
 
-func (s *Cage) GetObject() volumes.IThing {
+func (s *Cage) GetObject() IObject {
 	return s.object
 }
 
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
 func (s *Cage) Rebuild(maxStep float64) {
-	lEnt := s.object.VerticesGetEntity()
+	lEnt := s.object.GetEntity()
 	// Calculate Position
 	s.dX, s.dY, s.dZ = lEnt.GetFrameDisplacement()
 
@@ -161,7 +176,7 @@ func (s *Cage) Rebuild(maxStep float64) {
 }
 
 // AddFace adds a pair of faces (rFace and lFace) to the Cage, resizing the internal slice if needed.
-func (s *Cage) AddFace(rFace *volumes.Face, lFace *volumes.Face) {
+func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 	if s.facesIdx >= len(s.faces) {
 		n := make([]*Faces, len(s.faces)*2)
 		copy(n, s.faces)
@@ -183,14 +198,14 @@ func (s *Cage) Commit(rCage *Cage) {
 	var rOffX, rOffY, rOffZ float64
 	var lOffX, lOffY, lOffZ float64
 	if rCage != nil {
-		rEnt := rCage.object.VerticesGetEntity()
+		rEnt := rCage.object.GetEntity()
 		rOffX, rOffY, rOffZ = rEnt.GetCenter()
 		rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 		rOffX += rDX
 		rOffY += rDY
 		rOffZ += rDZ
 
-		lEnt := s.object.VerticesGetEntity()
+		lEnt := s.object.GetEntity()
 		lOffX, lOffY, lOffZ = lEnt.GetCenter()
 		lOffX += s.dX
 		lOffY += s.dY
@@ -202,10 +217,8 @@ func (s *Cage) Commit(rCage *Cage) {
 		rFace := faces.rFace
 		lFace := faces.lFace
 
-		if mat := rFace.GetMaterial(); mat != nil {
-			if mat.GetKind() == int(config.MaterialKindSky) || !mat.IsSolid() {
-				continue // Skybox or non-solid surface: ignore collision and volume tracking
-			}
+		if !rFace.IsSolid() {
+			continue // Skybox or non-solid surface: ignore collision and volume tracking
 		}
 
 		var b BucketType
@@ -291,7 +304,7 @@ func (s *Cage) Commit(rCage *Cage) {
 }
 
 // addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
-func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace *volumes.Face, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) bool {
+func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) bool {
 	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if cage != nil {
 		s.slots[s.slotsLen] = cage
@@ -317,12 +330,12 @@ func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
 func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, float64, float64) {
-	lEnt := s.object.VerticesGetEntity()
+	lEnt := s.object.GetEntity()
 	lOx, lOy, lOz := lEnt.GetCenter()
 	lOx += s.dX
 	lOy += s.dY
 	lOz += s.dZ
-	rEnt := rCage.object.VerticesGetEntity()
+	rEnt := rCage.object.GetEntity()
 	rOx, rOy, rOz := rEnt.GetCenter()
 	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	rOx += rDX
@@ -365,9 +378,10 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 	wCx, wCy, wCz := rLocCx+deltaX, rLocCy+deltaY, rLocCz+deltaZ
 	wHx, wHy, wHz := rLocHx, rLocHy, rLocHz
 
-	if f, ok := src.(*volumes.Face); ok {
+	if f, ok := src.(IFace); ok {
 		nX, nY, nZ := f.GetNormal()
 		if p := f.GetParent(); p != nil {
+
 			if rEnt := p.GetEntity(); rEnt != nil {
 				rA00, rA01, rA02, rA10, rA11, rA12, rA20, rA21, rA22 := rEnt.GetAxes()
 				wCx = rA00*rLocCx + rA10*rLocCy + rA20*rLocCz + deltaX
@@ -387,7 +401,7 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 		wHz += math.Abs(nZ) * s.eRadZ * 2.0
 	}
 
-	lEnt := s.object.VerticesGetEntity()
+	lEnt := s.object.GetEntity()
 	lA00, lA01, lA02, lA10, lA11, lA12, lA20, lA21, lA22 := lEnt.GetAxes()
 	lLocCx := wCx*lA00 + wCy*lA01 + wCz*lA02
 	lLocCy := wCx*lA10 + wCy*lA11 + wCz*lA12
@@ -430,11 +444,11 @@ func (s *Cage) GetSlotsLen() int { return s.slotsLen }
 // GetSlot returns the Entry at the specified index in the slots slice.
 func (s *Cage) GetSlot(i int) *Entry { return s.slots[i] }
 
-// GetThing retrieves the IThing object associated with the Cage.
-func (s *Cage) GetThing() volumes.IThing { return s.object }
+// GetThing returns the object associated with the cage.
+func (s *Cage) GetThing() IObject { return s.object }
 
 // GetVolume returns the volume associated with the Cage.
-func (s *Cage) GetVolume() *volumes.Volume { return s.volume }
+func (s *Cage) GetVolume() IObject { return s.volume }
 
 // GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.
 func (s *Cage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
@@ -461,19 +475,19 @@ func (s *Cage) HasFloor() bool {
 
 // GetEntity returns the physics entity associated with the collision cage.
 func (s *Cage) GetEntity() *rigid_body.Entity {
-	return s.object.VerticesGetEntity()
+	return s.object.GetEntity()
 }
 
 // SetApplied marks the collision cage as having applied its frame displacement and records entity center for tracking push-out offset.
 func (s *Cage) SetApplied() {
 	s.applied = true
-	lEnt := s.object.VerticesGetEntity()
+	lEnt := s.object.GetEntity()
 	s.appliedX, s.appliedY, s.appliedZ = lEnt.GetCenter()
 }
 
 // GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
 func (s *Cage) GetPushOffset() (float64, float64, float64) {
-	lEnt := s.object.VerticesGetEntity()
+	lEnt := s.object.GetEntity()
 	curX, curY, curZ := lEnt.GetCenter()
 	if s.applied {
 		return curX - s.appliedX, curY - s.appliedY, curZ - s.appliedZ
@@ -482,7 +496,7 @@ func (s *Cage) GetPushOffset() (float64, float64, float64) {
 }
 
 // computeFace calculates the penetration and distance of a face relative to an ellipsoid's motion and assigns a collision bucket.
-func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
@@ -643,7 +657,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace *volumes.Face, offX, offY, of
 
 // computeFaceMeshVsMesh determines the intersection and response between two mesh faces in 3D space with offsets.
 // It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.
-func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *volumes.Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	// Dati del piano remoto (Il Muro/Ostacolo)
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
@@ -875,10 +889,12 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace *volumes.Face, lFace *vo
 		}
 	}
 
-	tri := rFace.GetTri()
-	_, _, z0 := rQ.Rotate(tri.Points[0].X, tri.Points[0].Y, tri.Points[0].Z)
-	_, _, z1 := rQ.Rotate(tri.Points[1].X, tri.Points[1].Y, tri.Points[1].Z)
-	_, _, z2 := rQ.Rotate(tri.Points[2].X, tri.Points[2].Y, tri.Points[2].Z)
+	tri0X, tri0Y, tri0Z := rFace.Get0()
+	tri1X, tri1Y, tri1Z := rFace.Get1()
+	tri2X, tri2Y, tri2Z := rFace.Get2()
+	_, _, z0 := rQ.Rotate(tri0X, tri0Y, tri0Z)
+	_, _, z1 := rQ.Rotate(tri1X, tri1Y, tri1Z)
+	_, _, z2 := rQ.Rotate(tri2X, tri2Y, tri2Z)
 	rMaxZ := math.Max(z0, math.Max(z1, z2)) + rOffZ
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ

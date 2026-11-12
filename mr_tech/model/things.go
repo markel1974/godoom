@@ -6,11 +6,11 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/collisions"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
@@ -118,7 +118,7 @@ func (th *Things) Len() int {
 
 // QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
 func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
-	lThing := lCage.GetThing()
+	lThing := lCage.GetThing().(volumes.IThing)
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(volumes.IThing)
 		if lThing == rThing {
@@ -222,7 +222,7 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) volumes.IThin
 	default:
 		thing = things.NewItem(th, ct, volume)
 	}
-	entity := thing.VerticesGetEntity()
+	entity := thing.GetEntity()
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	return thing
 }
@@ -329,7 +329,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
 		cage := t2.GetCage().(*collisions.Cage)
-		t2.VerticesGetEntity().SetOnGround(cage.HasFloor())
+		t2.GetEntity().SetOnGround(cage.HasFloor())
 	}
 
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)
@@ -365,7 +365,7 @@ func (th *Things) AddStaticThing(ent volumes.IThing) {
 
 // addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
 func (th *Things) addThing(ent volumes.IThing) {
-	th.entities[ent.VerticesGetEntity().GetId()] = ent
+	th.entities[ent.GetEntity().GetId()] = ent
 	if len(th.entities) > cap(th.running) {
 		th.running = make([]volumes.IThing, len(th.entities)*4)
 		th.removables = make([]volumes.IThing, len(th.entities)*4)
@@ -378,5 +378,5 @@ func (th *Things) addThing(ent volumes.IThing) {
 // removeThing removes an IThing instance from the spatial tree and the entities map.
 func (th *Things) removeThing(ent volumes.IThing) {
 	th.tree.RemoveObject(ent)
-	delete(th.entities, ent.VerticesGetEntity().GetId())
+	delete(th.entities, ent.GetEntity().GetId())
 }

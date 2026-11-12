@@ -258,7 +258,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		if renderMode == volumes.RenderModeModel3D {
 			yaw = 0.0
 		}
-		tPosX, tPosY, zBot := thing.VerticesGetEntity().GetCenter()
+		tPosX, tPosY, zBot := thing.GetEntity().GetCenter()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 
 		var currentMat *textures.Material
@@ -321,7 +321,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	qOcclusion := func(object aabb.IObject) bool {
 		thing := object.(volumes.IThing)
-		occState := w.occlusion.GetState(thing.VerticesGetEntity().GetId())
+		occState := w.occlusion.GetState(thing.GetEntity().GetId())
 		if occState != nil && !occState.IsVisible {
 			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
 			return false                               // CULLATO! Non generiamo i vertici

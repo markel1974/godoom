@@ -72,7 +72,7 @@ func (v *Vertices3D) VerticesGetVolume() IVolume {
 }
 
 // VerticesGetEntity returns the physics entity for the composite model, or the first element's entity if unset.
-func (v *Vertices3D) VerticesGetEntity() *rigid_body.Entity {
+func (v *Vertices3D) GetEntity() *rigid_body.Entity {
 	return v.elements.vVolume.entity
 }
 

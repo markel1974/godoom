@@ -1,12 +1,10 @@
 package collisions
 
-import "github.com/markel1974/godoom/mr_tech/model/volumes"
-
 // Entry represents a collision entry used during spatial computations in the collision detection system.
 type Entry struct {
 	bucket      BucketType
 	rCage       *Cage
-	rFace       *volumes.Face
+	rFace       IFace
 	lCage       *Cage
 	dist        float64
 	penetration float64
@@ -26,7 +24,7 @@ func NewCageEntry() *Entry {
 }
 
 // GetRemoteFace returns the remote face associated with the Entry structure.
-func (s *Entry) GetRemoteFace() *volumes.Face { return s.rFace }
+func (s *Entry) GetRemoteFace() IFace { return s.rFace }
 
 // GetDistance returns the precomputed distance value associated with the Entry instance.
 func (s *Entry) GetDistance() float64 { return s.dist }
@@ -61,7 +59,7 @@ func (s *Entry) GetLCage() *Cage { return s.lCage }
 func (s *Entry) GetRCage() *Cage { return s.rCage }
 
 // Rebuild reinitializes the Entry with the given parameters and updates all its attributes accordingly.
-func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) {
+func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) {
 	s.bucket = bucket
 	s.lCage = lCage
 	s.rCage = rCage
@@ -92,5 +90,5 @@ func (s *Entry) penetrable(depth int) bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.penetrable(s.lCage.object.VerticesGetEntity().GetId(), depth+1)
+	return v.penetrable(s.lCage.object.GetEntity().GetId(), depth+1)
 }

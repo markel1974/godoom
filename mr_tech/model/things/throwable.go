@@ -29,7 +29,7 @@ func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
 	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
 	muzzleVelocity := throwable.speed * 5.0
-	entity := throwable.VerticesGetEntity()
+	entity := throwable.GetEntity()
 	//entity.SetRotationEuler(0, cfg.Pitch, throwable.angle)
 	entity.SetRotationEuler(0, 0, 0)
 	entity.SetVx(dirX * muzzleVelocity)

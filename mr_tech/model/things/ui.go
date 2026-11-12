@@ -67,7 +67,7 @@ func (t *UI) VerticesCompile(tick uint64) bool {
 // VerticesGet returns UI face data positioned at the origin with interface render mode.
 func (t *UI) VerticesGet() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	//TODO posizione assoluta e' un pezzo dell'interfaccia
-	t.VerticesGetEntity().MoveTo(0, 0, 0)
+	t.GetEntity().MoveTo(0, 0, 0)
 	f1, f2, lp, _ := t.Base.VerticesGet()
 	// Usiamo 1.1 (Spherical Billboard) in modo che lo shader originale lo processi correttamente
 	return f1, f2, lp, volumes.RenderModeInterface

@@ -2,8 +2,6 @@ package collisions
 
 import (
 	"math"
-
-	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
 // BucketType represents a categorized type for spatial partitioning or collision detection in 3D environments.
@@ -123,7 +121,7 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.object.VerticesGetEntity().GetId() == from {
+		if entry.rCage != nil && entry.rCage.object.GetEntity().GetId() == from {
 			continue
 		}
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
@@ -138,13 +136,13 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 }
 
 // Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
-func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace *volumes.Face, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
+func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
 		// DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
 		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
 		if rCage != nil && existing.rCage != nil {
-			if rCage.object.VerticesGetEntity().GetId() == existing.rCage.object.VerticesGetEntity().GetId() {
+			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
 				if penetration > existing.penetration {
 					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 				}

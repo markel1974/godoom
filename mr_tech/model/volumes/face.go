@@ -3,8 +3,10 @@ package volumes
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -50,8 +52,19 @@ func (fc *Face) GetTri() *geometry.Triangle3D {
 	return fc.tri
 }
 
+// Get0 returns the x, y, and z coordinates of the face's first vertex.
 func (fc *Face) Get0() (float64, float64, float64) {
-	return fc.tri.Points[0].X, fc.tri.Points[0].Y, fc.tri.Points[0].Z
+	return fc.tri.GetPoint0()
+}
+
+// Get1 returns the x, y, and z coordinates of the face's first triangle point.
+func (fc *Face) Get1() (float64, float64, float64) {
+	return fc.tri.GetPoint1()
+}
+
+// Get2 returns the coordinates of the face's second point.
+func (fc *Face) Get2() (float64, float64, float64) {
+	return fc.tri.GetPoint2()
 }
 
 // Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.
@@ -92,7 +105,7 @@ func (fc *Face) GetUV2() (float64, float64) {
 }
 
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
-func (fc *Face) GetParent() *Volume {
+func (fc *Face) GetParent() collisions.IObject {
 	return fc.parent
 }
 
@@ -176,6 +189,18 @@ func (fc *Face) TransformPoints(src *Face, originX, originY, originZ float64) {
 // CopyPoints copies the coordinates of all triangle points from src into fc.
 func (fc *Face) CopyPoints(src *Face) {
 	fc.tri.CopyPoints(src.tri)
+}
+
+func (fc *Face) IsSolid() bool {
+	mat := fc.GetMaterial()
+	if mat == nil {
+		return false
+	}
+	if mat.GetKind() == int(config.MaterialKindSky) || !mat.IsSolid() {
+		//Skybox or non-solid surface: ignore collision and volume tracking
+		return false
+	}
+	return true
 }
 
 // computeNormal calculates and assigns the n vector (geometry.XYZ) for the Face based on its points and geometry.

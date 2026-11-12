@@ -61,7 +61,7 @@ func (pr *Player) Setup() error {
 	}
 	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, location)
 	pr.cfg.Thing.OnBind(pr)
-	entity := pr.VerticesGetEntity()
+	entity := pr.GetEntity()
 	entity.MoveTo(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	pr.SetAngle(pr.cfg.Angle)
 
@@ -109,7 +109,7 @@ func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
 
 // StagePrepare prepares the stage for the Player by invoking the StagePrepare method of its Base.
 func (pr *Player) StagePrepare() {
-	pr.VerticesGetEntity().StopAngular()
+	pr.GetEntity().StopAngular()
 	pr.Base.StagePrepare()
 }
 
@@ -207,7 +207,7 @@ func (pr *Player) SetJump(multi bool) {
 	factor := 1.0
 	if multi {
 		factor = 0.2
-		pr.VerticesGetEntity().SetOnGround(true)
+		pr.GetEntity().SetOnGround(true)
 	}
 	if pr.Jump(0, 0, factor) {
 		pr.bobbing.InjectVerticalImpulse(1.5)
@@ -216,7 +216,7 @@ func (pr *Player) SetJump(multi bool) {
 
 // SetDucking toggles the player's ducking state between true and false.
 func (pr *Player) SetDucking() {
-	entity := pr.VerticesGetEntity()
+	entity := pr.GetEntity()
 	pr.ducking = !pr.ducking
 	if pr.ducking {
 		entity.SetSize(entity.GetWidth(), entity.GetHeight(), entity.GetDepth()*0.5)
@@ -247,7 +247,7 @@ func (pr *Player) GetTilt() float64 {
 	//	return 0.0
 	//}
 
-	entity := pr.VerticesGetEntity()
+	entity := pr.GetEntity()
 	rawTilt := pr.bobbing.GetTilt()
 	// 3. Calcoliamo la velocità reale sul piano
 	vx := entity.GetVx()
@@ -269,7 +269,7 @@ func (pr *Player) GetTilt() float64 {
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (pr *Player) GetVisualPosition() (float64, float64, float64) {
-	visualX, visualY, visualZ := pr.VerticesGetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
+	visualX, visualY, visualZ := pr.GetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
 	angleSin, angleCos := pr.GetAngleFull()
 	bobX, bobY, _ := pr.GetBob()
 	visualZ += pr.getEyeHeight() + bobY + pr.bobbing.GetJump()
@@ -307,7 +307,7 @@ func (pr *Player) StageThinking(playerX float64, playerY float64, playerZ float6
 
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
 func (pr *Player) StageApply() {
-	entity := pr.VerticesGetEntity()
+	entity := pr.GetEntity()
 	wasGrounded := entity.IsOnGround()
 	prevVz := entity.GetVz()
 	pr.Base.StageApply()
@@ -322,7 +322,7 @@ func (pr *Player) StageApply() {
 
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.
 func (pr *Player) getEyeHeight() float64 {
-	entity := pr.VerticesGetEntity()
+	entity := pr.GetEntity()
 	if pr.ducking {
 		return entity.GetDepth() * 0.25
 	}
@@ -332,7 +332,7 @@ func (pr *Player) getEyeHeight() float64 {
 // Throw creates and spawns a projectile at a position based on the player's orientation and camera position.
 func (pr *Player) Throw(throwableIndex int, speed float64) {
 	camX, camY, camZ := pr.GetVisualPosition()
-	entity := pr.VerticesGetEntity()
+	entity := pr.GetEntity()
 	diameter := entity.GetWidth()
 	spawnX := camX + (pr.angleCos * diameter)
 	spawnY := camY + (pr.angleSin * diameter)

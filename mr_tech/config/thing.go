@@ -23,7 +23,7 @@ type IThingConfig interface {
 
 	GetKind() ThingType
 
-	VerticesGetEntity() *rigid_body.Entity
+	GetEntity() *rigid_body.Entity
 
 	VerticesSetAction(idx int)
 

@@ -98,7 +98,7 @@ func (v *VerticesSprite) VerticesGetVolume() IVolume {
 }
 
 // VerticesGetEntity returns the physics entity associated with the sprite's volume.
-func (v *VerticesSprite) VerticesGetEntity() *rigid_body.Entity {
+func (v *VerticesSprite) GetEntity() *rigid_body.Entity {
 	return v.volume.GetEntity()
 }
 

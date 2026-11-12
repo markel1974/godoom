@@ -3,10 +3,10 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/collisions"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -144,7 +144,7 @@ func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
 	return distSq
 }
 
-func (t *Base) VerticesGetEntity() *rigid_body.Entity {
+func (t *Base) GetEntity() *rigid_body.Entity {
 	return t.VerticesGetVolume().GetEntity()
 }
 
@@ -209,7 +209,7 @@ func (t *Base) StageResolve() {
 			rParentEnt = rCage.GetEntity()
 		} else {
 			rFace := slot.GetRemoteFace()
-			rParent := rFace.GetParent()
+			rParent := rFace.GetParent().(*volumes.Volume)
 			rParentEnt = rParent.GetEntity()
 		}
 		// Risoluzione Impulsi e Attrito (Fase Cinetica).
@@ -221,7 +221,7 @@ func (t *Base) StageResolve() {
 // StageApply applies physical and geometrical adjustments to the entity based on collision resolution and position corrections.
 func (t *Base) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
-		t.location = location
+		t.location = location.(*volumes.Volume)
 	}
 	entity := t.VerticesGetVolume().GetEntity()
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
@@ -250,7 +250,7 @@ func (t *Base) StageApply() {
 					entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
 				}
 			}
-			t.onCollision(rCage.GetObject())
+			t.onCollision(rCage.GetObject().(volumes.IThing))
 		case collisions.ImpactInelastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
@@ -262,7 +262,7 @@ func (t *Base) StageApply() {
 			if pen > 0 {
 				entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 			}
-			rParent := slot.GetRemoteFace().GetParent()
+			rParent := slot.GetRemoteFace().GetParent().(*volumes.Volume)
 			if thing := rParent.GetThing(); thing != nil {
 				t.onCollision(thing)
 			}
@@ -330,7 +330,7 @@ func (t *Base) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, for
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
 
-		closestThing.VerticesGetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
+		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.VerticesApplyImpact(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDist, impactX, impactY, impactZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)

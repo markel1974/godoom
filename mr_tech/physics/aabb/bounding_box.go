@@ -4,6 +4,10 @@ import (
 	"math"
 )
 
+const maxTiltSin = 0.30
+
+var _maxTiltAngle = math.Asin(maxTiltSin) //, in radians
+
 // obbVector is a fixed-size 3D vector used by the SAT implementation.
 type obbVector [3]float64
 
@@ -36,6 +40,8 @@ func NewBoundingBox() *BoundingBox {
 		qTilt:        NewQuaternionEmpty(),
 	}
 	r.qRotation.SetIdentity()
+	r.qYaw.SetIdentity()
+	r.qTilt.SetIdentity()
 	r.rebuild()
 	return r
 }
@@ -61,18 +67,23 @@ func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
 func (r *BoundingBox) SetRotationQuaternion(x, y, z, w float64) {
 	r.qRotation.Set(x, y, z, w)
 	r.qRotation.Normalize()
+	r.syncYawTiltFromRotation()
 	r.rebuild()
 }
 
 // SetRotationAngleZ sets the orientation to a rotation around the world Z axis by angleRad radians.
 func (r *BoundingBox) SetRotationAngleZ(angleRad float64) {
-	r.qRotation.SetAxisAngle(0, 0, 1, angleRad)
+	r.qYaw.SetAxisAngle(0, 0, 1, angleRad)
+	r.qTilt.SetIdentity()
+	r.composeRotation()
 	r.rebuild()
 }
 
 // SetRotationEuler sets the orientation from roll (X), pitch (Y), and yaw (Z) angles in radians.
 func (r *BoundingBox) SetRotationEuler(rollX, pitchY, yawZ float64) {
 	r.qRotation.SetEulerZYX(rollX, pitchY, yawZ)
+	r.qRotation.Normalize()
+	r.syncYawTiltFromRotation()
 	r.rebuild()
 }
 
@@ -123,7 +134,8 @@ func (r *BoundingBox) GetAxes2() (float64, float64, float64) {
 
 // GetYaw returns the current horizontal yaw angle in radians derived from the local X axis in world space.
 func (r *BoundingBox) GetYaw() float64 {
-	return math.Atan2(r.axis[0][1], r.axis[0][0])
+	_, _, qz, qw := r.qYaw.Get()
+	return 2.0 * math.Atan2(qz, qw)
 }
 
 // GetOrientedHalfExtents returns the half-extents of the oriented bounding box projected onto world X, Y, Z axes.
@@ -213,47 +225,81 @@ func (r *BoundingBox) GetCenter() (float64, float64, float64) {
 	return r.center.x, r.center.y, r.center.z
 }
 
-const maxTiltSin = 0.30
+// composeRotation rebuilds the complete orientation from the independent yaw and tilt states.
+func (r *BoundingBox) composeRotation() {
+	r.qYaw.Multiplies(r.qTilt, r.qRotation)
+	r.qRotation.Normalize()
+}
 
-var _maxTiltSin = math.Asin(maxTiltSin)
-
-func (r *BoundingBox) Rotate(wx, wy, wz float64, dt float64) bool {
-	qBB := r.qRotation
-	qBB.IntegrateAngular(wx, wy, wz, dt)
-	r.SyncRotation()
-	reset := false
-	// Clamp maximum tilt angle (~18 degrees) so objects rock dynamically when hit
-	// without ever flipping sideways/upside-down or getting stuck in an unnatural pose.
-	a2Post0, a2Post1, a2Post2 := r.axis[2][0], r.axis[2][1], r.axis[2][2]
-	tiltSin := math.Hypot(a2Post0, a2Post1)
-
-	if tiltSin > maxTiltSin || a2Post2 < 0.95 {
-		qYaw := r.qYaw
-		qTilt := r.qTilt
-		yaw := r.GetYaw()
-		qYaw.Set(0, 0, 0, 0)
-		qTilt.Set(0, 0, 0, 0)
-		qYaw.SetAxisAngle(0.0, 0.0, 1.0, yaw)
-		var txAxis, tyAxis float64
-		if tiltSin > 1e-6 {
-			txAxis = -a2Post1 / tiltSin
-			tyAxis = a2Post0 / tiltSin
-		} else {
-			txAxis = 1.0
-		}
-
-		qTilt.SetAxisAngle(txAxis, tyAxis, 0.0, _maxTiltSin)
-		qTilt.Multiplies(qYaw, qBB)
-		qBB.Normalize()
-		r.SyncRotation()
-		// Zero outward Roll/Pitch angular velocity
-		if wx*txAxis+wy*tyAxis > 0.0 {
-			reset = true
-		}
-	} else if tiltSin < 0.005 && math.Abs(wx) < 0.05 && math.Abs(wy) < 0.05 {
-		r.SetRotationAngleZ(r.GetYaw())
-		reset = true
+// setSwingFromDirection builds a pure tilt quaternion that rotates local Z onto dir.
+// Any twist around local Z is intentionally discarded.
+func (r *BoundingBox) setSwingFromDirection(dx, dy, dz float64) float64 {
+	length := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	if length < 1e-12 {
+		r.qTilt.SetIdentity()
+		return 0
 	}
+	dx, dy, dz = dx/length, dy/length, dz/length
+	if dz > 1.0 {
+		dz = 1.0
+	}
+	if dz < -1.0 {
+		dz = -1.0
+	}
+	angle := math.Acos(dz)
+	if angle > _maxTiltAngle {
+		angle = _maxTiltAngle
+	}
+	axisX, axisY := -dy, dx // (0,0,1) x dir
+	axisLength := math.Hypot(axisX, axisY)
+	if axisLength < 1e-12 || angle < 1e-12 {
+		r.qTilt.SetIdentity()
+		return angle
+	}
+	r.qTilt.SetAxisAngle(axisX/axisLength, axisY/axisLength, 0, angle)
+	return angle
+}
+
+// syncYawTiltFromRotation decomposes an externally supplied orientation into
+// world-Z yaw and a pure swing (tilt), discarding any independent local-Z twist.
+func (r *BoundingBox) syncYawTiltFromRotation() {
+	_, _, qz, qw := r.qRotation.Get()
+	twistLength := math.Hypot(qz, qw)
+	if twistLength < 1e-12 {
+		r.qYaw.SetIdentity()
+	} else {
+		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
+	}
+	// qTilt = inverse(qYaw) * qRotation. Rotate local Z to obtain its swing direction.
+	qx, qy, qz, qw := r.qYaw.Get()
+	invYaw := Quaternion{data: [4]float64{-qx, -qy, -qz, qw}}
+	var relative Quaternion
+	invYaw.Multiplies(r.qRotation, &relative)
+	dx, dy, dz := relative.Rotate(0, 0, 1)
+	r.setSwingFromDirection(dx, dy, dz)
+	r.composeRotation()
+}
+
+// Rotate integrates yaw and tilt independently. Angular velocity is expressed in world space.
+// Yaw is integrated around world Z; roll/pitch are transformed into the yaw-local frame.
+func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
+	if dt == 0 {
+		return false
+	}
+	r.qYaw.IntegrateAngular(0, 0, wz, dt)
+	// Convert the horizontal world-space angular velocity into the yaw-local frame.
+	qx, qy, qz, qw := r.qYaw.Get()
+	inverseYaw := Quaternion{data: [4]float64{-qx, -qy, -qz, qw}}
+	lwx, lwy, _ := inverseYaw.Rotate(wx, wy, 0)
+	r.qTilt.IntegrateAngular(lwx, lwy, 0, dt)
+
+	// Keep tilt as a pure swing: no local-Z twist can leak into the yaw state.
+	dx, dy, dz := r.qTilt.Rotate(0, 0, 1)
+	angle := math.Acos(math.Max(-1, math.Min(1, dz)))
+	reset := angle > _maxTiltAngle && (lwx*(-dy)+lwy*dx) > 0
+	r.setSwingFromDirection(dx, dy, dz)
+	r.composeRotation()
+	r.SyncRotation()
 	return reset
 }
 
@@ -417,7 +463,6 @@ func intersectsOBB(cA obbVector, a [3]obbVector, hA obbVector, cB obbVector, b [
 			default:
 				ti1 = t2
 			}
-
 			switch i2 {
 			case 0:
 				ti2 = t0
@@ -426,12 +471,7 @@ func intersectsOBB(cA obbVector, a [3]obbVector, hA obbVector, cB obbVector, b [
 			default:
 				ti2 = t2
 			}
-
-			distance := math.Abs(
-				ti2*R[i1][j] -
-					ti1*R[i2][j],
-			)
-
+			distance := math.Abs(ti2*R[i1][j] - ti1*R[i2][j])
 			if distance > ra+rb {
 				return false
 			}

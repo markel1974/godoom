@@ -671,7 +671,31 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 
 // ResolveImpact resolves a 6-DoF rigid-body collision between two Cinematic objects at contact lever arms (r1x, r1y, r1z)
 // and (r2x, r2y, r2z), applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω.
-func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz, r1x, r1y, r1z, r2x, r2y, r2z float64) (float64, float64, float64, bool) {
+func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64) (float64, float64, float64, bool) {
+	var r1x, r1y, r1z float64
+	var r2x, r2y, r2z float64
+
+	if e2.GetInvMass() > 0.0 {
+		minX := math.Max(cx1-ex1, cx2-ex2)
+		maxX := math.Min(cx1+ex1, cx2+ex2)
+		minY := math.Max(cy1-ey1, cy2-ey2)
+		maxY := math.Min(cy1+ey1, cy2+ey2)
+		minZ := math.Max(cz1-ez1, cz2-ez2)
+		maxZ := math.Min(cz1+ez1, cz2+ez2)
+
+		px := math.Max(cx1-ex1, math.Min(cx1+ex1, (minX+maxX)*0.5))
+		py := math.Max(cy1-ey1, math.Min(cy1+ey1, (minY+maxY)*0.5))
+		pz := math.Max(cz1-ez1, math.Min(cz1+ez1, (minZ+maxZ)*0.5))
+
+		r1x, r1y, r1z = px-cx1, py-cy1, (pz-cz1)*0.25
+		r2x, r2y, r2z = px-cx2, py-cy2, (pz-cz2)*0.25
+	} else if math.Abs(nz) < 0.7 {
+		// Impact against static wall/obstacle: contact point on OBB perimeter along -n
+		r1x = -nx * ex1
+		r1y = -ny * ey1
+		r1z = -nz * ez1 * 0.25
+	}
+
 	// safe normalization (anti-explosion)
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen > 0.0 {

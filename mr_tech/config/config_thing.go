@@ -63,7 +63,7 @@ type Thing struct {
 
 // NewConfigThing creates and returns a new Thing instance with the specified ID, position, angle, type, and physical attributes.
 func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, mass, radius, height, speed float64) *Thing {
-	return &Thing{
+	th := &Thing{
 		Id:             id,
 		Position:       pos,
 		Angle:          angle,
@@ -73,7 +73,7 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Height:         height,
 		Speed:          speed,
 		Acceleration:   3.0,
-		MaxStepFactor:  0.5,
+		MaxStepFactor:  0.0,
 		Restitution:    0.0,
 		Impulse:        3.0,
 		WakeupDistance: 300.0,
@@ -81,6 +81,11 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		Friction:       0.2,
 		GForce:         9.8,
 	}
+	if th.Kind == ThingPlayerDef || th.Kind == ThingEnemyDef {
+		th.MaxStepFactor = 0.5
+	}
+
+	return th
 }
 
 // Scale applies the given scaling factors to the Position of the Thing by modifying its X, Y, and Z coordinates.

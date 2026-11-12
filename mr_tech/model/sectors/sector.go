@@ -5,8 +5,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -21,7 +21,7 @@ type Sector struct {
 	segments     []*Segment
 	segmentCount int
 	cLight       *config.Light
-	entity       *physics.Entity
+	entity       *rigid_body.Entity
 	segmentsTree *aabb.Tree
 	slopeF       *Slope
 	slopeC       *Slope
@@ -45,7 +45,7 @@ func NewSector(modelId int, id string, minZ float64, maxZ float64, materials []*
 		segments:     make([]*Segment, 128),
 		segmentCount: 0,
 		cLight:       &config.Light{},
-		entity:       physics.NewEntity(concreteMass, concreteRestitution, concreteFriction, concreteGForce),
+		entity:       rigid_body.NewEntity(concreteMass, concreteRestitution, concreteFriction, concreteGForce),
 		segmentsTree: aabb.NewTree(64, 0.0),
 		slopeF:       nil,
 		slopeC:       nil,
@@ -67,7 +67,7 @@ func (sr *Sector) GetId() string {
 }
 
 // GetEntity returns the physics.Entity instance associated with the Sector.
-func (sr *Sector) GetEntity() *physics.Entity {
+func (sr *Sector) GetEntity() *rigid_body.Entity {
 	return sr.entity
 }
 

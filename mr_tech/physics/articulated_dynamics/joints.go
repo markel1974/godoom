@@ -1,10 +1,12 @@
-package physics
+package articulated_dynamics
 
 import (
 	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // Joints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
@@ -37,10 +39,10 @@ type Joints struct {
 	lastHitPart  int
 	lastHitForce float64
 
-	rootQuat         *Quaternion
-	rootFallQuat     *Quaternion
-	rootRollQuat     *Quaternion
-	rootCombinedQuat *Quaternion
+	rootQuat         *aabb.Quaternion
+	rootFallQuat     *aabb.Quaternion
+	rootRollQuat     *aabb.Quaternion
+	rootCombinedQuat *aabb.Quaternion
 
 	isRagdoll bool
 
@@ -52,7 +54,7 @@ type Joints struct {
 
 	//elems []IElements
 
-	ent *Entity
+	ent *rigid_body.Entity
 }
 
 // NewJoints creates a Joints instance with default state and identity root quaternions.
@@ -60,20 +62,19 @@ func NewJoints() *Joints {
 	pj := &Joints{
 		fallAxisX:        1.0,
 		lastHitPart:      -1,
-		rootQuat:         NewQuaternionIdentity(),
-		rootFallQuat:     NewQuaternionIdentity(),
-		rootRollQuat:     NewQuaternionIdentity(),
-		rootCombinedQuat: NewQuaternionIdentity(),
+		rootQuat:         aabb.NewQuaternionIdentity(),
+		rootFallQuat:     aabb.NewQuaternionIdentity(),
+		rootRollQuat:     aabb.NewQuaternionIdentity(),
+		rootCombinedQuat: aabb.NewQuaternionIdentity(),
 	}
 	return pj
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Joints) Setup(ent *Entity, configJoints []*Joint, links *Links) error {
+func (v *Joints) Setup(ent *rigid_body.Entity, configJoints []*Joint, links *Links) error {
 	v.ent = ent
 	v.numParts = len(configJoints)
 	v.links = links
-	//v.elems = make([]IElement, v.numParts)
 	v.rotationsA = make([]*TagAxis, v.numParts)
 	v.rotationsB = make([]*TagAxis, v.numParts)
 	v.data = make([]*Joint, v.numParts)
@@ -81,67 +82,12 @@ func (v *Joints) Setup(ent *Entity, configJoints []*Joint, links *Links) error {
 	copy(v.data, configJoints)
 
 	for i := 0; i < v.numParts; i++ {
-		//v.elems[i] = elements.GetEntry(i)
 		v.rotationsA[i] = NewTagAxisIdentity()
 		v.rotationsB[i] = NewTagAxisIdentity()
-		//v.data[i] = NewJoint()
 	}
 
 	v.originsA = make([]geometry.XYZ, v.numParts)
 	v.originsB = make([]geometry.XYZ, v.numParts)
-
-	/*
-		for i := range v.data {
-			j := v.data[i]
-			j.quat.SetIdentity()
-			j.detQuat.SetIdentity()
-			j.axis.Reset()
-			j.combinedA.Reset()
-			j.combinedB.Reset()
-			//TODO FROM CONFIG
-			j.partRadius = 8.0
-
-			if element := elements.GetEntry(i); element != nil {
-				if vol := element.volumes[0]; vol != nil {
-					fc := vol.GetFaceCount()
-					if fc > 0 {
-						minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-						maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-						for fIdx := 0; fIdx < fc; fIdx++ {
-							f := vol.GetFace(fIdx)
-							minX, minY, minZ, maxX, maxY, maxZ = f.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-						}
-						j.localCenterX = (minX + maxX) * 0.5
-						j.localCenterY = (minY + maxY) * 0.5
-						j.localCenterZ = (minZ + maxZ) * 0.5
-						dx, dy, dz := maxX-minX, maxY-minY, maxZ-minZ
-						r := math.Max(dx, math.Max(dy, dz)) * 0.5
-						j.partRadius = math.Max(4.0, math.Min(48.0, r))
-					}
-				}
-			}
-
-			if i == 0 || v.links.GetParent(i) < 0 {
-				j.dofScaleX, j.dofScaleY, j.dofScaleZ = 0, 0, 0
-				j.maxAngleAlive = 0
-				j.maxAngleRagdoll = 0
-				j.stiffness = 80.0
-				j.damping = 10.0
-				j.canDetach = false
-			} else {
-				tag := v.links.GetTag(i)
-				z := cfg.Joints.Get(tag)
-				j.dofScaleX, j.dofScaleY, j.dofScaleZ = z.DofScale.X, z.DofScale.Y, z.DofScale.Z
-				j.maxAngleAlive = z.MaxAngleAlive
-				j.maxAngleRagdoll = z.MaxAngleRagdoll
-				j.stiffness = z.Stiffness
-				j.damping = z.Damping
-				j.detachThreshold = z.DetachThreshold
-				j.canDetach = z.CanDetach
-			}
-		}
-
-	*/
 
 	return nil
 }
@@ -642,7 +588,7 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
 // Restore resets the joint origins and rotations at i using q and any active root transform.
-func (v *Joints) Restore(i int, q *Quaternion) {
+func (v *Joints) Restore(i int, q *aabb.Quaternion) {
 	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.rootDropZ
 	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.rootDropZ
 

@@ -13,7 +13,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	common2 "github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 type cachedRagdoll struct {
@@ -844,7 +844,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 
 		const deathFrames = 16
 		startFrame := len(rawFrames)
-		qFall := physics.NewQuaternionEmpty()
+		qFall := common2.NewQuaternionEmpty()
 		for f := 0; f < deathFrames; f++ {
 			var skel []*md5.Joint
 			if baseAnim != nil && len(baseAnim.Frames) > 0 {
@@ -1000,10 +1000,10 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	}
 
 	anchorPos := make([]geometry.XYZ, numParts)
-	anchorQuat := make([]*physics.Quaternion, numParts)
-	identityQuat := physics.NewQuaternionIdentity()
-	invParentQ := physics.NewQuaternionEmpty()
-	relQ := physics.NewQuaternionEmpty()
+	anchorQuat := make([]*common2.Quaternion, numParts)
+	identityQuat := common2.NewQuaternionIdentity()
+	invParentQ := common2.NewQuaternionEmpty()
+	relQ := common2.NewQuaternionEmpty()
 
 	for fIdx, rf := range rawFrames {
 		// Part 0 is the root coordinate frame at centered origin (0,0,0) with identity orientation
@@ -1290,7 +1290,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 
 		const deathFrames = 16
 		startFrame := len(allFrames)
-		qFall := physics.NewQuaternionEmpty()
+		qFall := common2.NewQuaternionEmpty()
 		for f := 0; f < deathFrames; f++ {
 			var skel []*md5.Joint
 			if baseAnim != nil && len(baseAnim.Frames) > 0 {

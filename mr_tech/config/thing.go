@@ -2,7 +2,7 @@ package config
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // BindFunc is a function type used to bind and configure an IThingConfig instance for initialization or setup.
@@ -23,7 +23,7 @@ type IThingConfig interface {
 
 	GetKind() ThingType
 
-	VerticesGetEntity() *physics.Entity
+	VerticesGetEntity() *rigid_body.Entity
 
 	VerticesSetAction(idx int)
 

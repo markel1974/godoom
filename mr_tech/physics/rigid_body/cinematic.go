@@ -1,4 +1,4 @@
-package physics
+package rigid_body
 
 import (
 	"math"

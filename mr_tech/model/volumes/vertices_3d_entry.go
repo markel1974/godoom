@@ -9,15 +9,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Vertices3DEntryComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
 type Vertices3DEntryComposed struct {
 	volume *Volume
-	entity *physics.Entity
+	entity *rigid_body.Entity
 }
 
 // NewVertices3DEntryComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
@@ -34,7 +35,7 @@ func (vm *Vertices3DEntryComposed) QueryOverlaps(object aabb.IObject, callback f
 }
 
 // GetEntity returns the physics.Entity associated with the VerticeMultiSpriteEntity.
-func (vm *Vertices3DEntryComposed) GetEntity() *physics.Entity {
+func (vm *Vertices3DEntryComposed) GetEntity() *rigid_body.Entity {
 	return vm.entity
 }
 
@@ -93,7 +94,7 @@ type Vertices3DEntry struct {
 	tick          uint64
 	facesA        *Faces
 	facesB        *Faces
-	rot           *physics.TagAxis
+	rot           *articulated_dynamics.TagAxis
 	lastQx        float64
 	lastQy        float64
 	lastQz        float64
@@ -207,7 +208,7 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		salt:          uint64(rand.Intn(len(model.Frames))),
 		facesA:        facesA,
 		facesB:        facesB,
-		rot:           physics.NewTagAxisIdentity(),
+		rot:           articulated_dynamics.NewTagAxisIdentity(),
 		lastQw:        1.0,
 		singleFrame:   endFrame == 0,
 	}

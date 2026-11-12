@@ -6,17 +6,18 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
 type Vertices3D struct {
 	actions       *Vertices3DActions
 	currentAction int
-	links         *physics.Links
+	links         *articulated_dynamics.Links
 	elements      *Vertices3DElements
-	joints        *physics.Joints
+	joints        *articulated_dynamics.Joints
 	minX          float64
 	minY          float64
 	minZ          float64
@@ -29,8 +30,8 @@ type Vertices3D struct {
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
-		links:         physics.NewLinks(),
-		joints:        physics.NewJoints(),
+		links:         articulated_dynamics.NewLinks(),
+		joints:        articulated_dynamics.NewJoints(),
 		elements:      NewVertices3DElements(),
 		actions:       NewVertices3DActions(),
 		currentAction: -1,
@@ -71,7 +72,7 @@ func (v *Vertices3D) VerticesGetVolume() IVolume {
 }
 
 // VerticesGetEntity returns the physics entity for the composite model, or the first element's entity if unset.
-func (v *Vertices3D) VerticesGetEntity() *physics.Entity {
+func (v *Vertices3D) VerticesGetEntity() *rigid_body.Entity {
 	return v.elements.vVolume.entity
 }
 
@@ -225,16 +226,16 @@ func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
 }
 
-func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*physics.Joint, error) {
+func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*articulated_dynamics.Joint, error) {
 	numParts := len(cfg.Parts)
-	joints := make([]*physics.Joint, numParts)
+	joints := make([]*articulated_dynamics.Joint, numParts)
 	for i := 0; i < numParts; i++ {
 		element := elements.GetEntry(i)
 		if element == nil {
 			return nil, fmt.Errorf("entry %d is nil", i)
 		}
 		// TODO FROM CONFIG default partRadius
-		j := physics.NewJoint2(element, 8.0)
+		j := articulated_dynamics.NewJoint2(element, 8.0)
 		joints[i] = j
 
 		if vol := element.volumes[0]; vol != nil {
@@ -272,15 +273,15 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3
 
 // createConfigLinks creates and initializes physics.Link objects for each part in the given config.Model3D structure.
 // Returns the created links or an error if initialization fails.
-func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*physics.Link, error) {
+func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dynamics.Link, error) {
 	numParts := len(cfg.Parts)
-	links := make([]*physics.Link, numParts)
+	links := make([]*articulated_dynamics.Link, numParts)
 	for i := 0; i < numParts; i++ {
-		parent, tag := physics.LinkInvalidIndex, ""
+		parent, tag := articulated_dynamics.LinkInvalidIndex, ""
 		if i < len(cfg.Links) {
 			parent, tag = cfg.Links[i].Parent, cfg.Links[i].Tag
 		}
-		link := physics.NewLink(parent, tag)
+		link := articulated_dynamics.NewLink(parent, tag)
 		links[i] = link
 		lParent := link.GetParent()
 		if lParent < 0 {

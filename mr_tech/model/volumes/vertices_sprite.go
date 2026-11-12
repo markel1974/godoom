@@ -4,8 +4,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -98,7 +98,7 @@ func (v *VerticesSprite) VerticesGetVolume() IVolume {
 }
 
 // VerticesGetEntity returns the physics entity associated with the sprite's volume.
-func (v *VerticesSprite) VerticesGetEntity() *physics.Entity {
+func (v *VerticesSprite) VerticesGetEntity() *rigid_body.Entity {
 	return v.volume.GetEntity()
 }
 

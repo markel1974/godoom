@@ -7,23 +7,24 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 type VirtualVolume struct {
-	entity   *physics.Entity
+	entity   *rigid_body.Entity
 	elements *Vertices3DElements
 }
 
-func NewVirtualVolume(elements *Vertices3DElements, entity *physics.Entity) *VirtualVolume {
+func NewVirtualVolume(elements *Vertices3DElements, entity *rigid_body.Entity) *VirtualVolume {
 	return &VirtualVolume{
 		elements: elements,
 		entity:   entity,
 	}
 }
 
-func (v *VirtualVolume) GetEntity() *physics.Entity {
+func (v *VirtualVolume) GetEntity() *rigid_body.Entity {
 	return v.entity
 }
 
@@ -116,7 +117,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 		}
 	}
 
-	v.vVolume = NewVirtualVolume(v, physics.NewEntity(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce))
+	v.vVolume = NewVirtualVolume(v, rigid_body.NewEntity(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce))
 	return nil
 }
 
@@ -133,7 +134,7 @@ func (v *Vertices3DElements) Bind(i int, tick uint64) {
 }
 
 // Compile transforms frame faces for part i into the A and B buffers and clears unused face slots.
-func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *physics.TagAxis) (float64, float64, float64, float64, float64, float64) {
+func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *articulated_dynamics.TagAxis) (float64, float64, float64, float64, float64, float64) {
 	volA := v.volsA[i]
 	volB := v.volsB[i]
 

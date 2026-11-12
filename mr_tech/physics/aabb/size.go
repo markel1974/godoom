@@ -1,4 +1,4 @@
-package physics
+package aabb
 
 // Size represents the dimensions of a 3D object with width, height, and depth as float64 values.
 type Size struct {

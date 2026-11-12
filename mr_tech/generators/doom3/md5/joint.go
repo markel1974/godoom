@@ -2,7 +2,7 @@ package md5
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Joint holds the position and orientation of a single bone in model space.
@@ -10,11 +10,11 @@ type Joint struct {
 	name   string
 	parent int
 	Pos    geometry.XYZ
-	Orient *physics.Quaternion // (qx, qy, qz, qw)
+	Orient *aabb.Quaternion // (qx, qy, qz, qw)
 }
 
 // NewJoint creates a joint with the given name, parent index, position, and orientation.
-func NewJoint(name string, parent int, pos geometry.XYZ, orient *physics.Quaternion) *Joint {
+func NewJoint(name string, parent int, pos geometry.XYZ, orient *aabb.Quaternion) *Joint {
 	return &Joint{name: name, parent: parent, Pos: pos, Orient: orient}
 }
 
@@ -30,7 +30,7 @@ func (j *Joint) Parent() int {
 
 // Clone returns a deep copy of the joint, including a cloned orientation quaternion.
 func (j *Joint) Clone() *Joint {
-	var orient *physics.Quaternion
+	var orient *aabb.Quaternion
 	if j.Orient != nil {
 		orient = j.Orient.Clone()
 	}

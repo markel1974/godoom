@@ -2,7 +2,7 @@ package md5
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // HeadJointTransform represents different types of transformations applied to head joints in a 3D space.
@@ -21,7 +21,7 @@ type HeadJointBinding struct {
 	bodyIdx   int
 	parentIdx int
 	pLocal    geometry.XYZ
-	qLocal    *physics.Quaternion
+	qLocal    *aabb.Quaternion
 }
 
 // NewHeadJointBinding initializes and returns a new HeadJointBinding with the given joint transformation type and body index.
@@ -31,7 +31,7 @@ func NewHeadJointBinding(kind HeadJointTransform, bodyIdx int) *HeadJointBinding
 		bodyIdx:   bodyIdx,
 		parentIdx: 0,
 		pLocal:    geometry.XYZ{},
-		qLocal:    physics.NewQuaternionEmpty(),
+		qLocal:    aabb.NewQuaternionEmpty(),
 	}
 }
 
@@ -112,7 +112,7 @@ func (h *HeadAttachment) BuildHeadSkeleton(bodySkeleton []*Joint) []*Joint {
 				pEval := headSkeleton[b.parentIdx]
 				rPosX, rPosY, rPosZ := pEval.Orient.Rotate(b.pLocal.X, b.pLocal.Y, b.pLocal.Z)
 				cPos := geometry.XYZ{X: pEval.Pos.X + rPosX, Y: pEval.Pos.Y + rPosY, Z: pEval.Pos.Z + rPosZ}
-				cOrient := physics.NewQuaternionEmpty()
+				cOrient := aabb.NewQuaternionEmpty()
 				pEval.Orient.Multiplies(b.qLocal, cOrient)
 				cOrient.Normalize()
 				headSkeleton[i] = NewJoint(hj.name, hj.parent, cPos, cOrient)

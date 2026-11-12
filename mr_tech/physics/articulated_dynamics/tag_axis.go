@@ -1,7 +1,8 @@
-package physics
+package articulated_dynamics
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // _im is a predefined identity matrix array representing the standard basis vectors in 3D space.
@@ -50,7 +51,7 @@ func (ta *TagAxis) Reset() {
 }
 
 // SetFromQuaternion populates the 3x3 basis axes directly from the supplied orientation quaternion.
-func (ta *TagAxis) SetFromQuaternion(q *Quaternion) {
+func (ta *TagAxis) SetFromQuaternion(q *aabb.Quaternion) {
 	if q == nil {
 		ta.Reset()
 		return
@@ -61,7 +62,7 @@ func (ta *TagAxis) SetFromQuaternion(q *Quaternion) {
 }
 
 // ToQuaternion extracts the 3x3 basis orientation of the TagAxis into the supplied Quaternion without allocating.
-func (ta *TagAxis) ToQuaternion(q *Quaternion) {
+func (ta *TagAxis) ToQuaternion(q *aabb.Quaternion) {
 	if q == nil {
 		return
 	}

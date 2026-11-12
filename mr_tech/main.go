@@ -16,7 +16,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/version"
@@ -187,7 +187,7 @@ func main() {
 	}
 
 	textures.SetFps(uint64(fps))
-	physics.SetFps(uint64(fps))
+	rigid_body.SetFps(uint64(fps))
 
 	res := app.GetResources()
 	target := app.GetPath()

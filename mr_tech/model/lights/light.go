@@ -5,8 +5,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 const defaultFalloff = 10.0
@@ -39,7 +39,7 @@ type Light struct {
 // NewLight creates and returns a new Light instance with default values for intensity, falloff, and stage.
 func NewLight() *Light {
 	l := &Light{
-		id:               uint64(physics.GetGlobalId()),
+		id:               uint64(rigid_body.GetGlobalId()),
 		parent:           nil,
 		intensity:        0.0,
 		intensityDefault: 0.0,

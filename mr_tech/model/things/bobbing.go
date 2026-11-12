@@ -4,7 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // Bobbing represents a procedural motion system for simulating walking and vertical head movement effects.
@@ -118,7 +118,7 @@ func (p *Bobbing) InjectVerticalImpulse(vz float64) {
 // Compute updates the procedural bobbing motion based on elapsed time, speed, and velocity vector components.
 func (p *Bobbing) Compute(dt, maxSpeed, v2x, v2y float64) {
 	const calibrationFPS = 60.0
-	fps := float64(physics.GetFps())
+	fps := float64(rigid_body.GetFps())
 	if fps <= 0 {
 		return
 	}

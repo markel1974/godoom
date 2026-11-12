@@ -6,8 +6,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // Volume represents a spatial model element that groups geometry, lighting, physics, and sector data.
@@ -17,11 +18,11 @@ type Volume struct {
 	faces      *Faces
 	tag        string
 	light      *lights.Light
-	entity     *physics.Entity
+	entity     *rigid_body.Entity
 	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *sectors.Sector
-	vertexTags []*physics.TagAxis
+	vertexTags []*articulated_dynamics.TagAxis
 	marker     int
 	dirty      bool
 }
@@ -32,9 +33,9 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction, 
 		id:         id,
 		tag:        tag,
 		faces:      NewFaces(128, false),
-		entity:     physics.NewEntity(mass, restitution, friction, gForce),
+		entity:     rigid_body.NewEntity(mass, restitution, friction, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
-		vertexTags: make([]*physics.TagAxis, 0),
+		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
 	}
@@ -114,7 +115,7 @@ func (v *Volume) GetThing() IThing {
 }
 
 // GetEntity returns the physics entity associated with the volume.
-func (v *Volume) GetEntity() *physics.Entity {
+func (v *Volume) GetEntity() *rigid_body.Entity {
 	return v.entity
 }
 
@@ -182,11 +183,11 @@ func (v *Volume) SetSector(s *sectors.Sector) {
 // SetVertexTag sets the vertex tag at idx with the given origin and axis, growing storage as needed.
 func (v *Volume) SetVertexTag(idx int, origin geometry.XYZ, axis [3]geometry.XYZ) {
 	if idx >= len(v.vertexTags) {
-		newTags := make([]*physics.TagAxis, idx+1)
+		newTags := make([]*articulated_dynamics.TagAxis, idx+1)
 		copy(newTags, v.vertexTags)
 		v.vertexTags = newTags
 	}
-	v.vertexTags[idx] = physics.NewTagAxis(origin, axis)
+	v.vertexTags[idx] = articulated_dynamics.NewTagAxis(origin, axis)
 }
 
 // HasVertexTag reports whether idx is a valid vertex tag index.
@@ -195,7 +196,7 @@ func (v *Volume) HasVertexTag(idx int) bool {
 }
 
 // GetVertexTag returns the vertex tag at idx, or nil if idx is out of range.
-func (v *Volume) GetVertexTag(idx int) *physics.TagAxis {
+func (v *Volume) GetVertexTag(idx int) *articulated_dynamics.TagAxis {
 	if idx >= 0 && idx < len(v.vertexTags) {
 		return v.vertexTags[idx]
 	}

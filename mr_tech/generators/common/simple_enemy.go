@@ -6,7 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 type EnemyState int
@@ -23,7 +23,7 @@ const (
 // framesToSeconds converts an animation frame count to seconds using the
 // current animation/update FPS. Missing durations remain zero; no duration is guessed.
 func framesToSeconds(frames int) float64 {
-	fps := physics.GetFps()
+	fps := rigid_body.GetFps()
 	if frames <= 0 || fps <= 0 {
 		return 0
 	}
@@ -129,7 +129,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 	}
 
 	if e.shootCooldown > 0 {
-		fps := physics.GetFps()
+		fps := rigid_body.GetFps()
 		dt := 1.0 / float64(fps)
 		e.shootCooldown -= dt
 		if e.shootCooldown < 0 {
@@ -191,7 +191,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStateAttack:
-		dt := 1.0 / float64(physics.GetFps())
+		dt := 1.0 / float64(rigid_body.GetFps())
 		e.shootTimer -= dt
 		if e.shootTimer <= 0 {
 			selfX, selfY, selfZ := e.self.VerticesGetEntity().GetCenter()
@@ -207,7 +207,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 		return
 
 	case EnemyStatePain:
-		dt := 1.0 / float64(physics.GetFps())
+		dt := 1.0 / float64(rigid_body.GetFps())
 		e.painTimer -= dt
 		if e.painTimer <= 0 {
 			e.painTimer = 0

@@ -1,9 +1,7 @@
-package physics
+package aabb
 
 import (
 	"math"
-
-	aabb "github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // obbVector is a fixed-size 3D vector used by the SAT implementation.
@@ -15,7 +13,7 @@ type BoundingBox struct {
 	bottomCenter Point
 	center       Point
 	size         Size
-	aabb         *aabb.AABB
+	aabb         *AABB
 	axis         [3]obbVector // Local axes transformed into world space.
 	rotation     *Quaternion  // Orientation quaternion.
 	ex           float64      // Oriented half-extents projected onto world axes.
@@ -30,7 +28,7 @@ func NewBoundingBox() *BoundingBox {
 		bottomCenter: NewPoint(0, 0, 0),
 		center:       NewPoint(0, 0, 0),
 		size:         NewSize(0, 0, 0),
-		aabb:         aabb.NewAABB(),
+		aabb:         NewAABB(),
 		rotation:     NewQuaternionEmpty(),
 	}
 	r.rotation.SetIdentity()
@@ -154,7 +152,7 @@ func (r *BoundingBox) updateAxes() {
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.
-func (r *BoundingBox) GetAABB() *aabb.AABB {
+func (r *BoundingBox) GetAABB() *AABB {
 	return r.aabb
 }
 

@@ -5,8 +5,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // ImpactMode identifies how a collision impact should be resolved and prioritized.
@@ -55,8 +55,8 @@ type Cage struct {
 	seen                map[*Cage]bool
 	object              volumes.IThing
 	buckets             [BucketSize]*Bucket
-	ellipsoid           *physics.Entity
-	ellipsoidLocal      [4]*physics.Entity
+	ellipsoid           *rigid_body.Entity
+	ellipsoidLocal      [4]*rigid_body.Entity
 	cX, cY, cZ          float64
 	dX, dY, dZ          float64
 	tX, tY, tZ          float64
@@ -80,7 +80,7 @@ func NewCage(object volumes.IThing) *Cage {
 	c := &Cage{
 		seen:      make(map[*Cage]bool),
 		object:    object,
-		ellipsoid: physics.NewEntity(0, 0, 0, 0),
+		ellipsoid: rigid_body.NewEntity(0, 0, 0, 0),
 		volume:    nil,
 		slots:     make([]*Entry, TotalSlots),
 		slotsLen:  0,
@@ -95,7 +95,7 @@ func NewCage(object volumes.IThing) *Cage {
 		c.buckets[i] = NewBucket(i)
 	}
 	for i := 0; i < len(c.ellipsoidLocal); i++ {
-		c.ellipsoidLocal[i] = physics.NewEntity(0, 0, 0, 0)
+		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, 0)
 	}
 	return c
 }
@@ -288,7 +288,7 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace *volumes.Face, 
 }
 
 // TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.
-func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *physics.Entity {
+func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *rigid_body.Entity {
 	w := s.ellipsoidLocal[slot]
 	from := s.ellipsoid.GetAABB()
 	lMinX := from.GetMinX() - deltaX
@@ -337,7 +337,7 @@ func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, floa
 }
 
 // Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
-func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *physics.Entity {
+func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *rigid_body.Entity {
 	w := s.ellipsoidLocal[slot]
 	to := src.GetAABB()
 	rLocCx := (to.GetMinX() + to.GetMaxX()) * 0.5
@@ -444,7 +444,7 @@ func (s *Cage) HasFloor() bool {
 }
 
 // GetEntity returns the physics entity associated with the collision cage.
-func (s *Cage) GetEntity() *physics.Entity {
+func (s *Cage) GetEntity() *rigid_body.Entity {
 	return s.object.VerticesGetEntity()
 }
 

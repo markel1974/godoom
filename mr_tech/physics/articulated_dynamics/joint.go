@@ -1,6 +1,10 @@
-package physics
+package articulated_dynamics
 
-import "math"
+import (
+	"math"
+
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+)
 
 type IElement interface {
 	FreezeCurrentFrame()
@@ -48,8 +52,8 @@ type Joint struct {
 	detWz      float64
 	detFloorZ  float64
 
-	quat      *Quaternion
-	detQuat   *Quaternion
+	quat      *aabb.Quaternion
+	detQuat   *aabb.Quaternion
 	axis      *TagAxis
 	combinedA *TagAxis
 	combinedB *TagAxis
@@ -59,8 +63,8 @@ type Joint struct {
 func NewJoint2(elem IElement, partRadius float64) *Joint {
 	j := &Joint{
 		elem:      elem,
-		quat:      NewQuaternionIdentity(),
-		detQuat:   NewQuaternionIdentity(),
+		quat:      aabb.NewQuaternionIdentity(),
+		detQuat:   aabb.NewQuaternionIdentity(),
 		axis:      NewTagAxisIdentity(),
 		combinedA: NewTagAxisIdentity(),
 		combinedB: NewTagAxisIdentity(),

@@ -6,15 +6,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticeMultiSpriteComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
 type VerticeMultiSpriteComposed struct {
 	volume *Volume
-	entity *physics.Entity
+	entity *rigid_body.Entity
 }
 
 // NewVerticeMultiSpriteComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
@@ -31,7 +31,7 @@ func (vm *VerticeMultiSpriteComposed) QueryOverlaps(object aabb.IObject, callbac
 }
 
 // GetEntity returns the physics.Entity associated with the VerticeMultiSpriteEntity.
-func (vm *VerticeMultiSpriteComposed) GetEntity() *physics.Entity {
+func (vm *VerticeMultiSpriteComposed) GetEntity() *rigid_body.Entity {
 	return vm.entity
 }
 

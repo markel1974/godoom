@@ -1,4 +1,4 @@
-package physics
+package articulated_dynamics
 
 import "strings"
 

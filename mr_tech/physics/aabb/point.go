@@ -1,4 +1,4 @@
-package physics
+package aabb
 
 // Point represents a 3D point in space with x, y, and z coordinates as float64 values.
 type Point struct {

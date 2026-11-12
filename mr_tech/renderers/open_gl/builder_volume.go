@@ -8,7 +8,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
@@ -38,7 +37,7 @@ type BuilderVolume struct {
 	//frustumLightRear  *metrics.Frustum
 	//lightFrontFrustum *aabb.Frustum
 	//lightRearFrustum  *aabb.Frustum
-	lightBB *physics.BoundingBox
+	lightBB *aabb.BoundingBox
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -64,7 +63,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 		//frustumLightRear:  metrics.NewFrustum(),
 		//lightFrontFrustum: aabb.NewFrustum(),
 		//lightRearFrustum:  aabb.NewFrustum(),
-		lightBB: physics.NewBoundingBox(),
+		lightBB: aabb.NewBoundingBox(),
 	}
 	prjScale := bv.cal.PrjScale
 	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)

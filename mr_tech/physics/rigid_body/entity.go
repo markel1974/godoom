@@ -1,8 +1,10 @@
-package physics
+package rigid_body
 
 import (
 	"math"
 	"sync/atomic"
+
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 var _dt float64
@@ -35,7 +37,7 @@ func init() {
 // Entity represents a game object with a unique identifier, bounding box, and cinematic behaviors.
 type Entity struct {
 	id uint64
-	*BoundingBox
+	*aabb.BoundingBox
 	*Cinematic
 }
 
@@ -43,7 +45,7 @@ type Entity struct {
 func NewEntity(mass, restitution, groundFriction, gForce float64) *Entity {
 	e := &Entity{
 		id:          uint64(GetGlobalId()),
-		BoundingBox: NewBoundingBox(),
+		BoundingBox: aabb.NewBoundingBox(),
 		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, gForce),
 	}
 	return e
@@ -253,7 +255,7 @@ func (e *Entity) Update() {
 		const maxTiltSin = 0.30
 		if tiltSin > maxTiltSin || a2Post2 < 0.95 {
 			yaw := e.GetYaw()
-			var qYaw, qTilt Quaternion
+			var qYaw, qTilt aabb.Quaternion
 			qYaw.SetAxisAngle(0.0, 0.0, 1.0, yaw)
 			var txAxis, tyAxis float64
 			if tiltSin > 1e-6 {

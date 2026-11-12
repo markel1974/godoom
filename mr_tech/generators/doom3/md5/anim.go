@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/physics"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // AnimHierarchyJoint represents a bone in the hierarchy section of an .md5anim file.
@@ -229,13 +229,13 @@ func (anim *Anim) BuildFrameSkeleton(frameIdx int) []*Joint {
 		if h.parent < 0 {
 			// Strip root motion translation so the animation plays in-place while physics drives world movement.
 			pos = geometry.XYZ{}
-			skel[i] = NewJoint(h.name, h.parent, pos, physics.NewQuaternion(orient))
+			skel[i] = NewJoint(h.name, h.parent, pos, aabb.NewQuaternion(orient))
 		} else {
 			parentJoint := skel[h.parent]
 			rPosX, rPosY, rPosZ := parentJoint.Orient.Rotate(pos.X, pos.Y, pos.Z)
 			pk := geometry.XYZ{X: parentJoint.Pos.X + rPosX, Y: parentJoint.Pos.Y + rPosY, Z: parentJoint.Pos.Z + rPosZ}
 
-			orientQuat := physics.NewQuaternion(orient)
+			orientQuat := aabb.NewQuaternion(orient)
 			parentJoint.Orient.Multiplies(orientQuat, orientQuat)
 			orientQuat.Normalize()
 

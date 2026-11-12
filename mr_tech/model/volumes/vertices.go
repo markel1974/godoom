@@ -3,8 +3,8 @@ package volumes
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/physics"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 type IVolume interface {
 	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
-	GetEntity() *physics.Entity
+	GetEntity() *rigid_body.Entity
 }
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.

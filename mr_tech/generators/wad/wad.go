@@ -15,10 +15,11 @@ type WAD struct {
 	file                    common.IReader
 	lumpInfos               []*lumps.LumpInfo
 	playPal                 *lumps.PlayPal
+	levels                  []*lumps.LumpInfo
 	patches                 map[string]*lumps.Image
 	textures                map[string]*lumps.Texture
 	flats                   map[string]*lumps.Flat
-	levels                  map[string]int
+	levelNames              map[string]int
 	lumps                   map[string]int
 	sprites                 map[string]int
 	patchNames              []string
@@ -29,7 +30,7 @@ type WAD struct {
 func New() *WAD {
 	return &WAD{
 		lumps:                   make(map[string]int),
-		levels:                  make(map[string]int),
+		levelNames:              make(map[string]int),
 		textures:                make(map[string]*lumps.Texture),
 		flats:                   make(map[string]*lumps.Flat),
 		patches:                 make(map[string]*lumps.Image),
@@ -45,22 +46,28 @@ func (w *WAD) Load(fs common.IResources, filename string) error {
 		return err
 	}
 	if err = w.loadInfoTables(); err != nil {
-		return err
+		fmt.Printf("[warning] can't load InfoTables%q\n", err)
+		//return err
 	}
 	if err = w.loadPlayPals(); err != nil {
-		return err
+		fmt.Printf("[warning] can't load PlayPals%q\n", err)
+		//return err
 	}
 	if err = w.loadPatches(); err != nil {
-		return err
+		fmt.Printf("[warning] can't load Patches%q\n", err)
+		//return err
 	}
 	if err = w.loadTextures(); err != nil {
-		return err
+		fmt.Printf("[warning] can't load Textures%q\n", err)
+		//return err
 	}
 	if err = w.loadFlats(); err != nil {
-		return err
+		fmt.Printf("[warning] can't load Flats%q\n", err)
+		//return err
 	}
 	if err = w.loadSprites(); err != nil {
-		return err
+		fmt.Printf("[warning] can't load Sprites%q\n", err)
+		//return err
 	}
 	return nil
 }
@@ -78,7 +85,8 @@ func (w *WAD) loadInfoTables() error {
 		if l.Name == "THINGS" {
 			levelIdx := i - 1
 			levelLump := w.lumpInfos[levelIdx]
-			w.levels[levelLump.Name] = levelIdx
+			w.levels = append(w.levels, levelLump)
+			w.levelNames[levelLump.Name] = levelIdx
 		}
 		w.lumps[l.Name] = i
 	}
@@ -255,18 +263,25 @@ func (w *WAD) GetFlat(flatName string) (*lumps.Flat, bool) {
 // GetLevels returns a sorted list of all level names defined in the WAD file.
 func (w *WAD) GetLevels() []string {
 	var result []string
-	for name := range w.levels {
+	for name := range w.levelNames {
 		result = append(result, name)
 	}
 	sort.Strings(result)
 	return result
 }
 
+func (w *WAD) GetLevelByName(levelName string) (*Level, error) {
+	levelIdx, ok := w.levelNames[levelName]
+	if !ok {
+		return nil, fmt.Errorf("invalid level name: %s", levelName)
+	}
+	return w.GetLevel(levelIdx)
+}
+
 // GetLevel retrieves the specified level data by its name and parses its associated lumps into a Level structure.
-func (w *WAD) GetLevel(levelName string) (*Level, error) {
+func (w *WAD) GetLevel(levelIdx int) (*Level, error) {
 	var err error
 	level := NewLevel()
-	levelIdx := w.levels[levelName]
 	for i := levelIdx + 1; i < levelIdx+11; i++ {
 		lumpInfo := w.lumpInfos[i]
 		if err = lumps.Seek(w.file, lumpInfo.Filepos); err != nil {

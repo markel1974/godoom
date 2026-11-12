@@ -76,9 +76,9 @@ func NewBuilder() *Builder {
 }
 
 // Build generates a Root configuration by loading level data from a WAD file and populating sectors, things, and player.
-func (bld *Builder) Build(fs common.IResources, inFile2 string, levelNumber int) (*config.Root, error) {
-	const difficulty = 2
-	parts := strings.Split(inFile2, "||")
+func (bld *Builder) Build(fs common.IResources, inFile string, levelNumber int) (*config.Root, error) {
+	const difficulty = 1
+	parts := strings.Split(inFile, "||")
 	wadFile := parts[0]
 	var wadLevelFile string
 	if len(parts) > 1 {
@@ -90,9 +90,10 @@ func (bld *Builder) Build(fs common.IResources, inFile2 string, levelNumber int)
 	}
 	wadLevel := wad
 	if len(wadLevelFile) > 0 {
-		iWadFile := wadLevelFile
-		wadLevel = New()
-		if err := wadLevel.Load(fs, iWadFile); err != nil {
+		iWad := New()
+		if err := iWad.Load(fs, wadLevelFile); err == nil {
+			wadLevel = iWad
+		} else {
 			fmt.Printf("can't find iWad:%q\n", err)
 		}
 	}
@@ -103,10 +104,15 @@ func (bld *Builder) Build(fs common.IResources, inFile2 string, levelNumber int)
 		return nil, fmt.Errorf("invalid level number: %d", levelIdx)
 	}
 	levelName := levelNames[levelIdx]
-	level, err := wadLevel.GetLevel(levelName)
+	level, err := wadLevel.GetLevelByName(levelName)
 	if err != nil {
 		return nil, err
 	}
+
+	//level, err := wadLevel.GetLevel(levelIdx)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	texHandler := wad.CreateTextures()
 
@@ -333,7 +339,7 @@ func (bld *Builder) buildPlayer(level *Level) *config.Player {
 	player.Flash.OffsetY = 0.1
 
 	player.Bobbing.SwayScale = 1.0
-	player.Bobbing.SwayOffsetX = 20
+	player.Bobbing.SwayOffsetX = 10
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = playerHeight * 0.15
 	player.Bobbing.MaxAmplitudeY = playerHeight * 0.15

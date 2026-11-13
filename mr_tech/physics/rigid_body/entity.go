@@ -103,10 +103,10 @@ func (e *Entity) SyncRotation() {
 // using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	cx, cy, cz := e.BoundingBox.GetCenter()
-	hx, hy, hz := e.BoundingBox.GetSizeCenter()
-	a00, a01, a02, a10, a11, a12, a20, a21, a22 := e.GetAxes()
-
-	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz, hx, hy, hz, a00, a01, a02, a10, a11, a12, a20, a21, a22)
+	//hx, hy, hz := e.BoundingBox.GetSizeCenter()
+	//a00, a01, a02, a10, a11, a12, a20, a21, a22 := e.GetAxes()
+	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz)
+	//e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz, hx, hy, hz, a00, a01, a02, a10, a11, a12, a20, a21, a22)
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.

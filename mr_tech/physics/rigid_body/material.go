@@ -23,18 +23,12 @@ type PhysicsMaterial struct {
 	friction           float64
 	restitutionCombine CombineMode
 	frictionCombine    CombineMode
-
-	groundFriction float64
-	groundDamping  float64
+	groundFriction     float64
+	groundDamping      float64
 }
 
 // NewPhysicsMaterial creates a physics material with clamped restitution, nonnegative friction, combine modes, and dt damping.
 func NewPhysicsMaterial(restitution, friction float64, restCombine, frictionCombine CombineMode, dt float64) *PhysicsMaterial {
-	if restitution < 0.0 {
-		restitution = 0.0
-	} else if restitution > 1.0 {
-		restitution = 1.0
-	}
 	if restitution < 0.0 {
 		restitution = 0.0
 	} else if restitution > 1.0 {

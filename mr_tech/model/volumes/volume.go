@@ -67,8 +67,12 @@ func (v *Volume) Rebuild() bool {
 	h := maxY - minY
 	d := maxZ - minZ
 
+	v.faces.Rebuild()
+
 	v.entity.Rebuild(minX, minY, minZ, w, h, d)
-	//v.entity.GetAABB().Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+
+	v.entity.SetCentroid(v.faces.GetCentroid())
+
 	v.dirty = true
 
 	return true
@@ -215,8 +219,7 @@ func (v *Volume) GetTag() string {
 	return v.tag
 }
 
-// GetCentroid returns the average position of all points across the volume's faces.
-// GetCentroid returns a zero XYZ when the volume has no face points.
+// GetCentroid returns the volume centroid computed from the oriented triangular boundary
 func (v *Volume) GetCentroid() (float64, float64, float64) {
 	return v.faces.GetCentroid()
 }

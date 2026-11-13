@@ -35,7 +35,11 @@ func init() {
 
 // Entity represents a game object with a unique identifier, bounding box, and cinematic behaviors.
 type Entity struct {
-	id uint64
+	id          uint64
+	cx          float64
+	cy          float64
+	cz          float64
+	hasCentroid bool
 	*aabb.BoundingBox
 	*Cinematic
 }
@@ -46,6 +50,7 @@ func NewEntity(mass, restitution, groundFriction float64, restCombine, frictionC
 		id:          uint64(GetGlobalId()),
 		BoundingBox: aabb.NewBoundingBox(),
 		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, restCombine, frictionCombine, gForce),
+		hasCentroid: false,
 	}
 	return e
 }
@@ -60,6 +65,19 @@ func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
 	e.BoundingBox.Rebuild(x, y, z, w, h, d)
 	e.Cinematic.UpdateInertia(w, h, d)
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+}
+
+func (e *Entity) SetCentroid(cx, cy, cz float64) {
+	gx, gy, gz := e.BoundingBox.GetCenter()
+	dx := cx - gx
+	dy := cy - gy
+	dz := cz - gz
+	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := e.BoundingBox.GetAxes()
+	// World space -> local space.
+	e.cx = dx*ax0 + dy*ay0 + dz*az0
+	e.cy = dx*ax1 + dy*ay1 + dz*az1
+	e.cz = dx*ax2 + dy*ay2 + dz*az2
+	e.hasCentroid = true
 }
 
 // SetKeepUpright enables or disables upright stabilization and the bounding box tilt limit.
@@ -108,28 +126,31 @@ func (e *Entity) SyncRotation() {
 // AddForceAtPoint applies a linear force (fx, fy, fz) at world point (px, py, pz) and generates 3D torque τ = r × F on the OBB
 // using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
-	cx, cy, cz := e.BoundingBox.GetCenter()
-	//hx, hy, hz := e.BoundingBox.GetSizeCenter()
-	//a00, a01, a02, a10, a11, a12, a20, a21, a22 := e.GetAxes()
+	cx, cy, cz := e.getCenterOfMass()
 	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz)
-	//e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz, hx, hy, hz, a00, a01, a02, a10, a11, a12, a20, a21, a22)
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
 func (e *Entity) Update() {
 	e.Cinematic.Update(e.BoundingBox.GetAxes2())
 	if e.Cinematic.GetInvMass() > 0.0 && (e.Cinematic.IsRotating() || e.Cinematic.IsTilted()) {
+		cx, cy, cz := e.getCenterOfMass()
 		if e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt()) {
 			e.wx = 0.0
 			e.wy = 0.0
 		}
+		ncx, ncy, ncz := e.getCenterOfMass()
+		// Keep the center of mass fixed during rotation.
+		e.AddTo(cx-ncx, cy-ncy, cz-ncz)
+		e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 	}
 }
 
 // ResolveImpact resolves a 6-DoF collision impact with another entity .
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64) {
-	cx1, cy1, cz1 := e.BoundingBox.GetCenter()
-	cx2, cy2, cz2 := e2.BoundingBox.GetCenter()
+	cx1, cy1, cz1 := e.getCenterOfMass()
+	cx2, cy2, cz2 := e2.getCenterOfMass()
+
 	dx1, dy1, dz1 := e.GetFrameDisplacement()
 	dx2, dy2, dz2 := e2.GetFrameDisplacement()
 
@@ -163,4 +184,15 @@ func (e *Entity) ResolveInelasticPenetration(nx, ny, nz float64, pen float64) {
 		return
 	}
 	e.AddTo(nx*p, ny*p, nz*p)
+}
+
+// getCenterOfMass returns the entity's world-space center of mass.
+// It returns the bounding box center when no custom centroid is set.
+func (e *Entity) getCenterOfMass() (float64, float64, float64) {
+	gx, gy, gz := e.BoundingBox.GetCenter()
+	if !e.hasCentroid {
+		return gx, gy, gz
+	}
+	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := e.BoundingBox.GetAxes()
+	return gx + e.cx*ax0 + e.cy*ax1 + e.cz*ax2, gy + e.cx*ay0 + e.cy*ay1 + e.cz*ay2, gz + e.cx*az0 + e.cy*az1 + e.cz*az2
 }

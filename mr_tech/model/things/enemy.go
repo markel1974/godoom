@@ -23,6 +23,8 @@ func NewEnemy(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *
 		onThinking: cfg.OnThinking,
 	}
 	enemy.Base = NewBase(enemy, things, cfg, volume)
+	entity := enemy.GetEntity()
+	entity.SetKeepUpright(true)
 	cfg.OnBind(enemy)
 	return enemy
 }

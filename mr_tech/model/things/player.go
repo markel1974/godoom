@@ -28,6 +28,8 @@ type Player struct {
 	volumes        IVolumeHandler
 	things         IThingHandler
 	cfg            *config.Player
+	wasGrounded    bool
+	preImpactVz    float64
 	*Base
 }
 
@@ -112,6 +114,9 @@ func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
 func (pr *Player) StagePrepare(session uint64) {
 	pr.GetEntity().StopAngular()
 	pr.Base.StagePrepare(session)
+	entity := pr.GetEntity()
+	pr.wasGrounded = entity.IsOnGround()
+	pr.preImpactVz = entity.GetVz()
 }
 
 // StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.
@@ -309,14 +314,12 @@ func (pr *Player) StageThinking(playerX float64, playerY float64, playerZ float6
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
 func (pr *Player) StageApply() {
 	entity := pr.GetEntity()
-	wasGrounded := entity.IsOnGround()
-	prevVz := entity.GetVz()
 	pr.Base.StageApply()
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := entity.IsOnGround()
-	if !wasGrounded && isGrounded {
+	if !pr.wasGrounded && isGrounded && pr.preImpactVz < 0.0 {
 		// Inietta la velocità terminale reale calcolata dall'integratore per schiacciare la molla
-		pr.bobbing.InjectVerticalImpulse(prevVz)
+		pr.bobbing.InjectVerticalImpulse(pr.preImpactVz)
 	}
 	pr.bobbing.Compute(entity.GetDt(), pr.speed, entity.GetVx(), entity.GetVy())
 }

@@ -17,16 +17,40 @@ func (r *Matrix3x3) Set(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
 	r.data[2][0], r.data[2][1], r.data[2][2] = a20, a21, a22
 }
 
-// Multiply accumulates body and bodyInv transformed by r into world and worldInv.
+func (r *Matrix3x3) Get0() (float64, float64, float64) {
+	return r.data[0][0], r.data[0][1], r.data[0][2]
+}
+
+func (r *Matrix3x3) Get1() (float64, float64, float64) {
+	return r.data[1][0], r.data[1][1], r.data[1][2]
+}
+
+// Get2 returns the third row of the matrix.
+func (r *Matrix3x3) Get2() (float64, float64, float64) {
+	return r.data[2][0], r.data[2][1], r.data[2][2]
+}
+
+// GetSymmetric returns the six unique entries (00, 01, 02, 11, 12, 22) of a symmetric 3x3 matrix.
+func (r *Matrix3x3) GetSymmetric() (float64, float64, float64, float64, float64, float64) {
+	return r.data[0][0], r.data[0][1], r.data[0][2], r.data[1][1], r.data[1][2], r.data[2][2]
+}
+
+// Multiply writes body and bodyInv transformed by r (R^T * M * R) into world and worldInv.
 func (r *Matrix3x3) Multiply(world *Matrix3x3, worldInv *Matrix3x3, body *Matrix3x3, bodyInv *Matrix3x3) {
 	for i := 0; i < 3; i++ {
 		for j := 0; j < 3; j++ {
+			sumW := 0.0
+			sumWI := 0.0
 			for k := 0; k < 3; k++ {
+				rki := r.data[k][i]
 				for l := 0; l < 3; l++ {
-					world.data[i][j] += r.data[k][i] * body.data[k][l] * r.data[l][j]
-					worldInv.data[i][j] += r.data[k][i] * bodyInv.data[k][l] * r.data[l][j]
+					rlj := r.data[l][j]
+					sumW += rki * body.data[k][l] * rlj
+					sumWI += rki * bodyInv.data[k][l] * rlj
 				}
 			}
+			world.data[i][j] = sumW
+			worldInv.data[i][j] = sumWI
 		}
 	}
 }

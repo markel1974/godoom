@@ -143,6 +143,11 @@ type Cinematic struct {
 	groundTiltDamping                  float64
 	lowEnergyTiltDamping               float64
 	faceAlignCos                       float64
+	r                                  *Matrix3x3
+	body                               *Matrix3x3
+	bodyInv                            *Matrix3x3
+	world                              *Matrix3x3
+	worldInv                           *Matrix3x3
 }
 
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
@@ -165,6 +170,11 @@ func NewCinematic(dt float64, mass, restitution, groundFriction float64, restCom
 		onGround:         false,
 		airFriction:      airFriction,
 		keepUpright:      false, //true //MODIFICATO,true,
+		r:                NewMatrix3x3(),
+		body:             NewMatrix3x3(),
+		bodyInv:          NewMatrix3x3(),
+		world:            NewMatrix3x3(),
+		worldInv:         NewMatrix3x3(),
 	}
 
 	a.UpdateInertia(defaultInertia, defaultInertia, defaultInertia)
@@ -241,9 +251,11 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 
 	e.bodyIxx, e.bodyIxy, e.bodyIxz = a, b, c
 	e.bodyIyy, e.bodyIyz, e.bodyIzz = d, f, g
+	e.body.Set(a, b, c, b, d, f, c, f, g)
 
 	e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = invA, invB, invC
 	e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = invD, invF, invG
+	e.bodyInv.Set(invA, invB, invC, invB, invD, invF, invC, invF, invG)
 
 	return true
 }
@@ -254,9 +266,11 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if e.invMass == 0.0 || e.mass <= 0.0 {
 		e.bodyIxx, e.bodyIxy, e.bodyIxz = 0, 0, 0
 		e.bodyIyy, e.bodyIyz, e.bodyIzz = 0, 0, 0
+		e.body.Set(0, 0, 0, 0, 0, 0, 0, 0, 0)
 
 		e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = 0, 0, 0
 		e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = 0, 0, 0
+		e.bodyInv.Set(0, 0, 0, 0, 0, 0, 0, 0, 0)
 
 		e.ixx, e.ixy, e.ixz = 0, 0, 0
 		e.iyy, e.iyz, e.izz = 0, 0, 0
@@ -297,38 +311,11 @@ func (e *Cinematic) SyncWorldInertia(a00, a01, a02, a10, a11, a12, a20, a21, a22
 		return
 	}
 
-	r := [3][3]float64{{a00, a01, a02}, {a10, a11, a12}, {a20, a21, a22}}
+	e.r.Set(a00, a01, a02, a10, a11, a12, a20, a21, a22)
+	e.r.Multiply(e.world, e.worldInv, e.body, e.bodyInv)
 
-	body := [3][3]float64{
-		{e.bodyIxx, e.bodyIxy, e.bodyIxz},
-		{e.bodyIxy, e.bodyIyy, e.bodyIyz},
-		{e.bodyIxz, e.bodyIyz, e.bodyIzz},
-	}
-
-	bodyInv := [3][3]float64{
-		{e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz},
-		{e.bodyInvIxy, e.bodyInvIyy, e.bodyInvIyz},
-		{e.bodyInvIxz, e.bodyInvIyz, e.bodyInvIzz},
-	}
-
-	var world, worldInv [3][3]float64
-
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			for k := 0; k < 3; k++ {
-				for l := 0; l < 3; l++ {
-					world[i][j] += r[k][i] * body[k][l] * r[l][j]
-					worldInv[i][j] += r[k][i] * bodyInv[k][l] * r[l][j]
-				}
-			}
-		}
-	}
-
-	e.ixx, e.ixy, e.ixz = world[0][0], world[0][1], world[0][2]
-	e.iyy, e.iyz, e.izz = world[1][1], world[1][2], world[2][2]
-
-	e.invIxx, e.invIxy, e.invIxz = worldInv[0][0], worldInv[0][1], worldInv[0][2]
-	e.invIyy, e.invIyz, e.invIzz = worldInv[1][1], worldInv[1][2], worldInv[2][2]
+	e.ixx, e.ixy, e.ixz, e.iyy, e.iyz, e.izz = e.world.GetSymmetric()
+	e.invIxx, e.invIxy, e.invIxz, e.invIyy, e.invIyz, e.invIzz = e.worldInv.GetSymmetric()
 }
 
 // ApplyWorldInvInertia multiplies a world-space vector by the 3x3 world-space inverse inertia tensor I_world^-1.

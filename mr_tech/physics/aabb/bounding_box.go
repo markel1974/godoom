@@ -309,6 +309,23 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	return reset
 }
 
+// supportAxisFactor smoothly maps an axis-normal alignment dot product to [-1, 1],
+// suppressing discontinuous corner snaps within a small near-flat deadband.
+func supportAxisFactor(d float64) float64 {
+	const flatTol = 0.012
+	const cornerTol = 0.06
+	ad := math.Abs(d)
+	if ad <= flatTol {
+		return 0.0
+	}
+	if ad >= cornerTol {
+		return math.Copysign(1.0, d)
+	}
+	t := (ad - flatTol) / (cornerTol - flatTol)
+	s := t * t * (3.0 - 2.0*t)
+	return math.Copysign(s, d)
+}
+
 // GetSupportPoint returns the extreme contact point of the OBB in direction (dirX, dirY, dirZ).
 // For directions aligned with faces or edges, it returns the center of that face or edge.
 func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float64, float64) {
@@ -319,39 +336,25 @@ func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float6
 
 	px, py, pz := cx, cy, cz
 
-	const planeTol = 0.01
-
-	d0 := r.axis[0][0]*dirX + r.axis[0][1]*dirY + r.axis[0][2]*dirZ
-	if d0 > planeTol {
-		px += r.axis[0][0] * hw
-		py += r.axis[0][1] * hw
-		pz += r.axis[0][2] * hw
-	} else if d0 < -planeTol {
-		px -= r.axis[0][0] * hw
-		py -= r.axis[0][1] * hw
-		pz -= r.axis[0][2] * hw
+	f0 := supportAxisFactor(r.axis[0][0]*dirX+r.axis[0][1]*dirY+r.axis[0][2]*dirZ) * hw
+	if f0 != 0.0 {
+		px += r.axis[0][0] * f0
+		py += r.axis[0][1] * f0
+		pz += r.axis[0][2] * f0
 	}
 
-	d1 := r.axis[1][0]*dirX + r.axis[1][1]*dirY + r.axis[1][2]*dirZ
-	if d1 > planeTol {
-		px += r.axis[1][0] * hh
-		py += r.axis[1][1] * hh
-		pz += r.axis[1][2] * hh
-	} else if d1 < -planeTol {
-		px -= r.axis[1][0] * hh
-		py -= r.axis[1][1] * hh
-		pz -= r.axis[1][2] * hh
+	f1 := supportAxisFactor(r.axis[1][0]*dirX+r.axis[1][1]*dirY+r.axis[1][2]*dirZ) * hh
+	if f1 != 0.0 {
+		px += r.axis[1][0] * f1
+		py += r.axis[1][1] * f1
+		pz += r.axis[1][2] * f1
 	}
 
-	d2 := r.axis[2][0]*dirX + r.axis[2][1]*dirY + r.axis[2][2]*dirZ
-	if d2 > planeTol {
-		px += r.axis[2][0] * hd
-		py += r.axis[2][1] * hd
-		pz += r.axis[2][2] * hd
-	} else if d2 < -planeTol {
-		px -= r.axis[2][0] * hd
-		py -= r.axis[2][1] * hd
-		pz -= r.axis[2][2] * hd
+	f2 := supportAxisFactor(r.axis[2][0]*dirX+r.axis[2][1]*dirY+r.axis[2][2]*dirZ) * hd
+	if f2 != 0.0 {
+		px += r.axis[2][0] * f2
+		py += r.axis[2][1] * f2
+		pz += r.axis[2][2] * f2
 	}
 
 	return px, py, pz

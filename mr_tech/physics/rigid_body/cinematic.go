@@ -31,6 +31,59 @@ const (
 	rotScale = 1.0
 
 	defaultInertia = 32.0
+
+	// Inertia validation and computation constants.
+	minInertiaMass      = 25.0
+	minInertiaDiagRatio = 0.1
+	cuboidInertiaFactor = 1.0 / 12.0
+	gyroEnergyEpsilon   = 1e-12
+	restitutionEpsilon  = 1e-6
+	tangentLenEpsilon   = 1e-8
+
+	// Exponential damping bases (per second, scaled via math.Pow(base, dt)).
+	groundYawDampingBase     = 0.02
+	groundTiltDampingBase    = 0.05
+	lowEnergyTiltDampingBase = 0.004
+	airAngDampingBase        = 0.65
+
+	// Upright PD stabilizer gains and thresholds (critically damped).
+	uprightTiltSqThreshold      = 1e-6
+	uprightSleepTiltSqThreshold = 1e-5
+	uprightAxisZThreshold       = 0.999999
+	uprightGroundStiffness      = 140.0
+	uprightGroundDamping        = 24.0
+	uprightAirStiffness         = 60.0
+	uprightAirDamping           = 15.5
+	uprightFlipLenEpsilon       = 1e-6
+
+	// Low-energy ground settling and yaw stabilization thresholds.
+	lowEnergyGroundTiltSq  = 2.5
+	lowEnergyGroundHorizSq = 6400.0
+	nearFlatFaceAlignCos   = 0.99
+	lowEnergyYawSpinLimit  = 1.5
+
+	// Impact restitution slop thresholds.
+	restitutionSlopGravityFactor  = 2.0
+	minRestitutionSlop            = 2.0
+	groundedImpactNormalThreshold = 0.25
+
+	// Near-flat floor face-slap absorption and unstable ridge kick constants.
+	faceSlapAlignCosMin    = 0.985
+	faceSlapAlignRange     = 1.0 - faceSlapAlignCosMin
+	faceSlapBaseKeep       = 0.60
+	faceSlapKeepDrop       = 0.45
+	restingNormalAlignCos  = 0.992
+	restingNormalTiltSqMax = 1.0
+	faceSlapVzAlignCos     = 0.994
+	ridgeMaxAlignCos       = 0.90
+	ridgeLeverSqMax        = 0.04
+	ridgeTiltSqMax         = 1e-4
+	ridgeBreakKick         = 0.1
+
+	// Low-energy floor friction torque attenuation thresholds.
+	frictionLowEnergyHorizSq = 10000.0
+	frictionLowEnergyTiltSq  = 2.25
+	frictionEdgeRotScale     = 0.35
 )
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
@@ -136,7 +189,7 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 		return false
 	}
 
-	factor := math.Max(e.mass, 25.0) * rotScale
+	factor := math.Max(e.mass, minInertiaMass) * rotScale
 
 	a := ixx * factor
 	b := ixy * factor
@@ -160,7 +213,7 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 
 	det := a*c00 + b*c01 + c*c02
 
-	minDiag := factor * 0.1
+	minDiag := factor * minInertiaDiagRatio
 	// Reject non-positive-definite, degenerate, or invalid inertia tensors.
 	if a <= minDiag || d <= minDiag || g <= minDiag ||
 		c00 <= 0.0 || c11 <= 0.0 || c22 <= 0.0 ||
@@ -224,9 +277,7 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	}
 
 	// Solid cuboid inertia per unit mass.
-	factor := 1.0 / 12.0
-
-	e.SetInertiaTensor((h*h+d*d)*factor, 0, 0, (w*w+d*d)*factor, 0, (w*w+h*h)*factor)
+	e.SetInertiaTensor((h*h+d*d)*cuboidInertiaFactor, 0, 0, (w*w+d*d)*cuboidInertiaFactor, 0, (w*w+h*h)*cuboidInertiaFactor)
 
 	// Initially identity orientation.
 	e.SyncWorldInertia(1, 0, 0, 0, 1, 0, 0, 0, 1)
@@ -282,20 +333,18 @@ func (e *Cinematic) SyncWorldInertia(a00, a01, a02, a10, a11, a12, a20, a21, a22
 
 // ApplyWorldInvInertia multiplies a world-space vector by the 3x3 world-space inverse inertia tensor I_world^-1.
 func (e *Cinematic) ApplyWorldInvInertia(tx, ty, tz float64) (float64, float64, float64) {
-	return e.invIxx*tx + e.invIxy*ty + e.invIxz*tz,
-		e.invIxy*tx + e.invIyy*ty + e.invIyz*tz,
-		e.invIxz*tx + e.invIyz*ty + e.invIzz*tz
+	return e.invIxx*tx + e.invIxy*ty + e.invIxz*tz, e.invIxy*tx + e.invIyy*ty + e.invIyz*tz, e.invIxz*tx + e.invIyz*ty + e.invIzz*tz
 }
 
 // SetDt configures the time step, ground friction, and air friction values for the cinematic simulation.
 func (e *Cinematic) SetDt(dt float64) {
 	e.dt = dt
-	e.groundYawDamping = math.Pow(0.02, e.dt)
-	e.groundTiltDamping = math.Pow(0.05, e.dt)
-	e.lowEnergyTiltDamping = math.Pow(0.004, e.dt)
+	e.groundYawDamping = math.Pow(groundYawDampingBase, e.dt)
+	e.groundTiltDamping = math.Pow(groundTiltDampingBase, e.dt)
+	e.lowEnergyTiltDamping = math.Pow(lowEnergyTiltDampingBase, e.dt)
 	e.material.SetDt(e.dt)
 	e.airDamping = math.Pow(e.airFriction, e.dt)
-	e.airAngDamping = math.Pow(0.65, e.dt)
+	e.airAngDamping = math.Pow(airAngDampingBase, e.dt)
 	if e.airDamping >= 1.0 {
 		// No atmospheric friction, terminal velocity would tend to infinity
 		e.terminalZVelocity = -math.MaxFloat64
@@ -511,21 +560,21 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 
 	if e.keepUpright {
 		tiltSq := ax0*ax0 + ax1*ax1
-		e.isTilted = tiltSq > 1e-7 || ax2 < 0.999999
+		e.isTilted = tiltSq > uprightTiltSqThreshold || ax2 < uprightAxisZThreshold
 	}
 
 	if e.isTilted && e.keepUpright {
-		stiffness := 140.0
-		damping := 16.0
+		stiffness := uprightGroundStiffness
+		damping := uprightGroundDamping
 		if !e.onGround {
-			stiffness = 60.0
-			damping = 10.0
+			stiffness = uprightAirStiffness
+			damping = uprightAirDamping
 		}
 		errX := ax1
 		errY := -ax0
 		if ax2 < 0.0 {
 			lenXY := math.Hypot(errX, errY)
-			if lenXY > 1e-6 {
+			if lenXY > uprightFlipLenEpsilon {
 				errX /= lenXY
 				errY /= lenXY
 			} else {
@@ -554,21 +603,25 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	yawDamping := e.airAngDamping
 	groundDamping := e.material.GetGroundDamping()
 	if e.onGround {
+		faceDamping := e.groundYawDamping * e.groundYawDamping
 		yawDamping = e.groundYawDamping
 		if !e.isTilted || e.keepUpright {
 			if e.keepUpright {
 				tiltDamping = groundDamping
+				yawDamping = faceDamping
 			} else {
 				// Flat face resting contact strongly damps residual tilt and yaw micro-vibrations.
-				faceDamping := e.groundYawDamping * e.groundYawDamping
 				tiltDamping = faceDamping
 				yawDamping = faceDamping
 			}
 		} else {
 			// Tilted free body touching the ground: apply rolling resistance and stronger low-energy damping.
 			tiltDamping = e.groundTiltDamping
-			if (e.wx*e.wx+e.wy*e.wy) < 2.5 && (e.vx*e.vx+e.vy*e.vy) < 6400.0 {
+			if (e.wx*e.wx+e.wy*e.wy) < lowEnergyGroundTiltSq && (e.vx*e.vx+e.vy*e.vy) < lowEnergyGroundHorizSq {
 				tiltDamping = e.lowEnergyTiltDamping
+				if e.faceAlignCos > nearFlatFaceAlignCos && math.Abs(e.wz) < lowEnergyYawSpinLimit {
+					yawDamping = e.lowEnergyTiltDamping
+				}
 			}
 		}
 	}
@@ -581,14 +634,18 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz))
 
-	// Angular sleep (only when body is face-aligned and not tilted on an edge).
-	if !e.isTilted {
+	// Angular sleep for face-aligned bodies, plus grounded yaw/upright jitter deadzone.
+	if !e.isTilted || (e.keepUpright && e.onGround && (ax0*ax0+ax1*ax1) < uprightSleepTiltSqThreshold) {
 		if math.Abs(e.wx) < angSleepEpsilon {
 			e.wx = 0.0
 		}
 		if math.Abs(e.wy) < angSleepEpsilon {
 			e.wy = 0.0
 		}
+		if math.Abs(e.wz) < angSleepEpsilon {
+			e.wz = 0.0
+		}
+	} else if e.onGround && (e.keepUpright || e.faceAlignCos > nearFlatFaceAlignCos) {
 		if math.Abs(e.wz) < angSleepEpsilon {
 			e.wz = 0.0
 		}
@@ -723,12 +780,12 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 
 	// Restitution combining with threshold (micro-bounce slop).
 	actualRestitution := e.material.CombineRestitution(e2.material)
-	if math.Abs(actualRestitution) > 1e-6 {
-		restitutionSlop := 2.0 * math.Max(e.gForce, e2.gForce) * e.dt
-		if restitutionSlop < 2.0 {
-			restitutionSlop = 2.0
+	if math.Abs(actualRestitution) > restitutionEpsilon {
+		restitutionSlop := restitutionSlopGravityFactor * math.Max(e.gForce, e2.gForce) * e.dt
+		if restitutionSlop < minRestitutionSlop {
+			restitutionSlop = minRestitutionSlop
 		}
-		if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > 0.25) || (e2.onGround && nz < -0.25) {
+		if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > groundedImpactNormalThreshold) || (e2.onGround && nz < -groundedImpactNormalThreshold) {
 			actualRestitution = 0.0
 		}
 	} else {
@@ -777,7 +834,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	tz := vrz - (vRelDotNPost * nz)
 
 	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
-	if tLen <= 1e-8 {
+	if tLen <= tangentLenEpsilon {
 		return
 	}
 
@@ -895,30 +952,49 @@ func (e *Cinematic) angularMomentumFor(wx, wy, wz float64) (float64, float64, fl
 // applyNormalAngular applies a normal collision impulse to angular velocity, clamping tilt and yaw spin.
 // It also dampens near-flat floor slap rebound and nudges unstable tilted ground contacts.
 func (e *Cinematic) applyNormalAngular(j, unx, uny, unz, rx, ry, floorNz, restitution float64) {
-	preWx, preWy := e.wx, e.wy
+	preWx, preWy, preWz := e.wx, e.wy, e.wz
 	dWx := j * unx
 	dWy := j * uny
+	dWz := j * unz
+
+	nearFlatFloor := !e.keepUpright && floorNz > floorNormalThreshold && restitution == 0.0 && e.faceAlignCos > faceSlapAlignCosMin
+	var slapKeep float64
+	if nearFlatFloor {
+		t := (e.faceAlignCos - faceSlapAlignCosMin) / faceSlapAlignRange
+		if t > 1.0 {
+			t = 1.0
+		}
+		slapKeep = faceSlapBaseKeep - faceSlapKeepDrop*t
+		// Resting near-flat on the floor: attenuate small gravity-induced normal kicks to avoid seesaw/yaw jitter.
+		if e.onGround && e.faceAlignCos > restingNormalAlignCos && (preWx*preWx+preWy*preWy) < restingNormalTiltSqMax {
+			dWx *= slapKeep
+			dWy *= slapKeep
+			dWz *= slapKeep
+		}
+	}
+
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, preWx+dWx))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, preWy+dWy))
-	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+j*unz))
-	if !e.keepUpright && floorNz > floorNormalThreshold {
+	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, preWz+dWz))
+
+	if nearFlatFloor {
 		// Face-slap absorption: when a rotating free body lands near-flat against a floor without bounce,
 		// opposing corners absorb seesaw rebound spin and vertical kick from single-point corner contact.
-		if restitution == 0.0 && e.faceAlignCos > 0.985 && (preWx*dWx+preWy*dWy) < 0.0 {
-			t := (e.faceAlignCos - 0.985) / 0.015
-			if t > 1.0 {
-				t = 1.0
-			}
-			slapKeep := 0.60 - 0.45*t
+		if (preWx*dWx + preWy*dWy) < 0.0 {
 			e.wx *= slapKeep
 			e.wy *= slapKeep
-			if e.faceAlignCos > 0.994 && e.vz > 0.0 {
+			if e.faceAlignCos > faceSlapVzAlignCos && e.vz > 0.0 {
 				e.vz *= slapKeep
 			}
 		}
+		if e.faceAlignCos > nearFlatFaceAlignCos && (preWz*dWz) < 0.0 {
+			e.wz *= slapKeep
+		}
+	}
+	if !e.keepUpright && floorNz > floorNormalThreshold {
 		// Unstable ridge equilibrium breaking when a tilted free body balances directly above its contact.
-		if e.onGround && e.isTilted && e.faceAlignCos < 0.90 && (rx*rx+ry*ry) < 0.04 && (e.wx*e.wx+e.wy*e.wy) < 1e-4 {
-			e.wy += 0.1
+		if e.onGround && e.isTilted && e.faceAlignCos < ridgeMaxAlignCos && (rx*rx+ry*ry) < ridgeLeverSqMax && (e.wx*e.wx+e.wy*e.wy) < ridgeTiltSqMax {
+			e.wy += ridgeBreakKick
 		}
 	}
 }
@@ -929,29 +1005,36 @@ func (e *Cinematic) applyFrictionAngular(jt, utx, uty, utz, floorNz float64) {
 	if !e.keepUpright && floorNz > floorNormalThreshold {
 		vHorizSq := e.vx*e.vx + e.vy*e.vy
 		wTiltSq := e.wx*e.wx + e.wy*e.wy
-		if vHorizSq < 10000.0 && wTiltSq < 2.25 {
-			if !e.isTilted || e.faceAlignCos > 0.99 {
+		if vHorizSq < frictionLowEnergyHorizSq && wTiltSq < frictionLowEnergyTiltSq {
+			if !e.isTilted || e.faceAlignCos > nearFlatFaceAlignCos {
 				// Flat/near-flat sliding on floor at low energy: support polygon resists tipping torque.
 				frictionRotScale = 0.0
-			} else if vHorizSq < 6400.0 {
+			} else if vHorizSq < lowEnergyGroundHorizSq {
 				// Low-energy rolling/sliding on edge: attenuate friction-to-tipping conversion.
-				frictionRotScale = 0.35
+				frictionRotScale = frictionEdgeRotScale
 			}
 		}
 	}
 	dWx := jt * utx
 	dWy := jt * uty
+	dWz := jt * utz
 	preTiltSq := e.wx*e.wx + e.wy*e.wy
 	nwx := e.wx + dWx
 	nwy := e.wy + dWy
-	// Allow full braking of existing spin; attenuate only friction that would spin up tilt.
-	if frictionRotScale < 1.0 && (nwx*nwx+nwy*nwy) > preTiltSq {
-		nwx = e.wx + dWx*frictionRotScale
-		nwy = e.wy + dWy*frictionRotScale
+	nwz := e.wz + dWz
+	// Allow full braking of existing spin; attenuate only friction that would spin up tilt or yaw.
+	if frictionRotScale < 1.0 {
+		if (nwx*nwx + nwy*nwy) > preTiltSq {
+			nwx = e.wx + dWx*frictionRotScale
+			nwy = e.wy + dWy*frictionRotScale
+		}
+		if (nwz * nwz) > (e.wz * e.wz) {
+			nwz = e.wz + dWz*frictionRotScale
+		}
 	}
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, nwx))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, nwy))
-	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+jt*utz))
+	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, nwz))
 }
 
 // integrateGyroscopic advances angular velocity due to gyroscopic precession using a midpoint step.
@@ -959,7 +1042,7 @@ func (e *Cinematic) applyFrictionAngular(jt, utx, uty, utz, floorNz float64) {
 func (e *Cinematic) integrateGyroscopic() {
 	lx, ly, lz := e.angularMomentumFor(e.wx, e.wy, e.wz)
 	t0 := e.wx*lx + e.wy*ly + e.wz*lz
-	if t0 <= 1e-12 {
+	if t0 <= gyroEnergyEpsilon {
 		return
 	}
 	// Midpoint step for Euler's equation: dω/dt = -I_world^-1 * (ω × L).
@@ -978,7 +1061,7 @@ func (e *Cinematic) integrateGyroscopic() {
 	nlx, nly, nlz := e.angularMomentumFor(nwx, nwy, nwz)
 	// Explicit steps can add numerical energy; project back onto the initial energy ellipsoid.
 	t1 := nwx*nlx + nwy*nly + nwz*nlz
-	if t1 > t0 && t1 > 1e-12 {
+	if t1 > t0 && t1 > gyroEnergyEpsilon {
 		scale := math.Sqrt(t0 / t1)
 		nwx *= scale
 		nwy *= scale

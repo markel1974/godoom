@@ -100,12 +100,12 @@ type Cage struct {
 	appliedZ            float64
 }
 
-var _counter uint64
+//var _counter uint64
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
-func NewCage(object IObject) *Cage {
-	id := _counter
-	_counter++
+func NewCage(id uint64, object IObject) *Cage {
+	//id := _counter
+	//_counter++
 	c := &Cage{
 		id:        id,
 		seen:      make([]uint64, 512),

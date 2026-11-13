@@ -11,11 +11,13 @@ import (
 )
 
 type IThingHandler interface {
+	CreateCage(t volumes.IThing) *collisions.Cage
+
 	GetMaterials() *materials.Materials
 
 	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
 
-	CreateThrowable(self volumes.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
+	CreateThrowable(t volumes.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
 }
 
 type IVolumeHandler interface {
@@ -82,7 +84,8 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	if cfg.MaxStepFactor > 0 {
 		t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
 	}
-	t.cage = collisions.NewCage(thing)
+
+	t.cage = things.CreateCage(thing)
 
 	return t
 }

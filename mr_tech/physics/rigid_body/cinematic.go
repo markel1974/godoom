@@ -721,7 +721,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 		if restitutionSlop < 2.0 {
 			restitutionSlop = 2.0
 		}
-		if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > floorNormalThreshold) || (e2.onGround && nz < -floorNormalThreshold) {
+		if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > 0.25) || (e2.onGround && nz < -0.25) {
 			actualRestitution = 0.0
 		}
 	} else {

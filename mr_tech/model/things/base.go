@@ -232,6 +232,9 @@ func (t *Base) StageApply() {
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 	t.cage.SetApplied()
+	_, _, targetZ := t.cage.GetT()
+	_, _, targetRadZ := t.cage.GetRad()
+	targetBaseZ := targetZ - targetRadZ
 	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
@@ -247,7 +250,8 @@ func (t *Base) StageApply() {
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			rPushX, rPushY, rPushZ := rCage.GetPushOffset()
 			alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
-			if pen := slot.GetPenetration() - alreadyResolved; pen > 0 {
+			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ)
+			if pen > 0 {
 				if !slot.Penetrable() {
 					entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 				} else {
@@ -259,10 +263,7 @@ func (t *Base) StageApply() {
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ
-			if alreadyResolved < 0.0 {
-				alreadyResolved = 0.0
-			}
-			pen := slot.GetPenetration() - alreadyResolved
+			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ)
 			if pen > 0 {
 				entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 			}
@@ -272,6 +273,23 @@ func (t *Base) StageApply() {
 			}
 		}
 	}
+}
+
+func clampUpwardPenetration(pen, alreadyResolved, nZ, maxZ, currentBaseZ float64) float64 {
+	if alreadyResolved < 0.0 {
+		alreadyResolved = 0.0
+	}
+	pen -= alreadyResolved
+	if pen > 0 && nZ > 0.05 {
+		remZ := maxZ - currentBaseZ
+		if remZ <= 0.0 {
+			return 0.0
+		}
+		if maxPen := remZ / nZ; pen > maxPen {
+			return maxPen
+		}
+	}
+	return pen
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.

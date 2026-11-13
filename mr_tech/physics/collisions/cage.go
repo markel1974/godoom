@@ -574,15 +574,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		}
 	}
 
-	// Minkowski / Support Mapping for Ellipsoids[cite: 6]
-	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
-	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-	dist := distTarget - rayEff
-	penetration := rayEff - distTarget
-
-	// sat filter (Anti-Phantom Plane)[cite: 6]
 	rFaceAABB := rFace.GetAABB()
-	// world space translation[cite: 6]
 	rMinX := rFaceAABB.GetMinX() + offX
 	rMaxX := rFaceAABB.GetMaxX() + offX
 	rMinY := rFaceAABB.GetMinY() + offY
@@ -590,25 +582,107 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 	rMinZ := rFaceAABB.GetMinZ() + offZ
 	rMaxZ := rFaceAABB.GetMaxZ() + offZ
 
-	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
-	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
+	return s.resolveFaceGeometry(
+		bucket,
+		nX, nY, nZ, nAbsX, nAbsY, nAbsZ,
+		p0x, p0y, p0z, distStart,
+		rMinX, rMaxX, rMinY, rMaxY, rMinZ, rMaxZ,
+		s.dX, s.dY, s.dZ,
+		0, 0, 0,
+		solidWE, solidNS,
+	)
+}
+
+const satMinAxisNormal = 0.05
+
+// supportRadiusAlong computes the half-extent of the local collider along unit normal (nX, nY, nZ).
+// Free 6-DoF rigid bodies use their oriented bounding box projection; KeepUpright entities use ellipsoid radii.
+func (s *Cage) supportRadiusAlong(nX, nY, nZ float64) float64 {
+	if lEnt := s.object.GetEntity(); lEnt != nil && !lEnt.KeepUpright() {
+		ax0x, ax0y, ax0z, ax1x, ax1y, ax1z, ax2x, ax2y, ax2z := lEnt.GetAxes()
+		wx, wy, wz := lEnt.GetSize()
+		return math.Abs(nX*ax0x+nY*ax0y+nZ*ax0z)*(wx*0.5) +
+			math.Abs(nX*ax1x+nY*ax1y+nZ*ax1z)*(wy*0.5) +
+			math.Abs(nX*ax2x+nY*ax2y+nZ*ax2z)*(wz*0.5)
+	}
+	return math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+}
+
+// satMinAxisOverlap computes the minimum separation distance along unit normal n across all active AABB overlap axes.
+func satMinAxisOverlap(nAbsX, nAbsY, nAbsZ, oX, oY, oZ float64, solidWE, solidNS bool) float64 {
+	axisOverlap := math.MaxFloat64
+	if nAbsX >= satMinAxisNormal {
+		if ox := oX / nAbsX; ox < axisOverlap {
+			axisOverlap = ox
+		}
+	}
+	if nAbsY >= satMinAxisNormal {
+		if oy := oY / nAbsY; oy < axisOverlap {
+			axisOverlap = oy
+		}
+	}
+	if nAbsZ >= satMinAxisNormal {
+		if oz := oZ / nAbsZ; oz < axisOverlap {
+			axisOverlap = oz
+		}
+	}
+	if axisOverlap == math.MaxFloat64 {
+		if solidWE {
+			return oX
+		}
+		if solidNS {
+			return oY
+		}
+		return oZ
+	}
+	return axisOverlap
+}
+
+func (s *Cage) resolveFaceGeometry(
+	bucket BucketType,
+	nX, nY, nZ, nAbsX, nAbsY, nAbsZ float64,
+	p0x, p0y, p0z float64,
+	distStart float64,
+	rMinX, rMaxX, rMinY, rMaxY, rMinZ, rMaxZ float64,
+	impX, impY, impZ float64,
+	rDX, rDY, rDZ float64,
+	solidWE, solidNS bool,
+) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	rayEff := s.supportRadiusAlong(nX, nY, nZ)
+	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
+	dist := distTarget - rayEff
+	penetration := rayEff - distTarget
+
+	// Relative swept bounds of s at t=1 and t=0 (shifted by remote frame displacement rD).
+	startRelX := s.tX - impX
+	startRelY := s.tY - impY
+	startRelZ := s.tZ - impZ
+	sMinX := math.Min(s.tX, startRelX) - s.eRadX
+	sMaxX := math.Max(s.tX, startRelX) + s.eRadX
+	sMinY := math.Min(s.tY, startRelY) - s.eRadY
+	sMaxY := math.Max(s.tY, startRelY) + s.eRadY
+	sMinZ := math.Min(s.tZ, startRelZ) - s.eRadZ
+	sMaxZ := math.Max(s.tZ, startRelZ) + s.eRadZ
+
+	oX := math.Max(0.0, math.Min(sMaxX-rMinX, rMaxX-sMinX))
+	oY := math.Max(0.0, math.Min(sMaxY-rMinY, rMaxY-sMinY))
 	if oX <= 0 || oY <= 0 {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		return 0, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	if penetration <= 0 {
 		return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
+	oZ := math.Max(0.0, math.Min(sMaxZ-rMinZ, rMaxZ-sMinZ))
 	if oZ <= 0 {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	// Calcolo TOI (Time Of Impact) tra il moto dell'ellissoide e la faccia statica[cite: 6]
-	rCx := (rMinX + rMaxX) * 0.5
-	rCy := (rMinY + rMaxY) * 0.5
-	rCz := (rMinZ + rMaxZ) * 0.5
+	// Calcolo TOI tra il volume locale e la faccia nello spazio relativo
+	rCx := (rMinX+rMaxX)*0.5 - rDX
+	rCy := (rMinY+rMaxY)*0.5 - rDY
+	rCz := (rMinZ+rMaxZ)*0.5 - rDZ
 	rRadX := (rMaxX - rMinX) * 0.5
 	rRadY := (rMaxY - rMinY) * 0.5
 	rRadZ := (rMaxZ - rMinZ) * 0.5
@@ -621,12 +695,12 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 	sumRadY := s.eRadY + rRadY
 	sumRadZ := s.eRadZ + rRadZ
 
-	tEnter, tExit, _, _, _, ok := computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, s.dX, s.dY, s.dZ)
+	tEnter, tExit, _, _, _, ok := computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, impX, impY, impZ)
 	if !ok {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
+	impDot := impX*nX + impY*nY + impZ*nZ
 	tPlaneEnter, tPlaneExit, okPlane := sweptAxisInterval(distStart, rayEff, impDot)
 	if !okPlane {
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
@@ -638,43 +712,19 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).
-	// Un piano infinito è fantasma se la compenetrazione proiettata eccede l'overlap fisico effettivo dell'AABB
-	// lungo l'asse principale della normale del piano.[cite: 6]
 	pen0 := math.Max(0.0, rayEff-distStart)
 	deltaPen := math.Max(0.0, penetration-pen0)
-
-	normOX := oX
-	if solidWE && nAbsX > 1e-5 && nAbsX < 1.0 {
-		normOX = oX / nAbsX
-	}
-	normOY := oY
-	if solidNS && nAbsY > 1e-5 && nAbsY < 1.0 {
-		normOY = oY / nAbsY
-	}
-	normOZ := oZ
-	if !solidWE && !solidNS && nAbsZ > 1e-5 && nAbsZ < 1.0 {
-		normOZ = oZ / nAbsZ
-	}
-	var axisOverlap float64
-	if solidWE {
-		axisOverlap = normOX
-	} else if solidNS {
-		axisOverlap = normOY
-	} else {
-		axisOverlap = normOZ
-	}
+	axisOverlap := satMinAxisOverlap(nAbsX, nAbsY, nAbsZ, oX, oY, oZ, solidWE, solidNS)
 	minOverlap := axisOverlap + deltaPen
 
-	if penetration > minOverlap+satFilterEpsilon {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
-	}
 	if penetration > minOverlap {
+		// Reject only back-side phantom planes; front-side contacts on narrow spikes clamp to SAT axis overlap.
+		if distTarget < -satFilterEpsilon && penetration > minOverlap+satFilterEpsilon {
+			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		}
 		penetration = minOverlap
 	}
 
-	// Proiezione ortogonale del punto di supporto estremo dell'OBB lungo -normal sul piano di contatto,
-	// confinata nei limiti spaziali effettivi della faccia (cattura spigoli e bordi di gradini).
 	supX, supY, supZ := s.object.GetEntity().GetSupportPoint(-nX, -nY, -nZ)
 	supX += s.dX
 	supY += s.dY
@@ -728,9 +778,54 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		nX, nY, nZ = -nX, -nY, -nZ
 	}
 
-	// Classificazione dell'asse dominante della faccia remota e canonizzazione sul volume AABB[cite: 6]
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
+
+	rEnt := rCage.GetEntity()
+	if !rEnt.KeepUpright() || math.Abs(outDot) > planeEpsilon {
+		v1x, v1y, v1z := rQ.Rotate(rFace.Get1())
+		v2x, v2y, v2z := rQ.Rotate(rFace.Get2())
+		rMinX := math.Min(rp0x, math.Min(v1x, v2x)) + rOffX
+		rMaxX := math.Max(rp0x, math.Max(v1x, v2x)) + rOffX
+		rMinY := math.Min(rp0y, math.Min(v1y, v2y)) + rOffY
+		rMaxY := math.Max(rp0y, math.Max(v1y, v2y)) + rOffY
+		rMinZ := math.Min(rp0z, math.Min(v1z, v2z)) + rOffZ
+		rMaxZ := math.Max(rp0z, math.Max(v1z, v2z)) + rOffZ
+
+		var bucket BucketType
+		if solidWE {
+			if nX < 0 {
+				bucket = BucketWallWest
+			} else {
+				bucket = BucketWallEast
+			}
+		} else if solidNS {
+			if nY < 0 {
+				bucket = BucketWallNorth
+			} else {
+				bucket = BucketWallSouth
+			}
+		} else {
+			if nZ >= 0 {
+				bucket = BucketFloor
+			} else {
+				bucket = BucketCeiling
+			}
+		}
+
+		distStart := (s.cX-(p0x-rDX))*nX + (s.cY-(p0y-rDY))*nY + (s.cZ-(p0z-rDZ))*nZ
+		return s.resolveFaceGeometry(
+			bucket,
+			nX, nY, nZ, nAbsX, nAbsY, nAbsZ,
+			p0x, p0y, p0z, distStart,
+			rMinX, rMaxX, rMinY, rMaxY, rMinZ, rMaxZ,
+			s.dX-rDX, s.dY-rDY, s.dZ-rDZ,
+			rDX, rDY, rDZ,
+			solidWE, solidNS,
+		)
+	}
+
+	// Billboard / upright sprite fallback: canonizzazione sul volume AABB[cite: 6]
 
 	if solidWE {
 		if nX < 0 {

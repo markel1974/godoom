@@ -21,8 +21,6 @@ const (
 	defaultPenetrationDepth = 0.7
 
 	defaultPenetrationSlop = 0.02
-
-	defaultPositionalPercent = 0.3
 )
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
@@ -77,14 +75,6 @@ type Cinematic struct {
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
 // Mass and restitution values are clamped to ensure physical validity. Returns a pointer to the initialized Cinematic.
 func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64) *Cinematic {
-	if restitution < 0.0 {
-		restitution = 0.0
-	} else if restitution > 1.0 {
-		restitution = 1.0
-	}
-	if groundFriction <= 0.0 {
-		groundFriction = 0.2
-	}
 	invMass := 0.0
 	if mass <= 0.0 {
 		mass = 0.0
@@ -195,7 +185,6 @@ func (e *Cinematic) ApplyWorldInvInertia(tx, ty, tz float64) (float64, float64, 
 func (e *Cinematic) SetOptions(dt, aFriction float64) {
 	e.dt = dt
 	e.material.SetDt(dt)
-	//e.groundDamping = math.Pow(e.groundFriction, e.dt)
 	e.airFriction = aFriction
 	e.airDamping = math.Pow(e.airFriction, e.dt)
 	if e.airDamping >= 1.0 {
@@ -207,7 +196,7 @@ func (e *Cinematic) SetOptions(dt, aFriction float64) {
 	}
 	maxVelocity := (minThickness * safetyMargin) / e.dt
 	e.maxVelocitySq = maxVelocity * maxVelocity
-	e.SetOnGround(e.onGround)
+	//e.SetOnGround(e.onGround)
 }
 
 // Stop halts the entity's motion by setting its linear and angular velocity components to zero.
@@ -306,14 +295,9 @@ func (e *Cinematic) SetDt(dt float64) {
 func (e *Cinematic) SetOnGround(onGround bool) {
 	e.onGround = onGround
 	if e.onGround {
-		//e.frictionActive = e.groundFriction
-		//e.dampingActive = e.groundDamping
 		if e.vz < 0.0 {
 			e.vz = 0.0
 		}
-	} else {
-		//e.frictionActive = e.airFriction
-		//e.dampingActive = e.airDamping
 	}
 }
 

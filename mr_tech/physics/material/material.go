@@ -35,6 +35,16 @@ func NewPhysicsMaterial(restitution, friction float64, restCombine, frictCombine
 	} else if restitution > 1.0 {
 		restitution = 1.0
 	}
+
+	if restitution < 0.0 {
+		restitution = 0.0
+	} else if restitution > 1.0 {
+		restitution = 1.0
+	}
+
+	//if friction <= 0.0 {
+	//	friction = 0.2
+	//}
 	if friction < 0.0 {
 		friction = 0.0
 	}

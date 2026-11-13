@@ -29,6 +29,8 @@ const (
 	angSleepEpsilon = 0.05
 
 	rotScale = 8.0
+
+	defaultInertia = 32.0
 )
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
@@ -99,7 +101,7 @@ func NewCinematic(dt float64, mass, restitution, groundFriction float64, restCom
 		keepUpright:      true,
 	}
 
-	a.UpdateInertia(32.0, 32.0, 32.0)
+	a.UpdateInertia(defaultInertia, defaultInertia, defaultInertia)
 	a.SetDt(dt)
 	a.SetOnGround(false)
 	return a
@@ -126,14 +128,14 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 		e.invIyy, e.invIyz, e.invIzz = 0.0, 0.0, 0.0
 		return
 	}
-	if w < 32.0 {
-		w = 32.0
+	if w < defaultInertia {
+		w = defaultInertia
 	}
-	if h < 32.0 {
-		h = 32.0
+	if h < defaultInertia {
+		h = defaultInertia
 	}
-	if d < 32.0 {
-		d = 32.0
+	if d < defaultInertia {
+		d = defaultInertia
 	}
 	effMass := math.Max(e.mass, 25.0)
 
@@ -407,14 +409,14 @@ func (e *Cinematic) AddForceAtPoint(fx, fy, fz float64, px, py, pz float64, cx, 
 	e.torqueZ += tz
 }
 
-// Update advances the cinematic physics state using the supplied local Z orientation axis components (a20, a21, a22).
-func (e *Cinematic) Update(a20, a21, a22 float64) {
+// Update advances the cinematic physics state using the supplied local Z orientation axis components (ax0, ax1, ax2).
+func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	if e.invMass == 0.0 {
 		return
 	}
 
-	tiltSq := a20*a20 + a21*a21
-	e.isTilted = tiltSq > 1e-7 || a22 < 0.999999
+	tiltSq := ax0*ax0 + ax1*ax1
+	e.isTilted = tiltSq > 1e-7 || ax2 < 0.999999
 
 	if e.isTilted && e.keepUpright {
 		stiffness := 140.0
@@ -423,9 +425,9 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 			stiffness = 60.0
 			damping = 10.0
 		}
-		errX := a21
-		errY := -a20
-		if a22 < 0.0 {
+		errX := ax1
+		errY := -ax0
+		if ax2 < 0.0 {
 			lenXY := math.Hypot(errX, errY)
 			if lenXY > 1e-6 {
 				errX /= lenXY
@@ -447,17 +449,11 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 	gz := e.wx*ly - e.wy*lx
 
 	// Angular acceleration: alpha = I_world^-1 * (tau - omega × L)
-	ax, ay, az := e.ApplyWorldInvInertia(
-		e.torqueX-gx,
-		e.torqueY-gy,
-		e.torqueZ-gz,
-	)
-
+	ax, ay, az := e.ApplyWorldInvInertia(e.torqueX-gx, e.torqueY-gy, e.torqueZ-gz)
 	// Integrate angular velocity.
 	e.wx += ax * e.dt
 	e.wy += ay * e.dt
 	e.wz += az * e.dt
-
 	// Reset torque accumulators.
 	e.torqueX = 0.0
 	e.torqueY = 0.0
@@ -467,12 +463,10 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 	tiltDamping := e.airDamping
 	yawDamping := e.airDamping
 	groundDamping := e.material.GetGroundDamping()
-
 	if e.onGround {
 		tiltDamping = groundDamping
 		yawDamping = e.groundYawDamping
 	}
-
 	e.wx *= tiltDamping
 	e.wy *= tiltDamping
 	e.wz *= yawDamping
@@ -518,9 +512,7 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 		dx := e.vx * e.dt
 		dy := e.vy * e.dt
 		dz := e.vz * e.dt
-		if math.Abs(dx) < sleepEpsilon &&
-			math.Abs(dy) < sleepEpsilon &&
-			math.Abs(dz) < sleepEpsilon {
+		if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
 			e.vx = 0.0
 			e.vy = 0.0
 			e.vz = 0.0
@@ -533,7 +525,6 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 		e.vx *= groundDamping
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
-
 		if math.Abs(e.vx) < e.vMin {
 			e.vx = 0.0
 		}
@@ -557,21 +548,21 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 
 // ResolveImpact resolves a 6-DoF rigid-body collision between two Cinematic objects,
 // applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω.
-func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64) (float64, float64, float64, bool) {
+func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64) {
 	// Safe normalization before computing lever arms or normal thresholds.
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
-	if nLen > 0.0 {
-		nx /= nLen
-		ny /= nLen
-		nz /= nLen
-	} else {
-		return 0, 0, 0, false
+	if nLen <= 0 {
+		return //0, 0, 0, false
 	}
+
+	nx /= nLen
+	ny /= nLen
+	nz /= nLen
 
 	var r1x, r1y, r1z float64
 	var r2x, r2y, r2z float64
 
-	if e2.GetInvMass() > 0.0 {
+	if e2.invMass > 0.0 {
 		minX := math.Max(cx1-ex1, cx2-ex2)
 		maxX := math.Min(cx1+ex1, cx2+ex2)
 		minY := math.Max(cy1-ey1, cy2-ey2)
@@ -608,7 +599,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 
 	// If bodies are separating at the contact point, no collision to resolve.
 	if vRelDotN > 0.0 {
-		return 0, 0, 0, false
+		return
 	}
 
 	invMass1 := e.invMass
@@ -621,25 +612,17 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 
 	var u1nx, u1ny, u1nz, rotMass1N float64
 	if invMass1 > 0.0 {
-		c1nx := r1y*nz - r1z*ny
-		c1ny := r1z*nx - r1x*nz
-		c1nz := r1x*ny - r1y*nx
-		u1nx, u1ny, u1nz = e.ApplyWorldInvInertia(c1nx, c1ny, c1nz)
-		rotMass1N = c1nx*u1nx + c1ny*u1ny + c1nz*u1nz
+		u1nx, u1ny, u1nz, rotMass1N = e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
 	}
 
 	var u2nx, u2ny, u2nz, rotMass2N float64
 	if invMass2 > 0.0 {
-		c2nx := r2y*nz - r2z*ny
-		c2ny := r2z*nx - r2x*nz
-		c2nz := r2x*ny - r2y*nx
-		u2nx, u2ny, u2nz = e2.ApplyWorldInvInertia(c2nx, c2ny, c2nz)
-		rotMass2N = c2nx*u2nx + c2ny*u2ny + c2nz*u2nz
+		u2nx, u2ny, u2nz, rotMass2N = e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
 	}
 
 	effMassN := invMass1 + invMass2 + rotMass1N + rotMass2N
 	if effMassN <= 0.0 {
-		return 0, 0, 0, false
+		return
 	}
 
 	// Restitution combining with threshold (micro-bounce slop).
@@ -701,67 +684,60 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	ty := vry - (vRelDotNPost * ny)
 	tz := vrz - (vRelDotNPost * nz)
 
-	if tLen := math.Sqrt(tx*tx + ty*ty + tz*tz); tLen > 1e-8 {
-		tx /= tLen
-		ty /= tLen
-		tz /= tLen
-
-		var u1tx, u1ty, u1tz, rotMass1T float64
-		if invMass1 > 0.0 {
-			c1tx := r1y*tz - r1z*ty
-			c1ty := r1z*tx - r1x*tz
-			c1tz := r1x*ty - r1y*tx
-			u1tx, u1ty, u1tz = e.ApplyWorldInvInertia(c1tx, c1ty, c1tz)
-			rotMass1T = c1tx*u1tx + c1ty*u1ty + c1tz*u1tz
-		}
-
-		var u2tx, u2ty, u2tz, rotMass2T float64
-		if invMass2 > 0.0 {
-			c2tx := r2y*tz - r2z*ty
-			c2ty := r2z*tx - r2x*tz
-			c2tz := r2x*ty - r2y*tx
-			u2tx, u2ty, u2tz = e2.ApplyWorldInvInertia(c2tx, c2ty, c2tz)
-			rotMass2T = c2tx*u2tx + c2ty*u2ty + c2tz*u2tz
-		}
-
-		effMassT := invMass1 + invMass2 + rotMass1T + rotMass2T
-		if effMassT > 0.0 {
-			vRelDotT := vrx*tx + vry*ty + vrz*tz
-			jt := -vRelDotT / effMassT
-			// Friction mixing: explicit contact material properties.
-			mu := e.material.CombineFriction(e2.material)
-			maxFriction := j * mu
-			// Clamp tangential impulse within Coulomb cone.
-			if math.Abs(jt) > maxFriction {
-				jt = math.Copysign(maxFriction, jt)
-			}
-			// Apply friction impulse to linear and angular velocities.
-			jtx := jt * tx
-			jty := jt * ty
-			jtz := jt * tz
-			e.vx += jtx * invMass1
-			e.vy += jty * invMass1
-			e.vz += jtz * invMass1
-			e2.vx -= jtx * invMass2
-			e2.vy -= jty * invMass2
-			e2.vz -= jtz * invMass2
-			if invMass1 > 0.0 {
-				e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+jt*u1tx))
-				e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+jt*u1ty))
-				e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+jt*u1tz))
-			}
-			if invMass2 > 0.0 {
-				e2.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e2.wx-jt*u2tx))
-				e2.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e2.wy-jt*u2ty))
-				e2.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e2.wz-jt*u2tz))
-			}
-			jx += jtx
-			jy += jty
-			jz += jtz
-		}
+	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
+	if tLen <= 1e-8 {
+		return
 	}
 
-	return jx, jy, jz, true
+	tx /= tLen
+	ty /= tLen
+	tz /= tLen
+
+	var u1tx, u1ty, u1tz, rotMass1T float64
+	if invMass1 > 0.0 {
+		u1tx, u1ty, u1tz, rotMass1T = e.rotationalMass(r1x, r1y, r1z, tx, ty, tz)
+	}
+
+	var u2tx, u2ty, u2tz, rotMass2T float64
+	if invMass2 > 0.0 {
+		u2tx, u2ty, u2tz, rotMass2T = e2.rotationalMass(r2x, r2y, r2z, tx, ty, tz)
+	}
+
+	effMassT := invMass1 + invMass2 + rotMass1T + rotMass2T
+	if effMassT <= 0.0 {
+		return
+	}
+
+	vRelDotT := vrx*tx + vry*ty + vrz*tz
+	jt := -vRelDotT / effMassT
+	// Friction mixing: explicit contact material properties.
+	mu := e.material.CombineFriction(e2.material)
+	maxFriction := j * mu
+	// Clamp tangential impulse within Coulomb cone.
+	if math.Abs(jt) > maxFriction {
+		jt = math.Copysign(maxFriction, jt)
+	}
+	// Apply friction impulse to linear and angular velocities.
+	jtx := jt * tx
+	jty := jt * ty
+	jtz := jt * tz
+	e.vx += jtx * invMass1
+	e.vy += jty * invMass1
+	e.vz += jtz * invMass1
+	e2.vx -= jtx * invMass2
+	e2.vy -= jty * invMass2
+	e2.vz -= jtz * invMass2
+	if invMass1 > 0.0 {
+		e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+jt*u1tx))
+		e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+jt*u1ty))
+		e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+jt*u1tz))
+	}
+	if invMass2 > 0.0 {
+		e2.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e2.wx-jt*u2tx))
+		e2.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e2.wy-jt*u2ty))
+		e2.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e2.wz-jt*u2tz))
+	}
+	return
 }
 
 // ResolveElasticPenetration computes positional correction for overlapping cinematic bodies along a collision normal.
@@ -812,4 +788,13 @@ func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float6
 		}
 	}
 	return pen, true
+}
+
+func (e *Cinematic) rotationalMass(rx, ry, rz float64, dx, dy, dz float64) (float64, float64, float64, float64) {
+	cx := ry*dz - rz*dy
+	cy := rz*dx - rx*dz
+	cz := rx*dy - ry*dx
+	ux, uy, uz := e.ApplyWorldInvInertia(cx, cy, cz)
+	mass := cx*ux + cy*uy + cz*uz
+	return ux, uy, uz, mass
 }

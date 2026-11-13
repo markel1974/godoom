@@ -71,7 +71,7 @@ const planeEpsilon = 0.01
 const toiTieEpsilon = 1e-4
 
 // TotalSlots represents the total available slots, computed as BucketSize * FacesPerBucket.
-const TotalSlots = BucketSize * FacesPerBucket
+const totalSlots = BucketSize * FacesPerBucket
 
 // Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
@@ -110,7 +110,7 @@ func NewCage(id uint64, object IObject) *Cage {
 		object:    object,
 		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volume:    nil,
-		slots:     make([]*Entry, TotalSlots),
+		slots:     make([]*Entry, totalSlots),
 		slotsLen:  0,
 		faces:     make([]*Faces, 8),
 		facesIdx:  0,

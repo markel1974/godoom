@@ -41,11 +41,11 @@ type Entity struct {
 }
 
 // NewEntity creates and returns a pointer to a new Entity with specified mass, restitution, ground friction, and gravity force.
-func NewEntity(mass, restitution, groundFriction, gForce float64) *Entity {
+func NewEntity(mass, restitution, groundFriction float64, restCombine, frictionCombine int, gForce float64) *Entity {
 	e := &Entity{
 		id:          uint64(GetGlobalId()),
 		BoundingBox: aabb.NewBoundingBox(),
-		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, gForce),
+		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, restCombine, frictionCombine, gForce),
 	}
 	return e
 }

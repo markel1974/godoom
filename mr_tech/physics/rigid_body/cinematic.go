@@ -2,8 +2,6 @@ package rigid_body
 
 import (
 	"math"
-
-	"github.com/markel1974/godoom/mr_tech/physics/material"
 )
 
 const (
@@ -63,7 +61,7 @@ type Cinematic struct {
 	//dampingActive  float64
 	gForce float64
 	//restitution       float64
-	material          *material.PhysicsMaterial
+	material          *PhysicsMaterial
 	maxVelocitySq     float64
 	sleepThresholdSq  float64
 	dt                float64
@@ -74,14 +72,14 @@ type Cinematic struct {
 
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
 // Mass and restitution values are clamped to ensure physical validity. Returns a pointer to the initialized Cinematic.
-func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64) *Cinematic {
+func NewCinematic(dt float64, mass, restitution, groundFriction float64, restCombine, frictionCombine int, gForce float64) *Cinematic {
 	invMass := 0.0
 	if mass <= 0.0 {
 		mass = 0.0
 	} else {
 		invMass = 1.0 / mass
 	}
-	mat := material.NewPhysicsMaterial(restitution, groundFriction, material.CombineAverage, material.CombineAverage, dt)
+	mat := NewPhysicsMaterial(restitution, groundFriction, CombineMode(restCombine), CombineMode(frictionCombine), dt)
 	a := &Cinematic{
 		gForce:           gForce,
 		vMin:             minVelocity,
@@ -366,26 +364,6 @@ func (e *Cinematic) GetInvMass() float64 {
 // GetMass returns the mass of the Cinematic object.
 func (e *Cinematic) GetMass() float64 {
 	return e.mass
-}
-
-// GetRestitution returns the restitution coefficient of the cinematic object, representing its bounciness.
-//func (e *Cinematic) GetRestitution() float64 {
-//	return e.restitution
-//}
-
-// GetPhysicsMaterial returns the surface physical characteristics of the cinematic object.
-func (e *Cinematic) GetPhysicsMaterial() *material.PhysicsMaterial {
-	return e.material
-}
-
-// SetPhysicsMaterial sets the surface physical characteristics and updates internal restitution and ground friction.
-func (e *Cinematic) SetPhysicsMaterial(m *material.PhysicsMaterial) {
-	e.material = m
-	//e.restitution = m.Restitution
-	//e.groundFriction = m.Friction
-	//if e.onGround {
-	//	e.frictionActive = m.Friction
-	//}
 }
 
 // GetGForce returns the value of the gravitational force acting on the Cinematic entity.

@@ -27,13 +27,13 @@ type Volume struct {
 	dirty      bool
 }
 
-func NewVolume(modelId int, id string, tag string, mass, restitution, friction, gForce float64) *Volume {
+func NewVolume(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
 	v := &Volume{
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
 		faces:      NewFaces(128, false),
-		entity:     rigid_body.NewEntity(mass, restitution, friction, gForce),
+		entity:     rigid_body.NewEntity(mass, restitution, friction, restCombine, frictionCombine, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
@@ -47,7 +47,7 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	const concreteRestitution = 0.0
 	const concreteFriction = 0.2
 	const concreteGForce = 9.8
-	return NewVolume(modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, concreteGForce)
+	return NewVolume(modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), concreteGForce)
 }
 
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.

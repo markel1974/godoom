@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-
-	"github.com/markel1974/godoom/mr_tech/physics/material"
 )
 
 // Material represents a collection of 2D texture frames used for rendering animations, along with its shader.
@@ -66,12 +64,12 @@ type Material struct {
 	// Pipeline Flags
 	vertexLitGeneric bool
 
-	isSolid         bool
-	amplitude       float64
-	packed          float32
-	tickInterval    uint64
-	salt            uint64
-	physicsMaterial *material.PhysicsMaterial
+	isSolid      bool
+	amplitude    float64
+	packed       float32
+	tickInterval uint64
+	salt         uint64
+	//physicsMaterial *rigid_body.PhysicsMaterial
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.

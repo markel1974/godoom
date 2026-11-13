@@ -149,7 +149,7 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 	vols := make([]*Volume, len(model.Frames))
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}

@@ -105,7 +105,7 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", cfg.Id, viewIdx)
 		thingId := fmt.Sprintf("thing_%s_%d", cfg.Id, viewIdx)
-		volume := NewVolume(viewIdx, baseId, thingId, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+		volume := NewVolume(viewIdx, baseId, thingId, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 		material := materials.GetMaterial(view)
 		faces, err := f.createFaces(material)
 		if err != nil {

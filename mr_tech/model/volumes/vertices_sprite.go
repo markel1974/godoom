@@ -33,7 +33,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 	halfX := w * 0.5
 	halfY := w * 0.5
 
-	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce)
+	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 	f := &VerticesSprite{
 		volume: volume,
 	}

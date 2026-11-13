@@ -1,4 +1,4 @@
-package material
+package rigid_body
 
 import "math"
 
@@ -29,7 +29,7 @@ type PhysicsMaterial struct {
 }
 
 // NewPhysicsMaterial creates a physics material with clamped restitution, nonnegative friction, combine modes, and dt damping.
-func NewPhysicsMaterial(restitution, friction float64, restCombine, frictCombine CombineMode, dt float64) *PhysicsMaterial {
+func NewPhysicsMaterial(restitution, friction float64, restCombine, frictionCombine CombineMode, dt float64) *PhysicsMaterial {
 	if restitution < 0.0 {
 		restitution = 0.0
 	} else if restitution > 1.0 {
@@ -55,17 +55,7 @@ func NewPhysicsMaterial(restitution, friction float64, restCombine, frictCombine
 		restitution:        restitution,
 		friction:           friction,
 		restitutionCombine: restCombine,
-		frictionCombine:    frictCombine,
-	}
-}
-
-// NewPhysicsMaterialDefault returns a new physics material with standard friction and average combine modes.
-func NewPhysicsMaterialDefault() *PhysicsMaterial {
-	return &PhysicsMaterial{
-		restitution:        0.0,
-		friction:           0.5,
-		restitutionCombine: CombineAverage,
-		frictionCombine:    CombineAverage,
+		frictionCombine:    frictionCombine,
 	}
 }
 

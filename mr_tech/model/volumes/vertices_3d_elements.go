@@ -117,7 +117,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 		}
 	}
 
-	v.vVolume = NewVirtualVolume(v, rigid_body.NewEntity(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.GForce))
+	v.vVolume = NewVirtualVolume(v, rigid_body.NewEntity(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce))
 	return nil
 }
 

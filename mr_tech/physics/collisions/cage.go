@@ -103,7 +103,7 @@ func NewCage(object IObject) *Cage {
 	c := &Cage{
 		seen:      make(map[*Cage]bool),
 		object:    object,
-		ellipsoid: rigid_body.NewEntity(0, 0, 0, 0),
+		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volume:    nil,
 		slots:     make([]*Entry, TotalSlots),
 		slotsLen:  0,
@@ -118,11 +118,12 @@ func NewCage(object IObject) *Cage {
 		c.buckets[i] = NewBucket(i)
 	}
 	for i := 0; i < len(c.ellipsoidLocal); i++ {
-		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, 0)
+		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
 	}
 	return c
 }
 
+// GetObject returns the object associated with the cage.
 func (s *Cage) GetObject() IObject {
 	return s.object
 }

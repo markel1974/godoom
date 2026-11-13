@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/physics/material"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -79,16 +78,6 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 
 	entity := t.VerticesGetVolume().GetEntity()
 	entity.SetOnGround(false)
-	if cfg.RestitutionCombine != 0 || cfg.FrictionCombine != 0 {
-		mat := entity.GetPhysicsMaterial()
-		if cfg.RestitutionCombine != 0 {
-			mat.SetRestitutionCombine(material.CombineMode(cfg.RestitutionCombine))
-		}
-		if cfg.FrictionCombine != 0 {
-			mat.SetFrictionCombine(material.CombineMode(cfg.FrictionCombine))
-		}
-		entity.SetPhysicsMaterial(mat)
-	}
 	t.SetAngle(cfg.Angle)
 	if cfg.MaxStepFactor > 0 {
 		t.maxStep = entity.GetDepth() * cfg.MaxStepFactor

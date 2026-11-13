@@ -89,6 +89,16 @@ func (q *Quaternion) Rotate(vX, vY, vZ float64) (float64, float64, float64) {
 	return rx, ry, rz
 }
 
+// RotateZ returns the Z component of the vector rotated by the quaternion.
+func (q *Quaternion) RotateZ(vX, vY, vZ float64) float64 {
+	qx, qy, qz, qw := q.data[0], q.data[1], q.data[2], q.data[3]
+	tx := 2.0 * (qy*vZ - qz*vY)
+	ty := 2.0 * (qz*vX - qx*vZ)
+	tz := 2.0 * (qx*vY - qy*vX)
+	rz := vZ + qw*tz + (qx*ty - qy*tx)
+	return rz
+}
+
 // RotateInverse applies the inverse rotation (q^* * v * q) to the vector components without mutating q.
 func (q *Quaternion) RotateInverse(vX, vY, vZ float64) (float64, float64, float64) {
 	qx, qy, qz, qw := q.data[0], q.data[1], q.data[2], q.data[3]

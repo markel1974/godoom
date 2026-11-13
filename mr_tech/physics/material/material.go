@@ -2,9 +2,10 @@ package material
 
 import "math"
 
-// CombineMode defines how physical properties (restitution, friction) of two contacting surfaces are combined.
+// CombineMode specifies how two material properties are combined during contact resolution.
 type CombineMode uint8
 
+// CombineMode values define how two material coefficients are merged.
 const (
 	// CombineAverage computes the arithmetic average: (a + b) * 0.5.
 	CombineAverage CombineMode = iota
@@ -16,16 +17,19 @@ const (
 	CombineMax
 )
 
-// PhysicsMaterial defines the surface physical characteristics for rigid body collisions and friction.
+// PhysicsMaterial defines surface response properties for contacts, including bounce, friction, and combine behavior.
 type PhysicsMaterial struct {
-	Restitution        float64
-	Friction           float64
-	RestitutionCombine CombineMode
-	FrictionCombine    CombineMode
+	restitution        float64
+	friction           float64
+	restitutionCombine CombineMode
+	frictionCombine    CombineMode
+
+	groundFriction float64
+	groundDamping  float64
 }
 
-// NewPhysicsMaterial creates a new PhysicsMaterial with clamped restitution [0, 1] and positive friction.
-func NewPhysicsMaterial(restitution, friction float64, restCombine, frictCombine CombineMode) PhysicsMaterial {
+// NewPhysicsMaterial creates a physics material with clamped restitution, nonnegative friction, combine modes, and dt damping.
+func NewPhysicsMaterial(restitution, friction float64, restCombine, frictCombine CombineMode, dt float64) *PhysicsMaterial {
 	if restitution < 0.0 {
 		restitution = 0.0
 	} else if restitution > 1.0 {
@@ -34,62 +38,94 @@ func NewPhysicsMaterial(restitution, friction float64, restCombine, frictCombine
 	if friction < 0.0 {
 		friction = 0.0
 	}
-	return PhysicsMaterial{
-		Restitution:        restitution,
-		Friction:           friction,
-		RestitutionCombine: restCombine,
-		FrictionCombine:    frictCombine,
+
+	return &PhysicsMaterial{
+		groundFriction:     friction,
+		groundDamping:      math.Pow(friction, dt),
+		restitution:        restitution,
+		friction:           friction,
+		restitutionCombine: restCombine,
+		frictionCombine:    frictCombine,
 	}
 }
 
-// DefaultPhysicsMaterial returns standard non-bouncy solid surface properties (concrete-like).
-func DefaultPhysicsMaterial() PhysicsMaterial {
-	return PhysicsMaterial{
-		Restitution:        0.0,
-		Friction:           0.5,
-		RestitutionCombine: CombineAverage,
-		FrictionCombine:    CombineAverage,
+// NewPhysicsMaterialDefault returns a new physics material with standard friction and average combine modes.
+func NewPhysicsMaterialDefault() *PhysicsMaterial {
+	return &PhysicsMaterial{
+		restitution:        0.0,
+		friction:           0.5,
+		restitutionCombine: CombineAverage,
+		frictionCombine:    CombineAverage,
 	}
 }
 
-// CombineRestitution combines the restitution coefficients of two materials according to their combine modes.
-// When combine modes differ, the higher-priority mode (Max > Multiply > Min > Average) dominates.
-func CombineRestitution(m1, m2 PhysicsMaterial) float64 {
-	mode := m1.RestitutionCombine
-	if m2.RestitutionCombine > mode {
-		mode = m2.RestitutionCombine
+// SetDt updates ground damping using the given time step.
+func (m1 *PhysicsMaterial) SetDt(dt float64) {
+	m1.groundDamping = math.Pow(m1.groundFriction, dt)
+}
+
+// SetRestitution sets the material restitution coefficient used for bounce response.
+func (m1 *PhysicsMaterial) SetRestitution(restitution float64) {
+	m1.restitution = restitution
+}
+
+// SetFriction sets the material's friction coefficient.
+func (m1 *PhysicsMaterial) SetFriction(friction float64) {
+	m1.friction = friction
+}
+
+// SetRestitutionCombine sets the mode used to combine restitution with another material.
+func (m1 *PhysicsMaterial) SetRestitutionCombine(restitutionCombine CombineMode) {
+	m1.restitutionCombine = restitutionCombine
+}
+
+// SetFrictionCombine sets the combine mode used when calculating friction with another material.
+func (m1 *PhysicsMaterial) SetFrictionCombine(frictionCombine CombineMode) {
+	m1.frictionCombine = frictionCombine
+}
+
+// GetGroundDamping returns the precomputed damping factor applied while the material is on the ground.
+func (m1 *PhysicsMaterial) GetGroundDamping() float64 {
+	return m1.groundDamping
+}
+
+// CombineRestitution returns the combined restitution with m2 using the higher-priority combine mode.
+func (m1 *PhysicsMaterial) CombineRestitution(m2 *PhysicsMaterial) float64 {
+	mode := m1.restitutionCombine
+	if m2.restitutionCombine > mode {
+		mode = m2.restitutionCombine
 	}
 	switch mode {
 	case CombineMin:
-		return math.Min(m1.Restitution, m2.Restitution)
+		return math.Min(m1.restitution, m2.restitution)
 	case CombineMultiply:
-		return m1.Restitution * m2.Restitution
+		return m1.restitution * m2.restitution
 	case CombineMax:
-		return math.Max(m1.Restitution, m2.Restitution)
+		return math.Max(m1.restitution, m2.restitution)
 	case CombineAverage:
 		fallthrough
 	default:
-		return (m1.Restitution + m2.Restitution) * 0.5
+		return (m1.restitution + m2.restitution) * 0.5
 	}
 }
 
-// CombineFriction combines the friction coefficients of two materials according to their combine modes.
-// When combine modes differ, the higher-priority mode (Max > Multiply > Min > Average) dominates.
-func CombineFriction(m1, m2 PhysicsMaterial) float64 {
-	mode := m1.FrictionCombine
-	if m2.FrictionCombine > mode {
-		mode = m2.FrictionCombine
+// CombineFriction returns the combined friction value for this material and m2.
+// It uses the higher-priority friction combine mode of the two materials.
+func (m1 *PhysicsMaterial) CombineFriction(m2 *PhysicsMaterial) float64 {
+	mode := m1.frictionCombine
+	if m2.frictionCombine > mode {
+		mode = m2.frictionCombine
 	}
 	switch mode {
 	case CombineMin:
-		return math.Min(m1.Friction, m2.Friction)
+		return math.Min(m1.friction, m2.friction)
 	case CombineMultiply:
-		return math.Sqrt(m1.Friction * m2.Friction)
+		return math.Sqrt(m1.friction * m2.friction)
 	case CombineMax:
-		return math.Max(m1.Friction, m2.Friction)
+		return math.Max(m1.friction, m2.friction)
 	case CombineAverage:
 		fallthrough
 	default:
-		return (m1.Friction + m2.Friction) * 0.5
+		return (m1.friction + m2.friction) * 0.5
 	}
 }

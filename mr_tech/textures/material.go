@@ -71,7 +71,7 @@ type Material struct {
 	packed          float32
 	tickInterval    uint64
 	salt            uint64
-	physicsMaterial material.PhysicsMaterial
+	physicsMaterial *material.PhysicsMaterial
 }
 
 // NewMaterial creates a new Material instance from a provided slice of Texture pointers.
@@ -92,7 +92,7 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		isSolid:         true,
 		amplitude:       0.0,
 		salt:            uint64(rand.Intn(100)),
-		physicsMaterial: material.DefaultPhysicsMaterial(),
+		physicsMaterial: material.NewPhysicsMaterialDefault(),
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -233,12 +233,12 @@ func (m *Material) GetClampV() bool { return m.clampV }
 func (m *Material) IsVertexLitGeneric() bool { return m.vertexLitGeneric }
 
 // GetPhysicsMaterial returns the surface physical characteristics of this material.
-func (m *Material) GetPhysicsMaterial() material.PhysicsMaterial {
+func (m *Material) GetPhysicsMaterial() *material.PhysicsMaterial {
 	return m.physicsMaterial
 }
 
 // SetPhysicsMaterial sets the surface physical characteristics of this material.
-func (m *Material) SetPhysicsMaterial(pm material.PhysicsMaterial) {
+func (m *Material) SetPhysicsMaterial(pm *material.PhysicsMaterial) {
 	m.physicsMaterial = pm
 }
 

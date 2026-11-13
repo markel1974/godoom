@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/physics/material"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -18,15 +17,22 @@ type IObject interface {
 
 type IFace interface {
 	GetAABB() *aabb.AABB
+
 	GetNormal() (float64, float64, float64)
+
 	GetNormalAbs() (float64, float64, float64)
+
 	Translate(int, float64, float64, float64) (float64, float64, float64)
+
 	GetParent() IObject
+
 	Get0() (float64, float64, float64)
+
 	Get1() (float64, float64, float64)
+
 	Get2() (float64, float64, float64)
+
 	IsSolid() bool
-	GetPhysicsMaterial() material.PhysicsMaterial
 }
 
 // ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
@@ -891,12 +897,9 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		}
 	}
 
-	tri0X, tri0Y, tri0Z := rFace.Get0()
-	tri1X, tri1Y, tri1Z := rFace.Get1()
-	tri2X, tri2Y, tri2Z := rFace.Get2()
-	_, _, z0 := rQ.Rotate(tri0X, tri0Y, tri0Z)
-	_, _, z1 := rQ.Rotate(tri1X, tri1Y, tri1Z)
-	_, _, z2 := rQ.Rotate(tri2X, tri2Y, tri2Z)
+	z0 := rQ.RotateZ(rFace.Get0())
+	z1 := rQ.RotateZ(rFace.Get1())
+	z2 := rQ.RotateZ(rFace.Get2())
 	rMaxZ := math.Max(z0, math.Max(z1, z2)) + rOffZ
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ

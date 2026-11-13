@@ -1,9 +1,5 @@
 package collisions
 
-import (
-	"github.com/markel1974/godoom/mr_tech/physics/material"
-)
-
 // Entry represents a collision entry used during spatial computations in the collision detection system.
 type Entry struct {
 	bucket      BucketType
@@ -29,17 +25,6 @@ func NewCageEntry() *Entry {
 
 // GetRemoteFace returns the remote face associated with the Entry structure.
 func (s *Entry) GetRemoteFace() IFace { return s.rFace }
-
-// GetPhysicsMaterial returns the surface physical characteristics associated with this contact entry.
-func (s *Entry) GetPhysicsMaterial() material.PhysicsMaterial {
-	if s.rCage != nil {
-		return s.rCage.GetEntity().GetPhysicsMaterial()
-	}
-	if s.rFace != nil {
-		return s.rFace.GetPhysicsMaterial()
-	}
-	return material.DefaultPhysicsMaterial()
-}
 
 // GetDistance returns the precomputed distance value associated with the Entry instance.
 func (s *Entry) GetDistance() float64 { return s.dist }

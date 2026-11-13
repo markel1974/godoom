@@ -89,18 +89,18 @@ func (r *Materials) GetMaterial(ca *config.Material) *textures.Material {
 	material.SetClampV(ca.ClampV)
 	material.SetVertexLitGeneric(ca.VertexLitGeneric)
 
-	pm := physmat.DefaultPhysicsMaterial()
+	pm := physmat.NewPhysicsMaterialDefault()
 	if ca.Restitution != 0 {
-		pm.Restitution = ca.Restitution
+		pm.SetRestitution(ca.Restitution)
 	}
 	if ca.Friction != 0 {
-		pm.Friction = ca.Friction
+		pm.SetFriction(ca.Friction)
 	}
 	if ca.RestitutionCombine != 0 {
-		pm.RestitutionCombine = physmat.CombineMode(ca.RestitutionCombine)
+		pm.SetRestitutionCombine(physmat.CombineMode(ca.RestitutionCombine))
 	}
 	if ca.FrictionCombine != 0 {
-		pm.FrictionCombine = physmat.CombineMode(ca.FrictionCombine)
+		pm.SetFrictionCombine(physmat.CombineMode(ca.FrictionCombine))
 	}
 	material.SetPhysicsMaterial(pm)
 

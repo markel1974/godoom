@@ -82,10 +82,10 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	if cfg.RestitutionCombine != 0 || cfg.FrictionCombine != 0 {
 		mat := entity.GetPhysicsMaterial()
 		if cfg.RestitutionCombine != 0 {
-			mat.RestitutionCombine = material.CombineMode(cfg.RestitutionCombine)
+			mat.SetRestitutionCombine(material.CombineMode(cfg.RestitutionCombine))
 		}
 		if cfg.FrictionCombine != 0 {
-			mat.FrictionCombine = material.CombineMode(cfg.FrictionCombine)
+			mat.SetFrictionCombine(material.CombineMode(cfg.FrictionCombine))
 		}
 		entity.SetPhysicsMaterial(mat)
 	}
@@ -225,8 +225,9 @@ func (t *Base) StageResolve() {
 		}
 		// Risoluzione Impulsi e Attrito (Fase Cinetica) con Proprietà Esplicite del Materiale di Contatto.
 		nX, nY, nZ := slot.GetNormal()
-		matOther := slot.GetPhysicsMaterial()
-		entity.ResolveImpactWithMaterial(rParentEnt, nX, nY, nZ, matOther)
+		//matOther := slot.GetPhysicsMaterial()
+		//rParentEnt.Cinematic
+		entity.ResolveImpact(rParentEnt, nX, nY, nZ)
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 const (
 	airFriction = 0.99
 
-	// vMin represents the minimum velocity threshold below which motion is considered negligible.
-	vMin = 0.1
+	// minVelocity represents the minimum velocity threshold below which motion is considered negligible.
+	minVelocity = 0.1
 
 	// minThickness represents the minimum allowable thickness value to prevent calculations with near-zero dimensions.
 	minThickness = 0.01
@@ -27,45 +27,45 @@ const (
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
 type Cinematic struct {
-	mass              float64
-	invMass           float64
-	invIx             float64
-	invIy             float64
-	invIz             float64
-	invIxx            float64
-	invIxy            float64
-	invIxz            float64
-	invIyy            float64
-	invIyz            float64
-	invIzz            float64
-	ixx               float64
-	ixy               float64
-	ixz               float64
-	iyy               float64
-	iyz               float64
-	izz               float64
-	vx                float64
-	vy                float64
-	vz                float64
-	ax                float64
-	ay                float64
-	az                float64
-	wx                float64
-	wy                float64
-	wz                float64
-	torqueX           float64
-	torqueY           float64
-	torqueZ           float64
-	vMin              float64
-	groundFriction    float64
-	airFriction       float64
-	frictionActive    float64
-	airDamping        float64
-	groundDamping     float64
-	dampingActive     float64
-	gForce            float64
-	restitution       float64
-	material          material.PhysicsMaterial
+	mass    float64
+	invMass float64
+	invIx   float64
+	invIy   float64
+	invIz   float64
+	invIxx  float64
+	invIxy  float64
+	invIxz  float64
+	invIyy  float64
+	invIyz  float64
+	invIzz  float64
+	ixx     float64
+	ixy     float64
+	ixz     float64
+	iyy     float64
+	iyz     float64
+	izz     float64
+	vx      float64
+	vy      float64
+	vz      float64
+	ax      float64
+	ay      float64
+	az      float64
+	wx      float64
+	wy      float64
+	wz      float64
+	torqueX float64
+	torqueY float64
+	torqueZ float64
+	vMin    float64
+	//groundFriction float64
+	airFriction float64
+	//frictionActive float64
+	airDamping float64
+	//groundDamping float64
+	//dampingActive  float64
+	gForce float64
+	//restitution       float64
+	material          *material.PhysicsMaterial
 	maxVelocitySq     float64
 	sleepThresholdSq  float64
 	dt                float64
@@ -91,19 +91,18 @@ func NewCinematic(dt float64, mass, restitution, groundFriction, gForce float64)
 	} else {
 		invMass = 1.0 / mass
 	}
-	mat := material.NewPhysicsMaterial(restitution, groundFriction, material.CombineAverage, material.CombineAverage)
+	mat := material.NewPhysicsMaterial(restitution, groundFriction, material.CombineAverage, material.CombineAverage, dt)
 	a := &Cinematic{
 		gForce:           gForce,
-		vMin:             vMin,
-		sleepThresholdSq: vMin * vMin,
+		vMin:             minVelocity,
+		sleepThresholdSq: minVelocity * minVelocity,
 		mass:             mass,
 		invMass:          invMass,
-		restitution:      restitution,
 		material:         mat,
 		onGround:         false,
 	}
 	a.UpdateInertia(32.0, 32.0, 32.0)
-	a.SetOptions(dt, groundFriction, airFriction)
+	a.SetOptions(dt, airFriction)
 	a.SetOnGround(false)
 	return a
 }
@@ -193,10 +192,10 @@ func (e *Cinematic) ApplyWorldInvInertia(tx, ty, tz float64) (float64, float64, 
 }
 
 // SetOptions configures the time step, ground friction, and air friction values for the cinematic simulation.
-func (e *Cinematic) SetOptions(dt, gFriction, aFriction float64) {
+func (e *Cinematic) SetOptions(dt, aFriction float64) {
 	e.dt = dt
-	e.groundFriction = gFriction
-	e.groundDamping = math.Pow(e.groundFriction, e.dt)
+	e.material.SetDt(dt)
+	//e.groundDamping = math.Pow(e.groundFriction, e.dt)
 	e.airFriction = aFriction
 	e.airDamping = math.Pow(e.airFriction, e.dt)
 	if e.airDamping >= 1.0 {
@@ -300,21 +299,21 @@ func (e *Cinematic) IsTilted() bool {
 
 // SetDt updates the time step (dt) and recalculates damping and velocity limits based on current friction values.
 func (e *Cinematic) SetDt(dt float64) {
-	e.SetOptions(dt, e.groundFriction, e.airFriction)
+	e.SetOptions(dt, e.airFriction)
 }
 
 // SetOnGround sets the entity's ground state and adjusts active friction and damping values based on the state.
 func (e *Cinematic) SetOnGround(onGround bool) {
 	e.onGround = onGround
 	if e.onGround {
-		e.frictionActive = e.groundFriction
-		e.dampingActive = e.groundDamping
+		//e.frictionActive = e.groundFriction
+		//e.dampingActive = e.groundDamping
 		if e.vz < 0.0 {
 			e.vz = 0.0
 		}
 	} else {
-		e.frictionActive = e.airFriction
-		e.dampingActive = e.airDamping
+		//e.frictionActive = e.airFriction
+		//e.dampingActive = e.airDamping
 	}
 }
 
@@ -386,23 +385,23 @@ func (e *Cinematic) GetMass() float64 {
 }
 
 // GetRestitution returns the restitution coefficient of the cinematic object, representing its bounciness.
-func (e *Cinematic) GetRestitution() float64 {
-	return e.restitution
-}
+//func (e *Cinematic) GetRestitution() float64 {
+//	return e.restitution
+//}
 
 // GetPhysicsMaterial returns the surface physical characteristics of the cinematic object.
-func (e *Cinematic) GetPhysicsMaterial() material.PhysicsMaterial {
+func (e *Cinematic) GetPhysicsMaterial() *material.PhysicsMaterial {
 	return e.material
 }
 
 // SetPhysicsMaterial sets the surface physical characteristics and updates internal restitution and ground friction.
-func (e *Cinematic) SetPhysicsMaterial(m material.PhysicsMaterial) {
+func (e *Cinematic) SetPhysicsMaterial(m *material.PhysicsMaterial) {
 	e.material = m
-	e.restitution = m.Restitution
-	e.groundFriction = m.Friction
-	if e.onGround {
-		e.frictionActive = m.Friction
-	}
+	//e.restitution = m.Restitution
+	//e.groundFriction = m.Friction
+	//if e.onGround {
+	//	e.frictionActive = m.Friction
+	//}
 }
 
 // GetGForce returns the value of the gravitational force acting on the Cinematic entity.
@@ -602,9 +601,10 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 	// Angular damping
 	tiltDamping := e.airDamping
 	yawDamping := e.airDamping
+	groundDamping := e.material.GetGroundDamping()
 
 	if e.onGround {
-		tiltDamping = e.groundDamping
+		tiltDamping = groundDamping
 		yawDamping = math.Pow(0.02, e.dt)
 	}
 
@@ -667,8 +667,8 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 	}
 
 	// Linear damping
-	e.vx *= e.groundDamping
-	e.vy *= e.groundDamping
+	e.vx *= groundDamping
+	e.vy *= groundDamping
 	e.vz *= e.airDamping
 
 	// Planar sleep
@@ -692,7 +692,7 @@ func (e *Cinematic) Update(a20, a21, a22 float64) {
 // ResolveImpact resolves a 6-DoF rigid-body collision between two Cinematic objects at contact lever arms (r1x, r1y, r1z)
 // and (r2x, r2y, r2z), applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω
 // using the explicit contact surface material properties (matOther).
-func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64, matOther material.PhysicsMaterial) (float64, float64, float64, bool) {
+func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2 float64) (float64, float64, float64, bool) {
 	var r1x, r1y, r1z float64
 	var r2x, r2y, r2z float64
 
@@ -778,7 +778,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	}
 
 	// restitution combining with threshold (micro-bounce slop)
-	actualRestitution := material.CombineRestitution(e.material, matOther)
+	actualRestitution := e.material.CombineRestitution(e2.material)
 	if math.Abs(actualRestitution) > 1e-6 {
 		restitutionSlop := 2.0 * math.Max(e.gForce, e2.gForce) * e.dt
 		if restitutionSlop < 2.0 {
@@ -869,7 +869,7 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 			jt := -vRelDotT / effMassT
 
 			// friction mixing: explicit contact material properties
-			mu := material.CombineFriction(e.material, matOther)
+			mu := e.material.CombineFriction(e2.material)
 			maxFriction := j * mu
 
 			// clamp tangential impulse within coulomb cone

@@ -13,31 +13,33 @@ type obbVector [3]float64
 
 // BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
-	bottomLeft   Point
-	bottomCenter Point
-	center       Point
-	size         Size
-	aabb         *AABB
-	axis         [3]obbVector // Local axes transformed into world space.
-	qRotation    *Quaternion  // Orientation quaternion.
-	qYaw         *Quaternion
-	qTilt        *Quaternion
-	ex           float64 // Oriented half-extents projected onto world axes.
-	ey           float64 // Oriented half-extents projected onto world axes.
-	ez           float64 // Oriented half-extents projected onto world axes.
+	bottomLeft       Point
+	bottomCenter     Point
+	center           Point
+	size             Size
+	aabb             *AABB
+	axis             [3]obbVector // Local axes transformed into world space.
+	qRotation        *Quaternion  // Orientation quaternion.
+	qYaw             *Quaternion
+	qTilt            *Quaternion
+	ex               float64 // Oriented half-extents projected onto world axes.
+	ey               float64 // Oriented half-extents projected onto world axes.
+	ez               float64 // Oriented half-extents projected onto world axes.
+	tiltLimitEnabled bool
 }
 
 // NewBoundingBox creates a bounding box with identity rotation.
 func NewBoundingBox() *BoundingBox {
 	r := &BoundingBox{
-		bottomLeft:   NewPoint(0, 0, 0),
-		bottomCenter: NewPoint(0, 0, 0),
-		center:       NewPoint(0, 0, 0),
-		size:         NewSize(0, 0, 0),
-		aabb:         NewAABB(),
-		qRotation:    NewQuaternionEmpty(),
-		qYaw:         NewQuaternionEmpty(),
-		qTilt:        NewQuaternionEmpty(),
+		bottomLeft:       NewPoint(0, 0, 0),
+		bottomCenter:     NewPoint(0, 0, 0),
+		center:           NewPoint(0, 0, 0),
+		size:             NewSize(0, 0, 0),
+		aabb:             NewAABB(),
+		qRotation:        NewQuaternionEmpty(),
+		qYaw:             NewQuaternionEmpty(),
+		qTilt:            NewQuaternionEmpty(),
+		tiltLimitEnabled: false, //true //MODIFICATO,
 	}
 	r.qRotation.SetIdentity()
 	r.qYaw.SetIdentity()
@@ -225,6 +227,11 @@ func (r *BoundingBox) GetCenter() (float64, float64, float64) {
 	return r.center.x, r.center.y, r.center.z
 }
 
+// SetTiltLimitEnabled sets whether tilt limit constraints are enabled for the bounding box.
+func (r *BoundingBox) SetTiltLimitEnabled(enabled bool) {
+	r.tiltLimitEnabled = enabled
+}
+
 // composeRotation rebuilds the complete orientation from the independent yaw and tilt states.
 func (r *BoundingBox) composeRotation() {
 	r.qYaw.Multiplies(r.qTilt, r.qRotation)
@@ -247,7 +254,7 @@ func (r *BoundingBox) setSwingFromDirection(dx, dy, dz float64) float64 {
 		dz = -1.0
 	}
 	angle := math.Acos(dz)
-	if angle > _maxTiltAngle {
+	if r.tiltLimitEnabled && angle > _maxTiltAngle {
 		angle = _maxTiltAngle
 	}
 	axisX, axisY := -dy, dx // (0,0,1) x dir
@@ -296,7 +303,7 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	// Keep tilt as a pure swing: no local-Z twist can leak into the yaw state.
 	dx, dy, dz := r.qTilt.Rotate(0, 0, 1)
 	angle := math.Acos(math.Max(-1, math.Min(1, dz)))
-	reset := angle > _maxTiltAngle && (lwx*(-dy)+lwy*dx) > 0
+	reset := r.tiltLimitEnabled && angle > _maxTiltAngle && (lwx*(-dy)+lwy*dx) > 0
 	r.setSwingFromDirection(dx, dy, dz)
 	r.composeRotation()
 	r.SyncRotation()

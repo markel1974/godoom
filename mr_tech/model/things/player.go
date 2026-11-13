@@ -62,6 +62,7 @@ func (pr *Player) Setup() error {
 	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, location)
 	pr.cfg.Thing.OnBind(pr)
 	entity := pr.GetEntity()
+	entity.SetKeepUpright(true)
 	entity.MoveTo(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
 	pr.SetAngle(pr.cfg.Angle)
 

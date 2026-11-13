@@ -217,9 +217,8 @@ func (t *Base) StageResolve() {
 		}
 		// Risoluzione Impulsi e Attrito (Fase Cinetica) con Proprietà Esplicite del Materiale di Contatto.
 		nX, nY, nZ := slot.GetNormal()
-		//matOther := slot.GetPhysicsMaterial()
-		//rParentEnt.Cinematic
-		entity.ResolveImpact(rParentEnt, nX, nY, nZ)
+		pX, pY, pZ := slot.GetPoint()
+		entity.ResolveImpact(rParentEnt, nX, nY, nZ, pX, pY, pZ)
 	}
 }
 

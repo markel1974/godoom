@@ -62,6 +62,12 @@ func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
+// SetKeepUpright enables or disables upright stabilization and the bounding box tilt limit.
+func (e *Entity) SetKeepUpright(state bool) {
+	e.BoundingBox.SetTiltLimitEnabled(state)
+	e.Cinematic.SetKeepUpright(state)
+}
+
 // GetSize returns the width, height, and depth of the entity's bounding box as three float64 values.
 func (e *Entity) GetSize() (float64, float64, float64) {
 	return e.BoundingBox.GetSize()
@@ -121,14 +127,21 @@ func (e *Entity) Update() {
 }
 
 // ResolveImpact resolves a 6-DoF collision impact with another entity .
-func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64) {
+func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64) {
 	cx1, cy1, cz1 := e.BoundingBox.GetCenter()
-	ex1, ey1, ez1 := e.BoundingBox.GetOrientedHalfExtents()
-
 	cx2, cy2, cz2 := e2.BoundingBox.GetCenter()
-	ex2, ey2, ez2 := e2.BoundingBox.GetOrientedHalfExtents()
+	dx1, dy1, dz1 := e.GetFrameDisplacement()
+	dx2, dy2, dz2 := e2.GetFrameDisplacement()
 
-	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, ex1, ey1, ez1, cx2, cy2, cz2, ex2, ey2, ez2)
+	cx1 += dx1
+	cy1 += dy1
+	cz1 += dz1
+
+	cx2 += dx2
+	cy2 += dy2
+	cz2 += dz2
+
+	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz)
 }
 
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.

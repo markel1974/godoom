@@ -35,20 +35,14 @@ func NewPhysicsMaterial(restitution, friction float64, restCombine, frictionComb
 	} else if restitution > 1.0 {
 		restitution = 1.0
 	}
-
 	if restitution < 0.0 {
 		restitution = 0.0
 	} else if restitution > 1.0 {
 		restitution = 1.0
 	}
-
-	//if friction <= 0.0 {
-	//	friction = 0.2
-	//}
 	if friction < 0.0 {
 		friction = 0.0
 	}
-
 	return &PhysicsMaterial{
 		groundFriction:     friction,
 		groundDamping:      math.Pow(friction, dt),
@@ -62,26 +56,6 @@ func NewPhysicsMaterial(restitution, friction float64, restCombine, frictionComb
 // SetDt updates ground damping using the given time step.
 func (m1 *PhysicsMaterial) SetDt(dt float64) {
 	m1.groundDamping = math.Pow(m1.groundFriction, dt)
-}
-
-// SetRestitution sets the material restitution coefficient used for bounce response.
-func (m1 *PhysicsMaterial) SetRestitution(restitution float64) {
-	m1.restitution = restitution
-}
-
-// SetFriction sets the material's friction coefficient.
-func (m1 *PhysicsMaterial) SetFriction(friction float64) {
-	m1.friction = friction
-}
-
-// SetRestitutionCombine sets the mode used to combine restitution with another material.
-func (m1 *PhysicsMaterial) SetRestitutionCombine(restitutionCombine CombineMode) {
-	m1.restitutionCombine = restitutionCombine
-}
-
-// SetFrictionCombine sets the combine mode used when calculating friction with another material.
-func (m1 *PhysicsMaterial) SetFrictionCombine(frictionCombine CombineMode) {
-	m1.frictionCombine = frictionCombine
 }
 
 // GetGroundDamping returns the precomputed damping factor applied while the material is on the ground.

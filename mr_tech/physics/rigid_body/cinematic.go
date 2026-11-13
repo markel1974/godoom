@@ -88,9 +88,11 @@ func NewCinematic(dt float64, mass, restitution, groundFriction float64, restCom
 		invMass:          invMass,
 		material:         mat,
 		onGround:         false,
+		airFriction:      airFriction,
 	}
+
 	a.UpdateInertia(32.0, 32.0, 32.0)
-	a.SetOptions(dt, airFriction)
+	a.SetDt(dt)
 	a.SetOnGround(false)
 	return a
 }
@@ -179,11 +181,10 @@ func (e *Cinematic) ApplyWorldInvInertia(tx, ty, tz float64) (float64, float64, 
 		e.invIxz*tx + e.invIyz*ty + e.invIzz*tz
 }
 
-// SetOptions configures the time step, ground friction, and air friction values for the cinematic simulation.
-func (e *Cinematic) SetOptions(dt, aFriction float64) {
+// SetDt configures the time step, ground friction, and air friction values for the cinematic simulation.
+func (e *Cinematic) SetDt(dt float64) {
 	e.dt = dt
-	e.material.SetDt(dt)
-	e.airFriction = aFriction
+	e.material.SetDt(e.dt)
 	e.airDamping = math.Pow(e.airFriction, e.dt)
 	if e.airDamping >= 1.0 {
 		// No atmospheric friction, terminal velocity would tend to infinity
@@ -282,11 +283,6 @@ func (e *Cinematic) IsRotating() bool {
 // IsTilted reports whether the cinematic is tilted.
 func (e *Cinematic) IsTilted() bool {
 	return e.isTilted
-}
-
-// SetDt updates the time step (dt) and recalculates damping and velocity limits based on current friction values.
-func (e *Cinematic) SetDt(dt float64) {
-	e.SetOptions(dt, e.airFriction)
 }
 
 // SetOnGround sets the entity's ground state and adjusts active friction and damping values based on the state.

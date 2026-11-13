@@ -88,11 +88,11 @@ func NewMaterial(name string, frames []*Texture, kind int) *Material {
 		scaleU:       1.0,
 		scaleV:       1.0,
 		// TODO FROM CONFIG defines the number of ticks required to form one logical interval for animation or updates.
-		tickInterval:    32,
-		isSolid:         true,
-		amplitude:       0.0,
-		salt:            uint64(rand.Intn(100)),
-		physicsMaterial: material.NewPhysicsMaterialDefault(),
+		tickInterval: 32,
+		isSolid:      true,
+		amplitude:    0.0,
+		salt:         uint64(rand.Intn(100)),
+		//physicsMaterial: material.NewPhysicsMaterialDefault(),
 	}
 	for _, frame := range frames {
 		if frame == nil {
@@ -233,14 +233,14 @@ func (m *Material) GetClampV() bool { return m.clampV }
 func (m *Material) IsVertexLitGeneric() bool { return m.vertexLitGeneric }
 
 // GetPhysicsMaterial returns the surface physical characteristics of this material.
-func (m *Material) GetPhysicsMaterial() *material.PhysicsMaterial {
-	return m.physicsMaterial
-}
+//func (m *Material) GetPhysicsMaterial() *material.PhysicsMaterial {
+//	return m.physicsMaterial
+//}
 
 // SetPhysicsMaterial sets the surface physical characteristics of this material.
-func (m *Material) SetPhysicsMaterial(pm *material.PhysicsMaterial) {
-	m.physicsMaterial = pm
-}
+//func (m *Material) SetPhysicsMaterial(pm *material.PhysicsMaterial) {
+//	m.physicsMaterial = pm
+//}
 
 // GetBlendMode returns the current blend mode identifier as an integer.
 func (m *Material) GetBlendMode() int {

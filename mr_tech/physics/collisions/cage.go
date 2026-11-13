@@ -75,7 +75,9 @@ const TotalSlots = BucketSize * FacesPerBucket
 
 // Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
-	seen                map[*Cage]bool
+	seen                []uint64
+	session             uint64
+	id                  uint64
 	object              IObject
 	buckets             [BucketSize]*Bucket
 	ellipsoid           *rigid_body.Entity
@@ -98,10 +100,15 @@ type Cage struct {
 	appliedZ            float64
 }
 
+var _counter uint64
+
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
 func NewCage(object IObject) *Cage {
+	id := _counter
+	_counter++
 	c := &Cage{
-		seen:      make(map[*Cage]bool),
+		id:        id,
+		seen:      make([]uint64, 512),
 		object:    object,
 		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volume:    nil,
@@ -129,7 +136,8 @@ func (s *Cage) GetObject() IObject {
 }
 
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.[cite: 6]
-func (s *Cage) Rebuild(maxStep float64) {
+func (s *Cage) Rebuild(maxStep float64, session uint64) {
+	s.session = session
 	lEnt := s.object.GetEntity()
 	// Calculate Position
 	s.dX, s.dY, s.dZ = lEnt.GetFrameDisplacement()
@@ -180,7 +188,7 @@ func (s *Cage) Rebuild(maxStep float64) {
 	s.hasFloor = false
 	s.applied = false
 
-	clear(s.seen)
+	//clear(s.seen)
 	s.maxStep = maxStep
 }
 
@@ -425,12 +433,18 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 
 // HasSeen checks if the given Cage has already been marked as seen in the current Cage.[cite: 6]
 func (s *Cage) HasSeen(rCage *Cage) bool {
-	return s.seen[rCage]
+	if rCage.id >= uint64(len(s.seen)) {
+		s.growSeen(rCage.id)
+	}
+	return s.seen[rCage.id] == s.session
 }
 
 // Seen marks a given Cage as observed by the current Cage within its internal tracking.[cite: 6]
 func (s *Cage) Seen(rCage *Cage) {
-	s.seen[rCage] = true
+	if rCage.id >= uint64(len(s.seen)) {
+		s.growSeen(rCage.id)
+	}
+	s.seen[rCage.id] = s.session
 }
 
 // GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.[cite: 6]
@@ -934,4 +948,10 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	rMaxZ := math.Max(z0, math.Max(z1, z2)) + rOffZ
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
+}
+
+func (s *Cage) growSeen(idx uint64) {
+	n := make([]uint64, idx*2)
+	copy(n, s.seen)
+	s.seen = n
 }

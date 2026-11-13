@@ -26,7 +26,7 @@ type IThing interface {
 
 	StageThinking(playerX float64, playerY float64, playerZ float64)
 
-	StagePrepare()
+	StagePrepare(session uint64)
 
 	StageResolve()
 

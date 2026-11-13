@@ -108,9 +108,9 @@ func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
 }
 
 // StagePrepare prepares the stage for the Player by invoking the StagePrepare method of its Base.
-func (pr *Player) StagePrepare() {
+func (pr *Player) StagePrepare(session uint64) {
 	pr.GetEntity().StopAngular()
-	pr.Base.StagePrepare()
+	pr.Base.StagePrepare(session)
 }
 
 // StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.

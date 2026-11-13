@@ -179,11 +179,11 @@ func (t *Base) IsVisible() bool {
 }
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
-func (t *Base) StagePrepare() {
+func (t *Base) StagePrepare(session uint64) {
 	entity := t.VerticesGetVolume().GetEntity()
 	entity.Update()
 	t.angle = entity.GetYaw()
-	t.cage.Rebuild(t.maxStep)
+	t.cage.Rebuild(t.maxStep, session)
 }
 
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.

@@ -41,6 +41,7 @@ type Things struct {
 	cfg               []*config.Thing
 	maxOverlapsWorld  int
 	maxOverlapsThings int
+	session           uint64
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -275,6 +276,8 @@ func (th *Things) StageCommit() {
 
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
+	th.session++
+
 	if th.removablesLen > 0 {
 		for x := 0; x < th.removablesLen; x++ {
 			th.removeThing(th.removables[x])
@@ -310,7 +313,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 			th.removablesLen++
 			continue
 		}
-		t2.StagePrepare()
+		t2.StagePrepare(th.session)
 		th.running[runningLen] = t2
 		runningLen++
 	}

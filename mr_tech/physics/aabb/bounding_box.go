@@ -22,6 +22,8 @@ type BoundingBox struct {
 	qRotation        *Quaternion  // Orientation quaternion.
 	qYaw             *Quaternion
 	qTilt            *Quaternion
+	qYawInverse      *Quaternion
+	qYawRelative     *Quaternion
 	ex               float64 // Oriented half-extents projected onto world axes.
 	ey               float64 // Oriented half-extents projected onto world axes.
 	ez               float64 // Oriented half-extents projected onto world axes.
@@ -39,6 +41,8 @@ func NewBoundingBox() *BoundingBox {
 		qRotation:        NewQuaternionEmpty(),
 		qYaw:             NewQuaternionEmpty(),
 		qTilt:            NewQuaternionEmpty(),
+		qYawInverse:      NewQuaternionEmpty(),
+		qYawRelative:     NewQuaternionEmpty(),
 		tiltLimitEnabled: false, //true //MODIFICATO,
 	}
 	r.qRotation.SetIdentity()
@@ -172,9 +176,7 @@ func (r *BoundingBox) rebuild() {
 // updateAxes transforms the local X, Y and Z axes into world space.
 // Called only when the bounding box changes.
 func (r *BoundingBox) updateAxes() {
-	r.axis[0][0], r.axis[0][1], r.axis[0][2],
-		r.axis[1][0], r.axis[1][1], r.axis[1][2],
-		r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.qRotation.ToAxes()
+	r.axis[0][0], r.axis[0][1], r.axis[0][2], r.axis[1][0], r.axis[1][1], r.axis[1][2], r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.qRotation.ToAxes()
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.
@@ -277,12 +279,11 @@ func (r *BoundingBox) syncYawTiltFromRotation() {
 	} else {
 		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
 	}
-	// qTilt = inverse(qYaw) * qRotation. Rotate local Z to obtain its swing direction.
 	qx, qy, qz, qw := r.qYaw.Get()
-	invYaw := Quaternion{data: [4]float64{-qx, -qy, -qz, qw}}
-	var relative Quaternion
-	invYaw.Multiplies(r.qRotation, &relative)
-	dx, dy, dz := relative.Rotate(0, 0, 1)
+	r.qYawInverse.Set(-qx, -qy, -qz, qw)
+	r.qYawRelative.Set(0, 0, 0, 0)
+	r.qYawInverse.Multiplies(r.qRotation, r.qYawRelative)
+	dx, dy, dz := r.qYawRelative.Rotate(0, 0, 1)
 	r.setSwingFromDirection(dx, dy, dz)
 	r.composeRotation()
 }
@@ -296,8 +297,8 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	r.qYaw.IntegrateAngular(0, 0, wz, dt)
 	// Convert the horizontal world-space angular velocity into the yaw-local frame.
 	qx, qy, qz, qw := r.qYaw.Get()
-	inverseYaw := Quaternion{data: [4]float64{-qx, -qy, -qz, qw}}
-	lwx, lwy, _ := inverseYaw.Rotate(wx, wy, 0)
+	r.qYawInverse.Set(-qx, -qy, -qz, qw)
+	lwx, lwy, _ := r.qYawInverse.Rotate(wx, wy, 0)
 	r.qTilt.IntegrateAngular(lwx, lwy, 0, dt)
 
 	// Keep tilt as a pure swing: no local-Z twist can leak into the yaw state.

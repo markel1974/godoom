@@ -73,6 +73,8 @@ func (v *Volume) Rebuild() bool {
 
 	v.entity.SetCentroid(v.faces.GetCentroid())
 
+	v.entity.SetInertia(v.faces.GetInertia())
+
 	v.dirty = true
 
 	return true

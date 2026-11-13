@@ -4,14 +4,17 @@ import (
 	"math"
 )
 
-// Faces represents a collection of face entries.
+// Faces stores a collection of Face values and accumulated geometric properties.
 type Faces struct {
-	container  []*Face
-	count      int
-	cx, cy, cz float64
+	container     []*Face
+	count         int
+	cx, cy, cz    float64
+	ixx, ixy, ixz float64
+	iyy, iyz, izz float64
 }
 
-// NewFaces creates a Faces collection with storage preallocated to initSize.
+// NewFaces creates a Faces collection with the given initial capacity.
+// If fill is true, the collection length is initialized to initSize.
 func NewFaces(initSize int, fill bool) *Faces {
 	count := 0
 	if fill {
@@ -23,11 +26,12 @@ func NewFaces(initSize int, fill bool) *Faces {
 	}
 }
 
+// Rebuild recomputes cached centroid and inertia values from the current faces.
 func (f *Faces) Rebuild() {
-	f.cx, f.cy, f.cz = f.compileCentroid()
+	f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = f.compileMassProperties()
 }
 
-// Add appends face to the collection, growing the internal storage when needed.
+// Add appends a face to the collection, growing the internal storage when needed.
 func (f *Faces) Add(face *Face) {
 	if f.count >= len(f.container) {
 		newFaces := make([]*Face, f.count*2)
@@ -38,23 +42,36 @@ func (f *Faces) Add(face *Face) {
 	f.count++
 }
 
-// Len returns the number of faces currently stored.
+// Len returns the number of faces in the collection.
 func (f *Faces) Len() int {
 	return f.count
 }
 
+// GetInertia returns the stored inertia tensor components for the faces.
+func (f *Faces) GetInertia() (ixx, ixy, ixz, iyy, iyz, izz float64) {
+	return f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz
+}
+
+// GetCentroid returns the cached centroid coordinates of the faces.
 func (f *Faces) GetCentroid() (float64, float64, float64) {
 	return f.cx, f.cy, f.cz
 }
 
-// GetCentroid returns the volume centroid computed from the oriented triangular boundary
-func (f *Faces) compileCentroid() (float64, float64, float64) {
+// compileMassProperties computes the centroid and unit-mass inertia tensor for the stored faces.
+// It returns zero values when there are no faces, no valid face, or the signed volume is zero.
+func (f *Faces) compileMassProperties() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	if f.count == 0 {
-		return 0, 0, 0
+		return 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
+
+	var cx, cy, cz float64
+	var ixx, ixy, ixz float64
+	var iyy, iyz, izz float64
+
 	// Use a vertex as reference to improve numerical stability.
 	var refX, refY, refZ float64
 	found := false
+
 	for i := 0; i < f.count; i++ {
 		if face := f.container[i]; face != nil {
 			refX, refY, refZ = face.GetPoint0()
@@ -62,42 +79,111 @@ func (f *Faces) compileCentroid() (float64, float64, float64) {
 			break
 		}
 	}
+
 	if !found {
-		return 0, 0, 0
+		return 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
+
 	var volume6 float64
-	var cx, cy, cz float64
+
+	// First moments.
+	var mx, my, mz float64
+
+	// Second moments matrix.
+	var sxx, sxy, sxz float64
+	var syy, syz, szz float64
+
 	for i := 0; i < f.count; i++ {
 		face := f.container[i]
 		if face == nil {
 			continue
 		}
-		point0X, point0Y, point0Z := face.GetPoint0()
-		ax := point0X - refX
-		ay := point0Y - refY
-		az := point0Z - refZ
-		point1X, point1Y, point1Z := face.GetPoint1()
-		bx := point1X - refX
-		by := point1Y - refY
-		bz := point1Z - refZ
-		point2X, point2Y, point2Z := face.GetPoint2()
-		cxv := point2X - refX
-		cyv := point2Y - refY
-		czv := point2Z - refZ
+
+		x0, y0, z0 := face.GetPoint0()
+		x1, y1, z1 := face.GetPoint1()
+		x2, y2, z2 := face.GetPoint2()
+
+		// Vertices relative to the reference point.
+		ax, ay, az := x0-refX, y0-refY, z0-refZ
+		bx, by, bz := x1-refX, y1-refY, z1-refZ
+		dx, dy, dz := x2-refX, y2-refY, z2-refZ
+
 		// Six times the signed tetrahedron volume.
-		v6 := ax*(by*czv-bz*cyv) + ay*(bz*cxv-bx*czv) + az*(bx*cyv-by*cxv)
+		v6 := ax*(by*dz-bz*dy) +
+			ay*(bz*dx-bx*dz) +
+			az*(bx*dy-by*dx)
+
 		volume6 += v6
-		// Tetrahedron centroid relative to the reference point.
-		cx += v6 * (ax + bx + cxv) * 0.25
-		cy += v6 * (ay + by + cyv) * 0.25
-		cz += v6 * (az + bz + czv) * 0.25
+
+		// Sum of the three non-reference vertices.
+		sx := ax + bx + dx
+		sy := ay + by + dy
+		sz := az + bz + dz
+
+		// First moments.
+		mx += v6 * sx * 0.25
+		my += v6 * sy * 0.25
+		mz += v6 * sz * 0.25
+
+		// Second moments:
+		//
+		// S = V/20 * (sum(v) * sum(v)^T + sum(v * v^T))
+		//
+		// Since V = v6/6, the coefficient is v6/120.
+
+		k := v6 / 120.0
+
+		sxx += k * (sx*sx + ax*ax + bx*bx + dx*dx)
+		sxy += k * (sx*sy + ax*ay + bx*by + dx*dy)
+		sxz += k * (sx*sz + ax*az + bx*bz + dx*dz)
+
+		syy += k * (sy*sy + ay*ay + by*by + dy*dy)
+		syz += k * (sy*sz + ay*az + by*bz + dy*dz)
+
+		szz += k * (sz*sz + az*az + bz*bz + dz*dz)
 	}
 
 	if volume6 == 0 {
-		return 0, 0, 0
+		return 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
 
-	return refX + cx/volume6, refY + cy/volume6, refZ + cz/volume6
+	// Centroid relative to the reference point.
+	rx := mx / volume6
+	ry := my / volume6
+	rz := mz / volume6
+
+	cx = refX + rx
+	cy = refY + ry
+	cz = refZ + rz
+
+	// Signed volume.
+	volume := volume6 / 6.0
+
+	// Translate second moments to the centroid.
+	sxx -= volume * rx * rx
+	sxy -= volume * rx * ry
+	sxz -= volume * rx * rz
+
+	syy -= volume * ry * ry
+	syz -= volume * ry * rz
+
+	szz -= volume * rz * rz
+
+	// Inertia tensor per unit mass:
+	//
+	// I = (trace(S) * Identity - S) / volume
+
+	factor := 6.0 / volume6
+
+	ixx = (syy + szz) * factor
+	iyy = (sxx + szz) * factor
+	izz = (sxx + syy) * factor
+
+	ixy = -sxy * factor
+	ixz = -sxz * factor
+	iyz = -syz * factor
+
+	return cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz
 }
 
 // Set assigns face to the element at idx.
@@ -105,17 +191,17 @@ func (f *Faces) Set(idx int, face *Face) {
 	f.container[idx] = face
 }
 
-// At returns the face stored at the specified index.
+// At returns the face stored at idx.
 func (f *Faces) At(idx int) *Face {
 	return f.container[idx]
 }
 
-// Clear resets the face count to zero, leaving allocated storage available for reuse.
+// Clear removes all faces from the collection.
 func (f *Faces) Clear() {
 	f.count = 0
 }
 
-// GetMinMax returns the minimum and maximum x, y, and z coordinates across all non-nil faces.
+// GetMinMax returns the minimum and maximum X, Y, and Z coordinates across all non-nil faces.
 func (f *Faces) GetMinMax() (float64, float64, float64, float64, float64, float64) {
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64

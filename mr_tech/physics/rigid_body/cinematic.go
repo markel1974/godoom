@@ -35,48 +35,57 @@ const (
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
 type Cinematic struct {
-	mass              float64
-	invMass           float64
-	invIx             float64
-	invIy             float64
-	invIz             float64
-	invIxx            float64
-	invIxy            float64
-	invIxz            float64
-	invIyy            float64
-	invIyz            float64
-	invIzz            float64
-	ixx               float64
-	ixy               float64
-	ixz               float64
-	iyy               float64
-	iyz               float64
-	izz               float64
-	vx                float64
-	vy                float64
-	vz                float64
-	ax                float64
-	ay                float64
-	az                float64
-	wx                float64
-	wy                float64
-	wz                float64
-	torqueX           float64
-	torqueY           float64
-	torqueZ           float64
-	vMin              float64
-	airFriction       float64
-	airDamping        float64
-	gForce            float64
-	material          *PhysicsMaterial
-	maxVelocitySq     float64
-	sleepThresholdSq  float64
-	dt                float64
-	terminalZVelocity float64
-	onGround          bool
-	isTilted          bool
-	keepUpright       bool
-	groundYawDamping  float64
+	mass    float64
+	invMass float64
+	// World-space inverse inertia tensor.
+	invIx  float64
+	invIy  float64
+	invIz  float64
+	invIxx float64
+	invIxy float64
+	invIxz float64
+	invIyy float64
+	invIyz float64
+	invIzz float64
+	// World-space inertia tensor.
+	ixx float64
+	ixy float64
+	ixz float64
+	iyy float64
+	iyz float64
+	izz float64
+	// Body-space inertia tensor.
+	bodyIxx, bodyIxy, bodyIxz float64
+	bodyIyy, bodyIyz, bodyIzz float64
+
+	// Body-space inverse inertia tensor.
+	bodyInvIxx, bodyInvIxy, bodyInvIxz float64
+	bodyInvIyy, bodyInvIyz, bodyInvIzz float64
+	vx                                 float64
+	vy                                 float64
+	vz                                 float64
+	ax                                 float64
+	ay                                 float64
+	az                                 float64
+	wx                                 float64
+	wy                                 float64
+	wz                                 float64
+	torqueX                            float64
+	torqueY                            float64
+	torqueZ                            float64
+	vMin                               float64
+	airFriction                        float64
+	airDamping                         float64
+	gForce                             float64
+	material                           *PhysicsMaterial
+	maxVelocitySq                      float64
+	sleepThresholdSq                   float64
+	dt                                 float64
+	terminalZVelocity                  float64
+	onGround                           bool
+	isTilted                           bool
+	keepUpright                        bool
+	groundYawDamping                   float64
 }
 
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
@@ -117,17 +126,86 @@ func (e *Cinematic) KeepUpright() bool {
 	return e.keepUpright
 }
 
+// SetInertiaTensor sets the body-space inertia tensor from the mesh inertia tensor expressed per unit mass.
+func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool {
+	if e.invMass == 0.0 || e.mass <= 0.0 {
+		return false
+	}
+
+	factor := math.Max(e.mass, 25.0) * rotScale
+
+	a := ixx * factor
+	b := ixy * factor
+	c := ixz * factor
+	d := iyy * factor
+	f := iyz * factor
+	g := izz * factor
+
+	// Inverse of the symmetric matrix:
+	//
+	// | a b c |
+	// | b d f |
+	// | c f g |
+
+	c00 := d*g - f*f
+	c01 := c*f - b*g
+	c02 := b*f - c*d
+	c11 := a*g - c*c
+	c12 := b*c - a*f
+	c22 := a*d - b*b
+
+	det := a*c00 + b*c01 + c*c02
+
+	// Reject degenerate or invalid inertia tensors.
+	if det <= 0.0 || math.IsNaN(det) || math.IsInf(det, 0) {
+		return false
+	}
+
+	invDet := 1.0 / det
+
+	invA := c00 * invDet
+	invB := c01 * invDet
+	invC := c02 * invDet
+	invD := c11 * invDet
+	invF := c12 * invDet
+	invG := c22 * invDet
+
+	if math.IsNaN(invA) || math.IsInf(invA, 0) ||
+		math.IsNaN(invB) || math.IsInf(invB, 0) ||
+		math.IsNaN(invC) || math.IsInf(invC, 0) ||
+		math.IsNaN(invD) || math.IsInf(invD, 0) ||
+		math.IsNaN(invF) || math.IsInf(invF, 0) ||
+		math.IsNaN(invG) || math.IsInf(invG, 0) {
+		return false
+	}
+
+	e.bodyIxx, e.bodyIxy, e.bodyIxz = a, b, c
+	e.bodyIyy, e.bodyIyz, e.bodyIzz = d, f, g
+
+	e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = invA, invB, invC
+	e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = invD, invF, invG
+
+	return true
+}
+
 // UpdateInertia computes the inverse principal moments of inertia for a solid cuboid of dimensions (w, h, d)
 // and initializes the world-space inverse inertia tensor.
 func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if e.invMass == 0.0 || e.mass <= 0.0 {
-		e.invIx, e.invIy, e.invIz = 0.0, 0.0, 0.0
-		e.ixx, e.ixy, e.ixz = 0.0, 0.0, 0.0
-		e.iyy, e.iyz, e.izz = 0.0, 0.0, 0.0
-		e.invIxx, e.invIxy, e.invIxz = 0.0, 0.0, 0.0
-		e.invIyy, e.invIyz, e.invIzz = 0.0, 0.0, 0.0
+		e.bodyIxx, e.bodyIxy, e.bodyIxz = 0, 0, 0
+		e.bodyIyy, e.bodyIyz, e.bodyIzz = 0, 0, 0
+
+		e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = 0, 0, 0
+		e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = 0, 0, 0
+
+		e.ixx, e.ixy, e.ixz = 0, 0, 0
+		e.iyy, e.iyz, e.izz = 0, 0, 0
+
+		e.invIxx, e.invIxy, e.invIxz = 0, 0, 0
+		e.invIyy, e.invIyz, e.invIzz = 0, 0, 0
 		return
 	}
+
 	if w < defaultInertia {
 		w = defaultInertia
 	}
@@ -137,59 +215,65 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if d < defaultInertia {
 		d = defaultInertia
 	}
-	effMass := math.Max(e.mass, 25.0)
 
-	factor := (effMass * rotScale) / 12.0
-	e.invIx = 1.0 / (factor * (h*h + d*d))
-	e.invIy = 1.0 / (factor * (w*w + d*d))
-	e.invIz = 1.0 / (factor * (w*w + h*h))
-	// Initialize body-space inertia tensor.
-	e.ixx = 1.0 / e.invIx
-	e.ixy = 0.0
-	e.ixz = 0.0
-	e.iyy = 1.0 / e.invIy
-	e.iyz = 0.0
-	e.izz = 1.0 / e.invIz
-	// Initialize world-space inverse inertia tensor.
-	// Initially the body has identity orientation.
-	e.invIxx = e.invIx
-	e.invIxy = 0.0
-	e.invIxz = 0.0
-	e.invIyy = e.invIy
-	e.invIyz = 0.0
-	e.invIzz = e.invIz
+	// Solid cuboid inertia per unit mass.
+	factor := 1.0 / 12.0
+
+	e.SetInertiaTensor((h*h+d*d)*factor, 0, 0, (w*w+d*d)*factor, 0, (w*w+h*h)*factor)
+
+	// Initially identity orientation.
+	e.SyncWorldInertia(1, 0, 0, 0, 1, 0, 0, 0, 1)
 }
 
 // SyncWorldInertia updates the world-space inertia and inverse inertia tensors from the local orientation axes
 // expressed in world space: row 0 = local X (a00,a01,a02), row 1 = local Y (a10,a11,a12), row 2 = local Z (a20,a21,a22).
 // It clears both tensors when the body has zero inverse mass.
-func (e *Cinematic) SyncWorldInertia(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
+func (e *Cinematic) SyncWorldInertia(
+	a00, a01, a02,
+	a10, a11, a12,
+	a20, a21, a22 float64,
+) {
 	if e.invMass == 0.0 {
-		e.ixx, e.ixy, e.ixz = 0.0, 0.0, 0.0
-		e.iyy, e.iyz, e.izz = 0.0, 0.0, 0.0
-		e.invIxx, e.invIxy, e.invIxz = 0.0, 0.0, 0.0
-		e.invIyy, e.invIyz, e.invIzz = 0.0, 0.0, 0.0
+		e.ixx, e.ixy, e.ixz = 0, 0, 0
+		e.iyy, e.iyz, e.izz = 0, 0, 0
+
+		e.invIxx, e.invIxy, e.invIxz = 0, 0, 0
+		e.invIyy, e.invIyz, e.invIzz = 0, 0, 0
 		return
 	}
-	ix, iy, iz := e.invIx, e.invIy, e.invIz
-	// Direct principal moments.
-	bix := 1.0 / ix
-	biy := 1.0 / iy
-	biz := 1.0 / iz
-	// World-space inertia tensor.
-	e.ixx = bix*a00*a00 + biy*a10*a10 + biz*a20*a20
-	e.ixy = bix*a00*a01 + biy*a10*a11 + biz*a20*a21
-	e.ixz = bix*a00*a02 + biy*a10*a12 + biz*a20*a22
-	e.iyy = bix*a01*a01 + biy*a11*a11 + biz*a21*a21
-	e.iyz = bix*a01*a02 + biy*a11*a12 + biz*a21*a22
-	e.izz = bix*a02*a02 + biy*a12*a12 + biz*a22*a22
-	// World-space inverse inertia tensor.
-	e.invIxx = ix*a00*a00 + iy*a10*a10 + iz*a20*a20
-	e.invIxy = ix*a00*a01 + iy*a10*a11 + iz*a20*a21
-	e.invIxz = ix*a00*a02 + iy*a10*a12 + iz*a20*a22
-	e.invIyy = ix*a01*a01 + iy*a11*a11 + iz*a21*a21
-	e.invIyz = ix*a01*a02 + iy*a11*a12 + iz*a21*a22
-	e.invIzz = ix*a02*a02 + iy*a12*a12 + iz*a22*a22
+
+	r := [3][3]float64{{a00, a01, a02}, {a10, a11, a12}, {a20, a21, a22}}
+
+	body := [3][3]float64{
+		{e.bodyIxx, e.bodyIxy, e.bodyIxz},
+		{e.bodyIxy, e.bodyIyy, e.bodyIyz},
+		{e.bodyIxz, e.bodyIyz, e.bodyIzz},
+	}
+
+	bodyInv := [3][3]float64{
+		{e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz},
+		{e.bodyInvIxy, e.bodyInvIyy, e.bodyInvIyz},
+		{e.bodyInvIxz, e.bodyInvIyz, e.bodyInvIzz},
+	}
+
+	var world, worldInv [3][3]float64
+
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			for k := 0; k < 3; k++ {
+				for l := 0; l < 3; l++ {
+					world[i][j] += r[k][i] * body[k][l] * r[l][j]
+					worldInv[i][j] += r[k][i] * bodyInv[k][l] * r[l][j]
+				}
+			}
+		}
+	}
+
+	e.ixx, e.ixy, e.ixz = world[0][0], world[0][1], world[0][2]
+	e.iyy, e.iyz, e.izz = world[1][1], world[1][2], world[2][2]
+
+	e.invIxx, e.invIxy, e.invIxz = worldInv[0][0], worldInv[0][1], worldInv[0][2]
+	e.invIyy, e.invIyz, e.invIzz = worldInv[1][1], worldInv[1][2], worldInv[2][2]
 }
 
 // ApplyWorldInvInertia multiplies a world-space vector by the 3x3 world-space inverse inertia tensor I_world^-1.

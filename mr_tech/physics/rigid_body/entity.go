@@ -35,11 +35,14 @@ func init() {
 
 // Entity represents a game object with a unique identifier, bounding box, and cinematic behaviors.
 type Entity struct {
-	id          uint64
-	cx          float64
-	cy          float64
-	cz          float64
-	hasCentroid bool
+	id               uint64
+	ecx              float64
+	ecy              float64
+	ecz              float64
+	hasCentroid      bool
+	eixx, eixy, eixz float64
+	eiyy, eiyz, eizz float64
+	hasInertia       bool
 	*aabb.BoundingBox
 	*Cinematic
 }
@@ -64,6 +67,9 @@ func (e *Entity) GetId() uint64 {
 func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
 	e.BoundingBox.Rebuild(x, y, z, w, h, d)
 	e.Cinematic.UpdateInertia(w, h, d)
+	if e.hasInertia {
+		e.Cinematic.SetInertiaTensor(e.eixx, e.eixy, e.eixz, e.eiyy, e.eiyz, e.eizz)
+	}
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
@@ -74,10 +80,16 @@ func (e *Entity) SetCentroid(cx, cy, cz float64) {
 	dz := cz - gz
 	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := e.BoundingBox.GetAxes()
 	// World space -> local space.
-	e.cx = dx*ax0 + dy*ay0 + dz*az0
-	e.cy = dx*ax1 + dy*ay1 + dz*az1
-	e.cz = dx*ax2 + dy*ay2 + dz*az2
+	e.ecx = dx*ax0 + dy*ay0 + dz*az0
+	e.ecy = dx*ax1 + dy*ay1 + dz*az1
+	e.ecz = dx*ax2 + dy*ay2 + dz*az2
 	e.hasCentroid = true
+}
+
+func (e *Entity) SetInertia(ixx, ixy, ixz, iyy, iyz, izz float64) {
+	e.eixx, e.eixy, e.eixz = ixx, ixy, ixz
+	e.eiyy, e.eiyz, e.eizz = iyy, iyz, izz
+	e.hasInertia = true
 }
 
 // SetKeepUpright enables or disables upright stabilization and the bounding box tilt limit.
@@ -134,14 +146,12 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 func (e *Entity) Update() {
 	e.Cinematic.Update(e.BoundingBox.GetAxes2())
 	if e.Cinematic.GetInvMass() > 0.0 && (e.Cinematic.IsRotating() || e.Cinematic.IsTilted()) {
-		cx, cy, cz := e.getCenterOfMass()
-		if e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt()) {
+		reset := e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt())
+		if reset {
 			e.wx = 0.0
 			e.wy = 0.0
 		}
-		ncx, ncy, ncz := e.getCenterOfMass()
-		// Keep the center of mass fixed during rotation.
-		e.AddTo(cx-ncx, cy-ncy, cz-ncz)
+		// Always synchronize after the orientation update.
 		e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 	}
 }
@@ -194,5 +204,5 @@ func (e *Entity) getCenterOfMass() (float64, float64, float64) {
 		return gx, gy, gz
 	}
 	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := e.BoundingBox.GetAxes()
-	return gx + e.cx*ax0 + e.cy*ax1 + e.cz*ax2, gy + e.cx*ay0 + e.cy*ay1 + e.cz*ay2, gz + e.cx*az0 + e.cy*az1 + e.cz*az2
+	return gx + e.ecx*ax0 + e.ecy*ax1 + e.ecz*ax2, gy + e.ecx*ay0 + e.ecy*ay1 + e.ecz*ay2, gz + e.ecx*az0 + e.ecy*az1 + e.ecz*az2
 }

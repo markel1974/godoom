@@ -104,11 +104,9 @@ type Cage struct {
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
 func NewCage(id uint64, object IObject) *Cage {
-	//id := _counter
-	//_counter++
 	c := &Cage{
 		id:        id,
-		seen:      make([]uint64, 512),
+		seen:      make([]uint64, max(id*2, 1024)),
 		object:    object,
 		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volume:    nil,

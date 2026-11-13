@@ -250,7 +250,7 @@ func (t *Base) StageApply() {
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			rPushX, rPushY, rPushZ := rCage.GetPushOffset()
 			alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
-			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ)
+			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ, sPushZ)
 			if pen > 0 {
 				if !slot.Penetrable() {
 					entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
@@ -263,7 +263,7 @@ func (t *Base) StageApply() {
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
 			alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ
-			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ)
+			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ, sPushZ)
 			if pen > 0 {
 				entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 			}
@@ -275,12 +275,12 @@ func (t *Base) StageApply() {
 	}
 }
 
-func clampUpwardPenetration(pen, alreadyResolved, nZ, maxZ, currentBaseZ float64) float64 {
+func clampUpwardPenetration(pen, alreadyResolved, nZ, maxZ, currentBaseZ, sPushZ float64) float64 {
 	if alreadyResolved < 0.0 {
 		alreadyResolved = 0.0
 	}
 	pen -= alreadyResolved
-	if pen > 0 && nZ > 0.05 {
+	if pen > 0 && sPushZ > 0.0 && nZ > 0.70 {
 		remZ := maxZ - currentBaseZ
 		if remZ <= 0.0 {
 			return 0.0

@@ -143,17 +143,31 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
+
 func (e *Entity) Update() {
-	e.Cinematic.Update(e.BoundingBox.GetAxes2())
-	if e.Cinematic.GetInvMass() > 0.0 && (e.Cinematic.IsRotating() || e.Cinematic.IsTilted()) {
-		reset := e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt())
-		if reset {
-			e.wx = 0.0
-			e.wy = 0.0
-		}
-		// Always synchronize after the orientation update.
-		e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+	if !e.Cinematic.KeepUpright() {
+		e.Cinematic.SetIsTilted(!e.BoundingBox.IsFaceAligned())
 	}
+	e.Cinematic.Update(e.BoundingBox.GetAxes2())
+	if e.Cinematic.GetInvMass() <= 0.0 ||
+		(!e.Cinematic.IsRotating() && !e.Cinematic.IsTilted()) {
+		return
+	}
+	// Preserve the world-space center of mass during rotation.
+	cx, cy, cz := e.getCenterOfMass()
+	reset := e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt())
+	// Rotation changes the world-space COM when the local
+	// centroid is offset from the geometric center.
+	ncx, ncy, ncz := e.getCenterOfMass()
+	e.BoundingBox.AddTo(cx-ncx, cy-ncy, cz-ncz)
+
+	if reset {
+		e.wx = 0.0
+		e.wy = 0.0
+	}
+
+	// Synchronize world inertia using the final orientation.
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
 // ResolveImpact resolves a 6-DoF collision impact with another entity .

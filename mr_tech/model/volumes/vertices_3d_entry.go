@@ -224,8 +224,15 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
-	cx, cy, cz := v.comp2.GetEntity().GetCenter()
-	b := v.comp2.GetEntity().GetAABB()
+	ent := v.comp2.GetEntity()
+	b := ent.GetAABB()
+	if v.singleFrame {
+		qx, qy, qz, qw := ent.GetQRotation().Get()
+		if qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
+			return b
+		}
+	}
+	cx, cy, cz := ent.GetCenter()
 	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 	return b
 }

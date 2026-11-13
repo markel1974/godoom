@@ -140,25 +140,26 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	// Calculate Position
 	s.dX, s.dY, s.dZ = lEnt.GetFrameDisplacement()
 
-	// Default fallback: entity's oriented extents
-	s.eRadX, s.eRadY, _ = lEnt.GetOrientedHalfExtents()
-	_, _, s.eRadZ = lEnt.GetSizeCenter()
+	// Oriented extents from entity OBB (kept synchronized by Entity.Update).
+	s.eRadX, s.eRadY, s.eRadZ = lEnt.GetOrientedHalfExtents()
 	s.cX, s.cY, s.cZ = lEnt.GetCenter()
 
-	if objAABB := s.object.GetAABB(); objAABB != nil {
-		minX := objAABB.GetMinX()
-		maxX := objAABB.GetMaxX()
-		minY := objAABB.GetMinY()
-		maxY := objAABB.GetMaxY()
-		minZ := objAABB.GetMinZ()
-		maxZ := objAABB.GetMaxZ()
-		if maxX > minX && maxY > minY && maxZ > minZ {
-			s.cX = (minX + maxX) * 0.5
-			s.cY = (minY + maxY) * 0.5
-			s.cZ = (minZ + maxZ) * 0.5
-			s.eRadX = (maxX - minX) * 0.5
-			s.eRadY = (maxY - minY) * 0.5
-			s.eRadZ = (maxZ - minZ) * 0.5
+	if lEnt.KeepUpright() {
+		if objAABB := s.object.GetAABB(); objAABB != nil {
+			minX := objAABB.GetMinX()
+			maxX := objAABB.GetMaxX()
+			minY := objAABB.GetMinY()
+			maxY := objAABB.GetMaxY()
+			minZ := objAABB.GetMinZ()
+			maxZ := objAABB.GetMaxZ()
+			if maxX > minX && maxY > minY && maxZ > minZ {
+				s.cX = (minX + maxX) * 0.5
+				s.cY = (minY + maxY) * 0.5
+				s.cZ = (minZ + maxZ) * 0.5
+				s.eRadX = (maxX - minX) * 0.5
+				s.eRadY = (maxY - minY) * 0.5
+				s.eRadZ = (maxZ - minZ) * 0.5
+			}
 		}
 	}
 
@@ -672,11 +673,17 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		penetration = minOverlap
 	}
 
-	// Proiezione ortogonale del centro a fine frame (t = 1) sul piano di contatto,
-	// confinata nei limiti spaziali effettivi della faccia (cattura spigoli e bordi di gradini).[cite: 6]
-	p0x = math.Max(rMinX, math.Min(rMaxX, s.tX-nX*distTarget))
-	p0y = math.Max(rMinY, math.Min(rMaxY, s.tY-nY*distTarget))
-	p0z = math.Max(rMinZ, math.Min(rMaxZ, s.tZ-nZ*distTarget))
+	// Proiezione ortogonale del punto di supporto estremo dell'OBB lungo -normal sul piano di contatto,
+	// confinata nei limiti spaziali effettivi della faccia (cattura spigoli e bordi di gradini).
+	supX, supY, supZ := s.object.GetEntity().GetSupportPoint(-nX, -nY, -nZ)
+	supX += s.dX
+	supY += s.dY
+	supZ += s.dZ
+	distSup := (supX-p0x)*nX + (supY-p0y)*nY + (supZ-p0z)*nZ
+
+	p0x = math.Max(rMinX, math.Min(rMaxX, supX-nX*distSup))
+	p0y = math.Max(rMinY, math.Min(rMaxY, supY-nY*distSup))
+	p0z = math.Max(rMinZ, math.Min(rMaxZ, supZ-nZ*distSup))
 
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
@@ -892,27 +899,35 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	maxPenetration := axisOverlap
 	hitDist := -axisOverlap
 
-	// Calcolo del baricentro della patch di contatto sulle coordinate tangenziali al piano d'impatto.
-	// In caso di tunneling ad alta velocità in sweptMode (intervallo a t = 1 disgiunto),
-	// effettua il clamp del centro locale sui bordi del volume remoto.[cite: 6]
-	patchMinX := math.Max(s.tX-s.eRadX, rTx-rRadX)
-	patchMaxX := math.Min(s.tX+s.eRadX, rTx+rRadX)
-	patchMinY := math.Max(s.tY-s.eRadY, rTy-rRadY)
-	patchMaxY := math.Min(s.tY+s.eRadY, rTy+rRadY)
-	patchMinZ := math.Max(s.tZ-s.eRadZ, rTz-rRadZ)
-	patchMaxZ := math.Min(s.tZ+s.eRadZ, rTz+rRadZ)
+	var contactX, contactY, contactZ float64
+	if ent := s.object.GetEntity(); ent != nil && !ent.KeepUpright() {
+		supX, supY, supZ := ent.GetSupportPoint(-nX, -nY, -nZ)
+		contactX = math.Max(rTx-rRadX, math.Min(rTx+rRadX, supX+s.dX))
+		contactY = math.Max(rTy-rRadY, math.Min(rTy+rRadY, supY+s.dY))
+		contactZ = math.Max(rTz-rRadZ, math.Min(rTz+rRadZ, supZ+s.dZ))
+	} else {
+		// Calcolo del baricentro della patch di contatto sulle coordinate tangenziali al piano d'impatto.
+		// In caso di tunneling ad alta velocità in sweptMode (intervallo a t = 1 disgiunto),
+		// effettua il clamp del centro locale sui bordi del volume remoto.[cite: 6]
+		patchMinX := math.Max(s.tX-s.eRadX, rTx-rRadX)
+		patchMaxX := math.Min(s.tX+s.eRadX, rTx+rRadX)
+		patchMinY := math.Max(s.tY-s.eRadY, rTy-rRadY)
+		patchMaxY := math.Min(s.tY+s.eRadY, rTy+rRadY)
+		patchMinZ := math.Max(s.tZ-s.eRadZ, rTz-rRadZ)
+		patchMaxZ := math.Min(s.tZ+s.eRadZ, rTz+rRadZ)
 
-	contactX := math.Max(rTx-rRadX, math.Min(rTx+rRadX, s.tX))
-	if patchMaxX >= patchMinX {
-		contactX = (patchMinX + patchMaxX) * 0.5
-	}
-	contactY := math.Max(rTy-rRadY, math.Min(rTy+rRadY, s.tY))
-	if patchMaxY >= patchMinY {
-		contactY = (patchMinY + patchMaxY) * 0.5
-	}
-	contactZ := math.Max(rTz-rRadZ, math.Min(rTz+rRadZ, s.tZ))
-	if patchMaxZ >= patchMinZ {
-		contactZ = (patchMinZ + patchMaxZ) * 0.5
+		contactX = math.Max(rTx-rRadX, math.Min(rTx+rRadX, s.tX))
+		if patchMaxX >= patchMinX {
+			contactX = (patchMinX + patchMaxX) * 0.5
+		}
+		contactY = math.Max(rTy-rRadY, math.Min(rTy+rRadY, s.tY))
+		if patchMaxY >= patchMinY {
+			contactY = (patchMinY + patchMaxY) * 0.5
+		}
+		contactZ = math.Max(rTz-rRadZ, math.Min(rTz+rRadZ, s.tZ))
+		if patchMaxZ >= patchMinZ {
+			contactZ = (patchMinZ + patchMaxZ) * 0.5
+		}
 	}
 
 	// Classificazione finale del Bucket e assegnazione coordinate tangenziali del punto di contatto[cite: 6]

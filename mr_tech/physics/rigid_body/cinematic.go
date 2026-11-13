@@ -28,7 +28,7 @@ const (
 
 	angSleepEpsilon = 0.05
 
-	rotScale = 8.0
+	rotScale = 1.0
 
 	defaultInertia = 32.0
 )
@@ -366,10 +366,10 @@ func (e *Cinematic) IsTilted() bool {
 	return e.isTilted
 }
 
-// SetOnGround sets the entity's ground state and adjusts vertical velocity when grounded.
+// SetOnGround sets the entity's ground state and adjusts vertical velocity when grounded flat.
 func (e *Cinematic) SetOnGround(onGround bool) {
 	e.onGround = onGround
-	if e.onGround && e.vz < 0.0 {
+	if e.onGround && (!e.isTilted || e.keepUpright) && e.vz < 0.0 {
 		e.vz = 0.0
 	}
 }
@@ -493,14 +493,21 @@ func (e *Cinematic) AddForceAtPoint(fx, fy, fz float64, px, py, pz float64, cx, 
 	e.torqueZ += tz
 }
 
+// SetIsTilted sets the tilted state of the cinematic body.
+func (e *Cinematic) SetIsTilted(isTilted bool) {
+	e.isTilted = isTilted
+}
+
 // Update advances the cinematic physics state using the supplied local Z orientation axis components (ax0, ax1, ax2).
 func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	if e.invMass == 0.0 {
 		return
 	}
 
-	tiltSq := ax0*ax0 + ax1*ax1
-	e.isTilted = tiltSq > 1e-7 || ax2 < 0.999999
+	if e.keepUpright {
+		tiltSq := ax0*ax0 + ax1*ax1
+		e.isTilted = tiltSq > 1e-7 || ax2 < 0.999999
+	}
 
 	if e.isTilted && e.keepUpright {
 		stiffness := 140.0
@@ -548,7 +555,9 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	yawDamping := e.airDamping
 	groundDamping := e.material.GetGroundDamping()
 	if e.onGround {
-		tiltDamping = groundDamping
+		if !e.isTilted || e.keepUpright {
+			tiltDamping = groundDamping
+		}
 		yawDamping = e.groundYawDamping
 	}
 	e.wx *= tiltDamping
@@ -560,22 +569,26 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz))
 
-	// Angular sleep.
-	if math.Abs(e.wx) < angSleepEpsilon {
-		e.wx = 0.0
-	}
-	if math.Abs(e.wy) < angSleepEpsilon {
-		e.wy = 0.0
-	}
-	if math.Abs(e.wz) < angSleepEpsilon {
-		e.wz = 0.0
+	// Angular sleep (only when body is face-aligned and not tilted on an edge).
+	if !e.isTilted {
+		if math.Abs(e.wx) < angSleepEpsilon {
+			e.wx = 0.0
+		}
+		if math.Abs(e.wy) < angSleepEpsilon {
+			e.wy = 0.0
+		}
+		if math.Abs(e.wz) < angSleepEpsilon {
+			e.wz = 0.0
+		}
 	}
 
 	// Integrate linear velocity.
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
 
-	if e.onGround {
+	groundedFlat := e.onGround && (!e.isTilted || e.keepUpright)
+
+	if groundedFlat {
 		if e.vz < 0.0 {
 			e.vz = 0.0
 		}
@@ -592,7 +605,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	e.az = 0.0
 
 	// Grounded sleep check (avoids freezing airborne projectiles at trajectory apex).
-	if e.onGround {
+	if groundedFlat {
 		dx := e.vx * e.dt
 		dy := e.vy * e.dt
 		dz := e.vz * e.dt
@@ -605,7 +618,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	}
 
 	// Linear damping and planar sleep threshold.
-	if e.onGround {
+	if groundedFlat {
 		e.vx *= groundDamping
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
@@ -727,11 +740,22 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 		e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+j*u1nx))
 		e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+j*u1ny))
 		e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+j*u1nz))
+		// Unstable ridge equilibrium breaking when a tilted free body balances directly above its contact.
+		if e.onGround && e.isTilted && !e.keepUpright && nz > floorNormalThreshold {
+			if (r1x*r1x+r1y*r1y) < 0.04 && (e.wx*e.wx+e.wy*e.wy) < 1e-4 {
+				e.wy += 0.1
+			}
+		}
 	}
 	if invMass2 > 0.0 {
 		e2.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e2.wx-j*u2nx))
 		e2.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e2.wy-j*u2ny))
 		e2.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e2.wz-j*u2nz))
+		if e2.onGround && e2.isTilted && !e2.keepUpright && nz < -floorNormalThreshold {
+			if (r2x*r2x+r2y*r2y) < 0.04 && (e2.wx*e2.wx+e2.wy*e2.wy) < 1e-4 {
+				e2.wy += 0.1
+			}
+		}
 	}
 
 	// Tangential impulse (Coulomb friction): recalculate relative velocity after normal impulse.
@@ -832,11 +856,11 @@ func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool,
 	p2 := correction * (invMass2 / invMassSum)
 
 	if nz > floorNormalThreshold && (otherFloor || other.IsOnGround()) {
-		if e.vz < 0.0 {
+		if (!e.isTilted || e.keepUpright) && e.vz < 0.0 {
 			e.vz = 0.0
 		}
 	} else if nz < -floorNormalThreshold && e.IsOnGround() {
-		if other.vz < 0.0 {
+		if (!other.isTilted || other.keepUpright) && other.vz < 0.0 {
 			other.vz = 0.0
 		}
 	}
@@ -851,7 +875,7 @@ func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float6
 		return 0, false
 	}
 	if nz > floorNormalThreshold {
-		if e.vz < 0.0 {
+		if (!e.isTilted || e.keepUpright) && e.vz < 0.0 {
 			e.vz = 0.0
 		}
 	}

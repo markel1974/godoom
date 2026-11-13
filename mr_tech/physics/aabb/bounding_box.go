@@ -275,35 +275,92 @@ func (r *BoundingBox) syncYawTiltFromRotation() {
 	r.composeRotation()
 }
 
-// Rotate integrates yaw and tilt independently. Angular velocity is expressed in world space.
-// Yaw is integrated around world Z; roll/pitch are transformed into the yaw-local frame.
 func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	if dt == 0 {
 		return false
 	}
-	// Integrate yaw around world Z.
-	r.qYaw.IntegrateAngular(0, 0, wz, dt)
-	// Transform horizontal angular velocity into the yaw-local frame.
-	r.qYawInverse.Conjugate(r.qYaw)
-	lwx, lwy, _ := r.qYawInverse.Rotate(wx, wy, 0)
-	// Integrate tilt, retaining the complete quaternion result.
-	r.qTilt.IntegrateAngular(lwx, lwy, 0, dt)
-	// Compose the complete candidate orientation before decomposing it.
-	r.composeRotation()
-	// Extract the new yaw and the corresponding pure swing direction.
+
+	// Integrate the complete angular velocity in world space.
+	r.qRotation.IntegrateAngular(wx, wy, wz, dt)
+
+	if !r.tiltLimitEnabled {
+		r.SyncRotation()
+		return false
+	}
+
+	// Extract the yaw and pure swing from the complete orientation.
 	dx, dy, dz := r.extractSwingDirection()
-	// Recalculate angular velocity in the resulting yaw-local frame.
-	lwx, lwy, _ = r.qYawInverse.Rotate(wx, wy, 0)
+
+	// Angular velocity expressed in the yaw-local frame.
+	lwx, lwy, _ := r.qYawInverse.Rotate(wx, wy, 0)
+
 	angle := math.Acos(math.Max(-1, math.Min(1, dz)))
-	// Detect whether the angular velocity is pushing tilt beyond its limit.
-	reset := r.tiltLimitEnabled && angle > _maxTiltAngle && (lwx*(-dy)+lwy*dx) > 0
-	// Rebuild the pure swing, applying the configured tilt limit.
+
+	// Detect outward angular motion beyond the tilt limit.
+	reset := angle > _maxTiltAngle && (lwx*(-dy)+lwy*dx) > 0
+
+	// Rebuild tilt, applying the limit only when enabled.
 	r.setSwingFromDirection(dx, dy, dz)
+
 	// Recompose the final orientation.
 	r.composeRotation()
 	r.SyncRotation()
 
 	return reset
+}
+
+// GetSupportPoint returns the extreme contact point of the OBB in direction (dirX, dirY, dirZ).
+// For directions aligned with faces or edges, it returns the center of that face or edge.
+func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float64, float64) {
+	cx, cy, cz := r.GetCenter()
+	hw := r.size.w * 0.5
+	hh := r.size.h * 0.5
+	hd := r.size.d * 0.5
+
+	px, py, pz := cx, cy, cz
+
+	const planeTol = 1e-4
+
+	d0 := r.axis[0][0]*dirX + r.axis[0][1]*dirY + r.axis[0][2]*dirZ
+	if d0 > planeTol {
+		px += r.axis[0][0] * hw
+		py += r.axis[0][1] * hw
+		pz += r.axis[0][2] * hw
+	} else if d0 < -planeTol {
+		px -= r.axis[0][0] * hw
+		py -= r.axis[0][1] * hw
+		pz -= r.axis[0][2] * hw
+	}
+
+	d1 := r.axis[1][0]*dirX + r.axis[1][1]*dirY + r.axis[1][2]*dirZ
+	if d1 > planeTol {
+		px += r.axis[1][0] * hh
+		py += r.axis[1][1] * hh
+		pz += r.axis[1][2] * hh
+	} else if d1 < -planeTol {
+		px -= r.axis[1][0] * hh
+		py -= r.axis[1][1] * hh
+		pz -= r.axis[1][2] * hh
+	}
+
+	d2 := r.axis[2][0]*dirX + r.axis[2][1]*dirY + r.axis[2][2]*dirZ
+	if d2 > planeTol {
+		px += r.axis[2][0] * hd
+		py += r.axis[2][1] * hd
+		pz += r.axis[2][2] * hd
+	} else if d2 < -planeTol {
+		px -= r.axis[2][0] * hd
+		py -= r.axis[2][1] * hd
+		pz -= r.axis[2][2] * hd
+	}
+
+	return px, py, pz
+}
+
+// IsFaceAligned returns whether any of the 6 box faces is aligned horizontally with world Z.
+func (r *BoundingBox) IsFaceAligned() bool {
+	maxZ := math.Max(math.Abs(r.axis[0][2]), math.Max(math.Abs(r.axis[1][2]), math.Abs(r.axis[2][2])))
+	return maxZ > 0.9999
 }
 
 // SetSize updates the dimensions and derived data.

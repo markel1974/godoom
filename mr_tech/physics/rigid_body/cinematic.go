@@ -26,7 +26,7 @@ const (
 
 	sleepEpsilon = 0.005
 
-	angSleepEpsilon = 0.05
+	angSleepEpsilon = 0.08
 
 	rotScale = 1.0
 
@@ -555,10 +555,17 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	yawDamping := e.airDamping
 	groundDamping := e.material.GetGroundDamping()
 	if e.onGround {
-		if !e.isTilted || e.keepUpright {
-			tiltDamping = groundDamping
-		}
 		yawDamping = e.groundYawDamping
+		if !e.isTilted || e.keepUpright {
+			if e.keepUpright {
+				tiltDamping = groundDamping
+			} else {
+				// Flat face resting contact strongly damps residual tilt and yaw micro-vibrations.
+				faceDamping := e.groundYawDamping * e.groundYawDamping
+				tiltDamping = faceDamping
+				yawDamping = faceDamping
+			}
+		}
 	}
 	e.wx *= tiltDamping
 	e.wy *= tiltDamping

@@ -319,7 +319,7 @@ func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float6
 
 	px, py, pz := cx, cy, cz
 
-	const planeTol = 1e-4
+	const planeTol = 0.01
 
 	d0 := r.axis[0][0]*dirX + r.axis[0][1]*dirY + r.axis[0][2]*dirZ
 	if d0 > planeTol {
@@ -360,7 +360,7 @@ func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float6
 // IsFaceAligned returns whether any of the 6 box faces is aligned horizontally with world Z.
 func (r *BoundingBox) IsFaceAligned() bool {
 	maxZ := math.Max(math.Abs(r.axis[0][2]), math.Max(math.Abs(r.axis[1][2]), math.Abs(r.axis[2][2])))
-	return maxZ > 0.9999
+	return maxZ > 0.99985
 }
 
 // SetSize updates the dimensions and derived data.

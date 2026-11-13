@@ -963,6 +963,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
 }
 
+// growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.
 func (s *Cage) growSeen(idx uint64) {
 	n := make([]uint64, idx*2)
 	copy(n, s.seen)

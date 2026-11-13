@@ -73,7 +73,7 @@ const toiTieEpsilon = 1e-4
 // TotalSlots represents the total available slots, computed as BucketSize * FacesPerBucket.
 const TotalSlots = BucketSize * FacesPerBucket
 
-// Cage represents a data structure for managing collision information for a physical entity.
+// Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
 	seen                map[*Cage]bool
 	object              IObject
@@ -98,7 +98,7 @@ type Cage struct {
 	appliedZ            float64
 }
 
-// NewCage creates and returns a new instance of Cage initialized with the specified IThing object.
+// NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
 func NewCage(object IObject) *Cage {
 	c := &Cage{
 		seen:      make(map[*Cage]bool),
@@ -123,12 +123,12 @@ func NewCage(object IObject) *Cage {
 	return c
 }
 
-// GetObject returns the object associated with the cage.
+// GetObject returns the object associated with the cage.[cite: 6]
 func (s *Cage) GetObject() IObject {
 	return s.object
 }
 
-// Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.
+// Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.[cite: 6]
 func (s *Cage) Rebuild(maxStep float64) {
 	lEnt := s.object.GetEntity()
 	// Calculate Position
@@ -184,7 +184,7 @@ func (s *Cage) Rebuild(maxStep float64) {
 	s.maxStep = maxStep
 }
 
-// AddFace adds a pair of faces (rFace and lFace) to the Cage, resizing the internal slice if needed.
+// AddFace adds a pair of faces (rFace and lFace) to the Cage, resizing the internal slice if needed.[cite: 6]
 func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 	if s.facesIdx >= len(s.faces) {
 		n := make([]*Faces, len(s.faces)*2)
@@ -200,7 +200,7 @@ func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 	s.facesIdx++
 }
 
-// Commit processes collision data between two CollisionCages, resolving interactions based on material and displacement factors.
+// Commit processes collision data between two CollisionCages, resolving interactions based on material and displacement factors.[cite: 6]
 func (s *Cage) Commit(rCage *Cage) {
 	lAABB := s.ellipsoid.GetAABB()
 
@@ -227,21 +227,20 @@ func (s *Cage) Commit(rCage *Cage) {
 		lFace := faces.lFace
 
 		if !rFace.IsSolid() {
-			continue // Skybox or non-solid surface: ignore collision and volume tracking
+			continue // Skybox or non-solid surface: ignore collision and volume tracking[cite: 6]
 		}
 
 		var b BucketType
 		var dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ float64
 
-		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane
+		// DISPATCHER: Mesh-vs-Mesh (6 DOF) o Ellipsoid-vs-Plane[cite: 6]
 		if lFace != nil && rCage != nil {
-			//b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ := s.computeManifold(rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFaceMeshVsMesh(rCage, rFace, lFace, rOffX, rOffY, rOffZ, lOffX, lOffY, lOffZ)
 		} else {
 			b, dist, pen, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ = s.computeFace(lAABB, rFace, rOffX, rOffY, rOffZ)
 		}
 
-		// Volume Priority per le mesh statiche
+		// Volume Priority per le mesh statiche[cite: 6]
 		iMode := ImpactElastic
 		if rCage == nil {
 			iMode = ImpactInelastic
@@ -253,7 +252,7 @@ func (s *Cage) Commit(rCage *Cage) {
 			}
 		}
 
-		// Floor support detection: resting contacts within ground tolerance maintain hasFloor = true
+		// Floor support detection: resting contacts within ground tolerance maintain hasFloor = true[cite: 6]
 		const floorGroundTolerance = 0.25
 		if b == BucketFloor {
 			if dist <= floorGroundTolerance {
@@ -270,19 +269,19 @@ func (s *Cage) Commit(rCage *Cage) {
 		}
 
 		// If the penetration calculated from the infinite half-space exceeds the physical AABB limit,
-		// we are intersecting the projection of a phantom orthogonal plane. Discard it.
-		if pen > minOverlap+satFilterEpsilon { // SAT filter (Anti-Phantom Plane)
+		// we are intersecting the projection of a phantom orthogonal plane. Discard it.[cite: 6]
+		if pen > minOverlap+satFilterEpsilon { // SAT filter (Anti-Phantom Plane)[cite: 6]
 			continue
 		}
 
 		if b.IsWall() {
 			baseZ := s.GetBaseZ()
 			minBaseZ := math.Min(baseZ, baseZ+s.dZ)
-			if rMaxZ <= minBaseZ+satFilterEpsilon { // down-hill (going downhill) or within floor penetration slop
+			if rMaxZ <= minBaseZ+satFilterEpsilon { // down-hill (going downhill) or within floor penetration slop[cite: 6]
 				continue
 			}
 			stepZ := baseZ + s.maxStep
-			if s.maxStep > 0 && rMaxZ <= stepZ { // up-hill (climbable step)
+			if s.maxStep > 0 && rMaxZ <= stepZ { // up-hill (climbable step)[cite: 6]
 				iMode = ImpactStep
 			}
 		}
@@ -312,7 +311,7 @@ func (s *Cage) Commit(rCage *Cage) {
 	s.facesIdx = 0
 }
 
-// addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.
+// addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.[cite: 6]
 func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) bool {
 	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if cage != nil {
@@ -323,7 +322,7 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pe
 	return false
 }
 
-// TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.
+// TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.[cite: 6]
 func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *rigid_body.Entity {
 	w := s.ellipsoidLocal[slot]
 	from := s.ellipsoid.GetAABB()
@@ -337,7 +336,7 @@ func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *
 	return w
 }
 
-// TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.
+// TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.[cite: 6]
 func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, float64, float64) {
 	lEnt := s.object.GetEntity()
 	lOx, lOy, lOz := lEnt.GetCenter()
@@ -373,7 +372,7 @@ func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, floa
 	return w, rOx - lOx, rOy - lOy, rOz - lOz
 }
 
-// Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.
+// Translate updates the local ellipsoid of the given slot based on the provided AABB source and displacement values.[cite: 6]
 func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ float64) *rigid_body.Entity {
 	w := s.ellipsoidLocal[slot]
 	to := src.GetAABB()
@@ -424,20 +423,20 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 	return w
 }
 
-// HasSeen checks if the given Cage has already been marked as seen in the current Cage.
+// HasSeen checks if the given Cage has already been marked as seen in the current Cage.[cite: 6]
 func (s *Cage) HasSeen(rCage *Cage) bool {
 	return s.seen[rCage]
 }
 
-// Seen marks a given Cage as observed by the current Cage within its internal tracking.
+// Seen marks a given Cage as observed by the current Cage within its internal tracking.[cite: 6]
 func (s *Cage) Seen(rCage *Cage) {
 	s.seen[rCage] = true
 }
 
-// GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.
+// GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.[cite: 6]
 func (s *Cage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
 
-// HasBucket reports whether the collision cage contains a bucket of the specified type.
+// HasBucket reports whether the collision cage contains a bucket of the specified type.[cite: 6]
 func (s *Cage) HasBucket(t BucketType) bool {
 	for z := 0; z < s.slotsLen; z++ {
 		if s.slots[z].bucket == t {
@@ -447,54 +446,54 @@ func (s *Cage) HasBucket(t BucketType) bool {
 	return false
 }
 
-// GetSlotsLen returns the current number of active slots in the Cage.
+// GetSlotsLen returns the current number of active slots in the Cage.[cite: 6]
 func (s *Cage) GetSlotsLen() int { return s.slotsLen }
 
-// GetSlot returns the Entry at the specified index in the slots slice.
+// GetSlot returns the Entry at the specified index in the slots slice.[cite: 6]
 func (s *Cage) GetSlot(i int) *Entry { return s.slots[i] }
 
-// GetThing returns the object associated with the cage.
+// GetThing returns the object associated with the cage.[cite: 6]
 func (s *Cage) GetThing() IObject { return s.object }
 
-// GetVolume returns the volume associated with the Cage.
+// GetVolume returns the volume associated with the Cage.[cite: 6]
 func (s *Cage) GetVolume() IObject { return s.volume }
 
-// GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.
+// GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.[cite: 6]
 func (s *Cage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
 
-// GetC returns the center coordinates (cX, cY, cZ) of the Cage.
+// GetC returns the center coordinates (cX, cY, cZ) of the Cage.[cite: 6]
 func (s *Cage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
 
-// GetDisplacement returns the displacement of the collision cage along the x, y, and z axes.
+// GetDisplacement returns the displacement of the collision cage along the x, y, and z axes.[cite: 6]
 func (s *Cage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
 
-// GetT retrieves the current transformed coordinates (tX, tY, tZ) of the Cage.
+// GetT retrieves the current transformed coordinates (tX, tY, tZ) of the Cage.[cite: 6]
 func (s *Cage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
 
-// BucketCount returns the number of entries in the specified bucket.
+// BucketCount returns the number of entries in the specified bucket.[cite: 6]
 func (s *Cage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
 
-// GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.
+// GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.[cite: 6]
 func (s *Cage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
 
-// HasFloor reports whether the collision cage has a floor.
+// HasFloor reports whether the collision cage has a floor.[cite: 6]
 func (s *Cage) HasFloor() bool {
 	return s.hasFloor
 }
 
-// GetEntity returns the physics entity associated with the collision cage.
+// GetEntity returns the physics entity associated with the collision cage.[cite: 6]
 func (s *Cage) GetEntity() *rigid_body.Entity {
 	return s.object.GetEntity()
 }
 
-// SetApplied marks the collision cage as having applied its frame displacement and records entity center for tracking push-out offset.
+// SetApplied marks the collision cage as having applied its frame displacement and records entity center for tracking push-out offset.[cite: 6]
 func (s *Cage) SetApplied() {
 	s.applied = true
 	lEnt := s.object.GetEntity()
 	s.appliedX, s.appliedY, s.appliedZ = lEnt.GetCenter()
 }
 
-// GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.
+// GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.[cite: 6]
 func (s *Cage) GetPushOffset() (float64, float64, float64) {
 	lEnt := s.object.GetEntity()
 	curX, curY, curZ := lEnt.GetCenter()
@@ -504,7 +503,7 @@ func (s *Cage) GetPushOffset() (float64, float64, float64) {
 	return curX - s.cX, curY - s.cY, curZ - s.cZ
 }
 
-// computeFace calculates the penetration and distance of a face relative to an ellipsoid's motion and assigns a collision bucket.
+// computeFace calculates the penetration and distance of a face relative to an ellipsoid's motion and assigns a collision bucket.[cite: 6]
 func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
@@ -515,19 +514,19 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
 
-	// Translation (Local -> World)
+	// Translation (Local -> World)[cite: 6]
 	p0x, p0y, p0z := rFace.Translate(0, offX, offY, offZ)
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 
 	var bucket BucketType
-	// Universal normalization
+	// Universal normalization[cite: 6]
 	if solidWE || solidNS {
-		// Facing Normalization: Forces the plane to oppose the thing
+		// Facing Normalization: Forces the plane to oppose the thing[cite: 6]
 		if distStart < 0 {
 			nX, nY, nZ = -nX, -nY, -nZ
 			distStart = -distStart
 		}
-		// Wall Bucket Assignment
+		// Wall Bucket Assignment[cite: 6]
 		if solidWE {
 			if nX < 0 {
 				bucket = BucketWallWest
@@ -542,7 +541,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 			}
 		}
 	} else {
-		// Exact elevation evaluation (Plane Z at Center X,Y)
+		// Exact elevation evaluation (Plane Z at Center X,Y)[cite: 6]
 		planeZ := p0z
 		if nAbsZ > 1e-5 {
 			planeZ = p0z - (nX*(s.cX-p0x)+nY*(s.cY-p0y))/nZ
@@ -562,15 +561,15 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		}
 	}
 
-	// Minkowski / Support Mapping for Ellipsoids
+	// Minkowski / Support Mapping for Ellipsoids[cite: 6]
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 	dist := distTarget - rayEff
 	penetration := rayEff - distTarget
 
-	// sat filter (Anti-Phantom Plane)
+	// sat filter (Anti-Phantom Plane)[cite: 6]
 	rFaceAABB := rFace.GetAABB()
-	// world space translation
+	// world space translation[cite: 6]
 	rMinX := rFaceAABB.GetMinX() + offX
 	rMaxX := rFaceAABB.GetMaxX() + offX
 	rMinY := rFaceAABB.GetMinY() + offY
@@ -593,7 +592,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
-	// Calcolo TOI (Time Of Impact) tra il moto dell'ellissoide e la faccia statica
+	// Calcolo TOI (Time Of Impact) tra il moto dell'ellissoide e la faccia statica[cite: 6]
 	rCx := (rMinX + rMaxX) * 0.5
 	rCy := (rMinY + rMaxY) * 0.5
 	rCz := (rMinZ + rMaxZ) * 0.5
@@ -628,7 +627,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 
 	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).
 	// Un piano infinito è fantasma se la compenetrazione proiettata eccede l'overlap fisico effettivo dell'AABB
-	// lungo l'asse principale della normale del piano.
+	// lungo l'asse principale della normale del piano.[cite: 6]
 	pen0 := math.Max(0.0, rayEff-distStart)
 	deltaPen := math.Max(0.0, penetration-pen0)
 
@@ -661,13 +660,19 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		penetration = minOverlap
 	}
 
+	// Proiezione ortogonale del centro a fine frame (t = 1) sul piano di contatto,
+	// confinata nei limiti spaziali effettivi della faccia (cattura spigoli e bordi di gradini).[cite: 6]
+	p0x = math.Max(rMinX, math.Min(rMaxX, s.tX-nX*distTarget))
+	p0y = math.Max(rMinY, math.Min(rMaxY, s.tY-nY*distTarget))
+	p0z = math.Max(rMinZ, math.Min(rMaxZ, s.tZ-nZ*distTarget))
+
 	return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, minOverlap, rMaxZ
 }
 
 // computeFaceMeshVsMesh determines the intersection and response between two mesh faces in 3D space with offsets.
-// It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.
+// It calculates collision parameters such as entry/exit times, normals, overlap, and separation distance between meshes.[cite: 6]
 func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	// Dati del piano remoto (Il Muro/Ostacolo)
+	// Dati del piano remoto (Il Muro/Ostacolo)[cite: 6]
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
@@ -679,7 +684,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), math.Abs(nZ)
 
 	// Punto di ancoraggio del piano remoto in World Space a fine frame (t = 1),
-	// poiché rOffX, rOffY, rOffZ includono già lo spostamento rDX, rDY, rDZ.
+	// poiché rOffX, rOffY, rOffZ includono già lo spostamento rDX, rDY, rDZ.[cite: 6]
 	lp0x, lp0y, lp0z := rFace.Get0()
 	rp0x, rp0y, rp0z := rQ.Rotate(lp0x, lp0y, lp0z)
 	p0x, p0y, p0z := rp0x+rOffX, rp0y+rOffY, rp0z+rOffZ
@@ -694,7 +699,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	relZ := s.cZ - rCz0
 
 	// Orientiamo la normale verso l'esterno del volume remoto (valutato in modo coerente a t = 1).
-	// Scartiamo solo i piani visivi interni privi di tag fisico (es. quad billboard centrale a Y=0).
+	// Scartiamo solo i piani visivi interni privi di tag fisico (es. quad billboard centrale a Y=0).[cite: 6]
 	outDot := (p0x-rTx)*nX + (p0y-rTy)*nY + (p0z-rTz)*nZ
 	if math.Abs(outDot) <= planeEpsilon {
 		if relX*nX+relY*nY+relZ*nZ < 0 {
@@ -704,7 +709,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		nX, nY, nZ = -nX, -nY, -nZ
 	}
 
-	// Classificazione dell'asse dominante della faccia remota e canonizzazione sul volume AABB
+	// Classificazione dell'asse dominante della faccia remota e canonizzazione sul volume AABB[cite: 6]
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
 	solidNS := nAbsY > nAbsZ
 
@@ -737,17 +742,17 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		p0x, p0y, p0z = rTx, rTy, rTz+nZ*rRadZ
 	}
 
-	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)
+	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)[cite: 6]
 	p0x0 := p0x - rDX
 	p0y0 := p0y - rDY
 	p0z0 := p0z - rDZ
 
-	// La faccia remota deve essere rivolta verso il centro relativo iniziale dell'entità locale
+	// La faccia remota deve essere rivolta verso il centro relativo iniziale dell'entità locale[cite: 6]
 	if relX*nX+relY*nY+relZ*nZ <= 0 {
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 	}
 
-	// Spostamento relativo nel frame corrente (Locale rispetto a Remoto)
+	// Spostamento relativo nel frame corrente (Locale rispetto a Remoto)[cite: 6]
 	impX := s.dX - rDX
 	impY := s.dY - rDY
 	impZ := s.dZ - rDZ
@@ -766,7 +771,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	}
 
 	// Overlap bilaterale a t = 1 (per contatti discreti/persistenti) e penetrazione unidirezionale dal lato d'ingresso
-	// (che resta positiva anche in caso di tunneling oltre il centro o oltre la parete opposta a t = 1).
+	// (che resta positiva anche in caso di tunneling oltre il centro o oltre la parete opposta a t = 1).[cite: 6]
 	relTx := s.tX - rTx
 	relTy := s.tY - rTy
 	relTz := s.tZ - rTz
@@ -784,13 +789,13 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		entryOZ = sumRadZ + relTz
 	}
 
-	// Distanza iniziale a t = 0 del centro locale rispetto al piano remoto a t = 0
+	// Distanza iniziale a t = 0 del centro locale rispetto al piano remoto a t = 0[cite: 6]
 	distStart := (s.cX-p0x0)*nX + (s.cY-p0y0)*nY + (s.cZ-p0z0)*nZ
 	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
 
 	var activeX, activeY, activeZ bool
 
-	// In modalità discreta (volumi già sovrapposti a t = 0 su tutti gli assi), se a t = 1 si sono separati non c'è impatto
+	// In modalità discreta (volumi già sovrapposti a t = 0 su tutti gli assi), se a t = 1 si sono separati non c'è impatto[cite: 6]
 	boxOX := sumRadX - math.Abs(relTx)
 	boxOY := sumRadY - math.Abs(relTy)
 	boxOZ := sumRadZ - math.Abs(relTz)
@@ -800,11 +805,11 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	sepZ := math.Abs(relZ) - sumRadZ
 	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
 	if sweptMode {
-		// In modalità swept il centro locale deve partire dal semispazio esterno del piano
+		// In modalità swept il centro locale deve partire dal semispazio esterno del piano[cite: 6]
 		if distStart < -planeEpsilon {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		// Verifica che il contatto col piano avvenga all'interno della finestra di sovrapposizione AABB [tEnter, min(1, tExit)]
+		// Verifica che il contatto col piano avvenga all'interno della finestra di sovrapposizione AABB [tEnter, min(1, tExit)][cite: 6]
 		suppStart := distStart - rayEff
 		tWindowEnd := math.Min(1.0, tExit)
 		if suppStart > planeEpsilon {
@@ -816,22 +821,22 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 			}
 		} else if distStart+tEnter*impDot < -planeEpsilon {
-			// A t = tEnter il centro locale aveva già oltrepassato il prolungamento infinito del piano (faccia fantasma)
+			// A t = tEnter il centro locale aveva già oltrepassato il prolungamento infinito del piano (faccia fantasma)[cite: 6]
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		// Determinazione degli assi temporali attivi (indipendente dall'asse dominante della faccia)
+		// Determinazione degli assi temporali attivi (indipendente dall'asse dominante della faccia)[cite: 6]
 		activeX = sepX > planeEpsilon && tEnterX >= tEnter-toiTieEpsilon && relX*impX < -planeEpsilon
 		activeY = sepY > planeEpsilon && tEnterY >= tEnter-toiTieEpsilon && relY*impY < -planeEpsilon
 		activeZ = sepZ > planeEpsilon && tEnterZ >= tEnter-toiTieEpsilon && relZ*impZ < -planeEpsilon
 	} else {
-		// In modalità discreta (compenetrazione già presente a t = 0), scartiamo solo se l'intero supporto a t = 0 era già oltre il piano
+		// In modalità discreta (compenetrazione già presente a t = 0), scartiamo solo se l'intero supporto a t = 0 era già oltre il piano[cite: 6]
 		if distStart+rayEff < -planeEpsilon {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		if boxOX <= 0 || boxOY <= 0 || boxOZ <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		// Determinazione degli assi MTV attivi (indipendente dall'asse dominante della faccia)
+		// Determinazione degli assi MTV attivi (indipendente dall'asse dominante della faccia)[cite: 6]
 		prevOX := math.Max(0.0, -sepX)
 		prevOY := math.Max(0.0, -sepY)
 		prevOZ := math.Max(0.0, -sepZ)
@@ -840,7 +845,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		activeZ = isDiscreteMTV(prevOZ, boxOZ, relZ, impZ, prevOX, boxOX, prevOY, boxOY)
 	}
 
-	// Verifica di compatibilità geometrica tra la normale del piano remoto e gli assi di contatto attivi
+	// Verifica di compatibilità geometrica tra la normale del piano remoto e gli assi di contatto attivi[cite: 6]
 	var axisOverlap float64
 	matchedAxis := false
 
@@ -862,8 +867,8 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 			matchedAxis = true
 		}
 	} else {
-		const contactSlop = 0.25
-		if (activeZ || (!sweptMode && boxOX > 0 && boxOY > 0 && boxOZ >= -contactSlop)) && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
+		// Correzione applicata: rimosso il bypass che forzava l'asse Z su qualsiasi spuntone laterale
+		if activeZ && relZ*nZ > 0 && (!sweptMode || impZ*nZ < -planeEpsilon) {
 			axisOverlap = pickOverlap(entryOZ, boxOZ)
 			matchedAxis = true
 		}
@@ -875,22 +880,47 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	maxPenetration := axisOverlap
 	hitDist := -axisOverlap
 
-	// Classificazione finale del Bucket sulla normale di contatto già determinata e orientata
+	// Calcolo del baricentro della patch di contatto sulle coordinate tangenziali al piano d'impatto.
+	// In caso di tunneling ad alta velocità in sweptMode (intervallo a t = 1 disgiunto),
+	// effettua il clamp del centro locale sui bordi del volume remoto.[cite: 6]
+	patchMinX := math.Max(s.tX-s.eRadX, rTx-rRadX)
+	patchMaxX := math.Min(s.tX+s.eRadX, rTx+rRadX)
+	patchMinY := math.Max(s.tY-s.eRadY, rTy-rRadY)
+	patchMaxY := math.Min(s.tY+s.eRadY, rTy+rRadY)
+	patchMinZ := math.Max(s.tZ-s.eRadZ, rTz-rRadZ)
+	patchMaxZ := math.Min(s.tZ+s.eRadZ, rTz+rRadZ)
 
+	contactX := math.Max(rTx-rRadX, math.Min(rTx+rRadX, s.tX))
+	if patchMaxX >= patchMinX {
+		contactX = (patchMinX + patchMaxX) * 0.5
+	}
+	contactY := math.Max(rTy-rRadY, math.Min(rTy+rRadY, s.tY))
+	if patchMaxY >= patchMinY {
+		contactY = (patchMinY + patchMaxY) * 0.5
+	}
+	contactZ := math.Max(rTz-rRadZ, math.Min(rTz+rRadZ, s.tZ))
+	if patchMaxZ >= patchMinZ {
+		contactZ = (patchMinZ + patchMaxZ) * 0.5
+	}
+
+	// Classificazione finale del Bucket e assegnazione coordinate tangenziali del punto di contatto[cite: 6]
 	var bucket BucketType
 	if solidWE {
+		p0y, p0z = contactY, contactZ
 		if nX < 0 {
 			bucket = BucketWallWest
 		} else {
 			bucket = BucketWallEast
 		}
 	} else if solidNS {
+		p0x, p0z = contactX, contactZ
 		if nY < 0 {
 			bucket = BucketWallNorth
 		} else {
 			bucket = BucketWallSouth
 		}
 	} else {
+		p0x, p0y = contactX, contactY
 		if nZ > 0 {
 			bucket = BucketFloor
 		} else {
@@ -905,178 +935,3 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rMaxZ
 }
-
-/*
-// computeManifold calculates the collision manifold between two 3D faces with offset transformations.
-// Returns a ContactManifold containing collision details or non-collision state.
-func (s *CollisionCage) computeManifold(rFace *Face, lFace *Face, rOffX, rOffY, rOffZ float64, lOffX, lOffY, lOffZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	type ContactManifold struct {
-		Hit           bool
-		Bucket        BucketType
-		NormalX       float64
-		NormalY       float64
-		NormalZ       float64
-		PointX        float64 // Esatto punto di impatto 3D per calcolo momento torcente
-		PointY        float64
-		PointZ        float64
-		Depth         float64 // Compenetrazione matematica lungo l'asse SAT vincente
-		HitDist       float64 // Distanza originale mantenuta per compatibilità
-		P0X, P0Y, P0Z float64 // Punto di ancoraggio piano originario
-		MinOverlap    float64 // Ovelap AABB originale
-		RMaxZ         float64 // RMaxZ originale
-	}
-	//cm := ContactManifold{Hit: false}
-
-	// FAST-FAIL: SAT Filter AABB spostato in testa
-	rFaceAABB := rFace.GetAABB()
-	rMinX, rMaxX := rFaceAABB.GetMinX()+rOffX, rFaceAABB.GetMaxX()+rOffX
-	rMinY, rMaxY := rFaceAABB.GetMinY()+rOffY, rFaceAABB.GetMaxY()+rOffY
-	rMinZ, rMaxZ := rFaceAABB.GetMinZ()+rOffZ, rFaceAABB.GetMaxZ()+rOffZ
-
-	lFaceAABB := lFace.GetAABB()
-	lMinX, lMaxX := lFaceAABB.GetMinX()+lOffX, lFaceAABB.GetMaxX()+lOffX
-	lMinY, lMaxY := lFaceAABB.GetMinY()+lOffY, lFaceAABB.GetMaxY()+lOffY
-	lMinZ, lMaxZ := lFaceAABB.GetMinZ()+lOffZ, lFaceAABB.GetMaxZ()+lOffZ
-
-	oX := max(0.0, min(lMaxX-rMinX, rMaxX-lMinX))
-	oY := max(0.0, min(lMaxY-rMinY, rMaxY-lMinY))
-	oZ := max(0.0, min(lMaxZ-rMinZ, rMaxZ-lMinZ))
-
-	if oX <= 0 || oY <= 0 || oZ <= 0 {
-		return cm // Nessuna intersezione spaziale, abort immediato
-	}
-	cm.MinOverlap = min(oX, min(oY, oZ))
-	cm.RMaxZ = rMaxZ
-
-	// Setup Vertici in World Space
-	var rV, lV [3]geometry.XYZ
-	for i := 0; i < 3; i++ {
-		rV[i] = geometry.XYZ{X: rFace.tri[i].X + rOffX, Y: rFace.tri[i].Y + rOffY, Z: rFace.tri[i].Z + rOffZ}
-		lV[i] = geometry.XYZ{X: lFace.tri[i].X + lOffX, Y: lFace.tri[i].Y + lOffY, Z: lFace.tri[i].Z + lOffZ}
-	}
-
-	// Normali e Calcolo Legacy Bucket
-	nX, nY, nZ := rFace.GetNormal()
-	cm.P0X, cm.P0Y, cm.P0Z = rV[0].X, rV[0].Y, rV[0].Z
-
-	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
-	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
-	solidNS := nAbsY > nAbsZ
-	distStart := (s.cX-cm.P0X)*nX + (s.cY-cm.P0Y)*nY + (s.cZ-cm.P0Z)*nZ
-
-	if solidWE || solidNS {
-		if distStart < 0 {
-			nX, nY, nZ = -nX, -nY, -nZ
-		}
-		if solidWE {
-			if nX < 0 {
-				cm.Bucket = BucketWallWest
-			} else {
-				cm.Bucket = BucketWallEast
-			}
-		} else {
-			if nY < 0 {
-				cm.Bucket = BucketWallNorth
-			} else {
-				cm.Bucket = BucketWallSouth
-			}
-		}
-	} else {
-		planeZ := cm.P0Z
-		if nAbsZ > 1e-5 {
-			planeZ = cm.P0Z - (nX*(s.cX-cm.P0X)+nY*(s.cY-cm.P0Y))/nZ
-		}
-		if s.cZ >= planeZ {
-			cm.Bucket = BucketFloor
-			if nZ < 0 {
-				nX, nY, nZ = -nX, -nY, -nZ
-			}
-		} else {
-			cm.Bucket = BucketCeiling
-			if nZ > 0 {
-				nX, nY, nZ = -nX, -nY, -nZ
-			}
-		}
-	}
-	cm.NormalX, cm.NormalY, cm.NormalZ = nX, nY, nZ
-	// SAT FULL 11-AXIS E CALCOLO PUNTO DI CONTATTO 3D
-	lnX, lnY, lnZ := lFace.GetNormal()
-	axes := [11]geometry.XYZ{
-		{X: nX, Y: nY, Z: nZ},    // 0: Normale Remota (Faccia vs Vertice)
-		{X: lnX, Y: lnY, Z: lnZ}, // 1: Normale Locale (Vertice vs Faccia)
-	}
-
-	rE := [3]geometry.XYZ{geometry.SubXYZ(rV[1], rV[0]), geometry.SubXYZ(rV[2], rV[1]), geometry.SubXYZ(rV[0], rV[2])}
-	lE := [3]geometry.XYZ{geometry.SubXYZ(lV[1], lV[0]), geometry.SubXYZ(lV[2], lV[1]), geometry.SubXYZ(lV[0], lV[2])}
-	axisIdx := 2
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			crossP := geometry.CrossXYZ(rE[i], lE[j])
-			// Se i due edge sono paralleli (cross quasi nullo), l'asse è degenere e viene scartato
-			if geometry.DotXYZ(crossP, crossP) > 1e-8 {
-				axes[axisIdx] = geometry.NormalizeXYZ(crossP)
-			}
-			axisIdx++
-		}
-	}
-	bestPenetration := math.MaxFloat64
-	bestAxisIdx := -1
-	// Risoluzione SAT (Proiezione di R e L su tutti gli 11 assi)
-	for i := 0; i < 11; i++ {
-		if axes[i].X == 0 && axes[i].Y == 0 && axes[i].Z == 0 {
-			continue
-		}
-		rMin, rMax := geometry.TriangleProject(rV, axes[i])
-		lMin, lMax := geometry.TriangleProject(lV, axes[i])
-		// Check separazione
-		if lMax < rMin || rMax < lMin {
-			return cm // Esiste un asse separatore. Hit = false.
-		}
-		// Calcolo compenetrazione
-		pen := math.Min(rMax-lMin, lMax-rMin)
-		if pen < bestPenetration {
-			bestPenetration = pen
-			bestAxisIdx = i
-			// Assicuriamo che la normale punti da Remote verso Local
-			if rMin < lMin {
-				axes[i] = geometry.XYZ{X: -axes[i].X, Y: -axes[i].Y, Z: -axes[i].Z}
-			}
-		}
-	}
-	// Estrazione Feature e Punto Esatto in base all'asse vincente
-	cm.Hit = true
-	cm.Depth = bestPenetration
-	// Conserviamo il calcolo legacy per hitDist per non rompere il tuo StageResolve attuale
-	for i := 0; i < 3; i++ {
-		vDist := (lV[i].X-cm.P0X)*nX + (lV[i].Y-cm.P0Y)*nY + (lV[i].Z-cm.P0Z)*nZ
-		if -vDist > cm.HitDist {
-			cm.HitDist = vDist // Legacy hitDist maintain
-		}
-	}
-	if bestAxisIdx == 0 {
-		// Urto planare (Vertice Locale penetra Faccia Remota)
-		cm.PointX, cm.PointY, cm.PointZ = geometry.TriangleFindDeepestPoint(lV, axes[0])
-	} else if bestAxisIdx == 1 {
-		// Urto planare inverso (Vertice Remoto penetra Faccia Locale)
-		cm.PointX, cm.PointY, cm.PointZ = geometry.TriangleFindDeepestPoint(rV, geometry.XYZ{X: -axes[1].X, Y: -axes[1].Y, Z: -axes[1].Z})
-	} else {
-		// Urto Edge-Edge (Segmenti Sghembi). Ricaviamo gli indici rE e lE.
-		eIdx := bestAxisIdx - 2
-		rIdx, lIdx := eIdx/3, eIdx%3
-		p1, p2 := geometry.ClosestPointSegmentSegment(rV[rIdx], rE[rIdx], lV[lIdx], lE[lIdx])
-		// Il punto di contatto è il punto medio tra i due segmenti intersecanti
-		cm.PointX = (p1.X + p2.X) * 0.5
-		cm.PointY = (p1.Y + p2.Y) * 0.5
-		cm.PointZ = (p1.Z + p2.Z) * 0.5
-	}
-
-	//b = cm.Bucket
-	//dist = cm.HitDist
-	//pen = cm.Depth
-	//nX, nY, nZ = cm.NormalX, manifold.NormalY, manifold.NormalZ
-	//p0x, p0y, p0z = cm.P0X, manifold.P0Y, manifold.P0Z
-	//minOverlap = cm.MinOverlap
-	//rMaxZ = cm.RMaxZ
-	return cm
-}
-*/

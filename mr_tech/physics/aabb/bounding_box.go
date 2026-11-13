@@ -60,16 +60,14 @@ func (r *BoundingBox) Rebuild(blx, bly, blz, w, h, d float64) {
 	r.rebuild()
 }
 
-// RebuildCenter updates the bounding box centered at (cx, cy, cz) with dimensions w, h, d,
-// then recalculates the derived bounding-box data.
+// RebuildCenter updates the bounding box centered at (cx, cy, cz) with dimensions w, h, d, then recalculates the derived bounding-box data.
 func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
 	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = cx-w*0.5, cy-h*0.5, cz-d*0.5
 	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
 }
 
-// SetRotationQuaternion sets the orientation using a quaternion (x, y, z, w).
-// The quaternion is normalized before being stored.
+// SetRotationQuaternion sets the orientation using a quaternion (x, y, z, w). The quaternion is normalized before being stored.
 func (r *BoundingBox) SetRotationQuaternion(x, y, z, w float64) {
 	r.qRotation.Set(x, y, z, w)
 	r.qRotation.Normalize()
@@ -269,21 +267,10 @@ func (r *BoundingBox) setSwingFromDirection(dx, dy, dz float64) float64 {
 	return angle
 }
 
-// syncYawTiltFromRotation decomposes an externally supplied orientation into
-// world-Z yaw and a pure swing (tilt), discarding any independent local-Z twist.
+// syncYawTiltFromRotation decomposes an externally supplied orientation
+// into world-Z yaw and a pure swing (tilt).
 func (r *BoundingBox) syncYawTiltFromRotation() {
-	_, _, qz, qw := r.qRotation.Get()
-	twistLength := math.Hypot(qz, qw)
-	if twistLength < 1e-12 {
-		r.qYaw.SetIdentity()
-	} else {
-		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
-	}
-	qx, qy, qz, qw := r.qYaw.Get()
-	r.qYawInverse.Set(-qx, -qy, -qz, qw)
-	r.qYawRelative.Set(0, 0, 0, 0)
-	r.qYawInverse.Multiplies(r.qRotation, r.qYawRelative)
-	dx, dy, dz := r.qYawRelative.Rotate(0, 0, 1)
+	dx, dy, dz := r.extractSwingDirection()
 	r.setSwingFromDirection(dx, dy, dz)
 	r.composeRotation()
 }
@@ -294,20 +281,28 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	if dt == 0 {
 		return false
 	}
+	// Integrate yaw around world Z.
 	r.qYaw.IntegrateAngular(0, 0, wz, dt)
-	// Convert the horizontal world-space angular velocity into the yaw-local frame.
-	qx, qy, qz, qw := r.qYaw.Get()
-	r.qYawInverse.Set(-qx, -qy, -qz, qw)
+	// Transform horizontal angular velocity into the yaw-local frame.
+	r.qYawInverse.Conjugate(r.qYaw)
 	lwx, lwy, _ := r.qYawInverse.Rotate(wx, wy, 0)
+	// Integrate tilt, retaining the complete quaternion result.
 	r.qTilt.IntegrateAngular(lwx, lwy, 0, dt)
-
-	// Keep tilt as a pure swing: no local-Z twist can leak into the yaw state.
-	dx, dy, dz := r.qTilt.Rotate(0, 0, 1)
+	// Compose the complete candidate orientation before decomposing it.
+	r.composeRotation()
+	// Extract the new yaw and the corresponding pure swing direction.
+	dx, dy, dz := r.extractSwingDirection()
+	// Recalculate angular velocity in the resulting yaw-local frame.
+	lwx, lwy, _ = r.qYawInverse.Rotate(wx, wy, 0)
 	angle := math.Acos(math.Max(-1, math.Min(1, dz)))
+	// Detect whether the angular velocity is pushing tilt beyond its limit.
 	reset := r.tiltLimitEnabled && angle > _maxTiltAngle && (lwx*(-dy)+lwy*dx) > 0
+	// Rebuild the pure swing, applying the configured tilt limit.
 	r.setSwingFromDirection(dx, dy, dz)
+	// Recompose the final orientation.
 	r.composeRotation()
 	r.SyncRotation()
+
 	return reset
 }
 
@@ -398,8 +393,7 @@ func (r *BoundingBox) IntersectBB(other *BoundingBox) bool {
 	)
 }
 
-// intersectsOBB performs the 15-axis Separating Axis Theorem test.
-// It uses fixed-size arrays and does not create slices or heap objects.
+// intersectsOBB performs the 15-axis Separating Axis Theorem test. It uses fixed-size arrays and does not create slices or heap objects.
 func intersectsOBB(cA obbVector, a [3]obbVector, hA obbVector, cB obbVector, b [3]obbVector, hB obbVector) bool {
 	dx := cB[0] - cA[0]
 	dy := cB[1] - cA[1]
@@ -488,4 +482,21 @@ func intersectsOBB(cA obbVector, a [3]obbVector, hA obbVector, cB obbVector, b [
 
 	// Preserve the previous contact semantics: touching is intersection.
 	return true
+}
+
+// extractSwingDirection extracts the world-Z yaw from qRotation and returns the local-Z direction in the resulting yaw frame.
+func (r *BoundingBox) extractSwingDirection() (float64, float64, float64) {
+	_, _, qz, qw := r.qRotation.Get()
+
+	twistLength := math.Hypot(qz, qw)
+	if twistLength < 1e-12 {
+		r.qYaw.SetIdentity()
+	} else {
+		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
+	}
+
+	r.qYawInverse.Conjugate(r.qYaw)
+	r.qYawInverse.Multiplies(r.qRotation, r.qYawRelative)
+
+	return r.qYawRelative.Rotate(0, 0, 1)
 }

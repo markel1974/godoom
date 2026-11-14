@@ -86,6 +86,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 
 	// Ora Rebuild itera su un volume 3D reale. minY e maxY non sono più 0.
 	f.volume.Rebuild()
+	f.volume.GetEntity().LockUpright()
 
 	f.volume.SetThing(thing)
 

@@ -238,11 +238,28 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 	if e.activeAnimation == config.EnemyStateDead {
 		return 0
 	}
+	if state == config.EnemyStateDead {
+		e.self.VerticesSetRagdoll()
+		entity := e.self.GetEntity()
+		if e.hasAnimationState(state) {
+			// Models with keyframed death animations, sprites, or articulated ragdoll collapse
+			// already flatten internally; disabling KeepUpright would double-rotate them on the floor
+			// and disable dynamic objAABB ground fitting.
+			entity.LockUpright()
+		} else {
+			entity.SetKeepUpright(false)
+		}
+		entity.SetOnGround(false)
+		entity.WakeUp()
+		e.self.SetMaxStep(0)
+		//fmt.Println("No animations for state:", e.self.GetId(), state)
+	}
 	if !e.hasAnimationState(state) {
 		if state == config.EnemyStateDead {
 			e.activeAnimation = state
-			e.self.VerticesSetRagdoll()
-			e.self.SetMaxStep(0)
+			//e.self.VerticesSetRagdoll()
+			//e.self.GetEntity().SetKeepUpright(false)
+			//e.self.SetMaxStep(0)
 		}
 		//fmt.Println("No animations for state:", e.self.GetId(), state)
 		return 0

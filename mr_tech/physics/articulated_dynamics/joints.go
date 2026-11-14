@@ -31,6 +31,7 @@ type Joints struct {
 	rootBounceZ      float64
 	rootBounceVz     float64
 	rootDropZ        float64
+	baseOffsetZ      float64
 	hasRootTransform bool
 
 	rotationsA []*TagAxis
@@ -100,6 +101,11 @@ func (v *Joints) IsRagdoll() bool {
 // SetRagdollCollapse marks the joint system to collapse when ragdoll mode is activated.
 func (v *Joints) SetRagdollCollapse() {
 	v.ragdollCollapse = true
+}
+
+// SetBaseOffsetZ records the static Z centering offset aligning model bounds with Entity center.
+func (v *Joints) SetBaseOffsetZ(z float64) {
+	v.baseOffsetZ = z
 }
 
 // GetOriginsA returns the X, Y, and Z components of the A-side origin for the joint at index i.
@@ -360,15 +366,26 @@ func (v *Joints) StepJoints(tick uint64) {
 			}
 		}
 
+		uprightScale := 1.0
+		if v.ent != nil && !v.ent.KeepUpright() {
+			_, _, az2 := v.ent.GetAxes2()
+			if az2 < 0.0 {
+				uprightScale = 0.0
+			} else if az2 < 1.0 {
+				uprightScale = az2
+			}
+		}
+
 		collapseDrop := 0.0
+		effFallAngle := v.fallAngle * uprightScale
 		if v.ragdollCollapse {
 			_, _, halfD := v.ent.GetSizeCenter()
-			collapseDrop = -math.Max(halfD-6.0, 0.0) * math.Sin(v.fallAngle)
+			collapseDrop = -math.Max(halfD-6.0, 0.0) * math.Sin(effFallAngle) * uprightScale
 		}
 		v.rootDropZ = collapseDrop + v.rootBounceZ
 
-		if v.fallAngle > 1e-4 || math.Abs(v.rootRollAng) > 1e-4 {
-			v.rootFallQuat.SetAxisAngle(v.fallAxisX, v.fallAxisY, 0, v.fallAngle)
+		if effFallAngle > 1e-4 || math.Abs(v.rootRollAng) > 1e-4 {
+			v.rootFallQuat.SetAxisAngle(v.fallAxisX, v.fallAxisY, 0, effFallAngle)
 			if math.Abs(v.rootRollAng) > 1e-4 {
 				v.rootRollQuat.SetAxisAngle(-v.fallAxisY, v.fallAxisX, 0.35, v.rootRollAng)
 				v.rootRollQuat.Multiplies(v.rootFallQuat, v.rootQuat)
@@ -376,6 +393,8 @@ func (v *Joints) StepJoints(tick uint64) {
 				v.rootQuat.CopyFrom(v.rootFallQuat)
 			}
 			v.hasRootTransform = true
+		} else {
+			v.hasRootTransform = false
 		}
 
 		if rootActive {
@@ -589,8 +608,9 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 
 // Restore resets the joint origins and rotations at i using q and any active root transform.
 func (v *Joints) Restore(i int, q *aabb.Quaternion) {
-	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.rootDropZ
-	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.rootDropZ
+	zOff := v.baseOffsetZ + v.rootDropZ
+	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, zOff
+	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, zOff
 
 	if v.hasRootTransform {
 		v.rootQuat.Multiplies(q, v.rootCombinedQuat)

@@ -60,6 +60,12 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	}
 
 	v.VerticesCompile(0)
+	if v.minZ <= v.maxZ {
+		if baseZ := -(v.minZ + v.maxZ) * 0.5; math.Abs(baseZ) > 1e-6 {
+			v.joints.SetBaseOffsetZ(baseZ)
+			v.VerticesCompile(0)
+		}
+	}
 
 	v.elements.UpdateEntityBounds()
 
@@ -92,6 +98,7 @@ func (v *Vertices3D) VerticesSetRagdoll() {
 	if v.joints.IsRagdoll() {
 		return
 	}
+	v.elements.vVolume.entity.LockUpright()
 	v.elements.Freeze()
 	v.joints.SetRagdollCollapse()
 	v.joints.ActivateRagdoll()
@@ -131,6 +138,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 		}
 	}
 	if enteringRagdoll {
+		v.elements.vVolume.entity.LockUpright()
 		v.joints.ActivateRagdoll()
 	}
 }
@@ -213,9 +221,13 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	}
 
 	if minX <= maxX {
+		prevMinZ := v.minZ
 		v.minX, v.minY, v.minZ = minX, minY, minZ
 		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
 		ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+		if v.joints.IsRagdoll() && minZ > prevMinZ+1e-3 && ent.IsSleeping() {
+			ent.WakeUp()
+		}
 	}
 
 	return false

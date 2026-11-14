@@ -76,6 +76,9 @@ const totalSlots = BucketSize * FacesPerBucket
 // floorGroundTolerance keeps floor contact grounded within a small vertical hover band.
 const floorGroundTolerance = 0.25
 
+// floorNormalThreshold matches the rigid-body floor normal threshold for valid ground support.
+const floorNormalThreshold = 0.7
+
 // Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
 	seen                []uint64
@@ -96,7 +99,7 @@ type Cage struct {
 	maxStep             float64
 	faces               []*Faces
 	facesIdx            int
-	manifold1           *aabb.OBBManifold
+	manifold            *aabb.OBBManifold
 	hasFloor            bool
 	applied             bool
 	appliedX            float64
@@ -125,7 +128,7 @@ func NewCage(id uint64, object IObject) *Cage {
 		faces:     make([]*Faces, 8),
 		facesIdx:  0,
 		hasFloor:  false,
-		manifold1: aabb.NewOBBManifold(),
+		manifold:  aabb.NewOBBManifold(),
 		solverIdx: -1,
 	}
 	for i := 0; i < len(c.faces); i++ {
@@ -291,18 +294,17 @@ func (s *Cage) Commit(rCage *Cage) {
 			}
 		}
 
-		// Floor support detection: resting contacts within ground tolerance maintain hasFloor = true[cite: 6]
-		if b == BucketFloor {
-			if dist <= floorGroundTolerance {
-				s.hasFloor = true
-			}
-		} else if b == BucketCeiling {
-			if rCage != nil && dist <= floorGroundTolerance {
-				rCage.hasFloor = true
-			}
-		}
-
+		// Only genuine resting or validated contacts may grant floor support (rejected/phantom faces return dist = MaxFloat64).
 		if pen <= 0 {
+			if b == BucketFloor {
+				if dist <= floorGroundTolerance {
+					s.hasFloor = true
+				}
+			} else if b == BucketCeiling {
+				if rCage != nil && dist <= floorGroundTolerance {
+					rCage.hasFloor = true
+				}
+			}
 			continue
 		}
 
@@ -386,15 +388,18 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 	lEnt := s.object.GetEntity()
 	rEnt := rCage.GetEntity()
 	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
-	m := s.manifold1
+	m := s.manifold
 	m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rDX, rDY, rDZ)
+
+	rTx, rTy, rTz := rCage.GetT()
+	rRadX, rRadY, rRadZ := rCage.GetRad()
 
 	b := classifyBucketNormal(m.NormalX, m.NormalY, m.NormalZ)
 	if !m.Hit {
-		if (b == BucketFloor || b == BucketCeiling) && m.Gap <= floorGroundTolerance {
-			if b == BucketFloor {
+		if m.Gap <= floorGroundTolerance && s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY) {
+			if b == BucketFloor && m.NormalZ >= floorNormalThreshold {
 				s.hasFloor = true
-			} else {
+			} else if b == BucketCeiling && m.NormalZ <= -floorNormalThreshold {
 				rCage.hasFloor = true
 			}
 		}
@@ -402,9 +407,9 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 	}
 
 	dist := -m.Penetration
-	if b == BucketFloor && dist <= floorGroundTolerance {
+	if b == BucketFloor && m.NormalZ >= floorNormalThreshold && dist <= floorGroundTolerance {
 		s.hasFloor = true
-	} else if b == BucketCeiling && dist <= floorGroundTolerance {
+	} else if b == BucketCeiling && m.NormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance {
 		rCage.hasFloor = true
 	}
 
@@ -412,8 +417,6 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 		return true
 	}
 
-	_, _, rTz := rCage.GetT()
-	_, _, rRadZ := rCage.GetRad()
 	rMaxZ := rTz + rRadZ
 	lMaxZ := s.tZ + s.eRadZ
 
@@ -727,12 +730,19 @@ func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 		return false
 	}
 	b, dist, pen, nX, nY, nZ, _, _, _, minOverlap, rMaxZ := s.computeFace(lAABB, rFace, 0, 0, 0)
-	if b == BucketFloor && dist <= floorGroundTolerance {
+	if pen <= 0.0 {
+		if b == BucketFloor && dist <= floorGroundTolerance {
+			s.hasFloor = true
+			s.object.GetEntity().SetOnGround(true)
+		}
+		return false
+	}
+	if pen > minOverlap+satFilterEpsilon {
+		return false
+	}
+	if b == BucketFloor {
 		s.hasFloor = true
 		s.object.GetEntity().SetOnGround(true)
-	}
-	if pen <= 0.0 || pen > minOverlap+satFilterEpsilon {
-		return false
 	}
 	if b.IsWall() {
 		curBaseZ := s.tZ - s.eRadZ
@@ -766,6 +776,11 @@ func (s *Cage) EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, or
 	s.cX, s.cY, s.cZ = origCX, origCY, origCZ
 	s.dX, s.dY, s.dZ = origDX, origDY, origDZ
 	s.tX, s.tY, s.tZ = origTX, origTY, origTZ
+}
+
+// overlapsTargetXY reports whether the target XY footprint at tX, tY overlaps [minX, maxX] x [minY, maxY].
+func (s *Cage) overlapsTargetXY(minX, maxX, minY, maxY float64) bool {
+	return s.tX+s.eRadX > minX && maxX > s.tX-s.eRadX && s.tY+s.eRadY > minY && maxY > s.tY-s.eRadY
 }
 
 // effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
@@ -899,16 +914,25 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
 	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
 	if oX <= 0 || oY <= 0 {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	if penetration <= 0 {
+		if bucket == BucketFloor && dist <= floorGroundTolerance {
+			tBaseZ := s.tZ - rayEff
+			if nZ < floorNormalThreshold ||
+				!s.overlapsTargetXY(rMinX, rMaxX, rMinY, rMaxY) ||
+				rMaxZ < tBaseZ-floorGroundTolerance-satFilterEpsilon ||
+				rMinZ > s.tZ+satFilterEpsilon {
+				return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+			}
+		}
 		return bucket, dist, penetration, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
 	if oZ <= 0 {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	// Calcolo TOI (Time Of Impact) tra il moto dell'ellissoide e la faccia statica[cite: 6]
@@ -929,19 +953,19 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 
 	tEnter, tExit, _, _, _, ok := computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, s.dX, s.dY, s.dZ)
 	if !ok {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
 	tPlaneEnter, tPlaneExit, okPlane := sweptAxisInterval(distStart, rayEff, impDot)
 	if !okPlane {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	overlapStart := math.Max(tEnter, tPlaneEnter)
 	overlapEnd := math.Min(math.Min(1.0, tExit), tPlaneExit)
 	if overlapStart > overlapEnd+toiTieEpsilon || overlapEnd < -toiTieEpsilon || overlapStart > 1.0+toiTieEpsilon {
-		return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+		return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 	}
 
 	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).
@@ -984,7 +1008,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		if spikeTipCap && distTarget >= -satFilterEpsilon {
 			penetration = minOverlap
 		} else if penetration > minOverlap+satFilterEpsilon {
-			return bucket, dist, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
+			return bucket, math.MaxFloat64, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rMaxZ
 		} else {
 			penetration = minOverlap
 		}
@@ -1169,10 +1193,9 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	if sweptMode {
 		// Try 15-axis angular+linear OBB CCD before falling back to linear face TOI.
 		if !lEnt.KeepUpright() || !rEnt.KeepUpright() {
-			m := s.manifold1
-			m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rDX, rDY, rDZ)
-			if m.Hit && m.Count > 0 {
-				return manifoldToFaceResult(m, rFMaxZ)
+			s.manifold.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rDX, rDY, rDZ)
+			if s.manifold.Hit && s.manifold.Count > 0 {
+				return manifoldToFaceResult(s.manifold, rFMaxZ)
 			}
 		}
 		// In modalità swept il centro locale deve partire dal semispazio esterno del piano[cite: 6]
@@ -1207,23 +1230,24 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
 		if !lEnt.KeepUpright() || !rEnt.KeepUpright() {
-			m := s.manifold1
-			m.ComputeAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
-			if !m.Hit {
-				// Preserve vertical ground detection within floor tolerance even when OBBs are micro-separated.
-				if !solidWE && !solidNS && m.Gap <= floorGroundTolerance {
+
+			s.manifold.ComputeAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
+			if !s.manifold.Hit {
+				// Preserve vertical ground detection within floor tolerance only when XY footprints overlap vertically.
+				if !solidWE && !solidNS && nAbsZ >= floorNormalThreshold && math.Abs(s.manifold.NormalZ) >= floorNormalThreshold &&
+					s.manifold.Gap <= floorGroundTolerance && s.overlapsTargetXY(rFMinX, rFMaxX, rFMinY, rFMaxY) {
 					b := BucketCeiling
 					if nZ > 0 {
 						b = BucketFloor
 					}
-					return b, m.Gap, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rFMaxZ
+					return b, s.manifold.Gap, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rFMaxZ
 				}
 				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 			}
-			if m.Count > 0 {
-				return manifoldToFaceResult(m, rFMaxZ)
+			if s.manifold.Count > 0 {
+				return manifoldToFaceResult(s.manifold, rFMaxZ)
 			}
-			obbClamp = m.Penetration
+			obbClamp = s.manifold.Penetration
 		}
 		// Determinazione degli assi MTV attivi (indipendente dall'asse dominante della faccia)[cite: 6]
 		prevOX := math.Max(0.0, -sepX)

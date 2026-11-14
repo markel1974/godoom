@@ -148,6 +148,7 @@ type Cinematic struct {
 	onGround                           bool
 	isTilted                           bool
 	keepUpright                        bool
+	uprightLocked                      bool
 	groundYawDamping                   float64
 	groundTiltDamping                  float64
 	lowEnergyTiltDamping               float64
@@ -197,7 +198,22 @@ func NewCinematic(dt float64, mass, restitution, groundFriction float64, restCom
 
 // SetKeepUpright enables or disables the automatic upright PD stabilizer during Update.
 func (e *Cinematic) SetKeepUpright(keepUpright bool) {
+	if !keepUpright && e.uprightLocked {
+		return
+	}
 	e.keepUpright = keepUpright
+	e.SetOnGround(false)
+}
+
+// LockUpright locks upright stabilization on so billboard sprites cannot tumble on death.
+func (e *Cinematic) LockUpright() {
+	e.uprightLocked = true
+	e.keepUpright = true
+}
+
+// IsUprightLocked reports whether upright stabilization is locked.
+func (e *Cinematic) IsUprightLocked() bool {
+	return e.uprightLocked
 }
 
 // KeepUpright reports whether the automatic upright PD stabilizer is enabled.

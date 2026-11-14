@@ -390,8 +390,12 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 			minX, minY, minZ = 0, 0, 0
 			maxX, maxY, maxZ = 0, 0, 0
 		}
+		prevMinZ := v.minZ
 		v.minX, v.minY, v.minZ = minX, minY, minZ
 		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
+		if minZ > prevMinZ+1e-3 && entity.IsSleeping() {
+			entity.WakeUp()
+		}
 	}
 
 	if v.lastVolA != v.volA {

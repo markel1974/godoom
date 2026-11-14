@@ -131,7 +131,7 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 	for _, volume := range f.volumes {
 		volume.SetThing(thing)
 		if f.renderMode == RenderModeBillboard {
-			volume.GetEntity().SetKeepUpright(true)
+			volume.GetEntity().LockUpright()
 		}
 	}
 

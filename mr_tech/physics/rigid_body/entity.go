@@ -94,8 +94,20 @@ func (e *Entity) SetInertia(ixx, ixy, ixz, iyy, iyz, izz float64) {
 
 // SetKeepUpright enables or disables upright stabilization and the bounding box tilt limit.
 func (e *Entity) SetKeepUpright(state bool) {
+	if !state && e.Cinematic.IsUprightLocked() {
+		return
+	}
+	if e.Cinematic.KeepUpright() != state {
+		e.Cinematic.WakeUp()
+	}
 	e.BoundingBox.SetTiltLimitEnabled(state)
 	e.Cinematic.SetKeepUpright(state)
+}
+
+// LockUpright keeps the entity permanently upright with tilt limits enabled.
+func (e *Entity) LockUpright() {
+	e.Cinematic.LockUpright()
+	e.BoundingBox.SetTiltLimitEnabled(true)
 }
 
 // GetSize returns the width, height, and depth of the entity's bounding box as three float64 values.

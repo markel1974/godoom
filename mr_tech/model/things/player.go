@@ -275,7 +275,9 @@ func (pr *Player) GetTilt() float64 {
 
 // GetVisualPosition calculates and returns the player's visual position as X, Y, and Z coordinates.
 func (pr *Player) GetVisualPosition() (float64, float64, float64) {
-	visualX, visualY, visualZ := pr.GetEntity().GetBottomCenter() //p.pos.X, p.pos.Y, p.pos.Z
+	ent := pr.GetEntity()
+	visualX, visualY, visualZ := ent.GetCenter()
+	visualZ -= ent.GetDepth() * 0.5
 	angleSin, angleCos := pr.GetAngleFull()
 	bobX, bobY, _ := pr.GetBob()
 	visualZ += pr.getEyeHeight() + bobY + pr.bobbing.GetJump()

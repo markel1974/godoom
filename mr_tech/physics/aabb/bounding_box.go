@@ -14,7 +14,6 @@ var _axisId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
 type BoundingBox struct {
 	aabb             *AABB
 	bottomLeft       Point
-	bottomCenter     Point
 	center           Point
 	size             Size
 	axis             Axis        // Local axes transformed into world space.
@@ -150,7 +149,6 @@ func (r *BoundingBox) rebuild() {
 	cz := r.bottomLeft.GetZ() + hz
 
 	r.center.MoveTo(cx, cy, cz)
-	r.bottomCenter.MoveTo(cx, cy, r.bottomLeft.GetZ())
 
 	r.axis.Set(r.qRotation.ToAxes())
 
@@ -198,11 +196,6 @@ func (r *BoundingBox) GetZ() float64 {
 // GetBottomLeft returns the reference position.
 func (r *BoundingBox) GetBottomLeft() (float64, float64, float64) {
 	return r.bottomLeft.Get()
-}
-
-// GetBottomCenter returns the bottom-center coordinates.
-func (r *BoundingBox) GetBottomCenter() (float64, float64, float64) {
-	return r.bottomCenter.Get()
 }
 
 // GetCenter returns the geometric center.

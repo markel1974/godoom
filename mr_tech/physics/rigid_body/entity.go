@@ -147,6 +147,7 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
 
 func (e *Entity) Update() {
+	e.BoundingBox.SnapshotRotation()
 	if !e.Cinematic.KeepUpright() {
 		e.Cinematic.SetIsTilted(!e.BoundingBox.IsFaceAligned())
 	}

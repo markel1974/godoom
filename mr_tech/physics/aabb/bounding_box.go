@@ -16,11 +16,13 @@ type BoundingBox struct {
 	size             Size
 	axis             Axis        // Local axes transformed into world space.
 	qRotation        *Quaternion // Orientation quaternion.
+	qPrev            *Quaternion // Previous-step orientation quaternion for angular CCD.
 	qYaw             *Quaternion
 	qTilt            *Quaternion
 	qYawInverse      *Quaternion
 	qYawRelative     *Quaternion
 	halfExtents      Point // Oriented half-extents projected onto world axes.
+	prevHalfExtents  Point // Pre-rotation world AABB half-extents for broadphase angular sweep.
 	tiltLimitEnabled bool
 	sat              Sat
 }
@@ -30,6 +32,7 @@ func NewBoundingBox() *BoundingBox {
 	r := &BoundingBox{
 		aabb:             NewAABB(),
 		qRotation:        NewQuaternionEmpty(),
+		qPrev:            NewQuaternionEmpty(),
 		qYaw:             NewQuaternionEmpty(),
 		qTilt:            NewQuaternionEmpty(),
 		qYawInverse:      NewQuaternionEmpty(),
@@ -40,6 +43,7 @@ func NewBoundingBox() *BoundingBox {
 	r.qYaw.SetIdentity()
 	r.qTilt.SetIdentity()
 	r.rebuild()
+	r.SnapshotRotation()
 	return r
 }
 
@@ -49,6 +53,7 @@ func (r *BoundingBox) Rebuild(blx, bly, blz, w, h, d float64) {
 	r.bottomLeft.Set(blx, bly, blz)
 	r.size.Set(w, h, d)
 	r.rebuild()
+	r.SnapshotRotation()
 }
 
 // RebuildCenter updates the bounding box centered at (cx, cy, cz) with dimensions w, h, d, then recalculates the derived bounding-box data.
@@ -56,6 +61,7 @@ func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
 	r.bottomLeft.Set(cx-w*0.5, cy-h*0.5, cz-d*0.5)
 	r.size.Set(w, h, d)
 	r.rebuild()
+	r.SnapshotRotation()
 }
 
 // SetRotationQuaternion sets the orientation using a quaternion (x, y, z, w). The quaternion is normalized before being stored.
@@ -64,6 +70,7 @@ func (r *BoundingBox) SetRotationQuaternion(x, y, z, w float64) {
 	r.qRotation.Normalize()
 	r.syncYawTiltFromRotation()
 	r.rebuild()
+	r.SnapshotRotation()
 }
 
 // SetRotationAngleZ sets the orientation to a rotation around the world Z axis by angleRad radians.
@@ -72,6 +79,7 @@ func (r *BoundingBox) SetRotationAngleZ(angleRad float64) {
 	r.qTilt.SetIdentity()
 	r.composeRotation()
 	r.rebuild()
+	r.SnapshotRotation()
 }
 
 // SetRotationEuler sets the orientation from roll (X), pitch (Y), and yaw (Z) angles in radians.
@@ -80,6 +88,13 @@ func (r *BoundingBox) SetRotationEuler(rollX, pitchY, yawZ float64) {
 	r.qRotation.Normalize()
 	r.syncYawTiltFromRotation()
 	r.rebuild()
+	r.SnapshotRotation()
+}
+
+// SnapshotRotation captures the current orientation and oriented half-extents as the start-of-step state for angular CCD.
+func (r *BoundingBox) SnapshotRotation() {
+	r.qPrev.CopyFrom(r.qRotation)
+	r.prevHalfExtents = r.halfExtents
 }
 
 // SyncRotation recalculates the oriented axes and enclosing AABB after in-place quaternion updates.
@@ -136,6 +151,43 @@ func (r *BoundingBox) GetYaw() float64 {
 // GetOrientedHalfExtents returns the half-extents of the oriented bounding box projected onto world X, Y, Z axes.
 func (r *BoundingBox) GetOrientedHalfExtents() (float64, float64, float64) {
 	return r.halfExtents.Get()
+}
+
+func (r *BoundingBox) rotDotPrev() float64 {
+	x0, y0, z0, w0 := r.qPrev.Get()
+	x1, y1, z1, w1 := r.qRotation.Get()
+	d := math.Abs(x0*x1 + y0*y1 + z0*z1 + w0*w1)
+	if d > 1.0 {
+		d = 1.0
+	}
+	return d
+}
+
+// GetAngularSweepArc returns the maximum corner arc distance R*theta traveled during this step's rotation.
+func (r *BoundingBox) GetAngularSweepArc() float64 {
+	cosHalf := r.rotDotPrev()
+	if cosHalf >= 1.0-1e-12 {
+		return 0.0
+	}
+	hx, hy, hz := r.size.GetCenter()
+	radius := math.Sqrt(hx*hx + hy*hy + hz*hz)
+	return radius * 2.0 * math.Acos(cosHalf)
+}
+
+// GetSweptHalfExtents returns conservative world AABB half-extents enclosing the box rotation from qPrev to qRotation.
+func (r *BoundingBox) GetSweptHalfExtents() (float64, float64, float64) {
+	ex, ey, ez := r.halfExtents.Get()
+	cosHalf := r.rotDotPrev()
+	if cosHalf >= 1.0-1e-9 {
+		return ex, ey, ez
+	}
+	pex, pey, pez := r.prevHalfExtents.Get()
+	hx, hy, hz := r.size.GetCenter()
+	radius := math.Sqrt(hx*hx + hy*hy + hz*hz)
+	rotPad := radius * (1.0 - cosHalf)
+	return math.Min(radius, math.Max(pex, ex)+rotPad),
+		math.Min(radius, math.Max(pey, ey)+rotPad),
+		math.Min(radius, math.Max(pez, ez)+rotPad)
 }
 
 // ProjectExtent returns the half-extent of the OBB projected onto unit normal (nx, ny, nz).
@@ -408,4 +460,15 @@ func (r *BoundingBox) OverlapBBAtOffset(other *BoundingBox, offX, offY, offZ flo
 	ocx, ocy, ocz := other.size.GetCenter()
 	r.sat.Compute(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
 	return r.sat.hit, r.sat.minPen, r.sat.maxGap
+}
+
+// OverlapSATAtOffset tests all 15 SAT axes (faces and edge-edge cross axes) against other at (offX, offY, offZ)
+// and returns (hit, contactAxis, contactPen, maxGap, nx, ny, nz).
+func (r *BoundingBox) OverlapSATAtOffset(other *BoundingBox, offX, offY, offZ float64) (bool, int, float64, float64, float64, float64, float64) {
+	tx, ty, tz := other.center.Get()
+	px, py, pz := r.center.Get()
+	scx, scy, scz := r.size.GetCenter()
+	ocx, ocy, ocz := other.size.GetCenter()
+	r.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+	return r.sat.GetContact()
 }

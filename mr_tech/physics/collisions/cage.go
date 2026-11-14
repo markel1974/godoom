@@ -172,13 +172,24 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
-	// Calculate absolute extremes (Broad-Phase Swept Volume)
-	minX := s.cX - s.eRadX + math.Min(0, s.dX)
-	maxX := s.cX + s.eRadX + math.Max(0, s.dX)
-	minY := s.cY - s.eRadY + math.Min(0, s.dY)
-	maxY := s.cY + s.eRadY + math.Max(0, s.dY)
-	minZ := s.cZ - s.eRadZ + math.Min(0, s.dZ)
-	maxZ := s.cZ + s.eRadZ + math.Max(0, s.dZ)
+	sx, sy, sz := lEnt.GetSweptHalfExtents()
+	if sx < s.eRadX {
+		sx = s.eRadX
+	}
+	if sy < s.eRadY {
+		sy = s.eRadY
+	}
+	if sz < s.eRadZ {
+		sz = s.eRadZ
+	}
+
+	// Calculate absolute extremes (Broad-Phase Linear + Angular Swept Volume)
+	minX := s.cX - sx + math.Min(0, s.dX)
+	maxX := s.cX + sx + math.Max(0, s.dX)
+	minY := s.cY - sy + math.Min(0, s.dY)
+	maxY := s.cY + sy + math.Max(0, s.dY)
+	minZ := s.cZ - sz + math.Min(0, s.dZ)
+	maxZ := s.cZ + sz + math.Max(0, s.dZ)
 
 	// Canonical mapping for Rect/AABB
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
@@ -362,14 +373,14 @@ func classifyBucketNormal(nX, nY, nZ float64) BucketType {
 	return BucketCeiling
 }
 
-// commitDynamicManifold resolves an overlapping OBB pair using the unsnapped 15-axis SAT normal
-// and up to 4 clipped manifold contact points, returning true if handled cleanly without swept fallback.
+// commitDynamicManifold resolves an overlapping or swept-colliding OBB pair using 15-axis SAT (faces + edge-edge)
+// with angular+linear conservative advancement CCD and up to 4 clipped manifold contact points.
 func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 	lEnt := s.object.GetEntity()
 	rEnt := rCage.GetEntity()
-	rDX, rDY, rDZ := rCage.GetDisplacement()
+	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	m := s.manifold1
-	m.ComputeAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
+	m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rDX, rDY, rDZ)
 
 	b := classifyBucketNormal(m.NormalX, m.NormalY, m.NormalZ)
 	if !m.Hit {
@@ -379,9 +390,8 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 			} else {
 				rCage.hasFloor = true
 			}
-			return true
 		}
-		return false
+		return true
 	}
 
 	dist := -m.Penetration
@@ -1001,9 +1011,18 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	sepX := math.Abs(relX) - sumRadX
 	sepY := math.Abs(relY) - sumRadY
 	sepZ := math.Abs(relZ) - sumRadZ
+	lEnt := s.object.GetEntity()
 	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
 	obbClamp := -1.0
 	if sweptMode {
+		// Try 15-axis angular+linear OBB CCD before falling back to linear face TOI.
+		if !lEnt.KeepUpright() || !rEnt.KeepUpright() {
+			m := s.manifold1
+			m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rDX, rDY, rDZ)
+			if m.Hit && m.Count > 0 {
+				return manifoldToFaceResult(m, rFMaxZ)
+			}
+		}
 		// In modalità swept il centro locale deve partire dal semispazio esterno del piano[cite: 6]
 		if distStart < -planeEpsilon {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
@@ -1035,21 +1054,24 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		if boxOX <= 0 || boxOY <= 0 || boxOZ <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 		}
-		lEnt := s.object.GetEntity()
 		if !lEnt.KeepUpright() || !rEnt.KeepUpright() {
-			hit, obbPen, obbGap := lEnt.OverlapBBAtOffset(rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
-			if !hit {
+			m := s.manifold1
+			m.ComputeAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
+			if !m.Hit {
 				// Preserve vertical ground detection within floor tolerance even when OBBs are micro-separated.
-				if !solidWE && !solidNS && obbGap <= 0.25 {
+				if !solidWE && !solidNS && m.Gap <= floorGroundTolerance {
 					b := BucketCeiling
 					if nZ > 0 {
 						b = BucketFloor
 					}
-					return b, obbGap, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rFMaxZ
+					return b, m.Gap, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rFMaxZ
 				}
 				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
 			}
-			obbClamp = obbPen
+			if m.Count > 0 {
+				return manifoldToFaceResult(m, rFMaxZ)
+			}
+			obbClamp = m.Penetration
 		}
 		// Determinazione degli assi MTV attivi (indipendente dall'asse dominante della faccia)[cite: 6]
 		prevOX := math.Max(0.0, -sepX)
@@ -1168,6 +1190,15 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	}
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rFMaxZ
+}
+
+func manifoldToFaceResult(m *aabb.OBBManifold, rFMaxZ float64) (BucketType, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	pt := &m.Points[0]
+	pen := m.Penetration
+	if pt.Penetration > pen {
+		pen = pt.Penetration
+	}
+	return classifyBucketNormal(m.NormalX, m.NormalY, m.NormalZ), -pen, pen, m.NormalX, m.NormalY, m.NormalZ, pt.X, pt.Y, pt.Z, pen, rFMaxZ
 }
 
 // growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.

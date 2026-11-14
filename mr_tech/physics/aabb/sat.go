@@ -23,6 +23,12 @@ func (res *Sat) GetNormal() (float64, float64, float64) {
 	return res.nx, res.ny, res.nz
 }
 
+// GetContact returns the winning SAT state: overlap flag, winning axis index (0..5 face, 6..14 edge-edge),
+// contact penetration depth, separation gap, and unit normal pointing from B toward A.
+func (res *Sat) GetContact() (bool, int, float64, float64, float64, float64, float64) {
+	return res.hit, res.contactAxis, res.contactPen, res.maxGap, res.nx, res.ny, res.nz
+}
+
 // Compute runs a separating axis test between two oriented boxes using center delta, axes, and half-extents.
 // It reuses internal scratch buffers and writes hit state, penetration depth, contact normal, axis index, and gap.
 func (res *Sat) Compute(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) {
@@ -131,7 +137,7 @@ func (res *Sat) Compute(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *A
 					res.minPen = p
 				}
 				// Slightly bias against edge-edge axes to prevent numerical angle chatter on flat face contacts.
-				if axisLen > edgeAxisMinLen && p < faceBestPen*0.98-1e-4 && p < res.contactPen {
+				if axisLen > edgeAxisMinLen && p < faceBestPen*0.98-1e-6 && p < res.contactPen {
 					res.contactPen = p
 					res.contactAxis = 6 + i*3 + j
 					res.nx, res.ny, res.nz = worldCrossUnitNormal(a, i, b, j, axisLen, proj)

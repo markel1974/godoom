@@ -24,9 +24,7 @@ type BoundingBox struct {
 	qTilt            *Quaternion
 	qYawInverse      *Quaternion
 	qYawRelative     *Quaternion
-	ex               float64 // Oriented half-extents projected onto world axes.
-	ey               float64 // Oriented half-extents projected onto world axes.
-	ez               float64 // Oriented half-extents projected onto world axes.
+	halfExtents      Point // Oriented half-extents projected onto world axes.
 	tiltLimitEnabled bool
 }
 
@@ -34,16 +32,11 @@ type BoundingBox struct {
 func NewBoundingBox() *BoundingBox {
 	r := &BoundingBox{
 		aabb:             NewAABB(),
-		bottomLeft:       *NewPoint(0, 0, 0),
-		bottomCenter:     *NewPoint(0, 0, 0),
-		center:           *NewPoint(0, 0, 0),
-		size:             *NewSize(0, 0, 0),
 		qRotation:        NewQuaternionEmpty(),
 		qYaw:             NewQuaternionEmpty(),
 		qTilt:            NewQuaternionEmpty(),
 		qYawInverse:      NewQuaternionEmpty(),
 		qYawRelative:     NewQuaternionEmpty(),
-		axis:             *NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 		tiltLimitEnabled: false, //true //MODIFICATO,
 	}
 	r.qRotation.SetIdentity()
@@ -145,7 +138,7 @@ func (r *BoundingBox) GetYaw() float64 {
 
 // GetOrientedHalfExtents returns the half-extents of the oriented bounding box projected onto world X, Y, Z axes.
 func (r *BoundingBox) GetOrientedHalfExtents() (float64, float64, float64) {
-	return r.ex, r.ey, r.ez
+	return r.halfExtents.Get()
 }
 
 // rebuild recalculates the center, local axes and enclosing AABB.
@@ -162,9 +155,10 @@ func (r *BoundingBox) rebuild() {
 
 	r.axis.Set(r.qRotation.ToAxes())
 
-	r.ex, r.ey, r.ez = r.axis.Project(hx, hy, hz)
+	ex, ey, ez := r.axis.Project(hx, hy, hz)
+	r.halfExtents.Set(ex, ey, ez)
 
-	r.aabb.Rebuild(cx-r.ex, cy-r.ey, cz-r.ez, cx+r.ex, cy+r.ey, cz+r.ez)
+	r.aabb.Rebuild(cx-ex, cy-ey, cz-ez, cx+ex, cy+ey, cz+ez)
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.
@@ -295,6 +289,7 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 
 	// Recompose the final orientation.
 	r.composeRotation()
+
 	r.SyncRotation()
 
 	return reset
@@ -360,6 +355,23 @@ func (r *BoundingBox) Distance(target *BoundingBox) float64 {
 		return 0.01
 	}
 	return math.Sqrt(d)
+}
+
+// extractSwingDirection extracts the world-Z yaw from qRotation and returns the local-Z direction in the resulting yaw frame.
+func (r *BoundingBox) extractSwingDirection() (float64, float64, float64) {
+	_, _, qz, qw := r.qRotation.Get()
+
+	twistLength := math.Hypot(qz, qw)
+	if twistLength < 1e-12 {
+		r.qYaw.SetIdentity()
+	} else {
+		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
+	}
+
+	r.qYawInverse.Conjugate(r.qYaw)
+	r.qYawInverse.Multiplies(r.qRotation, r.qYawRelative)
+
+	return r.qYawRelative.Rotate(0, 0, 1)
 }
 
 // Intersect tests this OBB against an axis-aligned box defined by
@@ -474,21 +486,4 @@ func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, 
 
 	// Preserve the previous contact semantics: touching is intersection.
 	return true
-}
-
-// extractSwingDirection extracts the world-Z yaw from qRotation and returns the local-Z direction in the resulting yaw frame.
-func (r *BoundingBox) extractSwingDirection() (float64, float64, float64) {
-	_, _, qz, qw := r.qRotation.Get()
-
-	twistLength := math.Hypot(qz, qw)
-	if twistLength < 1e-12 {
-		r.qYaw.SetIdentity()
-	} else {
-		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
-	}
-
-	r.qYawInverse.Conjugate(r.qYaw)
-	r.qYawInverse.Multiplies(r.qRotation, r.qYawRelative)
-
-	return r.qYawRelative.Rotate(0, 0, 1)
 }

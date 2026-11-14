@@ -458,7 +458,8 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		t2.StageApply()
 	}
 
-	// Positional relaxation sweep to prevent vertical stack compression on tall piles.
+	// Positional relaxation sweep coupled with per-iteration static world clamping so pushed bodies
+	// cannot be squeezed through solid walls, floors, or ceilings across solver sweeps.
 	for si := 0; si < th.solverIterations; si++ {
 		if si&1 == 0 {
 			for x := 0; x < runningLen; x++ {
@@ -469,13 +470,11 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 				th.running[x].StageResolvePosition()
 			}
 		}
-	}
-
-	// Clamp any dynamically pushed body back outside newly contacted solid world walls, floors, and ceilings.
-	for x := 0; x < runningLen; x++ {
-		cage := th.running[x].GetCage().(*collisions.Cage)
-		if px, py, pz := cage.GetPushOffset(); px != 0.0 || py != 0.0 || pz != 0.0 {
-			th.volumes.ClampStaticCage(cage)
+		for x := 0; x < runningLen; x++ {
+			cage := th.running[x].GetCage().(*collisions.Cage)
+			if cage.NeedsStaticClamp() {
+				th.volumes.ClampStaticCage(cage)
+			}
 		}
 	}
 

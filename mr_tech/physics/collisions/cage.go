@@ -102,6 +102,11 @@ type Cage struct {
 	appliedX            float64
 	appliedY            float64
 	appliedZ            float64
+	clampX              float64
+	clampY              float64
+	clampZ              float64
+	clampNormals        [16][3]float64
+	clampNormalsLen     int
 	solverIdx           int
 }
 
@@ -204,6 +209,8 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.slotsLen = 0
 	s.hasFloor = false
 	s.applied = false
+	s.clampX, s.clampY, s.clampZ = s.cX, s.cY, s.cZ
+	s.clampNormalsLen = 0
 
 	//clear(s.seen)
 	s.maxStep = maxStep
@@ -621,13 +628,62 @@ func (s *Cage) IsBucketPenetrable(b BucketType, from uint64) bool {
 	return s.buckets[b].Penetrable(from)
 }
 
-// BeginStaticClamp prepares a temporary swept broadphase cage from frame start (cX,cY,cZ) to the current entity center,
-// returning the saved displacement and target values for restoration in EndStaticClamp.
-func (s *Cage) BeginStaticClamp() (origDX, origDY, origDZ, origTX, origTY, origTZ float64, lAABB *aabb.AABB) {
+// NeedsStaticClamp reports whether the entity center moved since the last validated static world clamp.
+func (s *Cage) NeedsStaticClamp() bool {
+	curX, curY, curZ := s.object.GetEntity().GetCenter()
+	return curX != s.clampX || curY != s.clampY || curZ != s.clampZ
+}
+
+// CommitStaticClamp records the current entity center as the latest statically clamped baseline position.
+func (s *Cage) CommitStaticClamp() {
+	s.clampX, s.clampY, s.clampZ = s.object.GetEntity().GetCenter()
+}
+
+func (s *Cage) addClampNormal(nX, nY, nZ float64) {
+	for i := 0; i < s.clampNormalsLen; i++ {
+		c := &s.clampNormals[i]
+		if c[0]*nX+c[1]*nY+c[2]*nZ > 0.999 {
+			return
+		}
+	}
+	if s.clampNormalsLen < len(s.clampNormals) {
+		s.clampNormals[s.clampNormalsLen][0] = nX
+		s.clampNormals[s.clampNormalsLen][1] = nY
+		s.clampNormals[s.clampNormalsLen][2] = nZ
+		s.clampNormalsLen++
+	}
+}
+
+// IsBlockedAlong reports whether pushing this cage along unit direction (dirX, dirY, dirZ)
+// pushes into any active or clamped static world face.
+func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
+	const wallBlockDotThreshold = -0.05
+	for i := 0; i < s.clampNormalsLen; i++ {
+		c := &s.clampNormals[i]
+		if dirX*c[0]+dirY*c[1]+dirZ*c[2] < wallBlockDotThreshold {
+			return true
+		}
+	}
+	for i := 0; i < s.slotsLen; i++ {
+		slot := s.slots[i]
+		if slot.iMode == ImpactInelastic {
+			if dirX*slot.nX+dirY*slot.nY+dirZ*slot.nZ < wallBlockDotThreshold {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// BeginStaticClamp prepares a temporary swept broadphase cage from the last valid clamped center to the current entity center,
+// returning saved frame center, displacement, and target values for restoration in EndStaticClamp.
+func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64, lAABB *aabb.AABB) {
+	origCX, origCY, origCZ = s.cX, s.cY, s.cZ
 	origDX, origDY, origDZ = s.dX, s.dY, s.dZ
 	origTX, origTY, origTZ = s.tX, s.tY, s.tZ
 	ent := s.object.GetEntity()
 	curX, curY, curZ := ent.GetCenter()
+	s.cX, s.cY, s.cZ = s.clampX, s.clampY, s.clampZ
 	s.tX, s.tY, s.tZ = curX, curY, curZ
 	s.dX, s.dY, s.dZ = curX-s.cX, curY-s.cY, curZ-s.cZ
 	sx, sy, sz := ent.GetSweptHalfExtents()
@@ -647,10 +703,10 @@ func (s *Cage) BeginStaticClamp() (origDX, origDY, origDZ, origTX, origTY, origT
 	minZ := s.cZ - sz + math.Min(0.0, s.dZ)
 	maxZ := s.cZ + sz + math.Max(0.0, s.dZ)
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
-	return origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
+	return origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
 }
 
-// ClampStaticFace tests one static face against the post-push entity sweep [c -> t] and immediately projects out
+// ClampStaticFace tests one static face against the entity sweep [clamp -> cur] and immediately projects out
 // any wall, floor, or ceiling penetration without modifying bucket warm-start buffers.
 func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 	if !rFace.IsSolid() {
@@ -665,22 +721,23 @@ func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 		return false
 	}
 	if b.IsWall() {
-		baseZ := s.GetBaseZ()
-		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
-		if rMaxZ <= minBaseZ+satFilterEpsilon {
+		curBaseZ := s.tZ - s.eRadZ
+		if rMaxZ <= curBaseZ+satFilterEpsilon {
 			return false
 		}
-		if s.maxStep > 0 && rMaxZ <= baseZ+s.maxStep {
+		preBaseZ := s.GetBaseZ()
+		if preBaseZ >= rMaxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon {
 			return false
 		}
 	}
 	ent := s.object.GetEntity()
+	s.addClampNormal(nX, nY, nZ)
+	ent.ClampNormalVelocity(nX, nY, nZ)
 	p, ok := ent.Cinematic.ResolveInelasticPenetration(nZ, pen)
 	if !ok || p <= 0.0 {
 		return false
 	}
 	ent.AddTo(nX*p, nY*p, nZ*p)
-	ent.ClampNormalVelocity(nX, nY, nZ)
 	s.tX += nX * p
 	s.tY += nY * p
 	s.tZ += nZ * p
@@ -690,8 +747,9 @@ func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 	return true
 }
 
-// EndStaticClamp restores the pre-resolve cage displacement and target fields after post-push static clamping.
-func (s *Cage) EndStaticClamp(origDX, origDY, origDZ, origTX, origTY, origTZ float64) {
+// EndStaticClamp restores the pre-clamp cage center, displacement, and target fields after post-push static clamping.
+func (s *Cage) EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64) {
+	s.cX, s.cY, s.cZ = origCX, origCY, origCZ
 	s.dX, s.dY, s.dZ = origDX, origDY, origDZ
 	s.tX, s.tY, s.tZ = origTX, origTY, origTZ
 }

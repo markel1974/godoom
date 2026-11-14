@@ -18,7 +18,7 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		initialSize = 1
 	}
 	t := &Tree{
-		rootNodeIndex:      AABBNullNode,
+		rootNodeIndex:      NullNode,
 		allocatedNodeCount: 0,
 		nextFreeNodeIndex:  0,
 		nodeCapacity:       initialSize,
@@ -34,14 +34,14 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		t.nodes[nodeIndex] = node
 		node.nextNodeIndex = nodeIndex + 1
 	}
-	t.nodes[initialSize-1].nextNodeIndex = AABBNullNode
+	t.nodes[initialSize-1].nextNodeIndex = NullNode
 
 	return t
 }
 
 // GetRoot returns the root AABB of the tree along with a boolean indicating its existence.
 func (a *Tree) GetRoot() (*AABB, bool) {
-	if a.rootNodeIndex == AABBNullNode {
+	if a.rootNodeIndex == NullNode {
 		return nil, false
 	}
 	return a.nodes[a.rootNodeIndex].aabb, true
@@ -50,19 +50,19 @@ func (a *Tree) GetRoot() (*AABB, bool) {
 // Clear resets the Tree to its initial empty state without deallocating the underlying structures.
 // It rebuilds the internal free-node list and clears the object map, making it ready for reuse.
 func (a *Tree) Clear() {
-	a.rootNodeIndex = AABBNullNode
+	a.rootNodeIndex = NullNode
 	a.allocatedNodeCount = 0
 	a.nextFreeNodeIndex = 0
 	var nodeIndex uint
 	for nodeIndex = 0; nodeIndex < a.nodeCapacity; nodeIndex++ {
 		a.nodes[nodeIndex].object = nil
-		a.nodes[nodeIndex].parentNodeIndex = AABBNullNode
-		a.nodes[nodeIndex].leftNodeIndex = AABBNullNode
-		a.nodes[nodeIndex].rightNodeIndex = AABBNullNode
+		a.nodes[nodeIndex].parentNodeIndex = NullNode
+		a.nodes[nodeIndex].leftNodeIndex = NullNode
+		a.nodes[nodeIndex].rightNodeIndex = NullNode
 		a.nodes[nodeIndex].nextNodeIndex = nodeIndex + 1
 	}
 	if a.nodeCapacity > 0 {
-		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
+		a.nodes[a.nodeCapacity-1].nextNodeIndex = NullNode
 	}
 	//a.objectNodeIndexMap = make(map[IObject]uint)
 }
@@ -143,7 +143,7 @@ func (a *Tree) QueryOverlaps(object IObject, callback func(object IObject) bool)
 	for stackIndex > 0 {
 		stackIndex--
 		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == AABBNullNode {
+		if nodeIndex == NullNode {
 			continue
 		}
 		node := a.nodes[nodeIndex]
@@ -177,7 +177,7 @@ func (a *Tree) QueryPoint2d(px, py float64, callback func(object IObject) bool) 
 	for stackIndex > 0 {
 		stackIndex--
 		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == AABBNullNode {
+		if nodeIndex == NullNode {
 			continue
 		}
 		node := a.nodes[nodeIndex]
@@ -208,7 +208,7 @@ func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IObject) bo
 	for stackIndex > 0 {
 		stackIndex--
 		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == AABBNullNode {
+		if nodeIndex == NullNode {
 			continue
 		}
 		node := a.nodes[nodeIndex]
@@ -239,7 +239,7 @@ func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool
 	for stackIndex > 0 {
 		stackIndex--
 		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == AABBNullNode {
+		if nodeIndex == NullNode {
 			continue
 		}
 		node := a.nodes[nodeIndex]
@@ -271,7 +271,7 @@ func (a *Tree) QueryMultiFrustum(fFront, fRear *Frustum, callback func(object IO
 	for stackIndex > 0 {
 		stackIndex--
 		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == AABBNullNode {
+		if nodeIndex == NullNode {
 			continue
 		}
 		node := a.nodes[nodeIndex]
@@ -314,7 +314,7 @@ func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float6
 	for stackIndex > 0 {
 		stackIndex--
 		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == AABBNullNode {
+		if nodeIndex == NullNode {
 			continue
 		}
 		node := a.nodes[nodeIndex]
@@ -349,7 +349,7 @@ func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float6
 
 // allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
 func (a *Tree) allocateNode() (uint, *Node) {
-	if a.nextFreeNodeIndex == AABBNullNode {
+	if a.nextFreeNodeIndex == NullNode {
 		a.nodeCapacity += a.growthSize
 		nodes := make([]*Node, a.nodeCapacity)
 		copy(nodes, a.nodes)
@@ -359,15 +359,15 @@ func (a *Tree) allocateNode() (uint, *Node) {
 			a.nodes[nodeIndex] = node
 			node.nextNodeIndex = nodeIndex + 1
 		}
-		a.nodes[a.nodeCapacity-1].nextNodeIndex = AABBNullNode
+		a.nodes[a.nodeCapacity-1].nextNodeIndex = NullNode
 		a.nextFreeNodeIndex = a.allocatedNodeCount
 	}
 
 	nodeIndex := a.nextFreeNodeIndex
 	allocatedNode := a.nodes[nodeIndex]
-	allocatedNode.parentNodeIndex = AABBNullNode
-	allocatedNode.leftNodeIndex = AABBNullNode
-	allocatedNode.rightNodeIndex = AABBNullNode
+	allocatedNode.parentNodeIndex = NullNode
+	allocatedNode.leftNodeIndex = NullNode
+	allocatedNode.rightNodeIndex = NullNode
 	a.nextFreeNodeIndex = allocatedNode.nextNodeIndex
 	a.allocatedNodeCount++
 
@@ -392,7 +392,7 @@ func (a *Tree) deallocateNode(nodeIndex uint) {
 // insertLeaf inserts a new leaf node with the given index into the AABB tree, adjusting the tree structure as needed.
 func (a *Tree) insertLeaf(leafNodeIndex uint) {
 	// if the tree is empty, then we make the root the leaf
-	if a.rootNodeIndex == AABBNullNode {
+	if a.rootNodeIndex == NullNode {
 		a.rootNodeIndex = leafNodeIndex
 		return
 	}
@@ -462,7 +462,7 @@ func (a *Tree) insertLeaf(leafNodeIndex uint) {
 	leafNode.parentNodeIndex = newParentIndex
 	leafSibling.parentNodeIndex = newParentIndex
 
-	if oldParentIndex == AABBNullNode {
+	if oldParentIndex == NullNode {
 		// the old parent was the root and so this is now the root
 		a.rootNodeIndex = newParentIndex
 	} else {
@@ -485,7 +485,7 @@ func (a *Tree) insertLeaf(leafNodeIndex uint) {
 func (a *Tree) removeLeaf(leafNodeIndex uint) {
 	// if the leaf is the root then we can just clear the root pointer and return
 	if leafNodeIndex == a.rootNodeIndex {
-		a.rootNodeIndex = AABBNullNode
+		a.rootNodeIndex = NullNode
 		return
 	}
 	leafNode := a.nodes[leafNodeIndex]
@@ -499,7 +499,7 @@ func (a *Tree) removeLeaf(leafNodeIndex uint) {
 		siblingNodeIndex = parentNode.leftNodeIndex
 	}
 	siblingNode := a.nodes[siblingNodeIndex]
-	if grandParentNodeIndex != AABBNullNode {
+	if grandParentNodeIndex != NullNode {
 		// if we have a grand parent (i.e. the parent is not the root) then destroy the parent and connect the sibling to the grandparent in its
 		// place
 		grandParentNode := a.nodes[grandParentNodeIndex]
@@ -515,10 +515,10 @@ func (a *Tree) removeLeaf(leafNodeIndex uint) {
 	} else {
 		// if we have no grandparent, then the parent is the root, and so our sibling becomes the root and has it's parent removed
 		a.rootNodeIndex = siblingNodeIndex
-		siblingNode.parentNodeIndex = AABBNullNode
+		siblingNode.parentNodeIndex = NullNode
 		a.deallocateNode(parentNodeIndex)
 	}
-	leafNode.parentNodeIndex = AABBNullNode
+	leafNode.parentNodeIndex = NullNode
 }
 
 // updateLeaf removes the leaf, updates its expanded AABB, and reinserts it into the tree.
@@ -531,7 +531,7 @@ func (a *Tree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 
 // fixUpwardsTree recalculates the bounding volumes and heights of nodes moving upwards in the Tree from a given node index.
 func (a *Tree) fixUpwardsTree(treeNodeIndex uint) {
-	for treeNodeIndex != AABBNullNode {
+	for treeNodeIndex != NullNode {
 		treeNode := a.nodes[treeNodeIndex]
 
 		// fix height and area

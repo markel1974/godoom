@@ -1,7 +1,7 @@
 package aabb
 
-// AABBNullNode represents an invalid or uninitialized node in an AABBTree, commonly used as a sentinel value.
-const AABBNullNode = 0xffffffff
+// NullNode represents an invalid or uninitialized node in an AABBTree, commonly used as a sentinel value.
+const NullNode = 0xffffffff
 
 // Node represents a node in an AABB tree, used for spatial partitioning of objects in a 3D space.
 type Node struct {
@@ -18,15 +18,15 @@ func NewNode() *Node {
 	node := &Node{
 		aabb:            &AABB{},
 		object:          nil,
-		parentNodeIndex: AABBNullNode,
-		leftNodeIndex:   AABBNullNode,
-		rightNodeIndex:  AABBNullNode,
-		nextNodeIndex:   AABBNullNode,
+		parentNodeIndex: NullNode,
+		leftNodeIndex:   NullNode,
+		rightNodeIndex:  NullNode,
+		nextNodeIndex:   NullNode,
 	}
 	return node
 }
 
-// IsLeaf checks if the current Node is a leaf node by verifying if its leftNodeIndex is equal to AABBNullNode.
+// IsLeaf checks if the current Node is a leaf node by verifying if its leftNodeIndex is equal to NullNode.
 func (a *Node) IsLeaf() bool {
-	return a.leftNodeIndex == AABBNullNode
+	return a.leftNodeIndex == NullNode
 }

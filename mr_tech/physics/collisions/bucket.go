@@ -279,7 +279,9 @@ func (b *Bucket) replaceCoplanarManifold(
 		}
 	}
 	if penetration > minPen+1e-4 {
-		b.rebuildKeepingWarm(b.currPool[minPenIdx], bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		target := b.currPool[minPenIdx]
+		target.Rebuild(bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.matchWarmStart(target)
 		return
 	}
 
@@ -326,7 +328,9 @@ func (b *Bucket) replaceCoplanarManifold(
 		}
 	}
 	if candMinDistSq > worstMinDistSq*(1.0+1e-3) {
-		b.rebuildKeepingWarm(b.currPool[coplanarIdx[worstSlot]], bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		target := b.currPool[coplanarIdx[worstSlot]]
+		target.Rebuild(bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.matchWarmStart(target)
 	}
 }
 

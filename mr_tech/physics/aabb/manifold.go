@@ -446,14 +446,15 @@ func (om *OBBManifold) collectPlaneCandidates(poly *ClipPolygon, planeX, planeY,
 	const clipDedupSq = 1e-8
 	for i := 0; i < poly.count; i++ {
 		px, py, pz := poly.x[i], poly.y[i], poly.z[i]
-		depth := (planeX-px)*planeNX + (planeY-py)*planeNY + (planeZ-pz)*planeNZ
-		if depth <= 0.0 {
+		rawDepth := (planeX-px)*planeNX + (planeY-py)*planeNY + (planeZ-pz)*planeNZ
+		if rawDepth <= 0.0 {
 			continue
 		}
+		depth := rawDepth
 		if maxDepth > 0.0 && depth > maxDepth {
 			depth = maxDepth
 		}
-		shift := shiftScale * depth
+		shift := shiftScale * rawDepth
 		cx := px + planeNX*shift
 		cy := py + planeNY*shift
 		cz := pz + planeNZ*shift

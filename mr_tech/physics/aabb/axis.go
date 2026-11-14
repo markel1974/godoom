@@ -2,6 +2,8 @@ package aabb
 
 import "math"
 
+var _axisId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
+
 // Axis represents a 3x3 matrix used to store local axes for oriented bounding box calculations.
 type Axis struct {
 	data [3][3]float64
@@ -34,6 +36,11 @@ func (r *Axis) Get1() (float64, float64, float64) {
 // Get2 returns the three values in the third row of the matrix.
 func (r *Axis) Get2() (float64, float64, float64) {
 	return r.data[2][0], r.data[2][1], r.data[2][2]
+}
+
+// GetIdentity returns the shared identity axis matrix.
+func (r *Axis) GetIdentity() *Axis {
+	return _axisId
 }
 
 // Project returns the axis-aligned extents of the oriented half-extents hx, hy, and hz.

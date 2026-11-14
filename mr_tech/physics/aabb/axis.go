@@ -63,26 +63,46 @@ func (r *Axis) ProjectNormal(nx, ny, nz, hx, hy, hz float64) float64 {
 		math.Abs(nx*r.data[2][0]+ny*r.data[2][1]+nz*r.data[2][2])*hz
 }
 
-// ComputeSupportPoint computes the support point for an oriented box from its center, direction, and half-extents.
+// ComputeSupportPoint computes the exact extreme support point for an oriented box
+// from its center, direction, and half-extents without deadband or smoothing.
 func (r *Axis) ComputeSupportPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
+	return r.computeExtremalPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd, false)
+}
+
+// ComputeStabilizedContactPoint computes a contact-stabilized extreme point for an oriented box
+// along direction (dirX, dirY, dirZ), suppressing near-flat corner jitter via supportAxisFactor.
+func (r *Axis) ComputeStabilizedContactPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
+	lenSq := dirX*dirX + dirY*dirY + dirZ*dirZ
+	if lenSq <= 1e-24 {
+		return cx, cy, cz
+	}
+	if math.Abs(lenSq-1.0) > 1e-12 {
+		invLen := 1.0 / math.Sqrt(lenSq)
+		dirX *= invLen
+		dirY *= invLen
+		dirZ *= invLen
+	}
+	return r.computeExtremalPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd, true)
+}
+
+func (r *Axis) computeExtremalPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64, stabilized bool) (float64, float64, float64) {
 	px, py, pz := cx, cy, cz
-	f0 := supportAxisFactor(r.data[0][0]*dirX+r.data[0][1]*dirY+r.data[0][2]*dirZ) * hw
-	if f0 != 0.0 {
-		px += r.data[0][0] * f0
-		py += r.data[0][1] * f0
-		pz += r.data[0][2] * f0
-	}
-	f1 := supportAxisFactor(r.data[1][0]*dirX+r.data[1][1]*dirY+r.data[1][2]*dirZ) * hh
-	if f1 != 0.0 {
-		px += r.data[1][0] * f1
-		py += r.data[1][1] * f1
-		pz += r.data[1][2] * f1
-	}
-	f2 := supportAxisFactor(r.data[2][0]*dirX+r.data[2][1]*dirY+r.data[2][2]*dirZ) * hd
-	if f2 != 0.0 {
-		px += r.data[2][0] * f2
-		py += r.data[2][1] * f2
-		pz += r.data[2][2] * f2
+	extents := [3]float64{hw, hh, hd}
+	for i := 0; i < 3; i++ {
+		dot := r.data[i][0]*dirX + r.data[i][1]*dirY + r.data[i][2]*dirZ
+		var sign float64
+		if stabilized {
+			sign = supportAxisFactor(dot)
+		} else if dot > 0.0 {
+			sign = 1.0
+		} else if dot < 0.0 {
+			sign = -1.0
+		}
+		if f := sign * extents[i]; f != 0.0 {
+			px += r.data[i][0] * f
+			py += r.data[i][1] * f
+			pz += r.data[i][2] * f
+		}
 	}
 	return px, py, pz
 }

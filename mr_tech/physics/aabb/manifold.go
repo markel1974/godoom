@@ -182,7 +182,7 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 		om.NormalX, om.NormalY, om.NormalZ = sat.gx, sat.gy, sat.gz
 		om.Penetration = math.Max(1e-4, -sat.maxGap)
 		om.Gap = 0.0
-		sx, sy, sz := om.axesA.ComputeSupportPoint(axT, ayT, azT, -om.NormalX, -om.NormalY, -om.NormalZ, scx, scy, scz)
+		sx, sy, sz := om.axesA.ComputeStabilizedContactPoint(axT, ayT, azT, -om.NormalX, -om.NormalY, -om.NormalZ, scx, scy, scz)
 		om.setSinglePoint(sx, sy, sz, om.Penetration)
 	}
 

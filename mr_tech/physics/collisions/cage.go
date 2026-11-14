@@ -1093,7 +1093,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 
 	// Proiezione ortogonale del punto di supporto estremo dell'OBB lungo -normal sul piano di contatto,
 	// confinata nei limiti spaziali effettivi della faccia (cattura spigoli e bordi di gradini).
-	supX, supY, supZ := s.object.GetEntity().GetSupportPoint(-nX, -nY, -nZ)
+	supX, supY, supZ := s.object.GetEntity().GetStabilizedContactPoint(-nX, -nY, -nZ)
 	supX += s.dX
 	supY += s.dY
 	supZ += s.dZ
@@ -1401,7 +1401,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 
 	var contactX, contactY, contactZ float64
 	if ent := s.object.GetEntity(); ent != nil && !ent.KeepUpright() {
-		supX, supY, supZ := ent.GetSupportPoint(-nX, -nY, -nZ)
+		supX, supY, supZ := ent.GetStabilizedContactPoint(-nX, -nY, -nZ)
 		contactX = math.Max(cMinX, math.Min(cMaxX, supX+s.dX))
 		contactY = math.Max(cMinY, math.Min(cMaxY, supY+s.dY))
 		contactZ = math.Max(cMinZ, math.Min(cMaxZ, supZ+s.dZ))

@@ -350,13 +350,20 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	return reset
 }
 
-// GetSupportPoint returns the extreme contact point of the OBB in direction (dirX, dirY, dirZ).
-// For directions aligned with faces or edges, it returns the center of that face or edge.
+// GetSupportPoint returns the exact support point of the OBB in direction (dirX, dirY, dirZ).
+// For directions strictly orthogonal to a box axis, that axis contributes zero (face/edge center).
 func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float64, float64) {
 	cx, cy, cz := r.GetCenter()
 	hw, hh, hd := r.size.GetCenter()
-	px, py, pz := r.axis.ComputeSupportPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd)
-	return px, py, pz
+	return r.axis.ComputeSupportPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd)
+}
+
+// GetStabilizedContactPoint returns a contact-stabilized extreme point of the OBB in direction (dirX, dirY, dirZ),
+// suppressing near-flat corner jitter for single-point contact generation.
+func (r *BoundingBox) GetStabilizedContactPoint(dirX, dirY, dirZ float64) (float64, float64, float64) {
+	cx, cy, cz := r.GetCenter()
+	hw, hh, hd := r.size.GetCenter()
+	return r.axis.ComputeStabilizedContactPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd)
 }
 
 // IsFaceAligned returns whether any of the 6 box faces is aligned horizontally with world Z.

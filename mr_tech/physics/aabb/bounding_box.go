@@ -13,9 +13,9 @@ type obbVector [3]float64
 
 // BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
-	bottomLeft       Point
-	bottomCenter     Point
-	center           Point
+	bottomLeft       *Point
+	bottomCenter     *Point
+	center           *Point
 	size             Size
 	aabb             *AABB
 	axis             [3]obbVector // Local axes transformed into world space.
@@ -55,14 +55,14 @@ func NewBoundingBox() *BoundingBox {
 // Rebuild updates the reference position and dimensions,
 // then recalculates the derived bounding-box data.
 func (r *BoundingBox) Rebuild(blx, bly, blz, w, h, d float64) {
-	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = blx, bly, blz
+	r.bottomLeft.Set(blx, bly, blz)
 	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
 }
 
 // RebuildCenter updates the bounding box centered at (cx, cy, cz) with dimensions w, h, d, then recalculates the derived bounding-box data.
 func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
-	r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z = cx-w*0.5, cy-h*0.5, cz-d*0.5
+	r.bottomLeft.Set(cx-w*0.5, cy-h*0.5, cz-d*0.5)
 	r.size.w, r.size.h, r.size.d = w, h, d
 	r.rebuild()
 }
@@ -154,12 +154,12 @@ func (r *BoundingBox) rebuild() {
 	hy := r.size.h * 0.5
 	hz := r.size.d * 0.5
 
-	cx := r.bottomLeft.x + hx
-	cy := r.bottomLeft.y + hy
-	cz := r.bottomLeft.z + hz
+	cx := r.bottomLeft.GetX() + hx
+	cy := r.bottomLeft.GetY() + hy
+	cz := r.bottomLeft.GetZ() + hz
 
 	r.center.MoveTo(cx, cy, cz)
-	r.bottomCenter.MoveTo(cx, cy, r.bottomLeft.z)
+	r.bottomCenter.MoveTo(cx, cy, r.bottomLeft.GetZ())
 
 	r.updateAxes()
 
@@ -209,22 +209,22 @@ func (r *BoundingBox) GetSizeCenter() (float64, float64, float64) {
 
 // GetZ returns the reference position's Z coordinate.
 func (r *BoundingBox) GetZ() float64 {
-	return r.bottomLeft.z
+	return r.bottomLeft.GetZ()
 }
 
 // GetBottomLeft returns the reference position.
 func (r *BoundingBox) GetBottomLeft() (float64, float64, float64) {
-	return r.bottomLeft.x, r.bottomLeft.y, r.bottomLeft.z
+	return r.bottomLeft.Get()
 }
 
 // GetBottomCenter returns the bottom-center coordinates.
 func (r *BoundingBox) GetBottomCenter() (float64, float64, float64) {
-	return r.bottomCenter.x, r.bottomCenter.y, r.bottomCenter.z
+	return r.bottomCenter.Get()
 }
 
 // GetCenter returns the geometric center.
 func (r *BoundingBox) GetCenter() (float64, float64, float64) {
-	return r.center.x, r.center.y, r.center.z
+	return r.center.Get()
 }
 
 // SetTiltLimitEnabled sets whether tilt limit constraints are enabled for the bounding box.
@@ -275,6 +275,7 @@ func (r *BoundingBox) syncYawTiltFromRotation() {
 	r.composeRotation()
 }
 
+// Rotate integrates world-space angular velocity over dt, updates the orientation, and reports tilt-limit reset.
 func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	if dt == 0 {
 		return false
@@ -385,39 +386,34 @@ func (r *BoundingBox) AddTo(x, y, z float64) {
 	if x == 0.0 && y == 0.0 && z == 0.0 {
 		return
 	}
-	r.bottomLeft.x += x
-	r.bottomLeft.y += y
-	r.bottomLeft.z += z
+	r.bottomLeft.AddTo(x, y, z)
 	r.rebuild()
 }
 
 // MoveTo changes the reference position.
 func (r *BoundingBox) MoveTo(x, y, z float64) {
-	r.bottomLeft.x = x
-	r.bottomLeft.y = y
-	r.bottomLeft.z = z
+	r.bottomLeft.Set(x, y, z)
 	r.rebuild()
 }
 
 // MoveToZ changes the reference position's Z coordinate.
 func (r *BoundingBox) MoveToZ(z float64) {
-	r.bottomLeft.z = z
+	r.bottomLeft.SetZ(z)
 	r.rebuild()
 }
 
 // MoveTest returns the reference position after applying a translation,
 // without modifying the bounding box.
-func (r *BoundingBox) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
-	return r.bottomLeft.x + vx,
-		r.bottomLeft.y + vy,
-		r.bottomLeft.z + vz
-}
+//func (r *BoundingBox) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
+//	return r.bottomLeft.x + vx, r.bottomLeft.y + vy, r.bottomLeft.z + vz
+//}
 
 // Distance returns the distance between the geometric centers.
 func (r *BoundingBox) Distance(target *BoundingBox) float64 {
-	dx := target.center.x - r.center.x
-	dy := target.center.y - r.center.y
-	dz := target.center.z - r.center.z
+	dx, dy, dz := r.center.Distance(target.center)
+	//dx := //target.center.x - r.center.x
+	//dy := target.center.y - r.center.y
+	//dz := target.center.z - r.center.z
 
 	d := dx*dx + dy*dy + dz*dz
 	if d < 0.0001 {
@@ -431,11 +427,14 @@ var _oobId = [3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
 // Intersect tests this OBB against an axis-aligned box defined by
 // its reference position and dimensions.
 func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
+	cx, cy, cz := r.center.Get()
+	dx := (x + (w * 0.5)) - cx
+	dy := (y + (h * 0.5)) - cy
+	dz := (z + (d * 0.5)) - cz
 	return intersectsOBB(
-		obbVector{r.center.x, r.center.y, r.center.z},
+		dx, dy, dz,
 		r.axis,
 		obbVector{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
-		obbVector{x + w*0.5, y + h*0.5, z + d*0.5},
 		_oobId,
 		obbVector{w * 0.5, h * 0.5, d * 0.5},
 	)
@@ -443,21 +442,18 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 
 // IntersectBB tests this OBB against another OBB.
 func (r *BoundingBox) IntersectBB(other *BoundingBox) bool {
+	dx, dy, dz := r.center.Distance(other.center)
 	return intersectsOBB(
-		obbVector{r.center.x, r.center.y, r.center.z},
+		dx, dy, dz,
 		r.axis,
-		obbVector{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
-		obbVector{other.center.x, other.center.y, other.center.z},
+		[3]float64{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
 		other.axis,
-		obbVector{other.size.w * 0.5, other.size.h * 0.5, other.size.d * 0.5},
+		[3]float64{other.size.w * 0.5, other.size.h * 0.5, other.size.d * 0.5},
 	)
 }
 
 // intersectsOBB performs the 15-axis Separating Axis Theorem test. It uses fixed-size arrays and does not create slices or heap objects.
-func intersectsOBB(cA obbVector, a [3]obbVector, hA obbVector, cB obbVector, b [3]obbVector, hB obbVector) bool {
-	dx := cB[0] - cA[0]
-	dy := cB[1] - cA[1]
-	dz := cB[2] - cA[2]
+func intersectsOBB(dx, dy, dz float64, a [3]obbVector, hA [3]float64, b [3]obbVector, hB [3]float64) bool {
 	var R [3][3]float64
 	var AbsR [3][3]float64
 	// Rotation matrix between the two box coordinate systems.

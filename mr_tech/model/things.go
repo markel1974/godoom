@@ -471,6 +471,14 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		}
 	}
 
+	// Clamp any dynamically pushed body back outside newly contacted solid world walls, floors, and ceilings.
+	for x := 0; x < runningLen; x++ {
+		cage := th.running[x].GetCage().(*collisions.Cage)
+		if px, py, pz := cage.GetPushOffset(); px != 0.0 || py != 0.0 || pz != 0.0 {
+			th.volumes.ClampStaticCage(cage)
+		}
+	}
+
 	// COMMIT SPAZIALE E INTEGRAZIONE
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]

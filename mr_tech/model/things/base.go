@@ -342,29 +342,34 @@ func (t *Base) StageResolvePosition() {
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
-		switch slot.GetImpactMode() {
-		case collisions.ImpactElastic:
-			nX, nY, nZ := slot.GetNormal()
-			rCage := slot.GetRCage()
-			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
-			rPushX, rPushY, rPushZ := rCage.GetPushOffset()
-			alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
-			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ, sPushZ)
-			if pen > 0 {
-				if !slot.Penetrable() {
-					entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
-				} else {
-					entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
-				}
-			}
-		case collisions.ImpactInelastic:
-			nX, nY, nZ := slot.GetNormal()
-			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
-			alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ
-			pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ, sPushZ)
-			if pen > 0 {
-				entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
-			}
+		if slot.GetImpactMode() != collisions.ImpactElastic {
+			continue
+		}
+		nX, nY, nZ := slot.GetNormal()
+		rCage := slot.GetRCage()
+		sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
+		rPushX, rPushY, rPushZ := rCage.GetPushOffset()
+		alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
+		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ, sPushZ)
+		if pen > 0 {
+			otherMovable := slot.Penetrable()
+			selfMovable := t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rCage.GetEntity().GetId())
+			entity.ResolveElasticPenetrationConstrained(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen, selfMovable, otherMovable)
+		}
+	}
+
+	// Resolve immutable static walls, floors, and ceilings after elastic pushes to prevent sinking into world geometry.
+	for i := 0; i < slotsLen; i++ {
+		slot := t.cage.GetSlot(i)
+		if slot.GetImpactMode() != collisions.ImpactInelastic {
+			continue
+		}
+		nX, nY, nZ := slot.GetNormal()
+		sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
+		alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ
+		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ, sPushZ)
+		if pen > 0 {
+			entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 		}
 	}
 }

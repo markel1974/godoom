@@ -616,6 +616,86 @@ func (s *Cage) HasEntryFor(t BucketType, entityId uint64) bool {
 	return s.buckets[t].HasEntryFor(entityId)
 }
 
+// IsBucketPenetrable reports whether pushing along bucket b's blocking direction is free of inelastic/pinned obstacles.
+func (s *Cage) IsBucketPenetrable(b BucketType, from uint64) bool {
+	return s.buckets[b].Penetrable(from)
+}
+
+// BeginStaticClamp prepares a temporary swept broadphase cage from frame start (cX,cY,cZ) to the current entity center,
+// returning the saved displacement and target values for restoration in EndStaticClamp.
+func (s *Cage) BeginStaticClamp() (origDX, origDY, origDZ, origTX, origTY, origTZ float64, lAABB *aabb.AABB) {
+	origDX, origDY, origDZ = s.dX, s.dY, s.dZ
+	origTX, origTY, origTZ = s.tX, s.tY, s.tZ
+	ent := s.object.GetEntity()
+	curX, curY, curZ := ent.GetCenter()
+	s.tX, s.tY, s.tZ = curX, curY, curZ
+	s.dX, s.dY, s.dZ = curX-s.cX, curY-s.cY, curZ-s.cZ
+	sx, sy, sz := ent.GetSweptHalfExtents()
+	if sx < s.eRadX {
+		sx = s.eRadX
+	}
+	if sy < s.eRadY {
+		sy = s.eRadY
+	}
+	if sz < s.eRadZ {
+		sz = s.eRadZ
+	}
+	minX := s.cX - sx + math.Min(0.0, s.dX)
+	maxX := s.cX + sx + math.Max(0.0, s.dX)
+	minY := s.cY - sy + math.Min(0.0, s.dY)
+	maxY := s.cY + sy + math.Max(0.0, s.dY)
+	minZ := s.cZ - sz + math.Min(0.0, s.dZ)
+	maxZ := s.cZ + sz + math.Max(0.0, s.dZ)
+	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
+	return origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
+}
+
+// ClampStaticFace tests one static face against the post-push entity sweep [c -> t] and immediately projects out
+// any wall, floor, or ceiling penetration without modifying bucket warm-start buffers.
+func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
+	if !rFace.IsSolid() {
+		return false
+	}
+	b, dist, pen, nX, nY, nZ, _, _, _, minOverlap, rMaxZ := s.computeFace(lAABB, rFace, 0, 0, 0)
+	if b == BucketFloor && dist <= floorGroundTolerance {
+		s.hasFloor = true
+		s.object.GetEntity().SetOnGround(true)
+	}
+	if pen <= 0.0 || pen > minOverlap+satFilterEpsilon {
+		return false
+	}
+	if b.IsWall() {
+		baseZ := s.GetBaseZ()
+		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
+		if rMaxZ <= minBaseZ+satFilterEpsilon {
+			return false
+		}
+		if s.maxStep > 0 && rMaxZ <= baseZ+s.maxStep {
+			return false
+		}
+	}
+	ent := s.object.GetEntity()
+	p, ok := ent.Cinematic.ResolveInelasticPenetration(nZ, pen)
+	if !ok || p <= 0.0 {
+		return false
+	}
+	ent.AddTo(nX*p, nY*p, nZ*p)
+	ent.ClampNormalVelocity(nX, nY, nZ)
+	s.tX += nX * p
+	s.tY += nY * p
+	s.tZ += nZ * p
+	s.dX = s.tX - s.cX
+	s.dY = s.tY - s.cY
+	s.dZ = s.tZ - s.cZ
+	return true
+}
+
+// EndStaticClamp restores the pre-resolve cage displacement and target fields after post-push static clamping.
+func (s *Cage) EndStaticClamp(origDX, origDY, origDZ, origTX, origTY, origTZ float64) {
+	s.dX, s.dY, s.dZ = origDX, origDY, origDZ
+	s.tX, s.tY, s.tZ = origTX, origTY, origTZ
+}
+
 // effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
 // using exact OBB axis projection for free 6-DoF bodies and ellipsoid extents otherwise.
 func (s *Cage) effectiveRadius(nX, nY, nZ float64) float64 {

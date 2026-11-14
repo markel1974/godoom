@@ -20,6 +20,9 @@ const (
 
 	defaultPenetrationSlop = 0.02
 
+	// Tight skin slop for immutable static world walls, floors, and ceilings.
+	staticPenetrationSlop = 0.001
+
 	// Positional Gauss-Seidel relaxation factor applied per iteration during StageResolvePosition.
 	posCorrectionFactor = 0.75
 
@@ -543,6 +546,16 @@ func (e *Cinematic) SubV(vx, vy, vz float64) {
 	e.vx -= vx
 	e.vy -= vy
 	e.vz -= vz
+}
+
+// ClampNormalVelocity removes any velocity component directed opposite to outward surface normal (nx, ny, nz).
+func (e *Cinematic) ClampNormalVelocity(nx, ny, nz float64) {
+	vn := e.vx*nx + e.vy*ny + e.vz*nz
+	if vn < 0.0 {
+		e.vx -= vn * nx
+		e.vy -= vn * ny
+		e.vz -= vn * nz
+	}
 }
 
 // GetDt retrieves the current delta time (dt) value for the Cinematic instance.
@@ -1124,17 +1137,24 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 // ResolveElasticPenetration computes positional correction for overlapping cinematic bodies along a collision normal.
 // It returns each body's correction amount and whether a correction should be applied.
 func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool, nx, ny, nz float64, penetration float64) (float64, float64, bool) {
+	return e.ResolveElasticPenetrationConstrained(other, otherFloor, nx, ny, nz, penetration, true, true)
+}
+
+// ResolveElasticPenetrationConstrained splits positional correction between e (along +n) and other (along -n),
+// treating pinned/blocked directions (selfMovable == false or otherMovable == false) as having infinite mass.
+func (e *Cinematic) ResolveElasticPenetrationConstrained(other *Cinematic, otherFloor bool, nx, ny, nz float64, penetration float64, selfMovable, otherMovable bool) (float64, float64, bool) {
 	depth := penetration - defaultPenetrationSlop
 	if depth <= 0.0 {
 		return 0, 0, false
 	}
 	invMass1 := e.GetInvMass()
 	invMass2 := other.GetInvMass()
-	// Se il corpo di appoggio poggia a terra lungo la verticale, non può scendere verso il basso (massa infinita -> invMass = 0)
-	if (otherFloor || other.IsOnGround()) && nz > floorNormalThreshold {
-		invMass2 = 0.0
-	} else if e.IsOnGround() && nz < -floorNormalThreshold {
+	// A body blocked along its push direction or resting on a ground support cannot be pushed into the obstacle.
+	if !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
 		invMass1 = 0.0
+	}
+	if !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
+		invMass2 = 0.0
 	}
 	invMassSum := invMass1 + invMass2
 	if invMassSum <= 0.0 {
@@ -1157,9 +1177,9 @@ func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool,
 	return p1, p2, true
 }
 
-// ResolveInelasticPenetration computes positional correction for an inelastic collision with static geometry.
+// ResolveInelasticPenetration computes full rigid positional projection out of static walls, floors, and ceilings.
 func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float64, bool) {
-	pen -= defaultPenetrationSlop
+	pen -= staticPenetrationSlop
 	if pen <= 0.0 {
 		return 0, false
 	}
@@ -1168,7 +1188,7 @@ func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float6
 			e.vz = 0.0
 		}
 	}
-	return pen * posCorrectionFactor, true
+	return pen, true
 }
 
 // rotationalMass returns the inverse-inertia response for r x d and its rotational effective mass contribution.

@@ -95,6 +95,29 @@ func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 	})
 }
 
+// ClampStaticCage projects any entity pushed during positional resolution strictly outside solid world faces.
+func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
+	const maxPasses = 3
+	for pass := 0; pass < maxPasses; pass++ {
+		moved := false
+		origDX, origDY, origDZ, origTX, origTY, origTZ, lAABB := cage.BeginStaticClamp()
+		s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
+			vol := object.(*volumes.Volume)
+			vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
+				if cage.ClampStaticFace(lAABB, otherEnt.(*volumes.Face)) {
+					moved = true
+				}
+				return false
+			})
+			return false
+		})
+		cage.EndStaticClamp(origDX, origDY, origDZ, origTX, origTY, origTZ)
+		if !moved {
+			break
+		}
+	}
+}
+
 // QueryFrustum performs a spatial query using a frustum, invoking the callback for each intersected object in the tree.
 func (s *Volumes) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	s.tree.QueryFrustum(frustum, callback)

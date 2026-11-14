@@ -201,12 +201,22 @@ func (e *Entity) ResolveImpactAccumulated(e2 *Entity, nx, ny, nz float64, px, py
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.
 // It honors penetration slop and avoids pushing grounded entities downward.
 func (e *Entity) ResolveElasticPenetration(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64) {
-	p1, p2, ok := e.Cinematic.ResolveElasticPenetration(other.Cinematic, otherFloor, nx, ny, nz, penetration)
+	e.ResolveElasticPenetrationConstrained(other, otherFloor, nx, ny, nz, penetration, true, true)
+}
+
+// ResolveElasticPenetrationConstrained separates overlapping entities while preventing either body from being pushed
+// along a direction blocked by static obstacles or pinned neighbors.
+func (e *Entity) ResolveElasticPenetrationConstrained(other *Entity, otherFloor bool, nx, ny, nz float64, penetration float64, selfMovable, otherMovable bool) {
+	p1, p2, ok := e.Cinematic.ResolveElasticPenetrationConstrained(other.Cinematic, otherFloor, nx, ny, nz, penetration, selfMovable, otherMovable)
 	if !ok {
 		return
 	}
-	e.AddTo(nx*p1, ny*p1, nz*p1)
-	other.AddTo(-nx*p2, -ny*p2, -nz*p2)
+	if p1 > 0.0 {
+		e.AddTo(nx*p1, ny*p1, nz*p1)
+	}
+	if p2 > 0.0 {
+		other.AddTo(-nx*p2, -ny*p2, -nz*p2)
+	}
 }
 
 // ResolveInelasticPenetration moves the entity along the collision normal to clear an inelastic overlap.

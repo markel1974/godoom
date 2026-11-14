@@ -2,7 +2,7 @@ package aabb
 
 import "math"
 
-// Sat holds reusable result state and scratch buffers for a 15-axis OBB Separating Axis Test.
+// Sat stores reusable scratch state and results for a separating axis test between oriented bounding boxes.
 type Sat struct {
 	hit         bool
 	minPen      float64
@@ -18,19 +18,20 @@ type Sat struct {
 	hB          [3]float64
 }
 
-// GetNormal returns the winning contact normal when hit is true, or the largest separation gap normal otherwise.
+// GetNormal returns the normal vector from the last SAT computation.
 func (res *Sat) GetNormal() (float64, float64, float64) {
 	return res.nx, res.ny, res.nz
 }
 
-// GetContact returns the winning SAT state: overlap flag, winning axis index (0..5 face, 6..14 edge-edge),
-// contact penetration depth, separation gap, and unit normal pointing from B toward A.
+// GetContact returns the latest SAT contact result: hit, axis index, penetration, maximum gap, and normal.
+// If hit is false, penetration is zero and the normal points along the largest separating gap.
 func (res *Sat) GetContact() (bool, int, float64, float64, float64, float64, float64) {
 	return res.hit, res.contactAxis, res.contactPen, res.maxGap, res.nx, res.ny, res.nz
 }
 
-// Compute runs a separating axis test between two oriented boxes using center delta, axes, and half-extents.
-// It reuses internal scratch buffers and writes hit state, penetration depth, contact normal, axis index, and gap.
+// Compute runs a separating axis test between two oriented boxes and stores the contact or separation result.
+// dx, dy, and dz are the center offset from the first box to the second.
+// a and b provide box axes; scx, scy, scz and ocx, ocy, ocz provide their half-extents.
 func (res *Sat) Compute(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) {
 	const epsilon = 1e-12
 	const crossAxisLenEps = 1e-6
@@ -154,6 +155,7 @@ func (res *Sat) Compute(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *A
 	}
 }
 
+// recordGap records gap and its normal when it exceeds the current maximum separating gap.
 func (res *Sat) recordGap(gap, nx, ny, nz float64) {
 	if gap > res.maxGap {
 		res.maxGap = gap
@@ -161,6 +163,8 @@ func (res *Sat) recordGap(gap, nx, ny, nz float64) {
 	}
 }
 
+// worldCrossUnitNormal returns the unit normal of the world-space cross axis from rows a[i] and b[j].
+// It divides by axisLen and flips the result when proj is positive to keep the normal consistently oriented.
 func worldCrossUnitNormal(a *Axis, i int, b *Axis, j int, axisLen, proj float64) (float64, float64, float64) {
 	ax, ay, az := a.data[i][0], a.data[i][1], a.data[i][2]
 	bx, by, bz := b.data[j][0], b.data[j][1], b.data[j][2]

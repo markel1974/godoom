@@ -706,6 +706,107 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	e.ResolveImpactAccumulated(e2, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, nil, nil, nil, nil, nil, nil)
 }
 
+// WarmStartImpact pre-applies persisted normal and tangential impulses before PGS iterations begin.
+func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, accNormal, accTx, accTy, accTz *float64) {
+	if accNormal == nil || *accNormal <= 0.0 {
+		return
+	}
+	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	if nLen <= 0.0 {
+		*accNormal = 0.0
+		if accTx != nil && accTy != nil && accTz != nil {
+			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
+		}
+		return
+	}
+	nx /= nLen
+	ny /= nLen
+	nz /= nLen
+
+	invMass1, invMass2 := effectiveContactInvMasses(e, e2, nz)
+	if invMass1 == 0.0 && invMass2 == 0.0 {
+		return
+	}
+
+	r1x, r1y, r1z := px-cx1, py-cy1, pz-cz1
+	r2x, r2y, r2z := px-cx2, py-cy2, pz-cz2
+
+	jn := *accNormal
+	jx, jy, jz := jn*nx, jn*ny, jn*nz
+	e.vx += jx * invMass1
+	e.vy += jy * invMass1
+	e.vz += jz * invMass1
+	e2.vx -= jx * invMass2
+	e2.vy -= jy * invMass2
+	e2.vz -= jz * invMass2
+
+	rotScale1N, _, _ := e.normalRotScale(nz, 0.0)
+	rotScale2N, _, _ := e2.normalRotScale(-nz, 0.0)
+	if invMass1 > 0.0 {
+		u1nx, u1ny, u1nz, _ := e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
+		e.addClampedAngular(jn*rotScale1N, u1nx, u1ny, u1nz)
+	}
+	if invMass2 > 0.0 {
+		u2nx, u2ny, u2nz, _ := e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
+		e2.addClampedAngular(-jn*rotScale2N, u2nx, u2ny, u2nz)
+	}
+
+	if accTx != nil && accTy != nil && accTz != nil {
+		wtx, wty, wtz := *accTx, *accTy, *accTz
+		tDotN := wtx*nx + wty*ny + wtz*nz
+		wtx -= tDotN * nx
+		wty -= tDotN * ny
+		wtz -= tDotN * nz
+		maxTotalFriction := jn * e.material.CombineFriction(e2.material)
+		if tMag := math.Sqrt(wtx*wtx + wty*wty + wtz*wtz); tMag > maxTotalFriction && tMag > 0.0 {
+			scale := maxTotalFriction / tMag
+			wtx *= scale
+			wty *= scale
+			wtz *= scale
+		}
+		*accTx, *accTy, *accTz = wtx, wty, wtz
+		fRotBase1 := e.frictionRotBaseScale(nz)
+		fRotBase2 := e2.frictionRotBaseScale(-nz)
+		applyTangentImpulse(e, e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, wtx, wty, wtz, fRotBase1, fRotBase2)
+	}
+}
+
+func effectiveContactInvMasses(e, e2 *Cinematic, nz float64) (float64, float64) {
+	invMass1 := e.invMass
+	invMass2 := e2.invMass
+	if e2.onGround && nz > floorNormalThreshold {
+		invMass2 = 0.0
+	} else if e.onGround && nz < -floorNormalThreshold {
+		invMass1 = 0.0
+	}
+	return invMass1, invMass2
+}
+
+func applyTangentImpulse(e, e2 *Cinematic, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2 float64) {
+	dtMag := math.Sqrt(jtx*jtx + jty*jty + jtz*jtz)
+	if dtMag <= gyroEnergyEpsilon {
+		return
+	}
+	fx := jtx / dtMag
+	fy := jty / dtMag
+	fz := jtz / dtMag
+
+	e.vx += jtx * invMass1
+	e.vy += jty * invMass1
+	e.vz += jtz * invMass1
+	e2.vx -= jtx * invMass2
+	e2.vy -= jty * invMass2
+	e2.vz -= jtz * invMass2
+	if invMass1 > 0.0 {
+		u1fx, u1fy, u1fz, _ := e.rotationalMass(r1x, r1y, r1z, fx, fy, fz)
+		e.applyFrictionAngular(dtMag, fRotBase1, u1fx, u1fy, u1fz)
+	}
+	if invMass2 > 0.0 {
+		u2fx, u2fy, u2fz, _ := e2.rotationalMass(r2x, r2y, r2z, fx, fy, fz)
+		e2.applyFrictionAngular(-dtMag, fRotBase2, u2fx, u2fy, u2fz)
+	}
+}
+
 // ResolveImpactAccumulated resolves a 6-DoF rigid-body collision between two Cinematic objects
 // using optional accumulated normal/tangential impulses and target restitution velocity across PGS iterations.
 func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, accNormal, accTx, accTy, accTz, restTarget *float64, hasRestTarget *bool) {
@@ -743,18 +844,13 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	vRelDotN := vrx*nx + vry*ny + vrz*nz
 
 	firstIter := hasRestTarget == nil || !*hasRestTarget
-	// If bodies are separating on initial contact, no collision to resolve.
-	if firstIter && vRelDotN > 0.0 {
+	warmStarted := accNormal != nil && *accNormal > 0.0
+	// If bodies are separating on a fresh non-warm-started contact, no collision to resolve.
+	if firstIter && !warmStarted && vRelDotN > 0.0 {
 		return
 	}
 
-	invMass1 := e.invMass
-	invMass2 := e2.invMass
-	if e2.onGround && nz > floorNormalThreshold {
-		invMass2 = 0.0
-	} else if e.onGround && nz < -floorNormalThreshold {
-		invMass1 = 0.0
-	}
+	invMass1, invMass2 := effectiveContactInvMasses(e, e2, nz)
 
 	var u1nx, u1ny, u1nz, rotMass1N float64
 	if invMass1 > 0.0 {
@@ -769,20 +865,26 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	var targetVelN float64
 	var actualRestitution float64
 	if firstIter {
-		// Restitution combining with threshold (micro-bounce slop), evaluated once per contact.
-		actualRestitution = e.material.CombineRestitution(e2.material)
-		if math.Abs(actualRestitution) > restitutionEpsilon {
-			restitutionSlop := restitutionSlopGravityFactor * math.Max(e.gForce, e2.gForce) * e.dt
-			if restitutionSlop < minRestitutionSlop {
-				restitutionSlop = minRestitutionSlop
-			}
-			if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > groundedImpactNormalThreshold) || (e2.onGround && nz < -groundedImpactNormalThreshold) {
+		if warmStarted {
+			// Persistent contact already carrying load: keep zero restitution bounce.
+			actualRestitution = 0.0
+			targetVelN = 0.0
+		} else {
+			// Restitution combining with threshold (micro-bounce slop), evaluated once per contact.
+			actualRestitution = e.material.CombineRestitution(e2.material)
+			if math.Abs(actualRestitution) > restitutionEpsilon {
+				restitutionSlop := restitutionSlopGravityFactor * math.Max(e.gForce, e2.gForce) * e.dt
+				if restitutionSlop < minRestitutionSlop {
+					restitutionSlop = minRestitutionSlop
+				}
+				if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > groundedImpactNormalThreshold) || (e2.onGround && nz < -groundedImpactNormalThreshold) {
+					actualRestitution = 0.0
+				}
+			} else {
 				actualRestitution = 0.0
 			}
-		} else {
-			actualRestitution = 0.0
+			targetVelN = -actualRestitution * vRelDotN
 		}
-		targetVelN = -actualRestitution * vRelDotN
 		if hasRestTarget != nil && restTarget != nil {
 			*restTarget = targetVelN
 			*hasRestTarget = true
@@ -800,14 +902,23 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		return
 	}
 
-	// Unilateral normal impulse: never apply tensile pull across single-point contacts,
-	// while accumulating total support impulse so friction stays active across PGS iterations.
-	j := math.Max(0.0, (targetVelN-vRelDotN)/effMassN)
+	// Unilateral accumulated normal impulse clamping (accNormal >= 0):
+	// allows trimming back excess warm-start/previous-iteration load without pulling.
+	rawJ := (targetVelN - vRelDotN) / effMassN
+	var j float64
 	if accNormal != nil {
-		*accNormal += j
+		oldAcc := *accNormal
+		candAcc := oldAcc + rawJ
+		if candAcc < 0.0 {
+			candAcc = 0.0
+		}
+		*accNormal = candAcc
+		j = candAcc - oldAcc
+	} else {
+		j = math.Max(0.0, rawJ)
 	}
-	if j > 0.0 {
-		// Apply normal impulse to linear and angular velocities.
+	if j != 0.0 {
+		// Apply normal impulse delta to linear and angular velocities.
 		jx := j * nx
 		jy := j * ny
 		jz := j * nz
@@ -825,7 +936,8 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 			e2.applyNormalAngular(-j, rotScale2N, nearFlat2, slapKeep2, u2nx, u2ny, u2nz, r2x, r2y, -nz)
 		}
 	}
-	if j <= 0.0 && (accNormal == nil || *accNormal <= 0.0) {
+	hasAccT := accTx != nil && (*accTx != 0.0 || *accTy != 0.0 || *accTz != 0.0)
+	if j <= 0.0 && (accNormal == nil || (*accNormal <= 0.0 && !hasAccT)) {
 		return
 	}
 
@@ -850,6 +962,14 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 
 	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
 	if tLen <= tangentLenEpsilon {
+		// If normal impulse clamped down to 0, still unwind any lingering warm-started tangential impulse.
+		if accNormal != nil && *accNormal <= 0.0 && hasAccT {
+			jtx, jty, jtz := -*accTx, -*accTy, -*accTz
+			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
+			fRotBase1 := e.frictionRotBaseScale(nz)
+			fRotBase2 := e2.frictionRotBaseScale(-nz)
+			applyTangentImpulse(e, e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
+		}
 		return
 	}
 
@@ -916,29 +1036,7 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		jtz = jt * tz
 	}
 
-	dtMag := math.Sqrt(jtx*jtx + jty*jty + jtz*jtz)
-	if dtMag <= gyroEnergyEpsilon {
-		return
-	}
-	fx := jtx / dtMag
-	fy := jty / dtMag
-	fz := jtz / dtMag
-
-	// Apply friction impulse to linear and angular velocities.
-	e.vx += jtx * invMass1
-	e.vy += jty * invMass1
-	e.vz += jtz * invMass1
-	e2.vx -= jtx * invMass2
-	e2.vy -= jty * invMass2
-	e2.vz -= jtz * invMass2
-	if invMass1 > 0.0 {
-		u1fx, u1fy, u1fz, _ := e.rotationalMass(r1x, r1y, r1z, fx, fy, fz)
-		e.applyFrictionAngular(dtMag, fRotBase1, u1fx, u1fy, u1fz)
-	}
-	if invMass2 > 0.0 {
-		u2fx, u2fy, u2fz, _ := e2.rotationalMass(r2x, r2y, r2z, fx, fy, fz)
-		e2.applyFrictionAngular(-dtMag, fRotBase2, u2fx, u2fy, u2fz)
-	}
+	applyTangentImpulse(e, e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
 }
 
 // ResolveElasticPenetration computes positional correction for overlapping cinematic bodies along a collision normal.
@@ -1024,6 +1122,12 @@ func (e *Cinematic) normalRotScale(floorNz, restitution float64) (float64, bool,
 	return 1.0, true, slapKeep
 }
 
+func (e *Cinematic) addClampedAngular(scale, ux, uy, uz float64) {
+	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+scale*ux))
+	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+scale*uy))
+	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+scale*uz))
+}
+
 // applyNormalAngular applies a normal collision impulse to angular velocity, clamping tilt and yaw spin.
 // It also dampens near-flat floor slap rebound and breaks unstable tilted ridge equilibrium once per frame.
 func (e *Cinematic) applyNormalAngular(j, rotScaleN float64, nearFlatFloor bool, slapKeep, unx, uny, unz, rx, ry, floorNz float64) {
@@ -1036,7 +1140,7 @@ func (e *Cinematic) applyNormalAngular(j, rotScaleN float64, nearFlatFloor bool,
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, preWy+dWy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, preWz+dWz))
 
-	if nearFlatFloor {
+	if j > 0.0 && nearFlatFloor {
 		// Face-slap absorption: when a rotating free body lands near-flat against a floor without bounce,
 		// opposing corners absorb seesaw rebound spin and vertical kick from single-point corner contact.
 		if (preWx*dWx + preWy*dWy) < 0.0 {
@@ -1050,7 +1154,7 @@ func (e *Cinematic) applyNormalAngular(j, rotScaleN float64, nearFlatFloor bool,
 			e.wz *= slapKeep
 		}
 	}
-	if !e.ridgeBreakApplied && !e.keepUpright && floorNz > floorNormalThreshold {
+	if j > 0.0 && !e.ridgeBreakApplied && !e.keepUpright && floorNz > floorNormalThreshold {
 		// Unstable ridge equilibrium breaking when a tilted free body balances directly above its contact.
 		if e.onGround && e.isTilted && e.faceAlignCos < ridgeMaxAlignCos && (rx*rx+ry*ry) < ridgeLeverSqMax && (e.wx*e.wx+e.wy*e.wy) < ridgeTiltSqMax {
 			e.wy += ridgeBreakKick

@@ -73,12 +73,34 @@ const BucketSize = BucketFloor + 1
 // FacesPerBucket specifies the maximum number of manifold/face entries stored per bucket.
 const FacesPerBucket = 16
 
+// warmStartFactor controls the fraction of previous-frame impulses carried over to persistent contacts.
+const warmStartFactor = 0.80
+
+// warmSlot snapshots a previous-frame persistent contact for zero-allocation warm starting.
+type warmSlot struct {
+	rEntityId uint64
+	rFace     IFace
+	nX        float64
+	nY        float64
+	nZ        float64
+	p0X       float64
+	p0Y       float64
+	p0Z       float64
+	accNormal float64
+	accTx     float64
+	accTy     float64
+	accTz     float64
+	consumed  bool
+}
+
 // Bucket holds collision data for a specific bucket, including spare and active cage entries and counters.
 type Bucket struct {
 	bucket           BucketType
 	spare            [FacesPerBucket]*Entry
 	container        [FacesPerBucket]*Entry
 	containerCounter int
+	prev             [FacesPerBucket]warmSlot
+	prevCount        int
 }
 
 // NewBucket creates a new Bucket for a given BucketType, initializing its spare and container arrays.
@@ -94,8 +116,30 @@ func NewBucket(bucket BucketType) *Bucket {
 	return b
 }
 
-// Rebuild resets the containerCounter to 0, clearing the current collision state for the bucket.
+// Rebuild snapshots active accumulated impulses from the previous frame and resets containerCounter to 0.
 func (b *Bucket) Rebuild() {
+	prevIdx := 0
+	for i := 0; i < b.containerCounter; i++ {
+		entry := b.container[i]
+		if entry.accNormal <= 0.0 {
+			continue
+		}
+		w := &b.prev[prevIdx]
+		if entry.rCage != nil {
+			w.rEntityId = entry.rCage.object.GetEntity().GetId()
+			w.rFace = nil
+		} else {
+			w.rEntityId = 0
+			w.rFace = entry.rFace
+		}
+		w.nX, w.nY, w.nZ = entry.nX, entry.nY, entry.nZ
+		w.p0X, w.p0Y, w.p0Z = entry.p0X, entry.p0Y, entry.p0Z
+		w.accNormal = entry.accNormal
+		w.accTx, w.accTy, w.accTz = entry.accTx, entry.accTy, entry.accTz
+		w.consumed = false
+		prevIdx++
+	}
+	b.prevCount = prevIdx
 	b.containerCounter = 0
 }
 
@@ -157,7 +201,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 				dz := p0z - existing.p0Z
 				if dx*dx+dy*dy+dz*dz < planeEpsilon*planeEpsilon {
 					if penetration > existing.penetration {
-						existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+						b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 					}
 					return nil
 				}
@@ -175,14 +219,14 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 				if planeDistance < planeEpsilon {
 					// Un vincolo anelastico (muro solido) ha sempre priorità su uno scalino (ImpactStep) coplanare
 					if existing.iMode == ImpactStep && iMode == ImpactInelastic {
-						existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+						b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 						return nil
 					}
 					if existing.iMode == ImpactInelastic && iMode == ImpactStep {
 						return nil
 					}
 					if penetration > existing.penetration || (iMode == ImpactStep && math.Abs(penetration-existing.penetration) <= planeEpsilon && maxZ > existing.maxZ) {
-						existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+						b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 					}
 					return nil
 				}
@@ -194,6 +238,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	if b.containerCounter < FacesPerBucket {
 		target := b.spare[b.containerCounter]
 		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.matchWarmStart(target)
 		b.container[b.containerCounter] = target
 		b.containerCounter++
 		return target
@@ -214,7 +259,68 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	}
 	inPrio := iMode.Priority()
 	if inPrio > minPrio || (inPrio == minPrio && penetration > minPen) {
-		b.container[minIdx].Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		target := b.container[minIdx]
+		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.matchWarmStart(target)
 	}
 	return nil
+}
+
+func (b *Bucket) rebuildKeepingWarm(entry *Entry, bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {
+	wN, wTx, wTy, wTz := entry.GetWarmImpulse()
+	entry.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+	if iMode == ImpactStep {
+		return
+	}
+	if wN > 0.0 {
+		entry.SetWarmImpulse(wN, wTx, wTy, wTz)
+		return
+	}
+	b.matchWarmStart(entry)
+}
+
+func (b *Bucket) matchWarmStart(entry *Entry) {
+	if b.prevCount == 0 || entry.iMode == ImpactStep {
+		return
+	}
+	var targetId uint64
+	if entry.rCage != nil {
+		targetId = entry.rCage.object.GetEntity().GetId()
+	}
+
+	lCage := entry.lCage
+	warmRadius := math.Max(0.5, math.Min(lCage.eRadX, math.Min(lCage.eRadY, lCage.eRadZ))*0.25)
+	bestDistSq := warmRadius * warmRadius
+	bestIdx := -1
+
+	for i := 0; i < b.prevCount; i++ {
+		w := &b.prev[i]
+		if w.consumed || w.rEntityId != targetId {
+			continue
+		}
+		nDot := entry.nX*w.nX + entry.nY*w.nY + entry.nZ*w.nZ
+		if nDot <= 0.90 {
+			continue
+		}
+		if targetId == 0 && w.rFace != entry.rFace && nDot <= 0.99 {
+			continue
+		}
+		dx := entry.p0X - w.p0X
+		dy := entry.p0Y - w.p0Y
+		dz := entry.p0Z - w.p0Z
+		if distSq := dx*dx + dy*dy + dz*dz; distSq < bestDistSq {
+			bestDistSq = distSq
+			bestIdx = i
+		}
+	}
+	if bestIdx >= 0 {
+		w := &b.prev[bestIdx]
+		w.consumed = true
+		entry.SetWarmImpulse(
+			w.accNormal*warmStartFactor,
+			w.accTx*warmStartFactor,
+			w.accTy*warmStartFactor,
+			w.accTz*warmStartFactor,
+		)
+	}
 }

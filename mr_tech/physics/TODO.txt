@@ -1,8 +1,3 @@
-1) Contact Manifold multi-punto (2–4 punti) e normale OBB non snappata in computeFaceMeshVsMesh
-
-Oggi Bucket.Add riduce il contatto dinamico a un solo punto per bucket e in computeFaceMeshVsMesh la normale ruotata dell'OBB remoto viene ancora snappata sugli assi cardinali (±X/±Y/±Z).
-È proprio questo che ti obbliga ad avere stabilizzazioni euristiche in Cinematic (normalRotScale, face-slap absorption, frictionRotBaseScale, ridgeBreakKick): con un clipping faccia-faccia a 2–4 vertici e la normale reale dell'asse MTV SAT, l'equilibrio di pile e appoggi su spigolo diventa intrinsecamente stabile senza trucchi empirici.
-
 2) Warm Starting sugli impulsi persistenti
 
 In Entry.Rebuild accNormal, accTx, accTy, accTz ripartono da 0 a ogni frame. Trasferire una frazione degli impulsi accumulati dal frame precedente ai contatti persistenti aumenterebbe molto la rigidità di pile alte a parità di SolverIterations.

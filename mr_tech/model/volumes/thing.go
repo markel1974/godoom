@@ -28,6 +28,8 @@ type IThing interface {
 
 	StagePrepare(session uint64)
 
+	StageWarmStart()
+
 	StageResolve()
 
 	StageApply()

@@ -344,6 +344,11 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		t2.GetEntity().SetOnGround(cage.HasFloor())
 	}
 
+	// Pre-apply warm-started impulses on persistent contacts before iterative PGS sweeps.
+	for x := 0; x < runningLen; x++ {
+		th.running[x].StageWarmStart()
+	}
+
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)
 	//th.event.wg.Wait()
 	for si := 0; si < th.solverIterations; si++ {

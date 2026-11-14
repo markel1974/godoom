@@ -69,6 +69,20 @@ func (s *Entry) GetSolverState() (*float64, *float64, *float64, *float64, *float
 	return &s.accNormal, &s.accTx, &s.accTy, &s.accTz, &s.restTarget, &s.hasRestTarget
 }
 
+// GetWarmImpulse returns the stored accumulated normal and tangential impulses for this entry.
+func (s *Entry) GetWarmImpulse() (float64, float64, float64, float64) {
+	return s.accNormal, s.accTx, s.accTy, s.accTz
+}
+
+// SetWarmImpulse seeds the entry's accumulated normal impulse and re-projects tangential impulse onto the contact plane.
+func (s *Entry) SetWarmImpulse(accNormal, accTx, accTy, accTz float64) {
+	tDotN := accTx*s.nX + accTy*s.nY + accTz*s.nZ
+	s.accNormal = accNormal
+	s.accTx = accTx - tDotN*s.nX
+	s.accTy = accTy - tDotN*s.nY
+	s.accTz = accTz - tDotN*s.nZ
+}
+
 // Rebuild reinitializes the Entry with the given parameters and updates all its attributes accordingly.
 func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) {
 	s.bucket = bucket

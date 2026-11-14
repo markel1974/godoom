@@ -170,6 +170,20 @@ func (e *Entity) Update() {
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
+func (e *Entity) predictedContactCOMs(e2 *Entity) (float64, float64, float64, float64, float64, float64) {
+	cx1, cy1, cz1 := e.getCenterOfMass()
+	cx2, cy2, cz2 := e2.getCenterOfMass()
+	dx1, dy1, dz1 := e.GetFrameDisplacement()
+	dx2, dy2, dz2 := e2.GetFrameDisplacement()
+	return cx1 + dx1, cy1 + dy1, cz1 + dz1, cx2 + dx2, cy2 + dy2, cz2 + dz2
+}
+
+// WarmStartImpact pre-applies persisted normal and tangential impulses for this entity pair before PGS iterations.
+func (e *Entity) WarmStartImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64, accNormal, accTx, accTy, accTz *float64) {
+	cx1, cy1, cz1, cx2, cy2, cz2 := e.predictedContactCOMs(e2)
+	e.Cinematic.WarmStartImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, accNormal, accTx, accTy, accTz)
+}
+
 // ResolveImpact resolves a 6-DoF collision impact with another entity .
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64) {
 	e.ResolveImpactAccumulated(e2, nx, ny, nz, px, py, pz, nil, nil, nil, nil, nil, nil)
@@ -177,20 +191,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float6
 
 // ResolveImpactAccumulated resolves a 6-DoF collision impact with another entity using accumulated PGS impulse clamping.
 func (e *Entity) ResolveImpactAccumulated(e2 *Entity, nx, ny, nz float64, px, py, pz float64, accNormal, accTx, accTy, accTz, restTarget *float64, hasRestTarget *bool) {
-	cx1, cy1, cz1 := e.getCenterOfMass()
-	cx2, cy2, cz2 := e2.getCenterOfMass()
-
-	dx1, dy1, dz1 := e.GetFrameDisplacement()
-	dx2, dy2, dz2 := e2.GetFrameDisplacement()
-
-	cx1 += dx1
-	cy1 += dy1
-	cz1 += dz1
-
-	cx2 += dx2
-	cy2 += dy2
-	cz2 += dz2
-
+	cx1, cy1, cz1, cx2, cy2, cz2 := e.predictedContactCOMs(e2)
 	e.Cinematic.ResolveImpactAccumulated(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, accNormal, accTx, accTy, accTz, restTarget, hasRestTarget)
 }
 

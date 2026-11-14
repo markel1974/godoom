@@ -189,6 +189,50 @@ func (t *Base) StagePrepare(session uint64) {
 	t.cage.Rebuild(t.maxStep, session)
 }
 
+// resolveSlotPartner returns the canonical collision partner entity for slot resolution, or nil if skipped.
+func resolveSlotPartner(entity *rigid_body.Entity, slot *collisions.Entry) *rigid_body.Entity {
+	if slot.GetImpactMode() == collisions.ImpactStep {
+		return nil
+	}
+	if rCage := slot.GetRCage(); rCage != nil {
+		rParentEnt := rCage.GetEntity()
+		// Each active dynamic pair is solved once per solver pass by the canonical owner.
+		if entity.GetId() > rParentEnt.GetId() {
+			if rThing, ok := rCage.GetObject().(volumes.IThing); ok && rThing.IsActive() && rCage.HasEntryFor(slot.GetBucket().Opposite(), entity.GetId()) {
+				return nil
+			}
+		}
+		return rParentEnt
+	}
+	rFace := slot.GetRemoteFace()
+	rParent := rFace.GetParent().(*volumes.Volume)
+	return rParent.GetEntity()
+}
+
+// StageWarmStart pre-applies persisted impulses on active contacts before PGS iterations begin.
+func (t *Base) StageWarmStart() {
+	slotsLen := t.cage.GetSlotsLen()
+	if slotsLen == 0 {
+		return
+	}
+
+	entity := t.VerticesGetVolume().GetEntity()
+	for i := 0; i < slotsLen; i++ {
+		slot := t.cage.GetSlot(i)
+		rParentEnt := resolveSlotPartner(entity, slot)
+		if rParentEnt == nil {
+			continue
+		}
+		accNormal, accTx, accTy, accTz, _, _ := slot.GetSolverState()
+		if *accNormal <= 0.0 {
+			continue
+		}
+		nX, nY, nZ := slot.GetNormal()
+		pX, pY, pZ := slot.GetPoint()
+		entity.WarmStartImpact(rParentEnt, nX, nY, nZ, pX, pY, pZ, accNormal, accTx, accTy, accTz)
+	}
+}
+
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.
 func (t *Base) StageResolve() {
 	slotsLen := t.cage.GetSlotsLen()
@@ -200,26 +244,9 @@ func (t *Base) StageResolve() {
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
-
-		iMode := slot.GetImpactMode()
-		switch iMode {
-		case collisions.ImpactStep:
+		rParentEnt := resolveSlotPartner(entity, slot)
+		if rParentEnt == nil {
 			continue
-		}
-		var rParentEnt *rigid_body.Entity
-
-		if rCage := slot.GetRCage(); rCage != nil {
-			rParentEnt = rCage.GetEntity()
-			// Each active dynamic pair is solved once per solver iteration by the canonical owner.
-			if entity.GetId() > rParentEnt.GetId() {
-				if rThing, ok := rCage.GetObject().(volumes.IThing); ok && rThing.IsActive() && rCage.HasEntryFor(slot.GetBucket().Opposite(), entity.GetId()) {
-					continue
-				}
-			}
-		} else {
-			rFace := slot.GetRemoteFace()
-			rParent := rFace.GetParent().(*volumes.Volume)
-			rParentEnt = rParent.GetEntity()
 		}
 		// Risoluzione Impulsi e Attrito (Fase Cinetica) con Proprietà Esplicite del Materiale di Contatto.
 		nX, nY, nZ := slot.GetNormal()

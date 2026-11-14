@@ -8,18 +8,18 @@ const maxTiltSin = 0.30
 
 var _maxTiltAngle = math.Asin(maxTiltSin) //, in radians
 
-// obbVector is a fixed-size 3D vector used by the SAT implementation.
-type obbVector [3]float64
+// var _oobId = [3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+var _oobId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
 // BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
 	bottomLeft       *Point
 	bottomCenter     *Point
 	center           *Point
-	size             Size
+	size             *Size
 	aabb             *AABB
-	axis             [3]obbVector // Local axes transformed into world space.
-	qRotation        *Quaternion  // Orientation quaternion.
+	axis             *Axis       // Local axes transformed into world space.
+	qRotation        *Quaternion // Orientation quaternion.
 	qYaw             *Quaternion
 	qTilt            *Quaternion
 	qYawInverse      *Quaternion
@@ -43,6 +43,7 @@ func NewBoundingBox() *BoundingBox {
 		qTilt:            NewQuaternionEmpty(),
 		qYawInverse:      NewQuaternionEmpty(),
 		qYawRelative:     NewQuaternionEmpty(),
+		axis:             NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 		tiltLimitEnabled: false, //true //MODIFICATO,
 	}
 	r.qRotation.SetIdentity()
@@ -56,14 +57,14 @@ func NewBoundingBox() *BoundingBox {
 // then recalculates the derived bounding-box data.
 func (r *BoundingBox) Rebuild(blx, bly, blz, w, h, d float64) {
 	r.bottomLeft.Set(blx, bly, blz)
-	r.size.w, r.size.h, r.size.d = w, h, d
+	r.size.Set(w, h, d)
 	r.rebuild()
 }
 
 // RebuildCenter updates the bounding box centered at (cx, cy, cz) with dimensions w, h, d, then recalculates the derived bounding-box data.
 func (r *BoundingBox) RebuildCenter(cx, cy, cz, w, h, d float64) {
 	r.bottomLeft.Set(cx-w*0.5, cy-h*0.5, cz-d*0.5)
-	r.size.w, r.size.h, r.size.d = w, h, d
+	r.size.Set(w, h, d)
 	r.rebuild()
 }
 
@@ -118,22 +119,22 @@ func (r *BoundingBox) GetQTilt() *Quaternion {
 
 // GetAxes returns the three orthonormal local axes (X, Y, Z) in world space.
 func (r *BoundingBox) GetAxes() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	return r.axis[0][0], r.axis[0][1], r.axis[0][2], r.axis[1][0], r.axis[1][1], r.axis[1][2], r.axis[2][0], r.axis[2][1], r.axis[2][2]
+	return r.axis.Get()
 }
 
 // GetAxes0 returns the x, y, and z components of the first bounding box axis.
 func (r *BoundingBox) GetAxes0() (float64, float64, float64) {
-	return r.axis[0][0], r.axis[0][1], r.axis[0][2]
+	return r.axis.Get0()
 }
 
 // GetAxes1 returns the x, y, and z components of the bounding box's second axis.
 func (r *BoundingBox) GetAxes1() (float64, float64, float64) {
-	return r.axis[1][0], r.axis[1][1], r.axis[1][2]
+	return r.axis.Get1()
 }
 
 // GetAxes2 returns the three components of the bounding box's third axis.
 func (r *BoundingBox) GetAxes2() (float64, float64, float64) {
-	return r.axis[2][0], r.axis[2][1], r.axis[2][2]
+	return r.axis.Get2()
 }
 
 // GetYaw returns the current horizontal yaw angle in radians derived from the local X axis in world space.
@@ -150,9 +151,7 @@ func (r *BoundingBox) GetOrientedHalfExtents() (float64, float64, float64) {
 // rebuild recalculates the center, local axes and enclosing AABB.
 // The box rotates around its geometric center.
 func (r *BoundingBox) rebuild() {
-	hx := r.size.w * 0.5
-	hy := r.size.h * 0.5
-	hz := r.size.d * 0.5
+	hx, hy, hz := r.size.GetCenter()
 
 	cx := r.bottomLeft.GetX() + hx
 	cy := r.bottomLeft.GetY() + hy
@@ -161,20 +160,11 @@ func (r *BoundingBox) rebuild() {
 	r.center.MoveTo(cx, cy, cz)
 	r.bottomCenter.MoveTo(cx, cy, r.bottomLeft.GetZ())
 
-	r.updateAxes()
+	r.axis.Set(r.qRotation.ToAxes())
 
-	// Project the oriented half-extents onto the world axes.
-	r.ex = math.Abs(r.axis[0][0])*hx + math.Abs(r.axis[1][0])*hy + math.Abs(r.axis[2][0])*hz
-	r.ey = math.Abs(r.axis[0][1])*hx + math.Abs(r.axis[1][1])*hy + math.Abs(r.axis[2][1])*hz
-	r.ez = math.Abs(r.axis[0][2])*hx + math.Abs(r.axis[1][2])*hy + math.Abs(r.axis[2][2])*hz
+	r.ex, r.ey, r.ez = r.axis.Project(hx, hy, hz)
 
 	r.aabb.Rebuild(cx-r.ex, cy-r.ey, cz-r.ez, cx+r.ex, cy+r.ey, cz+r.ez)
-}
-
-// updateAxes transforms the local X, Y and Z axes into world space.
-// Called only when the bounding box changes.
-func (r *BoundingBox) updateAxes() {
-	r.axis[0][0], r.axis[0][1], r.axis[0][2], r.axis[1][0], r.axis[1][1], r.axis[1][2], r.axis[2][0], r.axis[2][1], r.axis[2][2] = r.qRotation.ToAxes()
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.
@@ -310,74 +300,30 @@ func (r *BoundingBox) Rotate(wx, wy, wz, dt float64) bool {
 	return reset
 }
 
-// supportAxisFactor smoothly maps an axis-normal alignment dot product to [-1, 1],
-// suppressing discontinuous corner snaps within a small near-flat deadband.
-func supportAxisFactor(d float64) float64 {
-	const flatTol = 0.012
-	const cornerTol = 0.06
-	ad := math.Abs(d)
-	if ad <= flatTol {
-		return 0.0
-	}
-	if ad >= cornerTol {
-		return math.Copysign(1.0, d)
-	}
-	t := (ad - flatTol) / (cornerTol - flatTol)
-	s := t * t * (3.0 - 2.0*t)
-	return math.Copysign(s, d)
-}
-
 // GetSupportPoint returns the extreme contact point of the OBB in direction (dirX, dirY, dirZ).
 // For directions aligned with faces or edges, it returns the center of that face or edge.
 func (r *BoundingBox) GetSupportPoint(dirX, dirY, dirZ float64) (float64, float64, float64) {
 	cx, cy, cz := r.GetCenter()
-	hw := r.size.w * 0.5
-	hh := r.size.h * 0.5
-	hd := r.size.d * 0.5
-
-	px, py, pz := cx, cy, cz
-
-	f0 := supportAxisFactor(r.axis[0][0]*dirX+r.axis[0][1]*dirY+r.axis[0][2]*dirZ) * hw
-	if f0 != 0.0 {
-		px += r.axis[0][0] * f0
-		py += r.axis[0][1] * f0
-		pz += r.axis[0][2] * f0
-	}
-
-	f1 := supportAxisFactor(r.axis[1][0]*dirX+r.axis[1][1]*dirY+r.axis[1][2]*dirZ) * hh
-	if f1 != 0.0 {
-		px += r.axis[1][0] * f1
-		py += r.axis[1][1] * f1
-		pz += r.axis[1][2] * f1
-	}
-
-	f2 := supportAxisFactor(r.axis[2][0]*dirX+r.axis[2][1]*dirY+r.axis[2][2]*dirZ) * hd
-	if f2 != 0.0 {
-		px += r.axis[2][0] * f2
-		py += r.axis[2][1] * f2
-		pz += r.axis[2][2] * f2
-	}
-
+	hw, hh, hd := r.size.GetCenter()
+	px, py, pz := r.axis.ComputeSupportPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd)
 	return px, py, pz
 }
 
 // IsFaceAligned returns whether any of the 6 box faces is aligned horizontally with world Z.
 func (r *BoundingBox) IsFaceAligned() bool {
-	maxZ := math.Max(math.Abs(r.axis[0][2]), math.Max(math.Abs(r.axis[1][2]), math.Abs(r.axis[2][2])))
+	maxZ := math.Max(math.Abs(r.axis.data[0][2]), math.Max(math.Abs(r.axis.data[1][2]), math.Abs(r.axis.data[2][2])))
 	return maxZ > 0.99985
 }
 
 // SetSize updates the dimensions and derived data.
 func (r *BoundingBox) SetSize(w, h, d float64) {
-	r.size.w, r.size.h, r.size.d = w, h, d
+	r.size.Set(w, h, d)
 	r.rebuild()
 }
 
 // AddSize increases the dimensions and updates derived data.
 func (r *BoundingBox) AddSize(w, h, d float64) {
-	r.size.w += w
-	r.size.h += h
-	r.size.d += d
+	r.size.Add(w, h, d)
 	r.rebuild()
 }
 
@@ -402,27 +348,15 @@ func (r *BoundingBox) MoveToZ(z float64) {
 	r.rebuild()
 }
 
-// MoveTest returns the reference position after applying a translation,
-// without modifying the bounding box.
-//func (r *BoundingBox) MoveTest(vx, vy, vz float64) (float64, float64, float64) {
-//	return r.bottomLeft.x + vx, r.bottomLeft.y + vy, r.bottomLeft.z + vz
-//}
-
 // Distance returns the distance between the geometric centers.
 func (r *BoundingBox) Distance(target *BoundingBox) float64 {
 	dx, dy, dz := r.center.Distance(target.center)
-	//dx := //target.center.x - r.center.x
-	//dy := target.center.y - r.center.y
-	//dz := target.center.z - r.center.z
-
 	d := dx*dx + dy*dy + dz*dz
 	if d < 0.0001 {
 		return 0.01
 	}
 	return math.Sqrt(d)
 }
-
-var _oobId = [3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
 
 // Intersect tests this OBB against an axis-aligned box defined by
 // its reference position and dimensions.
@@ -431,49 +365,43 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dx := (x + (w * 0.5)) - cx
 	dy := (y + (h * 0.5)) - cy
 	dz := (z + (d * 0.5)) - cz
-	return intersectsOBB(
-		dx, dy, dz,
-		r.axis,
-		obbVector{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
-		_oobId,
-		obbVector{w * 0.5, h * 0.5, d * 0.5},
-	)
+	scx, scy, scz := r.size.GetCenter()
+	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
+	return intersectsOBB(dx, dy, dz, r.axis, scx, scy, scz, _oobId, ocx, ocy, ocz)
 }
 
 // IntersectBB tests this OBB against another OBB.
 func (r *BoundingBox) IntersectBB(other *BoundingBox) bool {
 	dx, dy, dz := r.center.Distance(other.center)
-	return intersectsOBB(
-		dx, dy, dz,
-		r.axis,
-		[3]float64{r.size.w * 0.5, r.size.h * 0.5, r.size.d * 0.5},
-		other.axis,
-		[3]float64{other.size.w * 0.5, other.size.h * 0.5, other.size.d * 0.5},
-	)
+	scx, scy, scz := r.size.GetCenter()
+	ocx, ocy, ocz := other.size.GetCenter()
+	return intersectsOBB(dx, dy, dz, r.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
 }
 
 // intersectsOBB performs the 15-axis Separating Axis Theorem test. It uses fixed-size arrays and does not create slices or heap objects.
-func intersectsOBB(dx, dy, dz float64, a [3]obbVector, hA [3]float64, b [3]obbVector, hB [3]float64) bool {
+func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) bool {
+	var hA = [3]float64{scx, scy, scz}
+	var hB = [3]float64{ocx, ocy, ocz}
 	var R [3][3]float64
 	var AbsR [3][3]float64
 	// Rotation matrix between the two box coordinate systems.
 	// The epsilon stabilizes nearly parallel axes.
 	const epsilon = 1e-12
 	for i := 0; i < 3; i++ {
-		ax := a[i][0]
-		ay := a[i][1]
-		az := a[i][2]
+		ax := a.data[i][0]
+		ay := a.data[i][1]
+		az := a.data[i][2]
 		for j := 0; j < 3; j++ {
-			value := ax*b[j][0] + ay*b[j][1] + az*b[j][2]
+			value := ax*b.data[j][0] + ay*b.data[j][1] + az*b.data[j][2]
 			R[i][j] = value
 			AbsR[i][j] = math.Abs(value) + epsilon
 		}
 	}
 
 	// Center displacement in A's coordinate system.
-	t0 := dx*a[0][0] + dy*a[0][1] + dz*a[0][2]
-	t1 := dx*a[1][0] + dy*a[1][1] + dz*a[1][2]
-	t2 := dx*a[2][0] + dy*a[2][1] + dz*a[2][2]
+	t0 := dx*a.data[0][0] + dy*a.data[0][1] + dz*a.data[0][2]
+	t1 := dx*a.data[1][0] + dy*a.data[1][1] + dz*a.data[1][2]
+	t2 := dx*a.data[2][0] + dy*a.data[2][1] + dz*a.data[2][2]
 
 	// Test the three axes of A.
 	for i := 0; i < 3; i++ {

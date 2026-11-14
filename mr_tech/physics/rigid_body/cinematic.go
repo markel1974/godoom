@@ -36,87 +36,107 @@ const (
 
 	// Continuous calm duration and motion thresholds before putting a grounded island to sleep.
 	sleepTimeThreshold = 0.45
-	sleepAngVelMax     = angSleepEpsilon * 1.5
-	sleepAngVelMaxSq   = sleepAngVelMax * sleepAngVelMax
-	sleepPushSlopSq    = (defaultPenetrationSlop * 2.0) * (defaultPenetrationSlop * 2.0)
+
+	sleepAngVelMax = angSleepEpsilon * 1.5
+
+	sleepAngVelMaxSq = sleepAngVelMax * sleepAngVelMax
+
+	sleepPushSlopSq = (defaultPenetrationSlop * 2.0) * (defaultPenetrationSlop * 2.0)
 
 	rotScale = 1.0
 
 	defaultInertia = 32.0
 
 	// Inertia validation and computation constants.
-	minInertiaMass      = 25.0
+	minInertiaMass = 25.0
+
 	minInertiaDiagRatio = 0.1
+
 	cuboidInertiaFactor = 1.0 / 12.0
-	gyroEnergyEpsilon   = 1e-12
-	restitutionEpsilon  = 1e-6
-	tangentLenEpsilon   = 1e-8
+
+	gyroEnergyEpsilon = 1e-12
+
+	restitutionEpsilon = 1e-6
+
+	tangentLenEpsilon = 1e-8
 
 	// Exponential damping bases (per second, scaled via math.Pow(base, dt)).
-	groundYawDampingBase     = 0.02
-	groundTiltDampingBase    = 0.05
+	groundYawDampingBase = 0.02
+
+	groundTiltDampingBase = 0.05
+
 	lowEnergyTiltDampingBase = 0.004
-	airAngDampingBase        = 0.65
+
+	airAngDampingBase = 0.65
 
 	// Upright PD stabilizer gains and thresholds (critically damped).
-	uprightTiltSqThreshold      = 1e-6
+	uprightTiltSqThreshold = 1e-6
+
 	uprightSleepTiltSqThreshold = 1e-5
-	uprightAxisZThreshold       = 0.999999
-	uprightGroundStiffness      = 140.0
-	uprightGroundDamping        = 24.0
-	uprightAirStiffness         = 60.0
-	uprightAirDamping           = 15.5
-	uprightFlipLenEpsilon       = 1e-6
+
+	uprightAxisZThreshold = 0.999999
+
+	uprightGroundStiffness = 140.0
+
+	uprightGroundDamping = 24.0
+
+	uprightAirStiffness = 60.0
+
+	uprightAirDamping = 15.5
+
+	uprightFlipLenEpsilon = 1e-6
 
 	// Low-energy ground settling and yaw stabilization thresholds.
-	lowEnergyGroundTiltSq  = 2.5
+	lowEnergyGroundTiltSq = 2.5
+
 	lowEnergyGroundHorizSq = 6400.0
-	nearFlatFaceAlignCos   = 0.99
-	lowEnergyYawSpinLimit  = 1.5
+
+	nearFlatFaceAlignCos = 0.99
+
+	lowEnergyYawSpinLimit = 1.5
 
 	// Impact restitution slop thresholds.
-	restitutionSlopGravityFactor  = 2.0
-	minRestitutionSlop            = 2.0
+	restitutionSlopGravityFactor = 2.0
+
+	minRestitutionSlop = 2.0
+
 	groundedImpactNormalThreshold = 0.25
 
 	// Near-flat floor face-slap absorption and unstable ridge kick constants.
-	faceSlapAlignCosMin    = 0.985
-	faceSlapAlignRange     = 1.0 - faceSlapAlignCosMin
-	faceSlapBaseKeep       = 0.60
-	faceSlapKeepDrop       = 0.45
-	restingNormalAlignCos  = 0.992
+	faceSlapAlignCosMin = 0.985
+
+	faceSlapAlignRange = 1.0 - faceSlapAlignCosMin
+
+	faceSlapBaseKeep = 0.60
+
+	faceSlapKeepDrop = 0.45
+
+	restingNormalAlignCos = 0.992
+
 	restingNormalTiltSqMax = 1.0
-	faceSlapVzAlignCos     = 0.994
-	ridgeMaxAlignCos       = 0.90
-	ridgeLeverSqMax        = 0.04
-	ridgeTiltSqMax         = 1e-4
-	ridgeBreakKick         = 0.1
+
+	faceSlapVzAlignCos = 0.994
+
+	ridgeMaxAlignCos = 0.90
+
+	ridgeLeverSqMax = 0.04
+
+	ridgeTiltSqMax = 1e-4
+
+	ridgeBreakKick = 0.1
 
 	// Low-energy floor friction torque attenuation thresholds.
 	frictionLowEnergyHorizSq = 10000.0
-	frictionLowEnergyTiltSq  = 2.25
-	frictionEdgeRotScale     = 0.35
+
+	frictionLowEnergyTiltSq = 2.25
+
+	frictionEdgeRotScale = 0.35
 )
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
 type Cinematic struct {
-	mass    float64
-	invMass float64
-	// World-space inverse inertia tensor.
-	invIxx float64
-	invIxy float64
-	invIxz float64
-	invIyy float64
-	invIyz float64
-	invIzz float64
-	// World-space inertia tensor.
-	ixx float64
-	ixy float64
-	ixz float64
-	iyy float64
-	iyz float64
-	izz float64
-
+	mass                 float64
+	invMass              float64
 	vx                   float64
 	vy                   float64
 	vz                   float64
@@ -252,16 +272,13 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 		det <= 0.0 || math.IsNaN(det) || math.IsInf(det, 0) {
 		return false
 	}
-
 	invDet := 1.0 / det
-
 	invA := c00 * invDet
 	invB := c01 * invDet
 	invC := c02 * invDet
 	invD := c11 * invDet
 	invF := c12 * invDet
 	invG := c22 * invDet
-
 	if math.IsNaN(invA) || math.IsInf(invA, 0) ||
 		math.IsNaN(invB) || math.IsInf(invB, 0) ||
 		math.IsNaN(invC) || math.IsInf(invC, 0) ||
@@ -270,15 +287,8 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 		math.IsNaN(invG) || math.IsInf(invG, 0) {
 		return false
 	}
-
-	//e.bodyIxx, e.bodyIxy, e.bodyIxz = a, b, c
-	//e.bodyIyy, e.bodyIyz, e.bodyIzz = d, f, g
 	e.body.Set(a, b, c, b, d, f, c, f, g)
-
-	//e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = invA, invB, invC
-	//e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = invD, invF, invG
 	e.bodyInv.Set(invA, invB, invC, invB, invD, invF, invC, invF, invG)
-
 	return true
 }
 
@@ -286,17 +296,12 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 // and initializes the world-space inverse inertia tensor.
 func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if e.invMass == 0.0 || e.mass <= 0.0 {
-		e.body.Set(0, 0, 0, 0, 0, 0, 0, 0, 0)
-		e.bodyInv.Set(0, 0, 0, 0, 0, 0, 0, 0, 0)
-
-		e.ixx, e.ixy, e.ixz = 0, 0, 0
-		e.iyy, e.iyz, e.izz = 0, 0, 0
-
-		e.invIxx, e.invIxy, e.invIxz = 0, 0, 0
-		e.invIyy, e.invIyz, e.invIzz = 0, 0, 0
+		e.body.Reset()
+		e.bodyInv.Reset()
+		e.world.Reset()
+		e.worldInv.Reset()
 		return
 	}
-
 	if w < defaultInertia {
 		w = defaultInertia
 	}
@@ -306,10 +311,8 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if d < defaultInertia {
 		d = defaultInertia
 	}
-
 	// Solid cuboid inertia per unit mass.
 	e.SetInertiaTensor((h*h+d*d)*cuboidInertiaFactor, 0, 0, (w*w+d*d)*cuboidInertiaFactor, 0, (w*w+h*h)*cuboidInertiaFactor)
-
 	// Initially identity orientation.
 	e.SyncWorldInertia(1, 0, 0, 0, 1, 0, 0, 0, 1)
 }
@@ -320,24 +323,17 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 func (e *Cinematic) SyncWorldInertia(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
 	e.faceAlignCos = math.Max(math.Abs(a02), math.Max(math.Abs(a12), math.Abs(a22)))
 	if e.invMass == 0.0 {
-		e.ixx, e.ixy, e.ixz = 0, 0, 0
-		e.iyy, e.iyz, e.izz = 0, 0, 0
-
-		e.invIxx, e.invIxy, e.invIxz = 0, 0, 0
-		e.invIyy, e.invIyz, e.invIzz = 0, 0, 0
+		e.world.Reset()
+		e.worldInv.Reset()
 		return
 	}
-
 	e.r.Set(a00, a01, a02, a10, a11, a12, a20, a21, a22)
 	e.r.Multiply(e.world, e.worldInv, e.body, e.bodyInv)
-
-	e.ixx, e.ixy, e.ixz, e.iyy, e.iyz, e.izz = e.world.GetSymmetric()
-	e.invIxx, e.invIxy, e.invIxz, e.invIyy, e.invIyz, e.invIzz = e.worldInv.GetSymmetric()
 }
 
-// ApplyWorldInvInertia multiplies a world-space vector by the 3x3 world-space inverse inertia tensor I_world^-1.
-func (e *Cinematic) ApplyWorldInvInertia(tx, ty, tz float64) (float64, float64, float64) {
-	return e.invIxx*tx + e.invIxy*ty + e.invIxz*tz, e.invIxy*tx + e.invIyy*ty + e.invIyz*tz, e.invIxz*tx + e.invIyz*ty + e.invIzz*tz
+// applyWorldInvInertia multiplies a world-space vector by the 3x3 world-space inverse inertia tensor I_world^-1.
+func (e *Cinematic) applyWorldInvInertia(tx, ty, tz float64) (float64, float64, float64) {
+	return e.worldInv.MultiplySymmetric(tx, ty, tz)
 }
 
 // SetDt configures the time step, ground friction, and air friction values for the cinematic simulation.
@@ -453,7 +449,7 @@ func (e *Cinematic) AddImpulseAtOffset(jx, jy, jz, rx, ry, rz float64) {
 	ty := rz*jx - rx*jz
 	tz := rx*jy - ry*jx
 	// Angular velocity variation: Δω = I_world^-1 * ΔL
-	dwx, dwy, dwz := e.ApplyWorldInvInertia(tx, ty, tz)
+	dwx, dwy, dwz := e.applyWorldInvInertia(tx, ty, tz)
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+dwx))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+dwy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+dwz))
@@ -668,7 +664,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 
 	// Integrate external torque first, then apply energy-preserving gyroscopic precession.
 	if e.torqueX != 0.0 || e.torqueY != 0.0 || e.torqueZ != 0.0 {
-		ax, ay, az := e.ApplyWorldInvInertia(e.torqueX, e.torqueY, e.torqueZ)
+		ax, ay, az := e.applyWorldInvInertia(e.torqueX, e.torqueY, e.torqueZ)
 		e.wx += ax * e.dt
 		e.wy += ay * e.dt
 		e.wz += az * e.dt
@@ -818,7 +814,7 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 	ny /= nLen
 	nz /= nLen
 
-	invMass1, invMass2 := effectiveContactInvMasses(e, e2, nz)
+	invMass1, invMass2 := e.effectiveContactInvMasses(e2, nz)
 	if invMass1 == 0.0 && invMass2 == 0.0 {
 		return
 	}
@@ -862,11 +858,12 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 		*accTx, *accTy, *accTz = wtx, wty, wtz
 		fRotBase1 := e.frictionRotBaseScale(nz)
 		fRotBase2 := e2.frictionRotBaseScale(-nz)
-		applyTangentImpulse(e, e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, wtx, wty, wtz, fRotBase1, fRotBase2)
+		e.applyTangentImpulse(e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, wtx, wty, wtz, fRotBase1, fRotBase2)
 	}
 }
 
-func effectiveContactInvMasses(e, e2 *Cinematic, nz float64) (float64, float64) {
+// effectiveContactInvMasses returns contact inverse masses, grounding the body supported by a floor-like normal.
+func (e *Cinematic) effectiveContactInvMasses(e2 *Cinematic, nz float64) (float64, float64) {
 	invMass1 := e.invMass
 	invMass2 := e2.invMass
 	if e2.onGround && nz > floorNormalThreshold {
@@ -877,7 +874,9 @@ func effectiveContactInvMasses(e, e2 *Cinematic, nz float64) (float64, float64) 
 	return invMass1, invMass2
 }
 
-func applyTangentImpulse(e, e2 *Cinematic, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2 float64) {
+// applyTangentImpulse applies a tangential contact impulse to both bodies, updating linear and angular motion.
+// It returns without changes when the impulse magnitude is too small to provide a stable direction.
+func (e *Cinematic) applyTangentImpulse(e2 *Cinematic, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2 float64) {
 	dtMag := math.Sqrt(jtx*jtx + jty*jty + jtz*jtz)
 	if dtMag <= gyroEnergyEpsilon {
 		return
@@ -945,7 +944,7 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		return
 	}
 
-	invMass1, invMass2 := effectiveContactInvMasses(e, e2, nz)
+	invMass1, invMass2 := e.effectiveContactInvMasses(e2, nz)
 
 	var u1nx, u1ny, u1nz, rotMass1N float64
 	if invMass1 > 0.0 {
@@ -1063,7 +1062,7 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
 			fRotBase1 := e.frictionRotBaseScale(nz)
 			fRotBase2 := e2.frictionRotBaseScale(-nz)
-			applyTangentImpulse(e, e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
+			e.applyTangentImpulse(e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
 		}
 		return
 	}
@@ -1131,7 +1130,7 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		jtz = jt * tz
 	}
 
-	applyTangentImpulse(e, e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
+	e.applyTangentImpulse(e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
 }
 
 // ResolveElasticPenetration computes positional correction for overlapping cinematic bodies along a collision normal.
@@ -1196,14 +1195,14 @@ func (e *Cinematic) rotationalMass(rx, ry, rz float64, dx, dy, dz float64) (floa
 	cx := ry*dz - rz*dy
 	cy := rz*dx - rx*dz
 	cz := rx*dy - ry*dx
-	ux, uy, uz := e.ApplyWorldInvInertia(cx, cy, cz)
+	ux, uy, uz := e.applyWorldInvInertia(cx, cy, cz)
 	mass := cx*ux + cy*uy + cz*uz
 	return ux, uy, uz, mass
 }
 
 // angularMomentumFor returns the angular momentum vector for the given angular velocity.
 func (e *Cinematic) angularMomentumFor(wx, wy, wz float64) (float64, float64, float64) {
-	return e.ixx*wx + e.ixy*wy + e.ixz*wz, e.ixy*wx + e.iyy*wy + e.iyz*wz, e.ixz*wx + e.iyz*wy + e.izz*wz
+	return e.world.MultiplySymmetric(wx, wy, wz)
 }
 
 // normalRotScale returns the consistent angular response scale for normal contact impulses and face-slap parameters.
@@ -1224,6 +1223,7 @@ func (e *Cinematic) normalRotScale(floorNz, restitution float64) (float64, bool,
 	return 1.0, true, slapKeep
 }
 
+// addClampedAngular adds a scaled angular impulse and clamps tilt and yaw velocities to their limits.
 func (e *Cinematic) addClampedAngular(scale, ux, uy, uz float64) {
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+scale*ux))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+scale*uy))
@@ -1357,5 +1357,5 @@ func (e *Cinematic) gyroscopicAccel(wx, wy, wz, lx, ly, lz float64) (float64, fl
 	gx := wy*lz - wz*ly
 	gy := wz*lx - wx*lz
 	gz := wx*ly - wy*lx
-	return e.ApplyWorldInvInertia(-gx, -gy, -gz)
+	return e.applyWorldInvInertia(-gx, -gy, -gz)
 }

@@ -15,54 +15,56 @@ type OBBManifold struct {
 	NormalX, NormalY, NormalZ float64
 	Count                     int
 	Points                    [MaxManifoldPoints]ContactPoint
-	clipA                     ClipPolygon
-	clipB                     ClipPolygon
 	candidates                [MaxCandidatePoints]ContactPoint
 	sat                       *Sat
+	clipA                     *ClipPolygon
+	clipB                     *ClipPolygon
 	qInterpA                  *Quaternion
 	qInterpB                  *Quaternion
-	axesA                     Axis
-	axesB                     Axis
+	axesA                     *Axis
+	axesB                     *Axis
 }
 
 // NewOBBManifold creates a reusable OBB contact manifold with initialized SAT scratch state.
 func NewOBBManifold() *OBBManifold {
 	return &OBBManifold{
 		sat:      NewSat(),
+		clipA:    NewClipPolygon(),
+		clipB:    NewClipPolygon(),
 		qInterpA: NewQuaternionEmpty(),
 		qInterpB: NewQuaternionEmpty(),
+		axesA:    NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
+		axesB:    NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 	}
 }
 
 // ComputeAtOffset computes the contact manifold between r and other with other translated by the given offset.
-func (om *OBBManifold) ComputeAtOffset(r *BoundingBox, other *BoundingBox, offX, offY, offZ float64) {
+func (om *OBBManifold) ComputeAtOffset(self *BoundingBox, other *BoundingBox, offX, offY, offZ float64) {
 	tx, ty, tz := other.center.Get()
-	px, py, pz := r.center.Get()
-	scx, scy, scz := r.size.GetCenter()
+	px, py, pz := self.center.Get()
+	scx, scy, scz := self.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
 
-	om.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
-
-	sat := om.sat
-	if !sat.hit {
+	om.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, self.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
+	if !om.sat.hit {
 		om.Hit = false
 		om.Penetration = 0.0
-		om.Gap = sat.maxGap
-		om.NormalX, om.NormalY, om.NormalZ = sat.GetNormal()
+		om.Gap = om.sat.maxGap
+		om.NormalX, om.NormalY, om.NormalZ = om.sat.GetNormal()
 		om.Count = 0
 		return
 	}
 
-	om.buildFromSat(sat, px, py, pz, &r.axis, scx, scy, scz, tx+offX, ty+offY, tz+offZ, &other.axis, ocx, ocy, ocz)
+	om.buildFromSat(om.sat, om.clipA, om.clipB, px, py, pz, self.axis, scx, scy, scz, tx+offX, ty+offY, tz+offZ, other.axis, ocx, ocy, ocz)
 }
 
 // ComputeSweptAtOffset evaluates discrete t=1 SAT first and falls back to angular+linear conservative advancement CCD
 // over t in [0, 1] when boxes move rapidly or rotate through each other. It returns the impact time toi in [0, 1].
-func (om *OBBManifold) ComputeSweptAtOffset(r *BoundingBox, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64) float64 {
+func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64) float64 {
 	offX, offY, offZ := dBX-dAX, dBY-dAY, dBZ-dAZ
-	om.ComputeAtOffset(r, other, offX, offY, offZ)
+	om.ComputeAtOffset(self, other, offX, offY, offZ)
 
-	sweepA := r.GetAngularSweepArc()
+	sweepA := self.GetAngularSweepArc()
 	sweepB := other.GetAngularSweepArc()
 	rotBound := sweepA + sweepB
 	totalSweep := math.Hypot(math.Hypot(offX, offY), offZ) + rotBound
@@ -72,7 +74,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(r *BoundingBox, other *BoundingBox, 
 
 	if om.Hit {
 		minDim := math.Min(
-			math.Min(r.GetWidth(), math.Min(r.GetHeight(), r.GetDepth())),
+			math.Min(self.GetWidth(), math.Min(self.GetHeight(), self.GetDepth())),
 			math.Min(other.GetWidth(), math.Min(other.GetHeight(), other.GetDepth())),
 		)
 		if totalSweep <= minDim*0.5 {
@@ -80,15 +82,15 @@ func (om *OBBManifold) ComputeSweptAtOffset(r *BoundingBox, other *BoundingBox, 
 		}
 		if (om.NormalX*offX + om.NormalY*offY + om.NormalZ*offZ) >= -1e-4 {
 			// Skip CCD only if bodies were already overlapping at t=0; if separated at t=0 they tunneled past halfway.
-			ax0, ay0, az0 := r.center.Get()
+			ax0, ay0, az0 := self.center.Get()
 			bx0, by0, bz0 := other.center.Get()
-			scx, scy, scz := r.size.GetCenter()
+			scx, scy, scz := self.size.GetCenter()
 			ocx, ocy, ocz := other.size.GetCenter()
-			om.qInterpA.CopyFrom(r.qPrev)
+			om.qInterpA.CopyFrom(self.qPrev)
 			om.axesA.Set(om.qInterpA.ToAxes())
 			om.qInterpB.CopyFrom(other.qPrev)
 			om.axesB.Set(om.qInterpB.ToAxes())
-			om.sat.Compute(bx0-ax0, by0-ay0, bz0-az0, &om.axesA, scx, scy, scz, &om.axesB, ocx, ocy, ocz)
+			om.sat.Compute(bx0-ax0, by0-ay0, bz0-az0, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
 			if om.sat.hit {
 				return 1.0
 			}
@@ -101,7 +103,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(r *BoundingBox, other *BoundingBox, 
 	missNX, missNY, missNZ := om.NormalX, om.NormalY, om.NormalZ
 	missCount := om.Count
 
-	if toi, ok := om.findSweptImpact(r, other, dAX, dAY, dAZ, dBX, dBY, dBZ, offX, offY, offZ, rotBound); ok {
+	if toi, ok := om.findSweptImpact(om.sat, om.clipA, om.clipB, self, other, dAX, dAY, dAZ, dBX, dBY, dBZ, offX, offY, offZ, rotBound); ok {
 		return toi
 	}
 
@@ -113,11 +115,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(r *BoundingBox, other *BoundingBox, 
 	return 1.0
 }
 
-func (om *OBBManifold) findSweptImpact(
-	r, other *BoundingBox,
-	dAX, dAY, dAZ, dBX, dBY, dBZ float64,
-	offX, offY, offZ, rotBound float64,
-) (float64, bool) {
+func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64, offX, offY, offZ, rotBound float64) (float64, bool) {
 	const maxCAIter = 16
 	const ccdGapTol = 1e-3
 	const minStep = 1e-3
@@ -128,7 +126,6 @@ func (om *OBBManifold) findSweptImpact(
 	ocx, ocy, ocz := other.size.GetCenter()
 	baseDX, baseDY, baseDZ := bx0-ax0, by0-ay0, bz0-az0
 
-	sat := om.sat
 	t := 0.0
 	closeRate := 0.0
 	hitFound := false
@@ -139,7 +136,7 @@ func (om *OBBManifold) findSweptImpact(
 		other.qPrev.Nlerp(other.qRotation, t, om.qInterpB)
 		om.axesB.Set(om.qInterpB.ToAxes())
 
-		sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, &om.axesA, scx, scy, scz, &om.axesB, ocx, ocy, ocz)
+		sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
 		if sat.hit {
 			hitFound = true
 			break
@@ -154,7 +151,7 @@ func (om *OBBManifold) findSweptImpact(
 				om.axesA.Set(om.qInterpA.ToAxes())
 				other.qPrev.Nlerp(other.qRotation, t, om.qInterpB)
 				om.axesB.Set(om.qInterpB.ToAxes())
-				sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, &om.axesA, scx, scy, scz, &om.axesB, ocx, ocy, ocz)
+				sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
 			}
 			hitFound = true
 			break
@@ -179,7 +176,7 @@ func (om *OBBManifold) findSweptImpact(
 	axT, ayT, azT := ax0+dAX*t, ay0+dAY*t, az0+dAZ*t
 	bxT, byT, bzT := bx0+dBX*t, by0+dBY*t, bz0+dBZ*t
 	if sat.hit && sat.contactAxis >= 0 {
-		om.buildFromSat(sat, axT, ayT, azT, &om.axesA, scx, scy, scz, bxT, byT, bzT, &om.axesB, ocx, ocy, ocz)
+		om.buildFromSat(sat, clipA, clipB, axT, ayT, azT, om.axesA, scx, scy, scz, bxT, byT, bzT, om.axesB, ocx, ocy, ocz)
 	} else {
 		om.Hit = true
 		om.NormalX, om.NormalY, om.NormalZ = sat.gx, sat.gy, sat.gz
@@ -210,11 +207,8 @@ func (om *OBBManifold) findSweptImpact(
 	return t, true
 }
 
-func (om *OBBManifold) buildFromSat(
-	sat *Sat,
-	ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64,
-	bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64,
-) {
+// buildFromSat populates the manifold from a successful SAT result and builds edge or face contacts.
+func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64) {
 	om.Hit = true
 	om.Penetration = sat.contactPen
 	om.Gap = 0.0
@@ -225,7 +219,7 @@ func (om *OBBManifold) buildFromSat(
 		om.buildEdgeManifoldAxes(sat, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
 		return
 	}
-	om.buildFaceManifoldAxes(sat, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
+	om.buildFaceManifoldAxes(sat, clipA, clipB, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
 }
 
 // setSinglePoint resets the manifold to one contact point with the given position and penetration depth.
@@ -292,11 +286,7 @@ func (om *OBBManifold) buildEdgeManifoldAxes(
 }
 
 // buildFaceManifoldAxes constructs clipped contact points for a face-axis OBB collision from SAT state and axes.
-func (om *OBBManifold) buildFaceManifoldAxes(
-	sat *Sat,
-	ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64,
-	bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64,
-) {
+func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64) {
 	var refX, refY, refZ, refHX, refHY, refHZ float64
 	var incX, incY, incZ, incHX, incHY, incHZ float64
 	var refAxes, incAxes *Axis
@@ -366,8 +356,8 @@ func (om *OBBManifold) buildFaceManifoldAxes(
 	vy *= hv
 	vz *= hv
 
-	clipA := &om.clipA
-	clipB := &om.clipB
+	//clipA := om.clipA
+	//clipB := om.clipB
 	clipA.count = 0
 	clipA.Add(icx+ux+vx, icy+uy+vy, icz+uz+vz)
 	clipA.Add(icx-ux+vx, icy-uy+vy, icz-uz+vz)

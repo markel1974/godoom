@@ -14,7 +14,7 @@ type BoundingBox struct {
 	bottomLeft       Point
 	center           Point
 	size             Size
-	axis             Axis        // Local axes transformed into world space.
+	axis             *Axis       // Local axes transformed into world space.
 	qRotation        *Quaternion // Orientation quaternion.
 	qPrev            *Quaternion // Previous-step orientation quaternion for angular CCD.
 	qYaw             *Quaternion
@@ -24,7 +24,7 @@ type BoundingBox struct {
 	halfExtents      Point // Oriented half-extents projected onto world axes.
 	prevHalfExtents  Point // Pre-rotation world AABB half-extents for broadphase angular sweep.
 	tiltLimitEnabled bool
-	sat              Sat
+	sat              *Sat
 }
 
 // NewBoundingBox creates a bounding box with identity rotation.
@@ -37,6 +37,8 @@ func NewBoundingBox() *BoundingBox {
 		qTilt:            NewQuaternionEmpty(),
 		qYawInverse:      NewQuaternionEmpty(),
 		qYawRelative:     NewQuaternionEmpty(),
+		axis:             NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
+		sat:              NewSat(),
 		tiltLimitEnabled: false, //true //MODIFICATO,
 	}
 	r.qRotation.SetIdentity()
@@ -432,7 +434,7 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dz := (z + (d * 0.5)) - cz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
-	r.sat.Compute(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
+	r.sat.Compute(dx, dy, dz, r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
 	return r.sat.hit
 }
 
@@ -458,7 +460,7 @@ func (r *BoundingBox) OverlapBBAtOffset(other *BoundingBox, offX, offY, offZ flo
 	dz := tz - pz + offZ
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
-	r.sat.Compute(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+	r.sat.Compute(dx, dy, dz, r.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
 	return r.sat.hit, r.sat.minPen, r.sat.maxGap
 }
 
@@ -469,6 +471,6 @@ func (r *BoundingBox) OverlapSATAtOffset(other *BoundingBox, offX, offY, offZ fl
 	px, py, pz := r.center.Get()
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
-	r.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+	r.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, r.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
 	return r.sat.GetContact()
 }

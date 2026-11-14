@@ -13,12 +13,12 @@ var _oobId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
 // BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
-	bottomLeft       *Point
-	bottomCenter     *Point
-	center           *Point
-	size             *Size
 	aabb             *AABB
-	axis             *Axis       // Local axes transformed into world space.
+	bottomLeft       Point
+	bottomCenter     Point
+	center           Point
+	size             Size
+	axis             Axis        // Local axes transformed into world space.
 	qRotation        *Quaternion // Orientation quaternion.
 	qYaw             *Quaternion
 	qTilt            *Quaternion
@@ -33,17 +33,17 @@ type BoundingBox struct {
 // NewBoundingBox creates a bounding box with identity rotation.
 func NewBoundingBox() *BoundingBox {
 	r := &BoundingBox{
-		bottomLeft:       NewPoint(0, 0, 0),
-		bottomCenter:     NewPoint(0, 0, 0),
-		center:           NewPoint(0, 0, 0),
-		size:             NewSize(0, 0, 0),
 		aabb:             NewAABB(),
+		bottomLeft:       *NewPoint(0, 0, 0),
+		bottomCenter:     *NewPoint(0, 0, 0),
+		center:           *NewPoint(0, 0, 0),
+		size:             *NewSize(0, 0, 0),
 		qRotation:        NewQuaternionEmpty(),
 		qYaw:             NewQuaternionEmpty(),
 		qTilt:            NewQuaternionEmpty(),
 		qYawInverse:      NewQuaternionEmpty(),
 		qYawRelative:     NewQuaternionEmpty(),
-		axis:             NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
+		axis:             *NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 		tiltLimitEnabled: false, //true //MODIFICATO,
 	}
 	r.qRotation.SetIdentity()
@@ -350,7 +350,11 @@ func (r *BoundingBox) MoveToZ(z float64) {
 
 // Distance returns the distance between the geometric centers.
 func (r *BoundingBox) Distance(target *BoundingBox) float64 {
-	dx, dy, dz := r.center.Distance(target.center)
+	tx, ty, tz := target.center.Get()
+	px, py, pz := r.center.Get()
+	dx := tx - px
+	dy := ty - py
+	dz := tz - pz
 	d := dx*dx + dy*dy + dz*dz
 	if d < 0.0001 {
 		return 0.01
@@ -367,15 +371,19 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dz := (z + (d * 0.5)) - cz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
-	return intersectsOBB(dx, dy, dz, r.axis, scx, scy, scz, _oobId, ocx, ocy, ocz)
+	return intersectsOBB(dx, dy, dz, &r.axis, scx, scy, scz, _oobId, ocx, ocy, ocz)
 }
 
 // IntersectBB tests this OBB against another OBB.
 func (r *BoundingBox) IntersectBB(other *BoundingBox) bool {
-	dx, dy, dz := r.center.Distance(other.center)
+	tx, ty, tz := other.center.Get()
+	px, py, pz := r.center.Get()
+	dx := tx - px
+	dy := ty - py
+	dz := tz - pz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
-	return intersectsOBB(dx, dy, dz, r.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
+	return intersectsOBB(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
 }
 
 // intersectsOBB performs the 15-axis Separating Axis Theorem test. It uses fixed-size arrays and does not create slices or heap objects.

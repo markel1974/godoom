@@ -201,7 +201,8 @@ func (e *Entity) WarmStartImpact(e2 *Entity, nx, ny, nz float64, px, py, pz floa
 
 // ResolveImpact resolves a 6-DoF collision impact with another entity .
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64) {
-	e.ResolveImpactAccumulated(e2, nx, ny, nz, px, py, pz, nil, nil, nil, nil, nil, nil)
+	var accTx, accTy, accTz float64
+	e.ResolveImpactAccumulated(e2, nx, ny, nz, px, py, pz, nil, &accTx, &accTy, &accTz, nil, nil)
 }
 
 // ResolveImpactAccumulated resolves a 6-DoF collision impact with another entity using accumulated PGS impulse clamping.

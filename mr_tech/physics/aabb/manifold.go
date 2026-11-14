@@ -115,6 +115,8 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 	return 1.0
 }
 
+// findSweptImpact advances two moving OBBs to their first swept contact and builds the contact manifold.
+// It returns the impact time in [0,1] and whether an impact was found.
 func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64, offX, offY, offZ, rotBound float64) (float64, bool) {
 	const maxCAIter = 16
 	const ccdGapTol = 1e-3

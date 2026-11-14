@@ -85,6 +85,8 @@ func (r *Axis) ComputeStabilizedContactPoint(cx, cy, cz float64, dirX, dirY, dir
 	return r.computeExtremalPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd, true)
 }
 
+// computeExtremalPoint returns the oriented box point farthest along the given direction.
+// It offsets the center by signed half-extents, optionally smoothing near-flat axis alignment.
 func (r *Axis) computeExtremalPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64, stabilized bool) (float64, float64, float64) {
 	px, py, pz := cx, cy, cz
 	extents := [3]float64{hw, hh, hd}

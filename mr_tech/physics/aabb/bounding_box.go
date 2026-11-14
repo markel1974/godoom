@@ -11,6 +11,7 @@ var _maxTiltAngle = math.Asin(maxTiltSin) //, in radians
 // BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
 	aabb             *AABB
+	sat              *Sat
 	bottomLeft       Point
 	center           Point
 	size             Size
@@ -24,7 +25,6 @@ type BoundingBox struct {
 	halfExtents      Point // Oriented half-extents projected onto world axes.
 	prevHalfExtents  Point // Pre-rotation world AABB half-extents for broadphase angular sweep.
 	tiltLimitEnabled bool
-	sat              *Sat
 }
 
 // NewBoundingBox creates a bounding box with identity rotation.
@@ -155,6 +155,7 @@ func (r *BoundingBox) GetOrientedHalfExtents() (float64, float64, float64) {
 	return r.halfExtents.Get()
 }
 
+// rotDotPrev returns the clamped absolute dot product of the previous and current rotations.
 func (r *BoundingBox) rotDotPrev() float64 {
 	x0, y0, z0, w0 := r.qPrev.Get()
 	x1, y1, z1, w1 := r.qRotation.Get()
@@ -187,9 +188,7 @@ func (r *BoundingBox) GetSweptHalfExtents() (float64, float64, float64) {
 	hx, hy, hz := r.size.GetCenter()
 	radius := math.Sqrt(hx*hx + hy*hy + hz*hz)
 	rotPad := radius * (1.0 - cosHalf)
-	return math.Min(radius, math.Max(pex, ex)+rotPad),
-		math.Min(radius, math.Max(pey, ey)+rotPad),
-		math.Min(radius, math.Max(pez, ez)+rotPad)
+	return math.Min(radius, math.Max(pex, ex)+rotPad), math.Min(radius, math.Max(pey, ey)+rotPad), math.Min(radius, math.Max(pez, ez)+rotPad)
 }
 
 // ProjectExtent returns the half-extent of the OBB projected onto unit normal (nx, ny, nz).

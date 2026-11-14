@@ -9,6 +9,7 @@ type ClipPolygon struct {
 	count int
 }
 
+// NewClipPolygon creates an empty reusable polygon clipping buffer.
 func NewClipPolygon() *ClipPolygon {
 	return &ClipPolygon{}
 }

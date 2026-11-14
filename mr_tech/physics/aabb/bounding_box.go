@@ -295,7 +295,11 @@ func (r *BoundingBox) setSwingFromDirection(dx, dy, dz float64) float64 {
 	axisX, axisY := -dy, dx // (0,0,1) x dir
 	axisLength := math.Hypot(axisX, axisY)
 	if axisLength < 1e-12 || angle < 1e-12 {
-		r.qTilt.SetIdentity()
+		if dz < 0 {
+			r.qTilt.SetAxisAngle(1, 0, 0, angle)
+		} else {
+			r.qTilt.SetIdentity()
+		}
 		return angle
 	}
 	r.qTilt.SetAxisAngle(axisX/axisLength, axisY/axisLength, 0, angle)
@@ -410,11 +414,15 @@ func (r *BoundingBox) Distance(target *BoundingBox) float64 {
 
 // extractSwingDirection extracts the world-Z yaw from qRotation and returns the local-Z direction in the resulting yaw frame.
 func (r *BoundingBox) extractSwingDirection() (float64, float64, float64) {
-	_, _, qz, qw := r.qRotation.Get()
+	qx, qy, qz, qw := r.qRotation.Get()
 
 	twistLength := math.Hypot(qz, qw)
 	if twistLength < 1e-12 {
-		r.qYaw.SetIdentity()
+		if xyLen := math.Hypot(qx, qy); xyLen >= 1e-12 {
+			r.qYaw.Set(0, 0, qy/xyLen, qx/xyLen)
+		} else {
+			r.qYaw.SetIdentity()
+		}
 	} else {
 		r.qYaw.Set(0, 0, qz/twistLength, qw/twistLength)
 	}

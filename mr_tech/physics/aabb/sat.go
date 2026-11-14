@@ -18,6 +18,10 @@ type Sat struct {
 	hB          [3]float64
 }
 
+func NewSat() *Sat {
+	return &Sat{}
+}
+
 // GetNormal returns the normal vector from the last SAT computation.
 func (res *Sat) GetNormal() (float64, float64, float64) {
 	return res.nx, res.ny, res.nz

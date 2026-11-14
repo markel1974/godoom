@@ -9,6 +9,10 @@ type ClipPolygon struct {
 	count int
 }
 
+func NewClipPolygon() *ClipPolygon {
+	return &ClipPolygon{}
+}
+
 // Add appends a vertex to the polygon if capacity remains.
 func (p *ClipPolygon) Add(vx, vy, vz float64) {
 	if p.count < len(p.x) {

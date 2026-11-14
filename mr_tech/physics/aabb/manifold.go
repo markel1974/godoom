@@ -4,6 +4,7 @@ import "math"
 
 // MaxManifoldPoints is the maximum number of contact points retained in a collision manifold.
 const MaxManifoldPoints = 4
+const MaxCandidatePoints = 8
 
 // OBBManifold stores the result of an oriented bounding box contact test.
 // It includes collision state, contact normal, penetration or gap, and generated contact points.
@@ -16,10 +17,10 @@ type OBBManifold struct {
 	Points                    [MaxManifoldPoints]ContactPoint
 	clipA                     ClipPolygon
 	clipB                     ClipPolygon
-	candidates                [8]ContactPoint
+	candidates                [MaxCandidatePoints]ContactPoint
 	sat                       *Sat
-	qInterpA                  Quaternion
-	qInterpB                  Quaternion
+	qInterpA                  *Quaternion
+	qInterpB                  *Quaternion
 	axesA                     Axis
 	axesB                     Axis
 }
@@ -27,7 +28,9 @@ type OBBManifold struct {
 // NewOBBManifold creates a reusable OBB contact manifold with initialized SAT scratch state.
 func NewOBBManifold() *OBBManifold {
 	return &OBBManifold{
-		sat: &Sat{},
+		sat:      NewSat(),
+		qInterpA: NewQuaternionEmpty(),
+		qInterpB: NewQuaternionEmpty(),
 	}
 }
 
@@ -72,8 +75,23 @@ func (om *OBBManifold) ComputeSweptAtOffset(r *BoundingBox, other *BoundingBox, 
 			math.Min(r.GetWidth(), math.Min(r.GetHeight(), r.GetDepth())),
 			math.Min(other.GetWidth(), math.Min(other.GetHeight(), other.GetDepth())),
 		)
-		if totalSweep <= minDim*0.5 || (om.NormalX*offX+om.NormalY*offY+om.NormalZ*offZ) >= -1e-4 {
+		if totalSweep <= minDim*0.5 {
 			return 1.0
+		}
+		if (om.NormalX*offX + om.NormalY*offY + om.NormalZ*offZ) >= -1e-4 {
+			// Skip CCD only if bodies were already overlapping at t=0; if separated at t=0 they tunneled past halfway.
+			ax0, ay0, az0 := r.center.Get()
+			bx0, by0, bz0 := other.center.Get()
+			scx, scy, scz := r.size.GetCenter()
+			ocx, ocy, ocz := other.size.GetCenter()
+			om.qInterpA.CopyFrom(r.qPrev)
+			om.axesA.Set(om.qInterpA.ToAxes())
+			om.qInterpB.CopyFrom(other.qPrev)
+			om.axesB.Set(om.qInterpB.ToAxes())
+			om.sat.Compute(bx0-ax0, by0-ay0, bz0-az0, &om.axesA, scx, scy, scz, &om.axesB, ocx, ocy, ocz)
+			if om.sat.hit {
+				return 1.0
+			}
 		}
 	}
 
@@ -116,9 +134,9 @@ func (om *OBBManifold) findSweptImpact(
 	hitFound := false
 
 	for iter := 0; iter < maxCAIter; iter++ {
-		r.qPrev.Nlerp(r.qRotation, t, &om.qInterpA)
+		r.qPrev.Nlerp(r.qRotation, t, om.qInterpA)
 		om.axesA.Set(om.qInterpA.ToAxes())
-		other.qPrev.Nlerp(other.qRotation, t, &om.qInterpB)
+		other.qPrev.Nlerp(other.qRotation, t, om.qInterpB)
 		om.axesB.Set(om.qInterpB.ToAxes())
 
 		sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, &om.axesA, scx, scy, scz, &om.axesB, ocx, ocy, ocz)
@@ -132,9 +150,9 @@ func (om *OBBManifold) findSweptImpact(
 		if gap <= ccdGapTol {
 			if closeRate > 1e-9 && t < 1.0 {
 				t = math.Min(1.0, t+(gap+1e-4)/closeRate)
-				r.qPrev.Nlerp(r.qRotation, t, &om.qInterpA)
+				r.qPrev.Nlerp(r.qRotation, t, om.qInterpA)
 				om.axesA.Set(om.qInterpA.ToAxes())
-				other.qPrev.Nlerp(other.qRotation, t, &om.qInterpB)
+				other.qPrev.Nlerp(other.qRotation, t, om.qInterpB)
 				om.axesB.Set(om.qInterpB.ToAxes())
 				sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, &om.axesA, scx, scy, scz, &om.axesB, ocx, ocy, ocz)
 			}

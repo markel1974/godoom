@@ -525,6 +525,7 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 	wCx, wCy, wCz := rLocCx+deltaX, rLocCy+deltaY, rLocCz+deltaZ
 	wHx, wHy, wHz := rLocHx, rLocHy, rLocHz
 
+	lEnt := s.object.GetEntity()
 	if f, ok := src.(IFace); ok {
 		nX, nY, nZ := f.GetNormal()
 		if p := f.GetParent(); p != nil {
@@ -541,14 +542,27 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 				nX = rA00*fnX + rA10*fnY + rA20*fnZ
 				nY = rA01*fnX + rA11*fnY + rA21*fnZ
 				nZ = rA02*fnX + rA12*fnY + rA22*fnZ
+				rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
+				wHx += math.Abs(rDX - s.dX)
+				wHy += math.Abs(rDY - s.dY)
+				wHz += math.Abs(rDZ - s.dZ)
 			}
 		}
-		wHx += math.Abs(nX) * s.eRadX * 2.0
-		wHy += math.Abs(nY) * s.eRadY * 2.0
-		wHz += math.Abs(nZ) * s.eRadZ * 2.0
+		sx, sy, sz := lEnt.GetSweptHalfExtents()
+		if sx < s.eRadX {
+			sx = s.eRadX
+		}
+		if sy < s.eRadY {
+			sy = s.eRadY
+		}
+		if sz < s.eRadZ {
+			sz = s.eRadZ
+		}
+		wHx += math.Abs(nX) * sx * 2.0
+		wHy += math.Abs(nY) * sy * 2.0
+		wHz += math.Abs(nZ) * sz * 2.0
 	}
 
-	lEnt := s.object.GetEntity()
 	lA00, lA01, lA02, lA10, lA11, lA12, lA20, lA21, lA22 := lEnt.GetAxes()
 	lLocCx := wCx*lA00 + wCy*lA01 + wCz*lA02
 	lLocCy := wCx*lA10 + wCy*lA11 + wCz*lA12

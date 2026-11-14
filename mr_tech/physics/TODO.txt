@@ -4,10 +4,6 @@
 
 fixUpwardsTree aggiorna gli AABB risalendo verso la radice ma non esegue rotazioni AVL/SAH come b2DynamicTree, e updateLeaf reinserisce sempre la foglia senza tolleranza di movimento dentro il margin: su mappe con molti oggetti dinamici in movimento continuo l'albero può sbilanciarsi nel tempo.
 
-5) Swept / CCD angolare e contatti su spigoli sottili (edge-edge) tra due OBB
-
-In computeFaceMeshVsMesh la modalità sweptMode testa lo spostamento lineare dell'AABB (computeTOI), non la rotazione dell'OBB nel timestep, e in OverlapBBAtOffset hai già tutti e 15 gli assi SAT (incluse le 9 coppie edge-edge), ma poi il calcolo di normale/punto di contatto torna a lavorare sulle facce triangolari snappate anziché sfruttare direttamente l'asse SAT vincente.
-
 6) Pulizia architetturale dei package (aabb vs obb/math3d)
 
 Come accennavi prima, mr_tech/physics/aabb oggi contiene sia la broadphase (Tree, AABB) sia la parte matematica/OBB (BoundingBox, Quaternion, Axis, Frustum, Plane): separarli renderebbe molto più chiari i confini tra broadphase e narrowphase.

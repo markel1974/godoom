@@ -1164,11 +1164,6 @@ func (e *Cinematic) rotationalMass(rx, ry, rz float64, dx, dy, dz float64) (floa
 	return ux, uy, uz, mass
 }
 
-// angularMomentumFor returns the angular momentum vector for the given angular velocity.
-func (e *Cinematic) angularMomentumFor(wx, wy, wz float64) (float64, float64, float64) {
-	return e.world.MultiplySymmetric(wx, wy, wz)
-}
-
 // addClampedAngular adds a scaled angular impulse and clamps tilt and yaw velocities to their limits.
 func (e *Cinematic) addClampedAngular(scale, ux, uy, uz float64) {
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+scale*ux))
@@ -1233,7 +1228,7 @@ func (e *Cinematic) applyFrictionAngular(jt, frictionRotScale, utx, uty, utz flo
 // integrateGyroscopic advances angular velocity due to gyroscopic precession using a midpoint step.
 // It projects explicit integration results back to the initial rotational energy when needed.
 func (e *Cinematic) integrateGyroscopic() {
-	lx, ly, lz := e.angularMomentumFor(e.wx, e.wy, e.wz)
+	lx, ly, lz := e.world.MultiplySymmetric(e.wx, e.wy, e.wz)
 	t0 := e.wx*lx + e.wy*ly + e.wz*lz
 	if t0 <= gyroEnergyEpsilon {
 		return
@@ -1245,13 +1240,13 @@ func (e *Cinematic) integrateGyroscopic() {
 	mwy := e.wy + ay*halfDt
 	mwz := e.wz + az*halfDt
 
-	mlx, mly, mlz := e.angularMomentumFor(mwx, mwy, mwz)
+	mlx, mly, mlz := e.world.MultiplySymmetric(mwx, mwy, mwz)
 	ax, ay, az = e.gyroscopicAccel(mwx, mwy, mwz, mlx, mly, mlz)
 
 	nwx := e.wx + ax*e.dt
 	nwy := e.wy + ay*e.dt
 	nwz := e.wz + az*e.dt
-	nlx, nly, nlz := e.angularMomentumFor(nwx, nwy, nwz)
+	nlx, nly, nlz := e.world.MultiplySymmetric(nwx, nwy, nwz)
 	// Explicit steps can add numerical energy; project back onto the initial energy ellipsoid.
 	t1 := nwx*nlx + nwy*nly + nwz*nlz
 	if t1 > t0 && t1 > gyroEnergyEpsilon {

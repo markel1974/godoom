@@ -70,8 +70,8 @@ func (p BucketType) Opposite() BucketType {
 // BucketSize defines the size of a single bucket, calculated as BucketFloor + 1.
 const BucketSize = BucketFloor + 1
 
-// FacesPerBucket specifies the number of faces allocated per bucket.
-const FacesPerBucket = 4
+// FacesPerBucket specifies the maximum number of manifold/face entries stored per bucket.
+const FacesPerBucket = 16
 
 // Bucket holds collision data for a specific bucket, including spare and active cage entries and counters.
 type Bucket struct {
@@ -149,14 +149,18 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.container[i]
-		// DEDUPLICAZIONE PER ENTITÀ DINAMICHE (Contact Reduction)
-		// Se questa faccia appartiene allo STESSO oggetto dinamico che abbiamo già registrato in QUESTO bucket...
+		// Deduplicate coincident dynamic contact points for the same body, preserving up to 4 manifold corners.
 		if rCage != nil && existing.rCage != nil {
 			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
-				if penetration > existing.penetration {
-					existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+				dx := p0x - existing.p0X
+				dy := p0y - existing.p0Y
+				dz := p0z - existing.p0Z
+				if dx*dx+dy*dy+dz*dz < planeEpsilon*planeEpsilon {
+					if penetration > existing.penetration {
+						existing.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+					}
+					return nil
 				}
-				return nil // Interrompiamo: abbiamo già gestito questo oggetto in questo bucket
 			}
 		}
 		// DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)

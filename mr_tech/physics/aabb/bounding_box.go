@@ -379,8 +379,8 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dz := (z + (d * 0.5)) - cz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
-	hit, _, _ := overlapOBB(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
-	return hit
+	res := satOBB(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
+	return res.hit
 }
 
 // IntersectBB tests this OBB against another OBB.
@@ -405,128 +405,6 @@ func (r *BoundingBox) OverlapBBAtOffset(other *BoundingBox, offX, offY, offZ flo
 	dz := tz - pz + offZ
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
-	return overlapOBB(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
-}
-
-// overlapOBB performs the 15-axis Separating Axis Theorem test and tracks Euclidean overlap/gap bounds.
-// It uses fixed-size arrays and does not create slices or heap objects.
-func overlapOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) (bool, float64, float64) {
-	var hA = [3]float64{scx, scy, scz}
-	var hB = [3]float64{ocx, ocy, ocz}
-	var R [3][3]float64
-	var AbsR [3][3]float64
-	// Rotation matrix between the two box coordinate systems.
-	// The epsilon stabilizes nearly parallel axes.
-	const epsilon = 1e-12
-	const crossAxisLenEps = 1e-6
-	for i := 0; i < 3; i++ {
-		ax := a.data[i][0]
-		ay := a.data[i][1]
-		az := a.data[i][2]
-		for j := 0; j < 3; j++ {
-			value := ax*b.data[j][0] + ay*b.data[j][1] + az*b.data[j][2]
-			R[i][j] = value
-			AbsR[i][j] = math.Abs(value) + epsilon
-		}
-	}
-
-	// Center displacement in A's coordinate system.
-	t0 := dx*a.data[0][0] + dy*a.data[0][1] + dz*a.data[0][2]
-	t1 := dx*a.data[1][0] + dy*a.data[1][1] + dz*a.data[1][2]
-	t2 := dx*a.data[2][0] + dy*a.data[2][1] + dz*a.data[2][2]
-
-	separated := false
-	minPen := math.MaxFloat64
-	maxGap := 0.0
-
-	// Test the three axes of A.
-	for i := 0; i < 3; i++ {
-		rb := hB[0]*AbsR[i][0] + hB[1]*AbsR[i][1] + hB[2]*AbsR[i][2]
-		var distance float64
-		switch i {
-		case 0:
-			distance = math.Abs(t0)
-		case 1:
-			distance = math.Abs(t1)
-		default:
-			distance = math.Abs(t2)
-		}
-		if distance > hA[i]+rb {
-			separated = true
-			if g := distance - (hA[i] + rb); g > maxGap {
-				maxGap = g
-			}
-		} else if !separated {
-			if p := hA[i] + rb - distance; p < minPen {
-				minPen = p
-			}
-		}
-	}
-
-	// Test the three axes of B.
-	for j := 0; j < 3; j++ {
-		ra := hA[0]*AbsR[0][j] + hA[1]*AbsR[1][j] + hA[2]*AbsR[2][j]
-		distance := math.Abs(t0*R[0][j] + t1*R[1][j] + t2*R[2][j])
-		if distance > ra+hB[j] {
-			separated = true
-			if g := distance - (ra + hB[j]); g > maxGap {
-				maxGap = g
-			}
-		} else if !separated {
-			if p := ra + hB[j] - distance; p < minPen {
-				minPen = p
-			}
-		}
-	}
-
-	// Test the nine cross-product axes A[i] x B[j].
-	// These are evaluated directly without constructing vectors.
-	for i := 0; i < 3; i++ {
-		i1 := (i + 1) % 3
-		i2 := (i + 2) % 3
-
-		for j := 0; j < 3; j++ {
-			j1 := (j + 1) % 3
-			j2 := (j + 2) % 3
-			ra := hA[i1]*AbsR[i2][j] + hA[i2]*AbsR[i1][j]
-			rb := hB[j1]*AbsR[i][j2] + hB[j2]*AbsR[i][j1]
-			var ti1, ti2 float64
-			switch i1 {
-			case 0:
-				ti1 = t0
-			case 1:
-				ti1 = t1
-			default:
-				ti1 = t2
-			}
-			switch i2 {
-			case 0:
-				ti2 = t0
-			case 1:
-				ti2 = t1
-			default:
-				ti2 = t2
-			}
-			distance := math.Abs(ti2*R[i1][j] - ti1*R[i2][j])
-			axisLen := math.Hypot(R[i1][j], R[i2][j])
-			if distance > ra+rb {
-				separated = true
-				if axisLen > crossAxisLenEps {
-					if g := (distance - (ra + rb)) / axisLen; g > maxGap {
-						maxGap = g
-					}
-				}
-			} else if !separated && axisLen > crossAxisLenEps {
-				if p := (ra + rb - distance) / axisLen; p < minPen {
-					minPen = p
-				}
-			}
-		}
-	}
-
-	if separated {
-		return false, 0.0, maxGap
-	}
-	// Preserve the previous contact semantics: touching is intersection.
-	return true, minPen, 0.0
+	res := satOBB(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+	return res.hit, res.minPen, res.maxGap
 }

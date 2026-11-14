@@ -244,6 +244,8 @@ func (t *Base) StageApply() {
 	targetBaseZ := targetZ - targetRadZ
 	// RISOLUZIONE GEOMETRICA (Push-out)
 	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.
+	var lastCollisionId uint64
+	hasCollisionId := false
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 		iMode := slot.GetImpactMode()
@@ -265,7 +267,12 @@ func (t *Base) StageApply() {
 					entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
 				}
 			}
-			t.onCollision(rCage.GetObject().(volumes.IThing))
+			rId := rCage.GetEntity().GetId()
+			if !hasCollisionId || lastCollisionId != rId {
+				t.onCollision(rCage.GetObject().(volumes.IThing))
+				lastCollisionId = rId
+				hasCollisionId = true
+			}
 		case collisions.ImpactInelastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()

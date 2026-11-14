@@ -1,18 +1,35 @@
+1) Contact Manifold multi-punto (2–4 punti) e normale OBB non snappata in computeFaceMeshVsMesh
+
+Oggi Bucket.Add riduce il contatto dinamico a un solo punto per bucket e in computeFaceMeshVsMesh la normale ruotata dell'OBB remoto viene ancora snappata sugli assi cardinali (±X/±Y/±Z).
+È proprio questo che ti obbliga ad avere stabilizzazioni euristiche in Cinematic (normalRotScale, face-slap absorption, frictionRotBaseScale, ridgeBreakKick): con un clipping faccia-faccia a 2–4 vertici e la normale reale dell'asse MTV SAT, l'equilibrio di pile e appoggi su spigolo diventa intrinsecamente stabile senza trucchi empirici.
+
+2) Warm Starting sugli impulsi persistenti
+
+In Entry.Rebuild accNormal, accTx, accTy, accTz ripartono da 0 a ogni frame. Trasferire una frazione degli impulsi accumulati dal frame precedente ai contatti persistenti aumenterebbe molto la rigidità di pile alte a parità di SolverIterations.
+
+3) Rilassamento iterativo / split-impulse anche sul push-out posizionale (StageApply)
+
+il solver agli impulsi ora itera (SolverIterations), ma la separazione posizionale (ResolveElasticPenetration/ResolveInelasticPenetration) gira in una sola passata: su torri alte di casse questo lascia leggera comprimibilità verticale rispetto a un push-out iterativo o a split-impulse/NGS.
+
+4) Sleeping reale / Collision Islands (con wake-up)
+
+Cinematic.Update azzera le micro-velocità (sleepEpsilon, angSleepEpsilon), ma in Things.Compute tutti gli oggetti attivi continuano comunque a ricostruire la Cage, interrogare l'albero e girare nel solver ogni tick. Aggiungere un vero stato sleeping (risvegliato da nuovi impatti o spostamento del supporto) azzererebbe drift residui e carico CPU con tanti oggetti fermi.
+
+4) Rotazioni di ribilanciamento in Tree
+
+fixUpwardsTree aggiorna gli AABB risalendo verso la radice ma non esegue rotazioni AVL/SAH come b2DynamicTree, e updateLeaf reinserisce sempre la foglia senza tolleranza di movimento dentro il margin: su mappe con molti oggetti dinamici in movimento continuo l'albero può sbilanciarsi nel tempo.
+
+5) Swept / CCD angolare e contatti su spigoli sottili (edge-edge) tra due OBB
+
+In computeFaceMeshVsMesh la modalità sweptMode testa lo spostamento lineare dell'AABB (computeTOI), non la rotazione dell'OBB nel timestep, e in OverlapBBAtOffset hai già tutti e 15 gli assi SAT (incluse le 9 coppie edge-edge), ma poi il calcolo di normale/punto di contatto torna a lavorare sulle facce triangolari snappate anziché sfruttare direttamente l'asse SAT vincente.
+
+6) Pulizia architetturale dei package (aabb vs obb/math3d)
+
+Come accennavi prima, mr_tech/physics/aabb oggi contiene sia la broadphase (Tree, AABB) sia la parte matematica/OBB (BoundingBox, Quaternion, Axis, Frustum, Plane): separarli renderebbe molto più chiari i confini tra broadphase e narrowphase.
 
 
 
-Iterazioni di Rilassamento per Torri/Stacking Multiplo:
-Attualmente la compenetrazione viene risolta in un'unica passata per frame. Se impili 2 oggetti (es. cassa su nemico o cassa su pavimento) funziona perfettamente; se crei torri di 4-5 casse una sopra l'altra, una singola passata può mostrare una leggera compressione "spugnosa" alla base. Aggiungere 2 o 3 sub-iterazioni nel ciclo di push-out renderebbe le pile alte rigide al 100%.
-
-
-Sleeping State Formale (IsSleeping):
-Quando una cassa o un nemico morto è fermo da più di N frame sotto la soglia di velocità (vMin), metterlo in modalità "sonno" permetterebbe di saltare i calcoli fisici dettagliati finché un altro oggetto in movimento non lo tocca o non si muove il supporto sottostante.
-
-
-Punti di Contatto Multipli (Contact Manifold):
-Al momento il punto di contatto tra due OBB viene stimato con il centro e gli half-extents orientati. La stabilizzazione verticale (upright stabilization) fa già un lavoro eccellente per evitare che i corpi si ribaltino in modo anomalo; un manifold a 2-4 punti sarebbe lo step successivo solo se volessi simulare bilanciamenti precisi di assi o travi in bilico su uno spigolo.
-
-
+Se vuoi, il prossimo salto di qualità più concreto (e meno invasivo rispetto a riscrivere tutto) è proprio il punto 1/6 (usare l'asse SAT vincente in OverlapBBAtOffset + eventuale manifold a 2–4 punti) oppure lo split/rinomina del package aabb, o un passo sul warm starting / sleeping. Quale vuoi affrontare?
 
 A. Risposta agli impatti
 
@@ -47,31 +64,4 @@ Hai un dt associato a Cinematic, un FPS globale e un tick specifico per Joints.
 
 La cosa che renderei rigorosa è l'esistenza di un unico riferimento temporale per tutti i sottosistemi, preferibilmente attraverso un timestep fisso indipendente dal framerate del rendering.
 
-Questo è importante soprattutto quando collisioni, ragdoll e corpi rigidi interagiscono nello stesso frame.
-6. Il punto architetturale più importante
-Secondo me devi distinguere due cose.
 
-Il tuo sistema attuale è già un motore di simulazione fisica personalizzato, ma non è ancora un motore general-purpose paragonabile, per completezza delle funzionalità, a Bullet o PhysX.
-
-Non lo considero un difetto.
-
-Per il tuo progetto, avere un sistema specializzato che conosce:
-- OBB e AABB;
-- le unità spaziali del motore;
-- la gerarchia dei modelli;
-- le articolazioni;
-- gli impatti;
-- il comportamento degli oggetti di gioco;
-può essere molto più vantaggioso che introdurre un framework esterno.
-
-Ci sono però alcune cose che sistemerei prima di considerarlo maturo:
-Area	Valutazione
-Modello matematico 3D	Buono
-Dinamica traslazionale	Buona
-Dinamica rotazionale	Buona base
-Collision detection OBB	Buona
-Risposta agli impatti	Da perfezionare
-Broadphase AABB	Buona base
-Ragdoll articolare	Molto interessante
-Stabilità numerica	Da verificare sistematicamente
-Architettura	Buona

@@ -73,6 +73,9 @@ const toiTieEpsilon = 1e-4
 // TotalSlots represents the total available slots, computed as BucketSize * FacesPerBucket.
 const totalSlots = BucketSize * FacesPerBucket
 
+// floorGroundTolerance keeps floor contact grounded within a small vertical hover band.
+const floorGroundTolerance = 0.25
+
 // Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
 	seen                []uint64
@@ -93,6 +96,7 @@ type Cage struct {
 	maxStep             float64
 	faces               []*Faces
 	facesIdx            int
+	manifold1           *aabb.OBBManifold
 	hasFloor            bool
 	applied             bool
 	appliedX            float64
@@ -115,6 +119,7 @@ func NewCage(id uint64, object IObject) *Cage {
 		faces:     make([]*Faces, 8),
 		facesIdx:  0,
 		hasFloor:  false,
+		manifold1: aabb.NewOBBManifold(),
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
@@ -226,6 +231,13 @@ func (s *Cage) Commit(rCage *Cage) {
 		lOffX += s.dX
 		lOffY += s.dY
 		lOffZ += s.dZ
+
+		if s.facesIdx > 0 && s.faces[0].lFace != nil {
+			if s.commitDynamicManifold(rCage) {
+				s.facesIdx = 0
+				return
+			}
+		}
 	}
 
 	for x := 0; x < s.facesIdx; x++ {
@@ -260,7 +272,6 @@ func (s *Cage) Commit(rCage *Cage) {
 		}
 
 		// Floor support detection: resting contacts within ground tolerance maintain hasFloor = true[cite: 6]
-		const floorGroundTolerance = 0.25
 		if b == BucketFloor {
 			if dist <= floorGroundTolerance {
 				s.hasFloor = true
@@ -327,6 +338,108 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pe
 		return true
 	}
 	return false
+}
+
+func classifyBucketNormal(nX, nY, nZ float64) BucketType {
+	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
+	if nAbsX > nAbsY && nAbsX > nAbsZ {
+		if nX < 0 {
+			return BucketWallWest
+		}
+		return BucketWallEast
+	}
+	if nAbsY > nAbsZ {
+		if nY < 0 {
+			return BucketWallNorth
+		}
+		return BucketWallSouth
+	}
+	if nZ > 0 {
+		return BucketFloor
+	}
+	return BucketCeiling
+}
+
+// commitDynamicManifold resolves an overlapping OBB pair using the unsnapped 15-axis SAT normal
+// and up to 4 clipped manifold contact points, returning true if handled cleanly without swept fallback.
+func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
+	lEnt := s.object.GetEntity()
+	rEnt := rCage.GetEntity()
+	rDX, rDY, rDZ := rCage.GetDisplacement()
+	m := s.manifold1
+	m.ComputeOBBManifoldAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
+
+	b := classifyBucketNormal(m.NormalX, m.NormalY, m.NormalZ)
+	if !m.Hit {
+		if (b == BucketFloor || b == BucketCeiling) && m.Gap <= floorGroundTolerance {
+			if b == BucketFloor {
+				s.hasFloor = true
+			} else {
+				rCage.hasFloor = true
+			}
+			return true
+		}
+		return false
+	}
+
+	dist := -m.Penetration
+	if b == BucketFloor && dist <= floorGroundTolerance {
+		s.hasFloor = true
+	} else if b == BucketCeiling && dist <= floorGroundTolerance {
+		rCage.hasFloor = true
+	}
+
+	if m.Penetration <= 0 || m.Count == 0 {
+		return true
+	}
+
+	_, _, rTz := rCage.GetT()
+	_, _, rRadZ := rCage.GetRad()
+	rMaxZ := rTz + rRadZ
+	lMaxZ := s.tZ + s.eRadZ
+
+	iMode := ImpactElastic
+	if b.IsWall() {
+		baseZ := s.GetBaseZ()
+		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
+		if rMaxZ <= minBaseZ+satFilterEpsilon {
+			return true
+		}
+		stepZ := baseZ + s.maxStep
+		if s.maxStep > 0 && rMaxZ <= stepZ {
+			iMode = ImpactStep
+		}
+	}
+
+	rFace := s.faces[0].rFace
+	recipFace := s.faces[0].lFace
+	if recipFace == nil {
+		recipFace = rFace
+	}
+
+	for pi := 0; pi < m.Count; pi++ {
+		pt := m.Points[pi]
+		if pt.Penetration <= 0 {
+			continue
+		}
+		ptDist := -pt.Penetration
+		s.addToBucket(b, rCage, rFace, ptDist, pt.Penetration, m.NormalX, m.NormalY, m.NormalZ, pt.X, pt.Y, pt.Z, rMaxZ, iMode)
+		if iMode == ImpactElastic {
+			oppB := b.Opposite()
+			rCage.addToBucket(oppB, s, recipFace, ptDist, pt.Penetration, -m.NormalX, -m.NormalY, -m.NormalZ, pt.X, pt.Y, pt.Z, lMaxZ, ImpactElastic)
+			if oppB == BucketFloor {
+				rCage.hasFloor = true
+			}
+		}
+	}
+
+	switch b {
+	case BucketFloor:
+		s.hasFloor = true
+	case BucketCeiling:
+		rCage.hasFloor = true
+	}
+	return true
 }
 
 // TranslateWorldToLocal transforms the world-space AABB of the ellipsoid to local-space relative to the given delta values.[cite: 6]
@@ -768,33 +881,46 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	rEnt := rCage.GetEntity()
 	isMeshSurface := !rEnt.KeepUpright() || math.Abs(outDot) > planeEpsilon
 
-	if solidWE {
-		if nX < 0 {
-			nX = -1.0
+	if rEnt.KeepUpright() {
+		if solidWE {
+			if nX < 0 {
+				nX = -1.0
+			} else {
+				nX = 1.0
+			}
+			nY, nZ = 0.0, 0.0
+			nAbsX, nAbsY, nAbsZ = 1.0, 0.0, 0.0
+			p0x, p0y, p0z = rTx+nX*rRadX, rTy, rTz
+		} else if solidNS {
+			if nY < 0 {
+				nY = -1.0
+			} else {
+				nY = 1.0
+			}
+			nX, nZ = 0.0, 0.0
+			nAbsX, nAbsY, nAbsZ = 0.0, 1.0, 0.0
+			p0x, p0y, p0z = rTx, rTy+nY*rRadY, rTz
 		} else {
-			nX = 1.0
+			if nZ < 0 {
+				nZ = -1.0
+			} else {
+				nZ = 1.0
+			}
+			nX, nY = 0.0, 0.0
+			nAbsX, nAbsY, nAbsZ = 0.0, 0.0, 1.0
+			p0x, p0y, p0z = rTx, rTy, rTz+nZ*rRadZ
 		}
-		nY, nZ = 0.0, 0.0
-		nAbsX, nAbsY, nAbsZ = 1.0, 0.0, 0.0
-		p0x, p0y, p0z = rTx+nX*rRadX, rTy, rTz
-	} else if solidNS {
-		if nY < 0 {
-			nY = -1.0
-		} else {
-			nY = 1.0
-		}
-		nX, nZ = 0.0, 0.0
-		nAbsX, nAbsY, nAbsZ = 0.0, 1.0, 0.0
-		p0x, p0y, p0z = rTx, rTy+nY*rRadY, rTz
 	} else {
-		if nZ < 0 {
-			nZ = -1.0
-		} else {
-			nZ = 1.0
+		nLen := math.Sqrt(nX*nX + nY*nY + nZ*nZ)
+		if nLen <= 1e-12 {
+			return 0, 0, 0, 0, 0, 0, p0x, p0y, p0z, 0, 0
 		}
-		nX, nY = 0.0, 0.0
-		nAbsX, nAbsY, nAbsZ = 0.0, 0.0, 1.0
-		p0x, p0y, p0z = rTx, rTy, rTz+nZ*rRadZ
+		nX /= nLen
+		nY /= nLen
+		nZ /= nLen
+		nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), math.Abs(nZ)
+		rExt := rEnt.ProjectExtent(nX, nY, nZ)
+		p0x, p0y, p0z = rTx+nX*rExt, rTy+nY*rExt, rTz+nZ*rExt
 	}
 
 	// Punto di ancoraggio del piano remoto a inizio frame (t = 0)[cite: 6]
@@ -1012,29 +1138,16 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		}
 	}
 
-	// Classificazione finale del Bucket e assegnazione coordinate tangenziali del punto di contatto[cite: 6]
-	var bucket BucketType
-	if solidWE {
+	// Classificazione finale del Bucket e assegnazione coordinate del punto di contatto[cite: 6]
+	bucket := classifyBucketNormal(nX, nY, nZ)
+	if !rEnt.KeepUpright() {
+		p0x, p0y, p0z = contactX, contactY, contactZ
+	} else if solidWE {
 		p0y, p0z = contactY, contactZ
-		if nX < 0 {
-			bucket = BucketWallWest
-		} else {
-			bucket = BucketWallEast
-		}
 	} else if solidNS {
 		p0x, p0z = contactX, contactZ
-		if nY < 0 {
-			bucket = BucketWallNorth
-		} else {
-			bucket = BucketWallSouth
-		}
 	} else {
 		p0x, p0y = contactX, contactY
-		if nZ > 0 {
-			bucket = BucketFloor
-		} else {
-			bucket = BucketCeiling
-		}
 	}
 
 	return bucket, hitDist, maxPenetration, nX, nY, nZ, p0x, p0y, p0z, axisOverlap, rFMaxZ

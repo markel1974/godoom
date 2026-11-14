@@ -379,8 +379,10 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dz := (z + (d * 0.5)) - cz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
-	res := satOBB(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
-	return res.hit
+	//TODO RIMUOVERE
+	var sat Sat
+	sat.Compute(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
+	return sat.hit
 }
 
 // IntersectBB tests this OBB against another OBB.
@@ -405,6 +407,9 @@ func (r *BoundingBox) OverlapBBAtOffset(other *BoundingBox, offX, offY, offZ flo
 	dz := tz - pz + offZ
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
-	res := satOBB(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
-	return res.hit, res.minPen, res.maxGap
+
+	//TODO RIMUOVERE
+	var sat Sat
+	sat.Compute(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+	return sat.hit, sat.minPen, sat.maxGap
 }

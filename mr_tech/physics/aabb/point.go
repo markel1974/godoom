@@ -65,14 +65,6 @@ func (p *Point) AddTo(x float64, y float64, z float64) {
 	p.z1 += z
 }
 
-// Distance returns the x, y, and z offsets from the point to the target point.
-func (p *Point) Distance(target *Point) (float64, float64, float64) {
-	dx := target.x1 - p.x1
-	dy := target.y1 - p.y1
-	dz := target.z1 - p.z1
-	return dx, dy, dz
-}
-
 // AddToX increments the x-coordinate of the Point by the specified value.
 func (p *Point) AddToX(x float64) {
 	p.x1 += x

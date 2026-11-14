@@ -8,8 +8,7 @@ const maxTiltSin = 0.30
 
 var _maxTiltAngle = math.Asin(maxTiltSin) //, in radians
 
-// var _oobId = [3]obbVector{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
-var _oobId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
+var _axisId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
 // BoundingBox represents a 3D oriented bounding box (OBB) and its enclosing axis-aligned bounding box (AABB).
 type BoundingBox struct {
@@ -383,7 +382,7 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dz := (z + (d * 0.5)) - cz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
-	return intersectsOBB(dx, dy, dz, &r.axis, scx, scy, scz, _oobId, ocx, ocy, ocz)
+	return intersectsOBB(dx, dy, dz, &r.axis, scx, scy, scz, _axisId, ocx, ocy, ocz)
 }
 
 // IntersectBB tests this OBB against another OBB.

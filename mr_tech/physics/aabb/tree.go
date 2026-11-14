@@ -380,7 +380,7 @@ func (a *Tree) deallocateNode(nodeIndex uint) {
 		return
 	}
 
-	if nodeIndex >= 0 && nodeIndex < uint(len(a.nodes)) {
+	if nodeIndex < uint(len(a.nodes)) {
 		deallocatedNode := a.nodes[nodeIndex]
 		deallocatedNode.object = nil
 		deallocatedNode.nextNodeIndex = a.nextFreeNodeIndex
@@ -486,7 +486,6 @@ func (a *Tree) removeLeaf(leafNodeIndex uint) {
 	// if the leaf is the root then we can just clear the root pointer and return
 	if leafNodeIndex == a.rootNodeIndex {
 		a.rootNodeIndex = AABBNullNode
-		a.deallocateNode(leafNodeIndex)
 		return
 	}
 	leafNode := a.nodes[leafNodeIndex]
@@ -522,17 +521,10 @@ func (a *Tree) removeLeaf(leafNodeIndex uint) {
 	leafNode.parentNodeIndex = AABBNullNode
 }
 
-// updateLeaf updates the AABB of a leaf node if the new AABB does not fit within the current margin.
-// It removes the leaf, updates its AABB, and reinserts it into the tree.
+// updateLeaf removes the leaf, updates its expanded AABB, and reinserts it into the tree.
 func (a *Tree) updateLeaf(leafNodeIndex uint, newAABB *AABB) {
 	node := a.nodes[leafNodeIndex]
-	// Branch Prediction amichevole: nel 99% dei frame le entità restano nel loro Fat Margin
-	if node.aabb.Contains(newAABB) {
-		return
-	}
-	// Boundary violato: mutazione dell'albero necessaria
 	a.removeLeaf(leafNodeIndex)
-	//node.aabb = NewAABBExpand(newAABB, a.margin)
 	node.aabb.ExpandInPlace(newAABB, a.margin)
 	a.insertLeaf(leafNodeIndex)
 }

@@ -1,5 +1,7 @@
 package aabb
 
+import "math"
+
 // IObject represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
 // GetAABB retrieves the AABB associated with the object implementing the IAABB interface.
 type IObject interface {
@@ -202,26 +204,35 @@ func (a *AABB) IntersectInPlace(src, other *AABB) {
 
 // IntersectRay checks if a ray intersects the AABB and calculates the intersection distance if applicable.
 func (a *AABB) IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ float64) (float64, bool) {
-	t1 := (a.minX - oX) * invDirX
-	t2 := (a.maxX - oX) * invDirX
-	tMin := min(t1, t2)
-	tMax := max(t1, t2)
+	tMin, tMax := slabAxis(oX, a.minX, a.maxX, invDirX)
 
-	t1 = (a.minY - oY) * invDirY
-	t2 = (a.maxY - oY) * invDirY
-	tMin = max(tMin, min(t1, t2))
-	tMax = min(tMax, max(t1, t2))
+	tyMin, tyMax := slabAxis(oY, a.minY, a.maxY, invDirY)
+	tMin = max(tMin, tyMin)
+	tMax = min(tMax, tyMax)
 
-	t1 = (a.minZ - oZ) * invDirZ
-	t2 = (a.maxZ - oZ) * invDirZ
-	tMin = max(tMin, min(t1, t2))
-	tMax = min(tMax, max(t1, t2))
+	tzMin, tzMax := slabAxis(oZ, a.minZ, a.maxZ, invDirZ)
+	tMin = max(tMin, tzMin)
+	tMax = min(tMax, tzMax)
 
 	// Intersezione valida se tMax >= tMin e il volume è davanti al raggio (tMax >= 0)
 	if tMax >= max(tMin, 0.0) {
 		return max(tMin, 0.0), true
 	}
 	return 0.0, false
+}
+
+// slabAxis computes the clipped ray [tNear, tFar] interval along a single axis,
+// avoiding 0*Inf NaNs when the ray runs parallel to and lies on a slab boundary.
+func slabAxis(o, minB, maxB, invDir float64) (float64, float64) {
+	if math.IsInf(invDir, 0) {
+		if !(o >= minB && o <= maxB) {
+			return math.Inf(1), math.Inf(-1)
+		}
+		return math.Inf(-1), math.Inf(1)
+	}
+	t1 := (minB - o) * invDir
+	t2 := (maxB - o) * invDir
+	return min(t1, t2), max(t1, t2)
 }
 
 // IntersectFrustum determines whether the AABB intersects with or is partially contained within the given Frustum.

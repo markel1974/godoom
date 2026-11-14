@@ -1,4 +1,5 @@
-
+1)
+Il percorso collisioni in cage.go è ancora ibrido: il clipping multi-punto (ComputeStaticTriangle) convive sopra le vecchie euristiche a punto singolo (computeFace / computeFaceMeshVsMesh con GetStabilizedContactPoint). È pragmatico e funziona, ma resta la parte meno lineare rispetto a commitDynamicManifold.
 
 4) Rotazioni di ribilanciamento in Tree
 

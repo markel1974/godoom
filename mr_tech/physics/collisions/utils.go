@@ -43,19 +43,3 @@ func computeTOI(relX, relY, relZ, sumRadX, sumRadY, sumRadZ, impX, impY, impZ fl
 	}
 	return tEnter, tExit, tEnterX, tEnterY, tEnterZ, true
 }
-
-// isDiscreteMTV determines if a box satisfies discrete Minimum Translation Vector (MTV) criteria under SAT constraints.
-func isDiscreteMTV(prevA, boxA, relA, impA, prevB, boxB, prevC, boxC float64) bool {
-	if prevA > prevB+satFilterEpsilon || prevA > prevC+satFilterEpsilon {
-		return false
-	}
-	tieB := math.Abs(prevA-prevB) <= satFilterEpsilon
-	tieC := math.Abs(prevA-prevC) <= satFilterEpsilon
-	if tieB && boxA > boxB+satFilterEpsilon && relA*impA >= -planeEpsilon {
-		return false
-	}
-	if tieC && boxA > boxC+satFilterEpsilon && relA*impA >= -planeEpsilon {
-		return false
-	}
-	return true
-}

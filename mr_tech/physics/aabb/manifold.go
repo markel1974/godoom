@@ -340,16 +340,17 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 
 // ComputeStaticTriangle clips the incident face of OBB self (shifted by offX, offY, offZ) against the static triangle
 // (v0, v1, v2) with plane normal (nx, ny, nz) pointing toward self, retaining up to MaxManifoldPoints contact points.
+// It reports whether clipping produced at least one penetrating contact point.
 func (om *OBBManifold) ComputeStaticTriangle(
 	self *BoundingBox,
 	offX, offY, offZ float64,
 	nx, ny, nz float64,
 	v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z float64,
-	fallbackX, fallbackY, fallbackZ, fallbackPen float64,
-) {
+	maxPen float64,
+) bool {
 	om.Hit = true
 	om.NormalX, om.NormalY, om.NormalZ = nx, ny, nz
-	om.Penetration = fallbackPen
+	om.Penetration = maxPen
 	om.Gap = 0.0
 
 	px, py, pz := self.center.Get()
@@ -370,12 +371,17 @@ func (om *OBBManifold) ComputeStaticTriangle(
 	if !clipEdgeHalfSpace(om.clipA, om.clipB, v0x, v0y, v0z, v1x, v1y, v1z, effNX, effNY, effNZ) ||
 		!clipEdgeHalfSpace(om.clipB, om.clipA, v1x, v1y, v1z, v2x, v2y, v2z, effNX, effNY, effNZ) ||
 		!clipEdgeHalfSpace(om.clipA, om.clipB, v2x, v2y, v2z, v0x, v0y, v0z, effNX, effNY, effNZ) {
-		om.setSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
-		return
+		om.Count = 0
+		return false
 	}
 
-	candCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, fallbackPen)
-	om.finalizePlaneCandidates(candCount, fallbackX, fallbackY, fallbackZ, fallbackPen)
+	candCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, maxPen)
+	if candCount == 0 {
+		om.Count = 0
+		return false
+	}
+	om.finalizePlaneCandidates(candCount, v0x, v0y, v0z, maxPen)
+	return om.Count > 0
 }
 
 // clipEdgeHalfSpace clips src against the outward normal plane of edge (ax,ay,az)->(bx,by,bz) in the plane with aligned normal effN.

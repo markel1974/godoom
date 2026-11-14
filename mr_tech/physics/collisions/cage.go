@@ -355,7 +355,27 @@ func (s *Cage) Commit(rCage *Cage) {
 			}
 		}
 
-		s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
+		if rCage == nil && iMode == ImpactInelastic && !s.object.GetEntity().KeepUpright() {
+			v0x, v0y, v0z := rFace.Translate(0, rOffX, rOffY, rOffZ)
+			v1x, v1y, v1z := rFace.Translate(1, rOffX, rOffY, rOffZ)
+			v2x, v2y, v2z := rFace.Translate(2, rOffX, rOffY, rOffZ)
+			s.manifold.ComputeStaticTriangle(
+				s.object.GetEntity().BoundingBox,
+				s.dX, s.dY, s.dZ,
+				nX, nY, nZ,
+				v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z,
+				p0x, p0y, p0z, pen,
+			)
+			for pi := 0; pi < s.manifold.Count; pi++ {
+				pt := &s.manifold.Points[pi]
+				if pt.Penetration <= 0 {
+					continue
+				}
+				s.addToBucket(b, nil, rFace, -pt.Penetration, pt.Penetration, nX, nY, nZ, pt.X, pt.Y, pt.Z, rMaxZ, iMode)
+			}
+		} else {
+			s.addToBucket(b, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, rMaxZ, iMode)
+		}
 		if rCage != nil && iMode == ImpactElastic {
 			recipFace := lFace
 			if recipFace == nil {

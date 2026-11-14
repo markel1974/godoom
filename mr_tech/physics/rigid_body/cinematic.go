@@ -104,29 +104,6 @@ const (
 
 	groundedImpactNormalThreshold = 0.25
 
-	// Near-flat floor face-slap absorption and unstable ridge kick constants.
-	faceSlapAlignCosMin = 0.985
-
-	faceSlapAlignRange = 1.0 - faceSlapAlignCosMin
-
-	faceSlapBaseKeep = 0.60
-
-	faceSlapKeepDrop = 0.45
-
-	restingNormalAlignCos = 0.992
-
-	restingNormalTiltSqMax = 1.0
-
-	faceSlapVzAlignCos = 0.994
-
-	ridgeMaxAlignCos = 0.90
-
-	ridgeLeverSqMax = 0.04
-
-	ridgeTiltSqMax = 1e-4
-
-	ridgeBreakKick = 0.1
-
 	// Low-energy floor friction torque attenuation thresholds.
 	frictionLowEnergyHorizSq = 10000.0
 
@@ -169,7 +146,6 @@ type Cinematic struct {
 	groundTiltDamping    float64
 	lowEnergyTiltDamping float64
 	faceAlignCos         float64
-	ridgeBreakApplied    bool
 	sleeping             bool
 	sleepTimer           float64
 	r                    *Matrix3x3
@@ -635,7 +611,6 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	if e.invMass == 0.0 {
 		return
 	}
-	e.ridgeBreakApplied = false
 
 	if e.keepUpright {
 		tiltSq := ax0*ax0 + ax1*ax1
@@ -825,15 +800,13 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 	e2.vy -= jy * invMass2
 	e2.vz -= jz * invMass2
 
-	rotScale1N, _, _ := e.normalRotScale(nz, 0.0)
-	rotScale2N, _, _ := e2.normalRotScale(-nz, 0.0)
 	if invMass1 > 0.0 {
 		u1nx, u1ny, u1nz, _ := e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
-		e.addClampedAngular(jn*rotScale1N, u1nx, u1ny, u1nz)
+		e.addClampedAngular(jn, u1nx, u1ny, u1nz)
 	}
 	if invMass2 > 0.0 {
 		u2nx, u2ny, u2nz, _ := e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
-		e2.addClampedAngular(-jn*rotScale2N, u2nx, u2ny, u2nz)
+		e2.addClampedAngular(-jn, u2nx, u2ny, u2nz)
 	}
 
 	if accTx != nil && accTy != nil && accTz != nil {
@@ -982,10 +955,7 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		actualRestitution = targetVelN
 	}
 
-	rotScale1N, nearFlat1, slapKeep1 := e.normalRotScale(nz, actualRestitution)
-	rotScale2N, nearFlat2, slapKeep2 := e2.normalRotScale(-nz, actualRestitution)
-
-	effMassN := invMass1 + invMass2 + rotScale1N*rotMass1N + rotScale2N*rotMass2N
+	effMassN := invMass1 + invMass2 + rotMass1N + rotMass2N
 	if effMassN <= 0.0 {
 		return
 	}
@@ -1018,10 +988,10 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		e2.vz -= jz * invMass2
 
 		if invMass1 > 0.0 {
-			e.applyNormalAngular(j, rotScale1N, nearFlat1, slapKeep1, u1nx, u1ny, u1nz, r1x, r1y, nz)
+			e.addClampedAngular(j, u1nx, u1ny, u1nz)
 		}
 		if invMass2 > 0.0 {
-			e2.applyNormalAngular(-j, rotScale2N, nearFlat2, slapKeep2, u2nx, u2ny, u2nz, r2x, r2y, -nz)
+			e2.addClampedAngular(-j, u2nx, u2ny, u2nz)
 		}
 	}
 	hasAccT := accTx != nil && (*accTx != 0.0 || *accTy != 0.0 || *accTz != 0.0)
@@ -1199,64 +1169,11 @@ func (e *Cinematic) angularMomentumFor(wx, wy, wz float64) (float64, float64, fl
 	return e.world.MultiplySymmetric(wx, wy, wz)
 }
 
-// normalRotScale returns the consistent angular response scale for normal contact impulses and face-slap parameters.
-func (e *Cinematic) normalRotScale(floorNz, restitution float64) (float64, bool, float64) {
-	nearFlatFloor := !e.keepUpright && floorNz > floorNormalThreshold && restitution == 0.0 && e.faceAlignCos > faceSlapAlignCosMin
-	if !nearFlatFloor {
-		return 1.0, false, 1.0
-	}
-	t := (e.faceAlignCos - faceSlapAlignCosMin) / faceSlapAlignRange
-	if t > 1.0 {
-		t = 1.0
-	}
-	slapKeep := faceSlapBaseKeep - faceSlapKeepDrop*t
-	// Resting near-flat on the floor: attenuate small gravity-induced normal kicks to avoid seesaw/yaw jitter.
-	if e.onGround && e.faceAlignCos > restingNormalAlignCos && (e.wx*e.wx+e.wy*e.wy) < restingNormalTiltSqMax {
-		return slapKeep, true, slapKeep
-	}
-	return 1.0, true, slapKeep
-}
-
 // addClampedAngular adds a scaled angular impulse and clamps tilt and yaw velocities to their limits.
 func (e *Cinematic) addClampedAngular(scale, ux, uy, uz float64) {
 	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wx+scale*ux))
 	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, e.wy+scale*uy))
 	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.wz+scale*uz))
-}
-
-// applyNormalAngular applies a normal collision impulse to angular velocity, clamping tilt and yaw spin.
-// It also dampens near-flat floor slap rebound and breaks unstable tilted ridge equilibrium once per frame.
-func (e *Cinematic) applyNormalAngular(j, rotScaleN float64, nearFlatFloor bool, slapKeep, unx, uny, unz, rx, ry, floorNz float64) {
-	preWx, preWy, preWz := e.wx, e.wy, e.wz
-	dWx := j * rotScaleN * unx
-	dWy := j * rotScaleN * uny
-	dWz := j * rotScaleN * unz
-
-	e.wx = math.Max(-maxTiltVel, math.Min(maxTiltVel, preWx+dWx))
-	e.wy = math.Max(-maxTiltVel, math.Min(maxTiltVel, preWy+dWy))
-	e.wz = math.Max(-maxYawVel, math.Min(maxYawVel, preWz+dWz))
-
-	if j > 0.0 && nearFlatFloor {
-		// Face-slap absorption: when a rotating free body lands near-flat against a floor without bounce,
-		// opposing corners absorb seesaw rebound spin and vertical kick from single-point corner contact.
-		if (preWx*dWx + preWy*dWy) < 0.0 {
-			e.wx *= slapKeep
-			e.wy *= slapKeep
-			if e.faceAlignCos > faceSlapVzAlignCos && e.vz > 0.0 {
-				e.vz *= slapKeep
-			}
-		}
-		if e.faceAlignCos > nearFlatFaceAlignCos && (preWz*dWz) < 0.0 {
-			e.wz *= slapKeep
-		}
-	}
-	if j > 0.0 && !e.ridgeBreakApplied && !e.keepUpright && floorNz > floorNormalThreshold {
-		// Unstable ridge equilibrium breaking when a tilted free body balances directly above its contact.
-		if e.onGround && e.isTilted && e.faceAlignCos < ridgeMaxAlignCos && (rx*rx+ry*ry) < ridgeLeverSqMax && (e.wx*e.wx+e.wy*e.wy) < ridgeTiltSqMax {
-			e.wy += ridgeBreakKick
-			e.ridgeBreakApplied = true
-		}
-	}
 }
 
 // frictionRotBaseScale returns the low-energy rotational attenuation factor for floor friction impulses.

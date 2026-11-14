@@ -2,6 +2,8 @@ package collisions
 
 import (
 	"math"
+
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // BucketType represents a categorized type for spatial partitioning or collision detection in 3D environments.
@@ -156,6 +158,15 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 
 // Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
 func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
+	var coplanarIdx [aabb.MaxManifoldPoints]int
+	coplanarCount := 0
+	var mergeDistSq float64
+	if rCage == nil {
+		minExt := math.Min(lCage.eRadX, math.Min(lCage.eRadY, lCage.eRadZ))
+		mergeDist := math.Min(0.5, math.Max(planeEpsilon, minExt*0.1))
+		mergeDistSq = mergeDist * mergeDist
+	}
+
 	for i := 0; i < b.containerCounter; i++ {
 		existing := b.currPool[i]
 		// Deduplicate coincident dynamic contact points for the same body, preserving up to 4 manifold corners.
@@ -172,8 +183,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 				}
 			}
 		}
-		// DEDUPLICAZIONE TOPOLOGICA (Geometria Statica Coplanare)
-		// Se il dot product è ~1.0, i due triangoli formano un piano continuo (Triangle Soup statica)
+		// Coplanar static manifold deduplication: preserve up to MaxManifoldPoints distinct support points per static plane.
 		if rCage == nil && existing.rCage == nil {
 			if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
 				planeDistance := math.Abs(
@@ -182,7 +192,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 						(p0z-existing.p0Z)*existing.nZ,
 				)
 				if planeDistance < planeEpsilon {
-					// Un vincolo anelastico (muro solido) ha sempre priorità su uno scalino (ImpactStep) coplanare
+					// Solid walls/floors take single-entry priority over step-ups; step-ups stay single-entry per plane.
 					if existing.iMode == ImpactStep && iMode == ImpactInelastic {
 						b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 						return nil
@@ -190,13 +200,33 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 					if existing.iMode == ImpactInelastic && iMode == ImpactStep {
 						return nil
 					}
-					if penetration > existing.penetration || (iMode == ImpactStep && math.Abs(penetration-existing.penetration) <= planeEpsilon && maxZ > existing.maxZ) {
-						b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+					if iMode == ImpactStep {
+						if penetration > existing.penetration || (math.Abs(penetration-existing.penetration) <= planeEpsilon && maxZ > existing.maxZ) {
+							b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+						}
+						return nil
 					}
-					return nil
+					dx := p0x - existing.p0X
+					dy := p0y - existing.p0Y
+					dz := p0z - existing.p0Z
+					if dx*dx+dy*dy+dz*dz < mergeDistSq {
+						if penetration > existing.penetration {
+							b.rebuildKeepingWarm(existing, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+						}
+						return nil
+					}
+					if coplanarCount < len(coplanarIdx) {
+						coplanarIdx[coplanarCount] = i
+						coplanarCount++
+					}
 				}
 			}
 		}
+	}
+
+	if rCage == nil && coplanarCount >= aabb.MaxManifoldPoints {
+		b.replaceCoplanarManifold(&coplanarIdx, coplanarCount, bucket, lCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		return nil
 	}
 
 	// Insert a new plane into the non-full bucket
@@ -228,6 +258,76 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 		b.matchWarmStart(target)
 	}
 	return nil
+}
+
+func (b *Bucket) replaceCoplanarManifold(
+	coplanarIdx *[aabb.MaxManifoldPoints]int,
+	coplanarCount int,
+	bucket BucketType,
+	lCage *Cage,
+	rFace IFace,
+	dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64,
+	iMode ImpactMode,
+) {
+	minPenIdx := coplanarIdx[0]
+	minPen := b.currPool[minPenIdx].penetration
+	for k := 1; k < coplanarCount; k++ {
+		idx := coplanarIdx[k]
+		if p := b.currPool[idx].penetration; p < minPen {
+			minPen = p
+			minPenIdx = idx
+		}
+	}
+	if penetration > minPen+1e-4 {
+		b.rebuildKeepingWarm(b.currPool[minPenIdx], bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		return
+	}
+
+	worstSlot := -1
+	worstMinDistSq := math.MaxFloat64
+	for s := 0; s < coplanarCount; s++ {
+		es := b.currPool[coplanarIdx[s]]
+		if es.penetration > penetration+1e-4 {
+			continue
+		}
+		minDSq := math.MaxFloat64
+		for k := 0; k < coplanarCount; k++ {
+			if k == s {
+				continue
+			}
+			ek := b.currPool[coplanarIdx[k]]
+			dx := es.p0X - ek.p0X
+			dy := es.p0Y - ek.p0Y
+			dz := es.p0Z - ek.p0Z
+			if dSq := dx*dx + dy*dy + dz*dz; dSq < minDSq {
+				minDSq = dSq
+			}
+		}
+		if minDSq < worstMinDistSq {
+			worstMinDistSq = minDSq
+			worstSlot = s
+		}
+	}
+	if worstSlot < 0 {
+		return
+	}
+
+	candMinDistSq := math.MaxFloat64
+	for k := 0; k < coplanarCount; k++ {
+		if k == worstSlot {
+			continue
+		}
+		ek := b.currPool[coplanarIdx[k]]
+		dx := p0x - ek.p0X
+		dy := p0y - ek.p0Y
+		dz := p0z - ek.p0Z
+		if dSq := dx*dx + dy*dy + dz*dz; dSq < candMinDistSq {
+			candMinDistSq = dSq
+		}
+	}
+	if candMinDistSq > worstMinDistSq*(1.0+1e-3) {
+		b.rebuildKeepingWarm(b.currPool[coplanarIdx[worstSlot]], bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+	}
 }
 
 func (b *Bucket) rebuildKeepingWarm(entry *Entry, bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {

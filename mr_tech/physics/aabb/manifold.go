@@ -319,13 +319,89 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	eU := axisHalfExtent(refHX, refHY, refHZ, uIdx)
 	eV := axisHalfExtent(refHX, refHY, refHZ, vIdx)
 
-	// Pick incident face whose outward normal is most anti-parallel to refN.
+	fillIncidentFaceQuad(clipA, incX, incY, incZ, incAxes, incHX, incHY, incHZ, rnx, rny, rnz)
+
+	// Clip against the 4 side planes bounding the reference face rectangle.
+	rcU := rcx*rux + rcy*ruy + rcz*ruz
+	rcV := rcx*rvx + rcy*rvy + rcz*rvz
+	if clipA.ClipPlane(rux, ruy, ruz, rcU+eU, clipB) == 0 ||
+		clipB.ClipPlane(-rux, -ruy, -ruz, -rcU+eU, clipA) == 0 ||
+		clipA.ClipPlane(rvx, rvy, rvz, rcV+eV, clipB) == 0 ||
+		clipB.ClipPlane(-rvx, -rvy, -rvz, -rcV+eV, clipA) == 0 {
+		om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
+		return
+	}
+
+	candCount := om.collectPlaneCandidates(clipA, rcx, rcy, rcz, rnx, rny, rnz, 0.5, 0.0)
+	om.finalizePlaneCandidates(candCount, rcx, rcy, rcz, sat.contactPen)
+}
+
+// ComputeStaticTriangle clips the incident face of OBB self (shifted by offX, offY, offZ) against the static triangle
+// (v0, v1, v2) with plane normal (nx, ny, nz) pointing toward self, retaining up to MaxManifoldPoints contact points.
+func (om *OBBManifold) ComputeStaticTriangle(
+	self *BoundingBox,
+	offX, offY, offZ float64,
+	nx, ny, nz float64,
+	v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z float64,
+	fallbackX, fallbackY, fallbackZ, fallbackPen float64,
+) {
+	om.Hit = true
+	om.NormalX, om.NormalY, om.NormalZ = nx, ny, nz
+	om.Penetration = fallbackPen
+	om.Gap = 0.0
+
+	px, py, pz := self.center.Get()
+	hx, hy, hz := self.size.GetCenter()
+	fillIncidentFaceQuad(om.clipA, px+offX, py+offY, pz+offZ, self.axis, hx, hy, hz, nx, ny, nz)
+
+	// Align triangle winding normal with (nx, ny, nz) so edge×effN points strictly outward from each edge.
+	e1x, e1y, e1z := v1x-v0x, v1y-v0y, v1z-v0z
+	e2x, e2y, e2z := v2x-v0x, v2y-v0y, v2z-v0z
+	tnx := e1y*e2z - e1z*e2y
+	tny := e1z*e2x - e1x*e2z
+	tnz := e1x*e2y - e1y*e2x
+	effNX, effNY, effNZ := nx, ny, nz
+	if tnx*nx+tny*ny+tnz*nz < 0.0 {
+		effNX, effNY, effNZ = -nx, -ny, -nz
+	}
+
+	if !clipEdgeHalfSpace(om.clipA, om.clipB, v0x, v0y, v0z, v1x, v1y, v1z, effNX, effNY, effNZ) ||
+		!clipEdgeHalfSpace(om.clipB, om.clipA, v1x, v1y, v1z, v2x, v2y, v2z, effNX, effNY, effNZ) ||
+		!clipEdgeHalfSpace(om.clipA, om.clipB, v2x, v2y, v2z, v0x, v0y, v0z, effNX, effNY, effNZ) {
+		om.setSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
+		return
+	}
+
+	candCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, fallbackPen)
+	om.finalizePlaneCandidates(candCount, fallbackX, fallbackY, fallbackZ, fallbackPen)
+}
+
+// clipEdgeHalfSpace clips src against the outward normal plane of edge (ax,ay,az)->(bx,by,bz) in the plane with aligned normal effN.
+func clipEdgeHalfSpace(src, dst *ClipPolygon, ax, ay, az, bx, by, bz, effNX, effNY, effNZ float64) bool {
+	ex, ey, ez := bx-ax, by-ay, bz-az
+	ox := ey*effNZ - ez*effNY
+	oy := ez*effNX - ex*effNZ
+	oz := ex*effNY - ey*effNX
+	oLen := math.Sqrt(ox*ox + oy*oy + oz*oz)
+	if oLen <= 1e-12 {
+		return false
+	}
+	invLen := 1.0 / oLen
+	ox *= invLen
+	oy *= invLen
+	oz *= invLen
+	limit := ax*ox + ay*oy + az*oz + 1e-4
+	return src.ClipPlane(ox, oy, oz, limit, dst) > 0
+}
+
+// fillIncidentFaceQuad populates clip with the 4 world-space vertices of the OBB face most anti-parallel to (refNX, refNY, refNZ).
+func fillIncidentFaceQuad(clip *ClipPolygon, incX, incY, incZ float64, incAxes *Axis, incHX, incHY, incHZ, refNX, refNY, refNZ float64) {
 	incFaceIdx := 0
 	maxAbsDot := -1.0
 	incDotSign := 1.0
 	for k := 0; k < 3; k++ {
 		kx, ky, kz := incAxes.GetRow(k)
-		d := rnx*kx + rny*ky + rnz*kz
+		d := refNX*kx + refNY*ky + refNZ*kz
 		if ad := math.Abs(d); ad > maxAbsDot {
 			maxAbsDot = ad
 			incFaceIdx = k
@@ -356,39 +432,31 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	vy *= hv
 	vz *= hv
 
-	//clipA := om.clipA
-	//clipB := om.clipB
-	clipA.count = 0
-	clipA.Add(icx+ux+vx, icy+uy+vy, icz+uz+vz)
-	clipA.Add(icx-ux+vx, icy-uy+vy, icz-uz+vz)
-	clipA.Add(icx-ux-vx, icy-uy-vy, icz-uz-vz)
-	clipA.Add(icx+ux-vx, icy+uy-vy, icz+uz-vz)
+	clip.count = 0
+	clip.Add(icx+ux+vx, icy+uy+vy, icz+uz+vz)
+	clip.Add(icx-ux+vx, icy-uy+vy, icz-uz+vz)
+	clip.Add(icx-ux-vx, icy-uy-vy, icz-uz-vz)
+	clip.Add(icx+ux-vx, icy+uy-vy, icz+uz-vz)
+}
 
-	// Clip against the 4 side planes bounding the reference face rectangle.
-	rcU := rcx*rux + rcy*ruy + rcz*ruz
-	rcV := rcx*rvx + rcy*rvy + rcz*rvz
-	if clipA.ClipPlane(rux, ruy, ruz, rcU+eU, clipB) == 0 ||
-		clipB.ClipPlane(-rux, -ruy, -ruz, -rcU+eU, clipA) == 0 ||
-		clipA.ClipPlane(rvx, rvy, rvz, rcV+eV, clipB) == 0 ||
-		clipB.ClipPlane(-rvx, -rvy, -rvz, -rcV+eV, clipA) == 0 {
-		om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
-		return
-	}
-
+// collectPlaneCandidates projects clipped polygon vertices onto plane (planeX/Y/Z, planeNX/Y/Z) with depth > 0 into om.candidates.
+func (om *OBBManifold) collectPlaneCandidates(poly *ClipPolygon, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth float64) int {
 	candidates := &om.candidates
 	candCount := 0
 	const clipDedupSq = 1e-8
-	for i := 0; i < clipA.count; i++ {
-		px, py, pz := clipA.x[i], clipA.y[i], clipA.z[i]
-		depth := (rcx-px)*rnx + (rcy-py)*rny + (rcz-pz)*rnz
+	for i := 0; i < poly.count; i++ {
+		px, py, pz := poly.x[i], poly.y[i], poly.z[i]
+		depth := (planeX-px)*planeNX + (planeY-py)*planeNY + (planeZ-pz)*planeNZ
 		if depth <= 0.0 {
 			continue
 		}
-		// Place contact point symmetrically halfway along penetration depth.
-		halfD := 0.5 * depth
-		cx := px + rnx*halfD
-		cy := py + rny*halfD
-		cz := pz + rnz*halfD
+		if maxDepth > 0.0 && depth > maxDepth {
+			depth = maxDepth
+		}
+		shift := shiftScale * depth
+		cx := px + planeNX*shift
+		cy := py + planeNY*shift
+		cz := pz + planeNZ*shift
 		duplicate := false
 		for j := 0; j < candCount; j++ {
 			if pointDistSq(cx, cy, cz, candidates[j].X, candidates[j].Y, candidates[j].Z) < clipDedupSq {
@@ -404,16 +472,20 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 			candCount++
 		}
 	}
+	return candCount
+}
 
+// finalizePlaneCandidates reduces candCount candidate contact points to at most MaxManifoldPoints or falls back to a single point.
+func (om *OBBManifold) finalizePlaneCandidates(candCount int, fallbackX, fallbackY, fallbackZ, fallbackPen float64) {
 	if candCount == 0 {
-		om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
+		om.setSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
 		return
 	}
 
 	if candCount <= MaxManifoldPoints {
 		deepestIdx := 0
 		for i := 1; i < candCount; i++ {
-			if candidates[i].Penetration > candidates[deepestIdx].Penetration {
+			if om.candidates[i].Penetration > om.candidates[deepestIdx].Penetration {
 				deepestIdx = i
 			}
 		}

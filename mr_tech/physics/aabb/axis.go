@@ -38,6 +38,11 @@ func (r *Axis) Get2() (float64, float64, float64) {
 	return r.data[2][0], r.data[2][1], r.data[2][2]
 }
 
+// GetRow returns the three values in row i (0..2) of the matrix.
+func (r *Axis) GetRow(i int) (float64, float64, float64) {
+	return r.data[i][0], r.data[i][1], r.data[i][2]
+}
+
 // GetIdentity returns the shared identity axis matrix.
 func (r *Axis) GetIdentity() *Axis {
 	return _axisId

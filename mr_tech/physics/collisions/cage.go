@@ -418,7 +418,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 	}
 
 	for pi := 0; pi < m.Count; pi++ {
-		pt := m.Points[pi]
+		pt := &m.Points[pi]
 		if pt.Penetration <= 0 {
 			continue
 		}

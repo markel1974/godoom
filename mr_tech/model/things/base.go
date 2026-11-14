@@ -210,6 +210,12 @@ func (t *Base) StageResolve() {
 
 		if rCage := slot.GetRCage(); rCage != nil {
 			rParentEnt = rCage.GetEntity()
+			// Each active dynamic pair is solved once per solver iteration by the canonical owner.
+			if entity.GetId() > rParentEnt.GetId() {
+				if rThing, ok := rCage.GetObject().(volumes.IThing); ok && rThing.IsActive() && rCage.HasEntryFor(slot.GetBucket().Opposite(), entity.GetId()) {
+					continue
+				}
+			}
 		} else {
 			rFace := slot.GetRemoteFace()
 			rParent := rFace.GetParent().(*volumes.Volume)
@@ -218,7 +224,8 @@ func (t *Base) StageResolve() {
 		// Risoluzione Impulsi e Attrito (Fase Cinetica) con Proprietà Esplicite del Materiale di Contatto.
 		nX, nY, nZ := slot.GetNormal()
 		pX, pY, pZ := slot.GetPoint()
-		entity.ResolveImpact(rParentEnt, nX, nY, nZ, pX, pY, pZ)
+		accNormal, accTx, accTy, accTz, restTarget, hasRestTarget := slot.GetSolverState()
+		entity.ResolveImpactAccumulated(rParentEnt, nX, nY, nZ, pX, pY, pZ, accNormal, accTx, accTy, accTz, restTarget, hasRestTarget)
 	}
 }
 

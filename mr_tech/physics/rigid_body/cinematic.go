@@ -91,9 +91,6 @@ type Cinematic struct {
 	mass    float64
 	invMass float64
 	// World-space inverse inertia tensor.
-	invIx  float64
-	invIy  float64
-	invIz  float64
 	invIxx float64
 	invIxy float64
 	invIxz float64
@@ -706,10 +703,16 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 // ResolveImpact resolves a 6-DoF rigid-body collision between two Cinematic objects,
 // applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω.
 func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64) {
+	e.ResolveImpactAccumulated(e2, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, nil, nil, nil, nil, nil, nil)
+}
+
+// ResolveImpactAccumulated resolves a 6-DoF rigid-body collision between two Cinematic objects
+// using optional accumulated normal/tangential impulses and target restitution velocity across PGS iterations.
+func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, accNormal, accTx, accTy, accTz, restTarget *float64, hasRestTarget *bool) {
 	// Safe normalization before computing lever arms or normal thresholds.
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen <= 0 {
-		return //0, 0, 0, false
+		return
 	}
 
 	nx /= nLen
@@ -739,8 +742,9 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	vrz := vp1z - vp2z
 	vRelDotN := vrx*nx + vry*ny + vrz*nz
 
-	// If bodies are separating at the contact point, no collision to resolve.
-	if vRelDotN > 0.0 {
+	firstIter := hasRestTarget == nil || !*hasRestTarget
+	// If bodies are separating on initial contact, no collision to resolve.
+	if firstIter && vRelDotN > 0.0 {
 		return
 	}
 
@@ -762,18 +766,30 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 		u2nx, u2ny, u2nz, rotMass2N = e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
 	}
 
-	// Restitution combining with threshold (micro-bounce slop).
-	actualRestitution := e.material.CombineRestitution(e2.material)
-	if math.Abs(actualRestitution) > restitutionEpsilon {
-		restitutionSlop := restitutionSlopGravityFactor * math.Max(e.gForce, e2.gForce) * e.dt
-		if restitutionSlop < minRestitutionSlop {
-			restitutionSlop = minRestitutionSlop
-		}
-		if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > groundedImpactNormalThreshold) || (e2.onGround && nz < -groundedImpactNormalThreshold) {
+	var targetVelN float64
+	var actualRestitution float64
+	if firstIter {
+		// Restitution combining with threshold (micro-bounce slop), evaluated once per contact.
+		actualRestitution = e.material.CombineRestitution(e2.material)
+		if math.Abs(actualRestitution) > restitutionEpsilon {
+			restitutionSlop := restitutionSlopGravityFactor * math.Max(e.gForce, e2.gForce) * e.dt
+			if restitutionSlop < minRestitutionSlop {
+				restitutionSlop = minRestitutionSlop
+			}
+			if math.Abs(vRelDotN) < restitutionSlop || (e.onGround && nz > groundedImpactNormalThreshold) || (e2.onGround && nz < -groundedImpactNormalThreshold) {
+				actualRestitution = 0.0
+			}
+		} else {
 			actualRestitution = 0.0
 		}
-	} else {
-		actualRestitution = 0.0
+		targetVelN = -actualRestitution * vRelDotN
+		if hasRestTarget != nil && restTarget != nil {
+			*restTarget = targetVelN
+			*hasRestTarget = true
+		}
+	} else if restTarget != nil {
+		targetVelN = *restTarget
+		actualRestitution = targetVelN
 	}
 
 	rotScale1N, nearFlat1, slapKeep1 := e.normalRotScale(nz, actualRestitution)
@@ -784,26 +800,33 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 		return
 	}
 
-	// Normal impulse including rotational inertia denominator K_n.
-	impulse := -(1.0 + actualRestitution) * vRelDotN
-	j := impulse / effMassN
-
-	// Apply normal impulse to linear and angular velocities.
-	jx := j * nx
-	jy := j * ny
-	jz := j * nz
-	e.vx += jx * invMass1
-	e.vy += jy * invMass1
-	e.vz += jz * invMass1
-	e2.vx -= jx * invMass2
-	e2.vy -= jy * invMass2
-	e2.vz -= jz * invMass2
-
-	if invMass1 > 0.0 {
-		e.applyNormalAngular(j, rotScale1N, nearFlat1, slapKeep1, u1nx, u1ny, u1nz, r1x, r1y, nz)
+	// Unilateral normal impulse: never apply tensile pull across single-point contacts,
+	// while accumulating total support impulse so friction stays active across PGS iterations.
+	j := math.Max(0.0, (targetVelN-vRelDotN)/effMassN)
+	if accNormal != nil {
+		*accNormal += j
 	}
-	if invMass2 > 0.0 {
-		e2.applyNormalAngular(-j, rotScale2N, nearFlat2, slapKeep2, u2nx, u2ny, u2nz, r2x, r2y, -nz)
+	if j > 0.0 {
+		// Apply normal impulse to linear and angular velocities.
+		jx := j * nx
+		jy := j * ny
+		jz := j * nz
+		e.vx += jx * invMass1
+		e.vy += jy * invMass1
+		e.vz += jz * invMass1
+		e2.vx -= jx * invMass2
+		e2.vy -= jy * invMass2
+		e2.vz -= jz * invMass2
+
+		if invMass1 > 0.0 {
+			e.applyNormalAngular(j, rotScale1N, nearFlat1, slapKeep1, u1nx, u1ny, u1nz, r1x, r1y, nz)
+		}
+		if invMass2 > 0.0 {
+			e2.applyNormalAngular(-j, rotScale2N, nearFlat2, slapKeep2, u2nx, u2ny, u2nz, r2x, r2y, -nz)
+		}
+	}
+	if j <= 0.0 && (accNormal == nil || *accNormal <= 0.0) {
+		return
 	}
 
 	// Tangential impulse (Coulomb friction): recalculate relative velocity after normal impulse.
@@ -855,18 +878,53 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	}
 
 	vRelDotT := vrx*tx + vry*ty + vrz*tz
-	jt := -vRelDotT / effMassT
+	candJt := -vRelDotT / effMassT
 	// Friction mixing: explicit contact material properties.
 	mu := e.material.CombineFriction(e2.material)
-	maxFriction := j * mu
-	// Clamp tangential impulse within Coulomb cone.
-	if math.Abs(jt) > maxFriction {
-		jt = math.Copysign(maxFriction, jt)
+	var jtx, jty, jtz float64
+	if accNormal != nil && accTx != nil && accTy != nil && accTz != nil {
+		// Clamp the total 3D tangent impulse across solver iterations within the Coulomb cone.
+		oldTx, oldTy, oldTz := *accTx, *accTy, *accTz
+		oldDotN := oldTx*nx + oldTy*ny + oldTz*nz
+		oldTx -= oldDotN * nx
+		oldTy -= oldDotN * ny
+		oldTz -= oldDotN * nz
+
+		newTx := oldTx + candJt*tx
+		newTy := oldTy + candJt*ty
+		newTz := oldTz + candJt*tz
+		maxTotalFriction := *accNormal * mu
+		if totalMag := math.Sqrt(newTx*newTx + newTy*newTy + newTz*newTz); totalMag > maxTotalFriction && totalMag > 0.0 {
+			scale := maxTotalFriction / totalMag
+			newTx *= scale
+			newTy *= scale
+			newTz *= scale
+		}
+		*accTx, *accTy, *accTz = newTx, newTy, newTz
+		jtx = newTx - oldTx
+		jty = newTy - oldTy
+		jtz = newTz - oldTz
+	} else {
+		maxFriction := j * mu
+		jt := candJt
+		// Clamp tangential impulse within Coulomb cone.
+		if math.Abs(jt) > maxFriction {
+			jt = math.Copysign(maxFriction, jt)
+		}
+		jtx = jt * tx
+		jty = jt * ty
+		jtz = jt * tz
 	}
+
+	dtMag := math.Sqrt(jtx*jtx + jty*jty + jtz*jtz)
+	if dtMag <= gyroEnergyEpsilon {
+		return
+	}
+	fx := jtx / dtMag
+	fy := jty / dtMag
+	fz := jtz / dtMag
+
 	// Apply friction impulse to linear and angular velocities.
-	jtx := jt * tx
-	jty := jt * ty
-	jtz := jt * tz
 	e.vx += jtx * invMass1
 	e.vy += jty * invMass1
 	e.vz += jtz * invMass1
@@ -874,10 +932,12 @@ func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, c
 	e2.vy -= jty * invMass2
 	e2.vz -= jtz * invMass2
 	if invMass1 > 0.0 {
-		e.applyFrictionAngular(jt, fRotBase1, u1tx, u1ty, u1tz)
+		u1fx, u1fy, u1fz, _ := e.rotationalMass(r1x, r1y, r1z, fx, fy, fz)
+		e.applyFrictionAngular(dtMag, fRotBase1, u1fx, u1fy, u1fz)
 	}
 	if invMass2 > 0.0 {
-		e2.applyFrictionAngular(-jt, fRotBase2, u2tx, u2ty, u2tz)
+		u2fx, u2fy, u2fz, _ := e2.rotationalMass(r2x, r2y, r2z, fx, fy, fz)
+		e2.applyFrictionAngular(-dtMag, fRotBase2, u2fx, u2fy, u2fz)
 	}
 }
 

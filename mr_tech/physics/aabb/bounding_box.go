@@ -137,6 +137,12 @@ func (r *BoundingBox) GetOrientedHalfExtents() (float64, float64, float64) {
 	return r.halfExtents.Get()
 }
 
+// ProjectExtent returns the half-extent of the OBB projected onto unit normal (nx, ny, nz).
+func (r *BoundingBox) ProjectExtent(nx, ny, nz float64) float64 {
+	hx, hy, hz := r.size.GetCenter()
+	return r.axis.ProjectNormal(nx, ny, nz, hx, hy, hz)
+}
+
 // rebuild recalculates the center, local axes and enclosing AABB.
 // The box rotates around its geometric center.
 func (r *BoundingBox) rebuild() {
@@ -373,23 +379,38 @@ func (r *BoundingBox) Intersect(x, y, z, w, h, d float64) bool {
 	dz := (z + (d * 0.5)) - cz
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := w*0.5, h*0.5, d*0.5
-	return intersectsOBB(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
+	hit, _, _ := overlapOBB(dx, dy, dz, &r.axis, scx, scy, scz, r.axis.GetIdentity(), ocx, ocy, ocz)
+	return hit
 }
 
 // IntersectBB tests this OBB against another OBB.
 func (r *BoundingBox) IntersectBB(other *BoundingBox) bool {
-	tx, ty, tz := other.center.Get()
-	px, py, pz := r.center.Get()
-	dx := tx - px
-	dy := ty - py
-	dz := tz - pz
-	scx, scy, scz := r.size.GetCenter()
-	ocx, ocy, ocz := other.size.GetCenter()
-	return intersectsOBB(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+	return r.IntersectBBAtOffset(other, 0, 0, 0)
 }
 
-// intersectsOBB performs the 15-axis Separating Axis Theorem test. It uses fixed-size arrays and does not create slices or heap objects.
-func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) bool {
+// IntersectBBAtOffset tests this OBB against another OBB shifted by relative offset (offX, offY, offZ).
+func (r *BoundingBox) IntersectBBAtOffset(other *BoundingBox, offX, offY, offZ float64) bool {
+	hit, _, _ := r.OverlapBBAtOffset(other, offX, offY, offZ)
+	return hit
+}
+
+// OverlapBBAtOffset tests this OBB against another OBB shifted by relative offset (offX, offY, offZ)
+// and returns whether they overlap along with the minimum SAT penetration depth (when overlapping)
+// or maximum SAT separation gap (when separated).
+func (r *BoundingBox) OverlapBBAtOffset(other *BoundingBox, offX, offY, offZ float64) (bool, float64, float64) {
+	tx, ty, tz := other.center.Get()
+	px, py, pz := r.center.Get()
+	dx := tx - px + offX
+	dy := ty - py + offY
+	dz := tz - pz + offZ
+	scx, scy, scz := r.size.GetCenter()
+	ocx, ocy, ocz := other.size.GetCenter()
+	return overlapOBB(dx, dy, dz, &r.axis, scx, scy, scz, &other.axis, ocx, ocy, ocz)
+}
+
+// overlapOBB performs the 15-axis Separating Axis Theorem test and tracks Euclidean overlap/gap bounds.
+// It uses fixed-size arrays and does not create slices or heap objects.
+func overlapOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) (bool, float64, float64) {
 	var hA = [3]float64{scx, scy, scz}
 	var hB = [3]float64{ocx, ocy, ocz}
 	var R [3][3]float64
@@ -397,6 +418,7 @@ func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, 
 	// Rotation matrix between the two box coordinate systems.
 	// The epsilon stabilizes nearly parallel axes.
 	const epsilon = 1e-12
+	const crossAxisLenEps = 1e-6
 	for i := 0; i < 3; i++ {
 		ax := a.data[i][0]
 		ay := a.data[i][1]
@@ -413,6 +435,10 @@ func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, 
 	t1 := dx*a.data[1][0] + dy*a.data[1][1] + dz*a.data[1][2]
 	t2 := dx*a.data[2][0] + dy*a.data[2][1] + dz*a.data[2][2]
 
+	separated := false
+	minPen := math.MaxFloat64
+	maxGap := 0.0
+
 	// Test the three axes of A.
 	for i := 0; i < 3; i++ {
 		rb := hB[0]*AbsR[i][0] + hB[1]*AbsR[i][1] + hB[2]*AbsR[i][2]
@@ -426,7 +452,14 @@ func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, 
 			distance = math.Abs(t2)
 		}
 		if distance > hA[i]+rb {
-			return false
+			separated = true
+			if g := distance - (hA[i] + rb); g > maxGap {
+				maxGap = g
+			}
+		} else if !separated {
+			if p := hA[i] + rb - distance; p < minPen {
+				minPen = p
+			}
 		}
 	}
 
@@ -435,7 +468,14 @@ func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, 
 		ra := hA[0]*AbsR[0][j] + hA[1]*AbsR[1][j] + hA[2]*AbsR[2][j]
 		distance := math.Abs(t0*R[0][j] + t1*R[1][j] + t2*R[2][j])
 		if distance > ra+hB[j] {
-			return false
+			separated = true
+			if g := distance - (ra + hB[j]); g > maxGap {
+				maxGap = g
+			}
+		} else if !separated {
+			if p := ra + hB[j] - distance; p < minPen {
+				minPen = p
+			}
 		}
 	}
 
@@ -468,12 +508,25 @@ func intersectsOBB(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, 
 				ti2 = t2
 			}
 			distance := math.Abs(ti2*R[i1][j] - ti1*R[i2][j])
+			axisLen := math.Hypot(R[i1][j], R[i2][j])
 			if distance > ra+rb {
-				return false
+				separated = true
+				if axisLen > crossAxisLenEps {
+					if g := (distance - (ra + rb)) / axisLen; g > maxGap {
+						maxGap = g
+					}
+				}
+			} else if !separated && axisLen > crossAxisLenEps {
+				if p := (ra + rb - distance) / axisLen; p < minPen {
+					minPen = p
+				}
 			}
 		}
 	}
 
+	if separated {
+		return false, 0.0, maxGap
+	}
 	// Preserve the previous contact semantics: touching is intersection.
-	return true
+	return true, minPen, 0.0
 }

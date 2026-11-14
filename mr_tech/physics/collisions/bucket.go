@@ -104,6 +104,16 @@ func (b *Bucket) Count() int {
 	return b.containerCounter
 }
 
+// HasEntryFor reports whether the Bucket currently holds an active dynamic entry for entityId.
+func (b *Bucket) HasEntryFor(entityId uint64) bool {
+	for i := 0; i < b.containerCounter; i++ {
+		if rCage := b.container[i].rCage; rCage != nil && rCage.object.GetEntity().GetId() == entityId {
+			return true
+		}
+	}
+	return false
+}
+
 // Penetrable determines if the Bucket can be penetrated starting from a specified entity ID.
 // Returns false if any entity in the bucket provides infinite inelastic resistance or cannot be recursively pushed.
 func (b *Bucket) Penetrable(from uint64) bool {

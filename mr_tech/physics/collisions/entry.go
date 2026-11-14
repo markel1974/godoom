@@ -2,20 +2,26 @@ package collisions
 
 // Entry represents a collision entry used during spatial computations in the collision detection system.
 type Entry struct {
-	bucket      BucketType
-	rCage       *Cage
-	rFace       IFace
-	lCage       *Cage
-	dist        float64
-	penetration float64
-	nX          float64
-	nY          float64
-	nZ          float64
-	p0X         float64
-	p0Y         float64
-	p0Z         float64
-	maxZ        float64
-	iMode       ImpactMode
+	bucket        BucketType
+	rCage         *Cage
+	rFace         IFace
+	lCage         *Cage
+	dist          float64
+	penetration   float64
+	nX            float64
+	nY            float64
+	nZ            float64
+	p0X           float64
+	p0Y           float64
+	p0Z           float64
+	maxZ          float64
+	iMode         ImpactMode
+	accNormal     float64
+	accTx         float64
+	accTy         float64
+	accTz         float64
+	restTarget    float64
+	hasRestTarget bool
 }
 
 // NewCageEntry creates and returns a new instance of Entry initialized with default zero values.
@@ -58,6 +64,11 @@ func (s *Entry) GetLCage() *Cage { return s.lCage }
 // GetRCage returns the remote collision cage associated with the entry.
 func (s *Entry) GetRCage() *Cage { return s.rCage }
 
+// GetSolverState returns pointers to accumulated normal/tangential impulses and target restitution state for PGS iterations.
+func (s *Entry) GetSolverState() (*float64, *float64, *float64, *float64, *float64, *bool) {
+	return &s.accNormal, &s.accTx, &s.accTy, &s.accTz, &s.restTarget, &s.hasRestTarget
+}
+
 // Rebuild reinitializes the Entry with the given parameters and updates all its attributes accordingly.
 func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) {
 	s.bucket = bucket
@@ -70,6 +81,12 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace
 	s.p0X, s.p0Y, s.p0Z = p0x, p0y, p0z
 	s.maxZ = maxZ
 	s.iMode = iMode
+	s.accNormal = 0
+	s.accTx = 0
+	s.accTy = 0
+	s.accTz = 0
+	s.restTarget = 0
+	s.hasRestTarget = false
 }
 
 const maxPushDepth = 8

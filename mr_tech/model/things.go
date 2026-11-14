@@ -347,14 +347,15 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	//fmt.Println("Ready:", th.readyLen, "Thinkers:", th.thinkersLen, "Running:", runningLen)
 	//th.event.wg.Wait()
 	for si := 0; si < th.solverIterations; si++ {
-		for x := 0; x < runningLen; x++ {
-			t2 := th.running[x]
-			//th.event.wg.Add(1)
-			//t2.PostMessage(th.event)
-			//TODO MULTIPLE ACTION INSIDE [SELF -> OTHER]
-			t2.StageResolve()
+		if si&1 == 0 {
+			for x := 0; x < runningLen; x++ {
+				th.running[x].StageResolve()
+			}
+		} else {
+			for x := runningLen - 1; x >= 0; x-- {
+				th.running[x].StageResolve()
+			}
 		}
-		//th.event.wg.Wait()
 	}
 
 	// PHYSYCS APPLY

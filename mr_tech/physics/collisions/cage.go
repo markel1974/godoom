@@ -486,6 +486,21 @@ func (s *Cage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
 // BucketCount returns the number of entries in the specified bucket.[cite: 6]
 func (s *Cage) BucketCount(t BucketType) int { return s.buckets[t].Count() }
 
+// HasEntryFor reports whether the specified bucket holds an active dynamic entry for entityId.
+func (s *Cage) HasEntryFor(t BucketType, entityId uint64) bool {
+	return s.buckets[t].HasEntryFor(entityId)
+}
+
+// effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
+// using exact OBB axis projection for free 6-DoF bodies and ellipsoid extents otherwise.
+func (s *Cage) effectiveRadius(nX, nY, nZ float64) float64 {
+	lEnt := s.object.GetEntity()
+	if !lEnt.KeepUpright() {
+		return lEnt.ProjectExtent(nX, nY, nZ)
+	}
+	return math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+}
+
 // GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.[cite: 6]
 func (s *Cage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
 
@@ -574,7 +589,7 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		}
 	}
 
-	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+	rayEff := s.effectiveRadius(nX, nY, nZ)
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 	dist := distTarget - rayEff
 	penetration := rayEff - distTarget
@@ -831,7 +846,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 
 	// Distanza iniziale a t = 0 del centro locale rispetto al piano remoto a t = 0[cite: 6]
 	distStart := (s.cX-p0x0)*nX + (s.cY-p0y0)*nY + (s.cZ-p0z0)*nZ
-	rayEff := math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+	rayEff := s.effectiveRadius(nX, nY, nZ)
 
 	var activeX, activeY, activeZ bool
 
@@ -844,6 +859,7 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 	sepY := math.Abs(relY) - sumRadY
 	sepZ := math.Abs(relZ) - sumRadZ
 	sweptMode := sepX > planeEpsilon || sepY > planeEpsilon || sepZ > planeEpsilon
+	obbClamp := -1.0
 	if sweptMode {
 		// In modalità swept il centro locale deve partire dal semispazio esterno del piano[cite: 6]
 		if distStart < -planeEpsilon {
@@ -875,6 +891,22 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 		}
 		if boxOX <= 0 || boxOY <= 0 || boxOZ <= 0 {
 			return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+		}
+		lEnt := s.object.GetEntity()
+		if !lEnt.KeepUpright() || !rEnt.KeepUpright() {
+			hit, obbPen, obbGap := lEnt.OverlapBBAtOffset(rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
+			if !hit {
+				// Preserve vertical ground detection within floor tolerance even when OBBs are micro-separated.
+				if !solidWE && !solidNS && obbGap <= 0.25 {
+					b := BucketCeiling
+					if nZ > 0 {
+						b = BucketFloor
+					}
+					return b, obbGap, 0, nX, nY, nZ, p0x, p0y, p0z, 0, rFMaxZ
+				}
+				return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0
+			}
+			obbClamp = obbPen
 		}
 		// Determinazione degli assi MTV attivi (indipendente dall'asse dominante della faccia)[cite: 6]
 		prevOX := math.Max(0.0, -sepX)
@@ -923,6 +955,9 @@ func (s *Cage) computeFaceMeshVsMesh(rCage *Cage, rFace IFace, lFace IFace, rOff
 			}
 			matchedAxis = true
 		}
+	}
+	if matchedAxis && !sweptMode && obbClamp >= 0.0 && obbClamp < axisOverlap {
+		axisOverlap = obbClamp
 	}
 	if !matchedAxis || axisOverlap < -0.25 {
 		return 0, 0, 0, nX, nY, nZ, p0x, p0y, p0z, 0, 0

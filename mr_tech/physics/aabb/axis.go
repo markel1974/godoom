@@ -51,6 +51,13 @@ func (r *Axis) Project(hx, hy, hz float64) (float64, float64, float64) {
 	return ex, ey, ez
 }
 
+// ProjectNormal returns the oriented half-extent projected onto unit normal (nx, ny, nz).
+func (r *Axis) ProjectNormal(nx, ny, nz, hx, hy, hz float64) float64 {
+	return math.Abs(nx*r.data[0][0]+ny*r.data[0][1]+nz*r.data[0][2])*hx +
+		math.Abs(nx*r.data[1][0]+ny*r.data[1][1]+nz*r.data[1][2])*hy +
+		math.Abs(nx*r.data[2][0]+ny*r.data[2][1]+nz*r.data[2][2])*hz
+}
+
 // ComputeSupportPoint computes the support point for an oriented box from its center, direction, and half-extents.
 func (r *Axis) ComputeSupportPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
 	px, py, pz := cx, cy, cz

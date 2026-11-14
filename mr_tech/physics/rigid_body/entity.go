@@ -172,6 +172,11 @@ func (e *Entity) Update() {
 
 // ResolveImpact resolves a 6-DoF collision impact with another entity .
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64) {
+	e.ResolveImpactAccumulated(e2, nx, ny, nz, px, py, pz, nil, nil, nil, nil, nil, nil)
+}
+
+// ResolveImpactAccumulated resolves a 6-DoF collision impact with another entity using accumulated PGS impulse clamping.
+func (e *Entity) ResolveImpactAccumulated(e2 *Entity, nx, ny, nz float64, px, py, pz float64, accNormal, accTx, accTy, accTz, restTarget *float64, hasRestTarget *bool) {
 	cx1, cy1, cz1 := e.getCenterOfMass()
 	cx2, cy2, cz2 := e2.getCenterOfMass()
 
@@ -186,7 +191,7 @@ func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float6
 	cy2 += dy2
 	cz2 += dz2
 
-	e.Cinematic.ResolveImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz)
+	e.Cinematic.ResolveImpactAccumulated(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, accNormal, accTx, accTy, accTz, restTarget, hasRestTarget)
 }
 
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.

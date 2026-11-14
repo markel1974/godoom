@@ -685,7 +685,7 @@ func (s *Cage) HasEntryFor(t BucketType, entityId uint64) bool {
 
 // IsBucketPenetrable reports whether pushing along bucket b's blocking direction is free of inelastic/pinned obstacles.
 func (s *Cage) IsBucketPenetrable(b BucketType, from uint64) bool {
-	return s.buckets[b].Penetrable(from)
+	return s.buckets[b].Penetrable(from, 0)
 }
 
 // NeedsStaticClamp reports whether the entity center moved since the last validated static world clamp.
@@ -901,12 +901,16 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 
 	p0x, p0y, p0z := rFace.Get0()
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
+	rayEff := s.effectiveRadius(nX, nY, nZ)
 
 	var bucket BucketType
 	if solidWE || solidNS {
 		if distStart < 0 {
-			nX, nY, nZ = -nX, -nY, -nZ
-			distStart = -distStart
+			impDotOrig := s.dX*nX + s.dY*nY + s.dZ*nZ
+			if distStart <= -rayEff+satFilterEpsilon || (distStart <= -0.5*rayEff && impDotOrig > satFilterEpsilon) {
+				nX, nY, nZ = -nX, -nY, -nZ
+				distStart = -distStart
+			}
 		}
 		if solidWE {
 			if nX < 0 {
@@ -941,7 +945,6 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 		}
 	}
 
-	rayEff := s.effectiveRadius(nX, nY, nZ)
 	distTarget := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 	dist := distTarget - rayEff
 	penetration := rayEff - distTarget
@@ -985,6 +988,33 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
 	if oZ <= 0 {
 		return out, false
+	}
+
+	if (solidWE || solidNS) && s.object.GetEntity().KeepUpright() {
+		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
+		var cornerHit bool
+		var cxN, cyN, cPen, qxW, qyW float64
+		var valid bool
+		valid, cornerHit, cxN, cyN, cPen, qxW, qyW = s.refineKeepUprightWall(rFace, nX, nY, penetration, tunneled)
+		if !valid {
+			return out, false
+		}
+		if cornerHit {
+			nX, nY, nZ = cxN, cyN, 0.0
+			nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), 0.0
+			solidWE = nAbsX > nAbsY
+			solidNS = !solidWE
+			bucket = classifyBucketNormal(nX, nY, 0.0)
+			rayEff = s.effectiveRadius(nX, nY, 0.0)
+			penetration = cPen
+			dist = -cPen
+			distTarget = rayEff - cPen
+			distStart = distTarget - (s.dX*nX + s.dY*nY)
+			out.bucket = bucket
+			out.dist = dist
+			out.nX, out.nY, out.nZ = nX, nY, 0.0
+			out.anchorX, out.anchorY, out.anchorZ = qxW, qyW, s.tZ
+		}
 	}
 
 	// Calcolo TOI (Time Of Impact) tra il moto dell'ellissoide e la faccia statica[cite: 6]
@@ -1051,13 +1081,13 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			activeAxes++
 		}
 		if activeAxes > 1 {
-			if nAbsX > multiAxisThreshold && normOX > axisOverlap {
+			if nAbsX > multiAxisThreshold && normOX < axisOverlap {
 				axisOverlap = normOX
 			}
-			if nAbsY > multiAxisThreshold && normOY > axisOverlap {
+			if nAbsY > multiAxisThreshold && normOY < axisOverlap {
 				axisOverlap = normOY
 			}
-			if nAbsZ > multiAxisThreshold && normOZ > axisOverlap {
+			if nAbsZ > multiAxisThreshold && normOZ < axisOverlap {
 				axisOverlap = normOZ
 			}
 		}
@@ -1084,6 +1114,160 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 
 	out.pen = penetration
 	return out, true
+}
+
+// refineKeepUprightWall clips a wall triangle to the upright body's Z slab and checks its scaled 2D footprint,
+// rejecting phantom infinite-plane hits outside the slab and computing smooth corner pushouts on edge/vertex hits.
+func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled bool) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
+	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
+		return true, false, 0, 0, 0, 0, 0
+	}
+	v0x, v0y, v0z := rFace.Get0()
+	v1x, v1y, v1z := rFace.Get1()
+	v2x, v2y, v2z := rFace.Get2()
+
+	var bufA, bufB [6][3]float64
+	bufA[0][0], bufA[0][1], bufA[0][2] = v0x, v0y, v0z
+	bufA[1][0], bufA[1][1], bufA[1][2] = v1x, v1y, v1z
+	bufA[2][0], bufA[2][1], bufA[2][2] = v2x, v2y, v2z
+
+	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
+	if n < 3 {
+		return tunneled, false, 0, 0, 0, 0, 0
+	}
+	n = clipPolyZSlab(&bufB, n, &bufA, s.tZ+s.eRadZ, false)
+	if n < 3 {
+		return tunneled, false, 0, 0, 0, 0, 0
+	}
+
+	invRX := 1.0 / s.eRadX
+	invRY := 1.0 / s.eRadY
+	var poly2D [6][2]float64
+	for i := 0; i < n; i++ {
+		poly2D[i][0] = (bufA[i][0] - s.tX) * invRX
+		poly2D[i][1] = (bufA[i][1] - s.tY) * invRY
+	}
+
+	if pointInConvexPoly2D(&poly2D, n) {
+		return true, false, 0, 0, 0, 0, 0
+	}
+
+	bestSq := math.MaxFloat64
+	var qx, qy float64
+	for i := 0; i < n; i++ {
+		j := i + 1
+		if j == n {
+			j = 0
+		}
+		ax, ay := poly2D[i][0], poly2D[i][1]
+		bx, by := poly2D[j][0], poly2D[j][1]
+		abx, aby := bx-ax, by-ay
+		abLenSq := abx*abx + aby*aby
+		var t float64
+		if abLenSq > 1e-18 {
+			t = -(ax*abx + ay*aby) / abLenSq
+			if t < 0.0 {
+				t = 0.0
+			} else if t > 1.0 {
+				t = 1.0
+			}
+		}
+		px := ax + t*abx
+		py := ay + t*aby
+		if dSq := px*px + py*py; dSq < bestSq {
+			bestSq = dSq
+			qx, qy = px, py
+		}
+	}
+
+	if bestSq >= 1.0-1e-9 {
+		return tunneled, false, 0, 0, 0, 0, 0
+	}
+	if bestSq <= 1e-12 {
+		return true, false, 0, 0, 0, 0, 0
+	}
+
+	qLen := math.Sqrt(bestSq)
+	scale := 1.0/qLen - 1.0
+	dx := -qx * scale * s.eRadX
+	dy := -qy * scale * s.eRadY
+	horizPen := math.Hypot(dx, dy)
+	if horizPen <= 1e-12 {
+		return false, false, 0, 0, 0, 0, 0
+	}
+	hx := dx / horizPen
+	hy := dy / horizPen
+
+	nXY := math.Hypot(nX, nY)
+	if nXY > 1e-9 {
+		fnX, fnY := nX/nXY, nY/nXY
+		if horizPen >= penetration-1e-4 && hx*fnX+hy*fnY > 0.999 {
+			return true, false, 0, 0, 0, 0, 0
+		}
+	}
+	return true, true, hx, hy, horizPen, s.tX + qx*s.eRadX, s.tY + qy*s.eRadY
+}
+
+func clipPolyZSlab(in *[6][3]float64, count int, out *[6][3]float64, zBound float64, keepAbove bool) int {
+	outCount := 0
+	for i := 0; i < count; i++ {
+		curr := in[i]
+		nextIdx := i + 1
+		if nextIdx == count {
+			nextIdx = 0
+		}
+		next := in[nextIdx]
+		var currIn, nextIn bool
+		if keepAbove {
+			currIn = curr[2] >= zBound
+			nextIn = next[2] >= zBound
+		} else {
+			currIn = curr[2] <= zBound
+			nextIn = next[2] <= zBound
+		}
+		if currIn {
+			out[outCount] = curr
+			outCount++
+			if !nextIn {
+				t := (zBound - curr[2]) / (next[2] - curr[2])
+				out[outCount][0] = curr[0] + t*(next[0]-curr[0])
+				out[outCount][1] = curr[1] + t*(next[1]-curr[1])
+				out[outCount][2] = zBound
+				outCount++
+			}
+		} else if nextIn {
+			t := (zBound - curr[2]) / (next[2] - curr[2])
+			out[outCount][0] = curr[0] + t*(next[0]-curr[0])
+			out[outCount][1] = curr[1] + t*(next[1]-curr[1])
+			out[outCount][2] = zBound
+			outCount++
+		}
+	}
+	return outCount
+}
+
+func pointInConvexPoly2D(poly *[6][2]float64, n int) bool {
+	hasPos := false
+	hasNeg := false
+	areaAbsSum := 0.0
+	for i := 0; i < n; i++ {
+		j := i + 1
+		if j == n {
+			j = 0
+		}
+		cross := poly[i][0]*poly[j][1] - poly[i][1]*poly[j][0]
+		areaAbsSum += math.Abs(cross)
+		if cross > 1e-12 {
+			hasPos = true
+		} else if cross < -1e-12 {
+			hasNeg = true
+		}
+		if hasPos && hasNeg {
+			return false
+		}
+	}
+	// Require non-zero 2D area so degenerate vertical walls fall through to edge/face distance check.
+	return areaAbsSum > 1e-12 && (hasPos != hasNeg)
 }
 
 // growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.

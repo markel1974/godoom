@@ -127,11 +127,12 @@ func (b *Bucket) HasEntryFor(entityId uint64) bool {
 
 // Penetrable determines if the Bucket can be penetrated starting from a specified entity ID.
 // Returns false if any entity in the bucket provides infinite inelastic resistance or cannot be recursively pushed.
-func (b *Bucket) Penetrable(from uint64) bool {
-	return b.penetrable(from, 0)
-}
+//func (b *Bucket) Penetrable(from uint64) bool {
+//	return b.penetrable(from, 0)
+//}
 
-func (b *Bucket) penetrable(from uint64, depth int) bool {
+// Penetrable reports whether this bucket can yield to a push from the given entity within the recursion depth.
+func (b *Bucket) Penetrable(from uint64, depth int) bool {
 	if depth >= maxPushDepth {
 		return true
 	}
@@ -148,7 +149,7 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
 		// può essere spinta a sua volta (Attraversamento Ricorsivo del Grafo).
 		// Se anche UNA SOLA entità è bloccata, tutto il nostro fronte di spinta è bloccato!
-		if !entry.penetrable(depth) {
+		if !entry.Penetrable(depth) {
 			return false
 		}
 	}
@@ -158,7 +159,7 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 
 // Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
 func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
-	var coplanarIdx [aabb.MaxManifoldPoints]int
+	var coplanar [aabb.MaxManifoldPoints]int
 	coplanarCount := 0
 	var mergeDistSq float64
 	if rCage == nil {
@@ -186,11 +187,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 		// Coplanar static manifold deduplication: preserve up to MaxManifoldPoints distinct support points per static plane.
 		if rCage == nil && existing.rCage == nil {
 			if dot := (normalX * existing.nX) + (normalY * existing.nY) + (normalZ * existing.nZ); dot > 0.999 {
-				planeDistance := math.Abs(
-					(p0x-existing.p0X)*existing.nX +
-						(p0y-existing.p0Y)*existing.nY +
-						(p0z-existing.p0Z)*existing.nZ,
-				)
+				planeDistance := math.Abs((p0x-existing.p0X)*existing.nX + (p0y-existing.p0Y)*existing.nY + (p0z-existing.p0Z)*existing.nZ)
 				if planeDistance < planeEpsilon {
 					// Solid walls/floors take single-entry priority over step-ups; step-ups stay single-entry per plane.
 					if existing.iMode == ImpactStep && iMode == ImpactInelastic {
@@ -215,8 +212,8 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 						}
 						return nil
 					}
-					if coplanarCount < len(coplanarIdx) {
-						coplanarIdx[coplanarCount] = i
+					if coplanarCount < len(coplanar) {
+						coplanar[coplanarCount] = i
 						coplanarCount++
 					}
 				}
@@ -225,7 +222,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	}
 
 	if rCage == nil && coplanarCount >= aabb.MaxManifoldPoints {
-		b.replaceCoplanarManifold(&coplanarIdx, coplanarCount, bucket, lCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.replaceCoplanarManifold(&coplanar, coplanarCount, bucket, lCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		return nil
 	}
 
@@ -260,19 +257,12 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	return nil
 }
 
-func (b *Bucket) replaceCoplanarManifold(
-	coplanarIdx *[aabb.MaxManifoldPoints]int,
-	coplanarCount int,
-	bucket BucketType,
-	lCage *Cage,
-	rFace IFace,
-	dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64,
-	iMode ImpactMode,
-) {
-	minPenIdx := coplanarIdx[0]
+// replaceCoplanarManifold replaces a coplanar contact when the candidate improves penetration or manifold spread.
+func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, coplanarCount int, bucket BucketType, lCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {
+	minPenIdx := coplanar[0]
 	minPen := b.currPool[minPenIdx].penetration
 	for k := 1; k < coplanarCount; k++ {
-		idx := coplanarIdx[k]
+		idx := coplanar[k]
 		if p := b.currPool[idx].penetration; p < minPen {
 			minPen = p
 			minPenIdx = idx
@@ -288,7 +278,7 @@ func (b *Bucket) replaceCoplanarManifold(
 	worstSlot := -1
 	worstMinDistSq := math.MaxFloat64
 	for s := 0; s < coplanarCount; s++ {
-		es := b.currPool[coplanarIdx[s]]
+		es := b.currPool[coplanar[s]]
 		if es.penetration > penetration+1e-4 {
 			continue
 		}
@@ -297,7 +287,7 @@ func (b *Bucket) replaceCoplanarManifold(
 			if k == s {
 				continue
 			}
-			ek := b.currPool[coplanarIdx[k]]
+			ek := b.currPool[coplanar[k]]
 			dx := es.p0X - ek.p0X
 			dy := es.p0Y - ek.p0Y
 			dz := es.p0Z - ek.p0Z
@@ -319,7 +309,7 @@ func (b *Bucket) replaceCoplanarManifold(
 		if k == worstSlot {
 			continue
 		}
-		ek := b.currPool[coplanarIdx[k]]
+		ek := b.currPool[coplanar[k]]
 		dx := p0x - ek.p0X
 		dy := p0y - ek.p0Y
 		dz := p0z - ek.p0Z
@@ -328,12 +318,13 @@ func (b *Bucket) replaceCoplanarManifold(
 		}
 	}
 	if candMinDistSq > worstMinDistSq*(1.0+1e-3) {
-		target := b.currPool[coplanarIdx[worstSlot]]
+		target := b.currPool[coplanar[worstSlot]]
 		target.Rebuild(bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 	}
 }
 
+// rebuildKeepingWarm rebuilds entry and preserves or restores warm-start impulses when applicable.
 func (b *Bucket) rebuildKeepingWarm(entry *Entry, bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {
 	wN, wTx, wTy, wTz := entry.GetWarmImpulse()
 	entry.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
@@ -347,6 +338,7 @@ func (b *Bucket) rebuildKeepingWarm(entry *Entry, bucket BucketType, lCage *Cage
 	b.matchWarmStart(entry)
 }
 
+// matchWarmStart restores scaled warm impulses from the best matching previous entry, if one is available.
 func (b *Bucket) matchWarmStart(entry *Entry) {
 	if b.prevCount == 0 || entry.iMode == ImpactStep {
 		return

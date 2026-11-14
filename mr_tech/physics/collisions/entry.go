@@ -1,11 +1,14 @@
 package collisions
 
+const maxPushDepth = 8
+
 // Entry represents a collision entry used during spatial computations in the collision detection system.
 type Entry struct {
 	bucket        BucketType
 	rCage         *Cage
 	rFace         IFace
 	lCage         *Cage
+	iMode         ImpactMode
 	dist          float64
 	penetration   float64
 	nX            float64
@@ -15,7 +18,6 @@ type Entry struct {
 	p0Y           float64
 	p0Z           float64
 	maxZ          float64
-	iMode         ImpactMode
 	accNormal     float64
 	accTx         float64
 	accTy         float64
@@ -105,14 +107,8 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace
 	s.warmConsumed = false
 }
 
-const maxPushDepth = 8
-
-// Penetrable determines if the Entry can be penetrated based on its collision mode and the state of adjacent entities.
-func (s *Entry) Penetrable() bool {
-	return s.penetrable(0)
-}
-
-func (s *Entry) penetrable(depth int) bool {
+// Penetrable reports whether this entry can be penetrated or pushed, following remote cages up to depth.
+func (s *Entry) Penetrable(depth int) bool {
 	if s.iMode == ImpactInelastic {
 		return false
 	}
@@ -123,5 +119,5 @@ func (s *Entry) penetrable(depth int) bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.penetrable(s.lCage.object.GetEntity().GetId(), depth+1)
+	return v.Penetrable(s.lCage.object.GetEntity().GetId(), depth+1)
 }

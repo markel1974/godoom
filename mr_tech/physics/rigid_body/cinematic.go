@@ -1156,6 +1156,9 @@ func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float6
 
 // rotationalMass returns the inverse-inertia response for r x d and its rotational effective mass contribution.
 func (e *Cinematic) rotationalMass(rx, ry, rz float64, dx, dy, dz float64) (float64, float64, float64, float64) {
+	if e.keepUpright {
+		return 0.0, 0.0, 0.0, 0.0
+	}
 	cx := ry*dz - rz*dy
 	cy := rz*dx - rx*dz
 	cz := rx*dy - ry*dx

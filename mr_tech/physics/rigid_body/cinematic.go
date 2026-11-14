@@ -47,10 +47,12 @@ const (
 
 	defaultInertia = 32.0
 
-	// Inertia validation and computation constants.
-	minInertiaMass = 25.0
+	// Inertia validation and computation constants (numerical guards only, to preserve light/small body scaling).
+	minInertiaMass = 1e-3
 
-	minInertiaDiagRatio = 0.1
+	minInertiaExtent = 1.0
+
+	minInertiaDiagRatio = 1e-4
 
 	cuboidInertiaFactor = 1.0 / 12.0
 
@@ -302,14 +304,14 @@ func (e *Cinematic) UpdateInertia(w, h, d float64) {
 		e.worldInv.Reset()
 		return
 	}
-	if w < defaultInertia {
-		w = defaultInertia
+	if w < minInertiaExtent {
+		w = minInertiaExtent
 	}
-	if h < defaultInertia {
-		h = defaultInertia
+	if h < minInertiaExtent {
+		h = minInertiaExtent
 	}
-	if d < defaultInertia {
-		d = defaultInertia
+	if d < minInertiaExtent {
+		d = minInertiaExtent
 	}
 	// Solid cuboid inertia per unit mass.
 	e.SetInertiaTensor((h*h+d*d)*cuboidInertiaFactor, 0, 0, (w*w+d*d)*cuboidInertiaFactor, 0, (w*w+h*h)*cuboidInertiaFactor)
@@ -665,9 +667,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	// Integrate external torque first, then apply energy-preserving gyroscopic precession.
 	if e.torqueX != 0.0 || e.torqueY != 0.0 || e.torqueZ != 0.0 {
 		ax, ay, az := e.applyWorldInvInertia(e.torqueX, e.torqueY, e.torqueZ)
-		e.wx += ax * e.dt
-		e.wy += ay * e.dt
-		e.wz += az * e.dt
+		e.addClampedAngular(e.dt, ax, ay, az)
 	}
 	e.integrateGyroscopic()
 	// Reset torque accumulators.

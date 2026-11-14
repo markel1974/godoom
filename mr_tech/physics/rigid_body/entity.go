@@ -164,22 +164,19 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.
-
 func (e *Entity) Update() {
 	e.BoundingBox.SnapshotRotation()
 	if !e.Cinematic.KeepUpright() {
 		e.Cinematic.SetIsTilted(!e.BoundingBox.IsFaceAligned())
 	}
 	e.Cinematic.Update(e.BoundingBox.GetAxes2())
-	if e.Cinematic.GetInvMass() <= 0.0 ||
-		(!e.Cinematic.IsRotating() && !e.Cinematic.IsTilted()) {
+	if e.Cinematic.GetInvMass() <= 0.0 || (!e.Cinematic.IsRotating() && !e.Cinematic.IsTilted()) {
 		return
 	}
 	// Preserve the world-space center of mass during rotation.
 	cx, cy, cz := e.getCenterOfMass()
 	reset := e.BoundingBox.Rotate(e.wx, e.wy, e.wz, e.GetDt())
-	// Rotation changes the world-space COM when the local
-	// centroid is offset from the geometric center.
+	// Rotation changes the world-space COM when the local centroid is offset from the geometric center.
 	ncx, ncy, ncz := e.getCenterOfMass()
 	e.BoundingBox.AddTo(cx-ncx, cy-ncy, cz-ncz)
 
@@ -192,6 +189,7 @@ func (e *Entity) Update() {
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
+// predictedContactCOMs returns the next-frame centers of mass for this entity and the given entity.
 func (e *Entity) predictedContactCOMs(e2 *Entity) (float64, float64, float64, float64, float64, float64) {
 	cx1, cy1, cz1 := e.getCenterOfMass()
 	cx2, cy2, cz2 := e2.getCenterOfMass()

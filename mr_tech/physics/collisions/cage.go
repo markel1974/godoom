@@ -102,6 +102,7 @@ type Cage struct {
 	appliedX            float64
 	appliedY            float64
 	appliedZ            float64
+	solverIdx           int
 }
 
 //var _counter uint64
@@ -120,6 +121,7 @@ func NewCage(id uint64, object IObject) *Cage {
 		facesIdx:  0,
 		hasFloor:  false,
 		manifold1: aabb.NewOBBManifold(),
+		solverIdx: -1,
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
@@ -620,6 +622,21 @@ func (s *Cage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
 // HasFloor reports whether the collision cage has a floor.[cite: 6]
 func (s *Cage) HasFloor() bool {
 	return s.hasFloor
+}
+
+// SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).
+func (s *Cage) SetSolverIndex(idx int) {
+	s.solverIdx = idx
+}
+
+// GetSolverIndex returns the temporary per-tick solver index of this cage (-1 when inactive).
+func (s *Cage) GetSolverIndex() int {
+	return s.solverIdx
+}
+
+// ZeroDisplacement resets any pending displacement delta on this cage when entering sleep.
+func (s *Cage) ZeroDisplacement() {
+	s.dX, s.dY, s.dZ = 0, 0, 0
 }
 
 // GetEntity returns the physics entity associated with the collision cage.[cite: 6]

@@ -31,6 +31,12 @@ const (
 
 	angSleepEpsilon = 0.08
 
+	// Continuous calm duration and motion thresholds before putting a grounded island to sleep.
+	sleepTimeThreshold = 0.45
+	sleepAngVelMax     = angSleepEpsilon * 1.5
+	sleepAngVelMaxSq   = sleepAngVelMax * sleepAngVelMax
+	sleepPushSlopSq    = (defaultPenetrationSlop * 2.0) * (defaultPenetrationSlop * 2.0)
+
 	rotScale = 1.0
 
 	defaultInertia = 32.0
@@ -144,6 +150,8 @@ type Cinematic struct {
 	lowEnergyTiltDamping               float64
 	faceAlignCos                       float64
 	ridgeBreakApplied                  bool
+	sleeping                           bool
+	sleepTimer                         float64
 	r                                  *Matrix3x3
 	body                               *Matrix3x3
 	bodyInv                            *Matrix3x3
@@ -372,9 +380,56 @@ func (e *Cinematic) GetAngularVelocity() (float64, float64, float64) {
 
 // SetAngularVelocity sets the angular velocity components (wx, wy, wz) in rad/s.
 func (e *Cinematic) SetAngularVelocity(wx, wy, wz float64) {
+	if wx != 0.0 || wy != 0.0 || wz != 0.0 {
+		e.WakeUp()
+	}
 	e.wx = wx
 	e.wy = wy
 	e.wz = wz
+}
+
+// IsSleeping reports whether the body is currently asleep in the physics solver.
+func (e *Cinematic) IsSleeping() bool {
+	return e.sleeping
+}
+
+// WakeUp wakes the body from sleep and resets its calm accumulator timer.
+func (e *Cinematic) WakeUp() {
+	e.sleeping = false
+	e.sleepTimer = 0.0
+}
+
+// SetSleeping sets the sleeping state; entering sleep zeroes residual velocities, accelerations, and torques.
+func (e *Cinematic) SetSleeping(sleeping bool) {
+	if !sleeping {
+		e.WakeUp()
+		return
+	}
+	e.sleeping = true
+	e.sleepTimer = sleepTimeThreshold
+	e.Stop()
+}
+
+// UpdateSleepState advances or resets the calm accumulator based on post-solver linear/angular speed and push-out delta.
+// It returns true when the body satisfies all rest conditions for at least sleepTimeThreshold seconds.
+func (e *Cinematic) UpdateSleepState(canSleep bool, pushSq float64) bool {
+	if !canSleep || e.invMass <= 0.0 || !e.onGround || (e.keepUpright && e.isTilted) || pushSq > sleepPushSlopSq {
+		e.sleepTimer = 0.0
+		return false
+	}
+	if e.ax != 0.0 || e.ay != 0.0 || e.az != 0.0 || e.torqueX != 0.0 || e.torqueY != 0.0 || e.torqueZ != 0.0 {
+		e.sleepTimer = 0.0
+		return false
+	}
+	linThresh := math.Max(e.vMin*2.0, (sleepEpsilon/e.dt)*1.5)
+	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
+	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
+	if vSq > linThresh*linThresh || wSq > sleepAngVelMaxSq {
+		e.sleepTimer = 0.0
+		return false
+	}
+	e.sleepTimer += e.dt
+	return e.sleepTimer >= sleepTimeThreshold
 }
 
 // AngularMomentum returns the world-space angular momentum L = I_world * omega.
@@ -386,6 +441,9 @@ func (e *Cinematic) SetAngularVelocity(wx, wy, wz float64) {
 func (e *Cinematic) AddImpulseAtOffset(jx, jy, jz, rx, ry, rz float64) {
 	if e.invMass == 0.0 {
 		return
+	}
+	if jx != 0.0 || jy != 0.0 || jz != 0.0 {
+		e.WakeUp()
 	}
 	// Angular impulse: ΔL = r × J
 	tx := ry*jz - rz*jy
@@ -438,21 +496,33 @@ func (e *Cinematic) GetVz() float64 {
 
 // SetVx sets the velocity along the X-axis for the Cinematic object.
 func (e *Cinematic) SetVx(vx float64) {
+	if vx != 0.0 {
+		e.WakeUp()
+	}
 	e.vx = vx
 }
 
 // SetVy sets the vertical velocity (vy) of the Cinematic object to the specified value.
 func (e *Cinematic) SetVy(vy float64) {
+	if vy != 0.0 {
+		e.WakeUp()
+	}
 	e.vy = vy
 }
 
 // SetVz sets the z-axis velocity (vz) for the Cinematic object.
 func (e *Cinematic) SetVz(vz float64) {
+	if vz != 0.0 {
+		e.WakeUp()
+	}
 	e.vz = vz
 }
 
 // SetV sets the velocity components vx, vy, and vz for the cinematic entity.
 func (e *Cinematic) SetV(vx, vy, vz float64) {
+	if vx != 0.0 || vy != 0.0 || vz != 0.0 {
+		e.WakeUp()
+	}
 	e.vx = vx
 	e.vy = vy
 	e.vz = vz
@@ -460,6 +530,9 @@ func (e *Cinematic) SetV(vx, vy, vz float64) {
 
 // AddV increments the velocity components (vx, vy, vz) of the Cinematic object by the specified values.
 func (e *Cinematic) AddV(vx, vy, vz float64) {
+	if vx != 0.0 || vy != 0.0 || vz != 0.0 {
+		e.WakeUp()
+	}
 	e.vx += vx
 	e.vy += vy
 	e.vz += vz
@@ -509,6 +582,9 @@ func (e *Cinematic) IsMoving() bool {
 
 // AddForce applies a force to the object by modifying its acceleration components (ax, ay, az) using the force and inverse mass.
 func (e *Cinematic) AddForce(fx, fy, fz float64) {
+	if fx != 0.0 || fy != 0.0 || fz != 0.0 {
+		e.WakeUp()
+	}
 	e.ax += fx * e.invMass
 	e.ay += fy * e.invMass
 	e.az += fz * e.invMass
@@ -518,6 +594,9 @@ func (e *Cinematic) AddForce(fx, fy, fz float64) {
 func (e *Cinematic) AddForceAtPoint(fx, fy, fz float64, px, py, pz float64, cx, cy, cz float64) {
 	if e.invMass == 0.0 {
 		return
+	}
+	if fx != 0.0 || fy != 0.0 || fz != 0.0 {
+		e.WakeUp()
 	}
 	// Accumulate linear acceleration.
 	e.AddForce(fx, fy, fz)

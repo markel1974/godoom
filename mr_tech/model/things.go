@@ -43,6 +43,9 @@ type Things struct {
 	maxOverlapsWorld  int
 	maxOverlapsThings int
 	session           uint64
+	islandParent      []int
+	islandSleep       []bool
+	wakeQueue         []volumes.IThing
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -66,6 +69,9 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		ready:             make([]volumes.IThing, defaultLen),
 		thinkers:          make([]volumes.IThing, defaultLen),
 		pending:           make([]volumes.IThing, defaultLen),
+		islandParent:      make([]int, defaultLen),
+		islandSleep:       make([]bool, defaultLen),
+		wakeQueue:         make([]volumes.IThing, defaultLen),
 		readyLen:          0,
 		thinkersLen:       0,
 		removablesLen:     0,
@@ -121,6 +127,10 @@ func (th *Things) Len() int {
 
 // QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
 func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
+	th.queryCollisionCage(lCage, maxOverlaps, nil)
+}
+
+func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, runningLen *int) {
 	lThing := lCage.GetThing().(volumes.IThing)
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(volumes.IThing)
@@ -131,8 +141,11 @@ func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 		if lCage.HasSeen(rCage) {
 			return false
 		}
+		wasSleeping := rThing.IsSleeping()
 		lCage.Seen(rCage)
-		rCage.Seen(lCage)
+		if !wasSleeping {
+			rCage.Seen(lCage)
+		}
 		pairCounter := 0
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
 		rThing.VerticesGetVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
@@ -147,9 +160,71 @@ func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 			})
 			return pairCounter > maxOverlaps
 		})
+		if wasSleeping {
+			if pairCounter == 0 {
+				return false
+			}
+			// Real face intersection with a sleeping body: wake its connected island before rebuilding/committing rCage.
+			th.wakeIsland(rThing, runningLen)
+			rCage.Seen(lCage)
+		}
 		lCage.Commit(rCage)
 		return false
 	})
+}
+
+func (th *Things) findIsland(x int) int {
+	for th.islandParent[x] != x {
+		th.islandParent[x] = th.islandParent[th.islandParent[x]]
+		x = th.islandParent[x]
+	}
+	return x
+}
+
+func (th *Things) wakeIsland(root volumes.IThing, runningLen *int) {
+	qLen := 0
+	if root.IsSleeping() {
+		root.WakeUp()
+	}
+	if qLen < len(th.wakeQueue) {
+		th.wakeQueue[qLen] = root
+		qLen++
+	}
+	for head := 0; head < qLen; head++ {
+		curr := th.wakeQueue[head]
+		cage := curr.GetCage().(*collisions.Cage)
+		slotsLen := cage.GetSlotsLen()
+		for i := 0; i < slotsLen; i++ {
+			rCage := cage.GetSlot(i).GetRCage()
+			if rCage == nil {
+				continue
+			}
+			rObj := rCage.GetObject()
+			if rObj == nil {
+				continue
+			}
+			rThing, ok := rObj.(volumes.IThing)
+			if !ok || !rThing.IsActive() || !rThing.IsSleeping() {
+				continue
+			}
+			rThing.WakeUp()
+			if qLen < len(th.wakeQueue) {
+				th.wakeQueue[qLen] = rThing
+				qLen++
+			}
+		}
+	}
+	if runningLen != nil {
+		for i := 0; i < qLen; i++ {
+			w := th.wakeQueue[i]
+			w.StagePrepare(th.session)
+			if *runningLen < len(th.running) {
+				w.SetSolverIndex(*runningLen)
+				th.running[*runningLen] = w
+				*runningLen++
+			}
+		}
+	}
 }
 
 // QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
@@ -313,16 +388,30 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.event.Wait()
 	}
 
+	// Cascade wake-up across pre-sleep resting slot graphs before StagePrepare clears slots.
+	for x := 0; x < th.readyLen; x++ {
+		t2 := th.ready[x]
+		if t2.IsActive() && !t2.IsSleeping() {
+			th.wakeIsland(t2, nil)
+		}
+	}
+
 	//Apply Physics
 	runningLen := 0
 	for x := 0; x < th.readyLen; x++ {
 		t2 := th.ready[x]
 		if !t2.IsActive() {
+			t2.SetSolverIndex(-1)
 			th.removables[th.removablesLen] = t2
 			th.removablesLen++
 			continue
 		}
+		if t2.IsSleeping() {
+			t2.SetSolverIndex(-1)
+			continue
+		}
 		t2.StagePrepare(th.session)
+		t2.SetSolverIndex(runningLen)
 		th.running[runningLen] = t2
 		runningLen++
 	}
@@ -331,11 +420,11 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		return
 	}
 
-	for x := 0; x < runningLen; x++ {
-		t2 := th.running[x]
+	for cursor := 0; cursor < runningLen; cursor++ {
+		t2 := th.running[cursor]
 		cage := t2.GetCage().(*collisions.Cage)
 		th.volumes.QueryCollisionCage(cage, th.maxOverlapsWorld) //world collision
-		th.QueryCollisionCage(cage, th.maxOverlapsThings)        //things collision
+		th.queryCollisionCage(cage, th.maxOverlapsThings, &runningLen)
 	}
 
 	for x := 0; x < runningLen; x++ {
@@ -387,6 +476,44 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		t2 := th.running[x]
 		th.tree.UpdateObject(t2)
 	}
+
+	// Build collision islands over active bodies and sleep completely calm islands.
+	for x := 0; x < runningLen; x++ {
+		th.islandParent[x] = x
+		th.islandSleep[x] = th.running[x].UpdateSleepState()
+	}
+	for x := 0; x < runningLen; x++ {
+		cage := th.running[x].GetCage().(*collisions.Cage)
+		slotsLen := cage.GetSlotsLen()
+		for i := 0; i < slotsLen; i++ {
+			rCage := cage.GetSlot(i).GetRCage()
+			if rCage == nil {
+				continue
+			}
+			rIdx := rCage.GetSolverIndex()
+			if rIdx < 0 || rIdx == x {
+				continue
+			}
+			rx := th.findIsland(x)
+			ry := th.findIsland(rIdx)
+			if rx != ry {
+				th.islandParent[ry] = rx
+			}
+		}
+	}
+	for x := 0; x < runningLen; x++ {
+		root := th.findIsland(x)
+		if !th.islandSleep[x] {
+			th.islandSleep[root] = false
+		}
+	}
+	for x := 0; x < runningLen; x++ {
+		t2 := th.running[x]
+		if th.islandSleep[th.findIsland(x)] {
+			t2.EnterSleep()
+		}
+		t2.SetSolverIndex(-1)
+	}
 }
 
 // AddStaticThing adds a static object to the scene without physics or spatial partitioning.
@@ -398,9 +525,13 @@ func (th *Things) AddStaticThing(ent volumes.IThing) {
 func (th *Things) addThing(ent volumes.IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
 	if len(th.entities) > cap(th.running) {
-		th.running = make([]volumes.IThing, len(th.entities)*4)
-		th.removables = make([]volumes.IThing, len(th.entities)*4)
-		th.pending = make([]volumes.IThing, len(th.entities)*4)
+		newCap := len(th.entities) * 4
+		th.running = make([]volumes.IThing, newCap)
+		th.removables = make([]volumes.IThing, newCap)
+		th.pending = make([]volumes.IThing, newCap)
+		th.islandParent = make([]int, newCap)
+		th.islandSleep = make([]bool, newCap)
+		th.wakeQueue = make([]volumes.IThing, newCap)
 	}
 	th.tree.InsertObject(ent)
 	ent.StartLoop()

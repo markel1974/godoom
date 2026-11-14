@@ -22,6 +22,20 @@ type IThing interface {
 
 	SetActive(active bool)
 
+	IsSleeping() bool
+
+	WakeUp()
+
+	EnterSleep()
+
+	CanSleep() bool
+
+	UpdateSleepState() bool
+
+	SetSolverIndex(idx int)
+
+	GetSolverIndex() int
+
 	HasThinking() bool
 
 	StageThinking(playerX float64, playerY float64, playerZ float64)

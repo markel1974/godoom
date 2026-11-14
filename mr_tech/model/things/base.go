@@ -181,6 +181,44 @@ func (t *Base) IsVisible() bool {
 	return true
 }
 
+// IsSleeping reports whether the entity's rigid body is currently asleep.
+func (t *Base) IsSleeping() bool {
+	return t.VerticesGetVolume().GetEntity().IsSleeping()
+}
+
+// WakeUp wakes the entity from sleep so it participates in physics steps.
+func (t *Base) WakeUp() {
+	t.VerticesGetVolume().GetEntity().WakeUp()
+}
+
+// EnterSleep puts the entity to sleep and clears any pending frame displacement.
+func (t *Base) EnterSleep() {
+	t.VerticesGetVolume().GetEntity().SetSleeping(true)
+	t.cage.ZeroDisplacement()
+}
+
+// CanSleep reports whether this entity type is allowed to enter the sleeping state.
+func (t *Base) CanSleep() bool {
+	return t.kind != config.ThingPlayerDef
+}
+
+// UpdateSleepState evaluates post-solver motion and returns whether this entity qualifies to sleep.
+func (t *Base) UpdateSleepState() bool {
+	px, py, pz := t.cage.GetPushOffset()
+	pushSq := px*px + py*py + pz*pz
+	return t.VerticesGetVolume().GetEntity().UpdateSleepState(t.CanSleep(), pushSq)
+}
+
+// SetSolverIndex records this entity's active index in the current solver tick (-1 when inactive).
+func (t *Base) SetSolverIndex(idx int) {
+	t.cage.SetSolverIndex(idx)
+}
+
+// GetSolverIndex returns this entity's active index in the current solver tick (-1 when inactive).
+func (t *Base) GetSolverIndex() int {
+	return t.cage.GetSolverIndex()
+}
+
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *Base) StagePrepare(session uint64) {
 	entity := t.VerticesGetVolume().GetEntity()

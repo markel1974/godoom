@@ -1,11 +1,4 @@
 
-3) Rilassamento iterativo / split-impulse anche sul push-out posizionale (StageApply)
-
-il solver agli impulsi ora itera (SolverIterations), ma la separazione posizionale (ResolveElasticPenetration/ResolveInelasticPenetration) gira in una sola passata: su torri alte di casse questo lascia leggera comprimibilità verticale rispetto a un push-out iterativo o a split-impulse/NGS.
-
-4) Sleeping reale / Collision Islands (con wake-up)
-
-Cinematic.Update azzera le micro-velocità (sleepEpsilon, angSleepEpsilon), ma in Things.Compute tutti gli oggetti attivi continuano comunque a ricostruire la Cage, interrogare l'albero e girare nel solver ogni tick. Aggiungere un vero stato sleeping (risvegliato da nuovi impatti o spostamento del supporto) azzererebbe drift residui e carico CPU con tanti oggetti fermi.
 
 4) Rotazioni di ribilanciamento in Tree
 

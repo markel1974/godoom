@@ -119,12 +119,14 @@ func (e *Entity) AddSize(w, h, d float64) {
 
 // SetRotationAngleZ sets the OBB orientation to a yaw rotation around Z and synchronizes the world inertia tensor.
 func (e *Entity) SetRotationAngleZ(angleRad float64) {
+	e.Cinematic.WakeUp()
 	e.BoundingBox.SetRotationAngleZ(angleRad)
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
 // SetRotationEuler sets the OBB orientation from Euler angles and synchronizes the world inertia tensor.
 func (e *Entity) SetRotationEuler(rollX, pitchY, yawZ float64) {
+	e.Cinematic.WakeUp()
 	e.BoundingBox.SetRotationEuler(rollX, pitchY, yawZ)
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }

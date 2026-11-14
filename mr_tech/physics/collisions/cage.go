@@ -367,7 +367,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) bool {
 	rEnt := rCage.GetEntity()
 	rDX, rDY, rDZ := rCage.GetDisplacement()
 	m := s.manifold1
-	m.ComputeOBBManifoldAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
+	m.ComputeAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, rDX-s.dX, rDY-s.dY, rDZ-s.dZ)
 
 	b := classifyBucketNormal(m.NormalX, m.NormalY, m.NormalZ)
 	if !m.Hit {

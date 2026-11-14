@@ -11,145 +11,12 @@ type ContactPoint struct {
 	Penetration float64
 }
 
-type Sat struct {
-	hit         bool
-	minPen      float64
-	maxGap      float64
-	contactPen  float64
-	contactAxis int
-	normal      [3]float64
-	gapNormal   [3]float64
+func (cp *ContactPoint) GetXYZ() (float64, float64, float64) {
+	return cp.X, cp.Y, cp.Z
 }
 
-func (res *Sat) GetNormal() (float64, float64, float64) {
-	return res.normal[0], res.normal[1], res.normal[2]
-}
-
-// Compute runs a separating axis test between two oriented boxes using center delta, axes, and half-extents.
-// It updates res with hit state, minimum penetration, contact normal, contact axis, and largest separation gap.
-func (res *Sat) Compute(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) {
-	hA := [3]float64{scx, scy, scz}
-	hB := [3]float64{ocx, ocy, ocz}
-	var R [3][3]float64
-	var AbsR [3][3]float64
-	const epsilon = 1e-12
-	const crossAxisLenEps = 1e-6
-	const edgeAxisMinLen = 1e-4
-
-	for i := 0; i < 3; i++ {
-		ax, ay, az := a.data[i][0], a.data[i][1], a.data[i][2]
-		for j := 0; j < 3; j++ {
-			value := ax*b.data[j][0] + ay*b.data[j][1] + az*b.data[j][2]
-			R[i][j] = value
-			AbsR[i][j] = math.Abs(value) + epsilon
-		}
-	}
-
-	t := [3]float64{
-		dx*a.data[0][0] + dy*a.data[0][1] + dz*a.data[0][2],
-		dx*a.data[1][0] + dy*a.data[1][1] + dz*a.data[1][2],
-		dx*a.data[2][0] + dy*a.data[2][1] + dz*a.data[2][2],
-	}
-
-	res.minPen = math.MaxFloat64
-	res.contactPen = math.MaxFloat64
-	res.contactAxis = -1
-	separated := false
-	faceBestPen := math.MaxFloat64
-
-	// Test the three axes of A (indices 0..2).
-	for i := 0; i < 3; i++ {
-		rb := hB[0]*AbsR[i][0] + hB[1]*AbsR[i][1] + hB[2]*AbsR[i][2]
-		proj := t[i]
-		distance := math.Abs(proj)
-		nx, ny, nz := a.data[i][0], a.data[i][1], a.data[i][2]
-		if proj > 0.0 {
-			nx, ny, nz = -nx, -ny, -nz
-		}
-		if distance > hA[i]+rb {
-			separated = true
-			if g := distance - (hA[i] + rb); g > res.maxGap {
-				res.maxGap = g
-				res.gapNormal = [3]float64{nx, ny, nz}
-			}
-		} else if !separated {
-			p := hA[i] + rb - distance
-			if p < res.minPen {
-				res.minPen = p
-			}
-			if p < res.contactPen {
-				res.contactPen = p
-				faceBestPen = p
-				res.contactAxis = i
-				res.normal = [3]float64{nx, ny, nz}
-			}
-		}
-	}
-
-	// Test the three axes of B (indices 3..5).
-	for j := 0; j < 3; j++ {
-		ra := hA[0]*AbsR[0][j] + hA[1]*AbsR[1][j] + hA[2]*AbsR[2][j]
-		proj := t[0]*R[0][j] + t[1]*R[1][j] + t[2]*R[2][j]
-		distance := math.Abs(proj)
-		nx, ny, nz := b.data[j][0], b.data[j][1], b.data[j][2]
-		if proj > 0.0 {
-			nx, ny, nz = -nx, -ny, -nz
-		}
-		if distance > ra+hB[j] {
-			separated = true
-			if g := distance - (ra + hB[j]); g > res.maxGap {
-				res.maxGap = g
-				res.gapNormal = [3]float64{nx, ny, nz}
-			}
-		} else if !separated {
-			p := ra + hB[j] - distance
-			if p < res.minPen {
-				res.minPen = p
-			}
-			if p < res.contactPen {
-				res.contactPen = p
-				faceBestPen = p
-				res.contactAxis = 3 + j
-				res.normal = [3]float64{nx, ny, nz}
-			}
-		}
-	}
-
-	// Test the nine cross-product axes A[i] x B[j] (indices 6..14).
-	for i := 0; i < 3; i++ {
-		i1 := (i + 1) % 3
-		i2 := (i + 2) % 3
-		for j := 0; j < 3; j++ {
-			j1 := (j + 1) % 3
-			j2 := (j + 2) % 3
-			ra := hA[i1]*AbsR[i2][j] + hA[i2]*AbsR[i1][j]
-			rb := hB[j1]*AbsR[i][j2] + hB[j2]*AbsR[i][j1]
-			proj := t[i2]*R[i1][j] - t[i1]*R[i2][j]
-			distance := math.Abs(proj)
-			axisLen := math.Hypot(R[i1][j], R[i2][j])
-			if distance > ra+rb {
-				separated = true
-				if axisLen > crossAxisLenEps {
-					if g := (distance - (ra + rb)) / axisLen; g > res.maxGap {
-						res.maxGap = g
-						res.gapNormal = worldCrossUnitNormal(a, i, b, j, axisLen, proj)
-					}
-				}
-			} else if !separated && axisLen > crossAxisLenEps {
-				p := (ra + rb - distance) / axisLen
-				if p < res.minPen {
-					res.minPen = p
-				}
-				// Slightly bias against edge-edge axes to prevent numerical angle chatter on flat face contacts.
-				if axisLen > edgeAxisMinLen && p < faceBestPen*0.98-1e-4 && p < res.contactPen {
-					res.contactPen = p
-					res.contactAxis = 6 + i*3 + j
-					res.normal = worldCrossUnitNormal(a, i, b, j, axisLen, proj)
-				}
-			}
-		}
-	}
-	res.hit = !separated
+func (cp *ContactPoint) SetXYZ(x, y, z float64) {
+	cp.X, cp.Y, cp.Z = x, y, z
 }
 
 // OBBManifold describes the result of a 3D SAT OBB-vs-OBB query including the unsnapped
@@ -175,9 +42,9 @@ func NewOBBManifold() *OBBManifold {
 	}
 }
 
-// ComputeOBBManifoldAtOffset computes an unsnapped SAT normal and a clipped multi-point
+// ComputeAtOffset computes an unsnapped SAT normal and a clipped multi-point
 // contact manifold (up to 4 points) into out between this OBB and another OBB shifted by (offX, offY, offZ).
-func (om *OBBManifold) ComputeOBBManifoldAtOffset(r *BoundingBox, other *BoundingBox, offX, offY, offZ float64) {
+func (om *OBBManifold) ComputeAtOffset(r *BoundingBox, other *BoundingBox, offX, offY, offZ float64) {
 	tx, ty, tz := other.center.Get()
 	px, py, pz := r.center.Get()
 	dx := tx - px + offX
@@ -194,9 +61,7 @@ func (om *OBBManifold) ComputeOBBManifoldAtOffset(r *BoundingBox, other *Boundin
 		om.Hit = false
 		om.Penetration = 0.0
 		om.Gap = sat.maxGap
-		om.NormalX = sat.gapNormal[0]
-		om.NormalY = sat.gapNormal[1]
-		om.NormalZ = sat.gapNormal[2]
+		om.NormalX, om.NormalY, om.NormalZ = sat.GetNormal()
 		om.Count = 0
 		return
 	}
@@ -204,9 +69,7 @@ func (om *OBBManifold) ComputeOBBManifoldAtOffset(r *BoundingBox, other *Boundin
 	om.Hit = true
 	om.Penetration = sat.contactPen
 	om.Gap = 0.0
-	om.NormalX = sat.normal[0]
-	om.NormalY = sat.normal[1]
-	om.NormalZ = sat.normal[2]
+	om.NormalX, om.NormalY, om.NormalZ = sat.GetNormal()
 	om.Count = 0
 
 	pA := [3]float64{px, py, pz}
@@ -220,19 +83,23 @@ func (om *OBBManifold) ComputeOBBManifoldAtOffset(r *BoundingBox, other *Boundin
 		i := axisIdx / 3
 		j := axisIdx % 3
 		ptX, ptY, ptZ := closestEdgeEdgePoint(pA, pB, &r.axis, hA, &other.axis, hB, i, j, sat.normal)
-		om.Count = 1
-		om.Points[0].X = ptX
-		om.Points[0].Y = ptY
-		om.Points[0].Z = ptZ
-		om.Points[0].Penetration = sat.contactPen
+		om.setSinglePoint(ptX, ptY, ptZ, sat.contactPen)
 		return
 	}
 
 	// Face-face / face-vertex / face-edge contact: clip the incident face against the reference face.
-	om.buildFaceManifold(pA, pB, &r.axis, hA, &other.axis, hB, sat.contactAxis, sat.normal, sat.contactPen, om)
+	om.buildFaceManifold(pA, pB, &r.axis, hA, &other.axis, hB, sat.contactAxis, sat.normal, sat.contactPen)
 }
 
-func (om *OBBManifold) buildFaceManifold(pA, pB [3]float64, a *Axis, hA [3]float64, b *Axis, hB [3]float64, bestAxis int, n [3]float64, bestPen float64, out *OBBManifold) {
+func (om *OBBManifold) setSinglePoint(x, y, z, penetration float64) {
+	om.Count = 1
+	om.Points[0].X = x
+	om.Points[0].Y = y
+	om.Points[0].Z = z
+	om.Points[0].Penetration = penetration
+}
+
+func (om *OBBManifold) buildFaceManifold(pA, pB [3]float64, a *Axis, hA [3]float64, b *Axis, hB [3]float64, bestAxis int, n [3]float64, bestPen float64) {
 	var refPos, incPos, refH, incH [3]float64
 	var refAxes, incAxes *Axis
 	var refIdx int
@@ -309,26 +176,22 @@ func (om *OBBManifold) buildFaceManifold(pA, pB [3]float64, a *Axis, hA [3]float
 
 	count = clipPolygonPlane(polyA, count, refU, rcU+eU, polyB)
 	if count == 0 {
-		om.Count = 1
-		om.Points[0] = ContactPoint{X: refCenter[0], Y: refCenter[1], Z: refCenter[2], Penetration: bestPen}
+		om.setSinglePoint(refCenter[0], refCenter[1], refCenter[2], bestPen)
 		return
 	}
 	count = clipPolygonPlane(polyB, count, [3]float64{-refU[0], -refU[1], -refU[2]}, -rcU+eU, polyA)
 	if count == 0 {
-		om.Count = 1
-		om.Points[0] = ContactPoint{X: refCenter[0], Y: refCenter[1], Z: refCenter[2], Penetration: bestPen}
+		om.setSinglePoint(refCenter[0], refCenter[1], refCenter[2], bestPen)
 		return
 	}
 	count = clipPolygonPlane(polyA, count, refV, rcV+eV, polyB)
 	if count == 0 {
-		om.Count = 1
-		om.Points[0] = ContactPoint{X: refCenter[0], Y: refCenter[1], Z: refCenter[2], Penetration: bestPen}
+		om.setSinglePoint(refCenter[0], refCenter[1], refCenter[2], bestPen)
 		return
 	}
 	count = clipPolygonPlane(polyB, count, [3]float64{-refV[0], -refV[1], -refV[2]}, -rcV+eV, polyA)
 	if count == 0 {
-		om.Count = 1
-		om.Points[0] = ContactPoint{X: refCenter[0], Y: refCenter[1], Z: refCenter[2], Penetration: bestPen}
+		om.setSinglePoint(refCenter[0], refCenter[1], refCenter[2], bestPen)
 		return
 	}
 
@@ -360,14 +223,14 @@ func (om *OBBManifold) buildFaceManifold(pA, pB [3]float64, a *Axis, hA [3]float
 			}
 		}
 		if !duplicate && candCount < len(candidates) {
-			candidates[candCount] = ContactPoint{X: cx, Y: cy, Z: cz, Penetration: depth}
+			candidates[candCount].SetXYZ(cx, cy, cz)
+			candidates[candCount].Penetration = depth
 			candCount++
 		}
 	}
 
 	if candCount == 0 {
-		om.Count = 1
-		om.Points[0] = ContactPoint{X: refCenter[0], Y: refCenter[1], Z: refCenter[2], Penetration: bestPen}
+		om.setSinglePoint(refCenter[0], refCenter[1], refCenter[2], bestPen)
 		return
 	}
 
@@ -379,11 +242,12 @@ func (om *OBBManifold) buildFaceManifold(pA, pB [3]float64, a *Axis, hA [3]float
 			}
 		}
 		if deepestIdx != 0 {
-			candidates[0], candidates[deepestIdx] = candidates[deepestIdx], candidates[0]
+			candidates[0].SetXYZ(candidates[deepestIdx].GetXYZ())
+			candidates[deepestIdx].SetXYZ(candidates[0].GetXYZ())
 		}
 		om.Count = candCount
 		for i := 0; i < candCount; i++ {
-			om.Points[i] = candidates[i]
+			om.Points[i].SetXYZ(candidates[i].GetXYZ())
 		}
 		return
 	}
@@ -407,7 +271,9 @@ func (om *OBBManifold) reduceManifoldPoints(candCount int) {
 		if i == i0 {
 			continue
 		}
-		if d := pointDistSq(cands[i], cands[i0]); d > maxD1 {
+		ax, ay, az := cands[i].GetXYZ()
+		bx, by, bz := cands[i0].GetXYZ()
+		if d := pointDistSq(ax, ay, az, bx, by, bz); d > maxD1 {
 			maxD1 = d
 			i1 = i
 		}
@@ -436,9 +302,13 @@ func (om *OBBManifold) reduceManifoldPoints(candCount int) {
 		if i == i0 || i == i1 || i == i2 {
 			continue
 		}
-		d0 := pointDistSq(cands[i], cands[i0])
-		d1 := pointDistSq(cands[i], cands[i1])
-		d2 := pointDistSq(cands[i], cands[i2])
+		ax, ay, az := cands[i].GetXYZ()
+		ai0x, ai0y, ai0z := cands[i0].GetXYZ()
+		ai1x, ai1y, ai1z := cands[i1].GetXYZ()
+		ai2x, ai2y, ai2z := cands[i2].GetXYZ()
+		d0 := pointDistSq(ax, ay, az, ai0x, ai0y, ai0z)
+		d1 := pointDistSq(ax, ay, az, ai1x, ai1y, ai1z)
+		d2 := pointDistSq(ax, ay, az, ai2x, ai2y, ai2z)
 		minD := math.Min(d0, math.Min(d1, d2))
 		if minD > maxMinD {
 			maxMinD = minD
@@ -560,8 +430,8 @@ func clipPolygonPlane(in *[8][3]float64, inCount int, planeN [3]float64, limit f
 	return outCount
 }
 
-func pointDistSq(a, b ContactPoint) float64 {
-	dx, dy, dz := a.X-b.X, a.Y-b.Y, a.Z-b.Z
+func pointDistSq(aX, aY, aZ float64, bX, bY, bZ float64) float64 {
+	dx, dy, dz := aX-bX, aY-bY, aZ-bZ
 	return dx*dx + dy*dy + dz*dz
 }
 

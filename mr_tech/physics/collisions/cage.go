@@ -108,6 +108,20 @@ type Cage struct {
 	clampX              float64
 	clampY              float64
 	clampZ              float64
+	objOffX             float64
+	objOffY             float64
+	objOffZ             float64
+	prevOffX            float64
+	prevOffY            float64
+	prevOffZ            float64
+	prevRadX            float64
+	prevRadY            float64
+	prevRadZ            float64
+	prevQX              float64
+	prevQY              float64
+	prevQZ              float64
+	prevQW              float64
+	forceStaticClamp    bool
 	clampNormals        [16][3]float64
 	clampNormalsLen     int
 	solverIdx           int
@@ -157,7 +171,9 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 
 	// Oriented extents from entity OBB (kept synchronized by Entity.Update).
 	s.eRadX, s.eRadY, s.eRadZ = lEnt.GetOrientedHalfExtents()
-	s.cX, s.cY, s.cZ = lEnt.GetCenter()
+	entCX, entCY, entCZ := lEnt.GetCenter()
+	s.cX, s.cY, s.cZ = entCX, entCY, entCZ
+	s.objOffX, s.objOffY, s.objOffZ = 0, 0, 0
 
 	if lEnt.KeepUpright() {
 		if objAABB := s.object.GetAABB(); objAABB != nil {
@@ -174,8 +190,21 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 				s.eRadX = (maxX - minX) * 0.5
 				s.eRadY = (maxY - minY) * 0.5
 				s.eRadZ = (maxZ - minZ) * 0.5
+				s.objOffX = s.cX - entCX
+				s.objOffY = s.cY - entCY
+				s.objOffZ = s.cZ - entCZ
 			}
 		}
+	}
+
+	qx, qy, qz, qw := lEnt.GetQRotation().Get()
+	if s.eRadX != s.prevRadX || s.eRadY != s.prevRadY || s.eRadZ != s.prevRadZ ||
+		s.objOffX != s.prevOffX || s.objOffY != s.prevOffY || s.objOffZ != s.prevOffZ ||
+		qx != s.prevQX || qy != s.prevQY || qz != s.prevQZ || qw != s.prevQW {
+		s.forceStaticClamp = true
+		s.prevRadX, s.prevRadY, s.prevRadZ = s.eRadX, s.eRadY, s.eRadZ
+		s.prevOffX, s.prevOffY, s.prevOffZ = s.objOffX, s.objOffY, s.objOffZ
+		s.prevQX, s.prevQY, s.prevQZ, s.prevQW = qx, qy, qz, qw
 	}
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
@@ -212,7 +241,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.slotsLen = 0
 	s.hasFloor = false
 	s.applied = false
-	s.clampX, s.clampY, s.clampZ = s.cX, s.cY, s.cZ
+	s.clampX, s.clampY, s.clampZ = entCX, entCY, entCZ
 	s.clampNormalsLen = 0
 
 	//clear(s.seen)
@@ -647,6 +676,9 @@ func (s *Cage) IsBucketPenetrable(b BucketType, from uint64) bool {
 
 // NeedsStaticClamp reports whether the entity center moved since the last validated static world clamp.
 func (s *Cage) NeedsStaticClamp() bool {
+	if s.forceStaticClamp {
+		return true
+	}
 	curX, curY, curZ := s.object.GetEntity().GetCenter()
 	return curX != s.clampX || curY != s.clampY || curZ != s.clampZ
 }
@@ -654,6 +686,7 @@ func (s *Cage) NeedsStaticClamp() bool {
 // CommitStaticClamp records the current entity center as the latest statically clamped baseline position.
 func (s *Cage) CommitStaticClamp() {
 	s.clampX, s.clampY, s.clampZ = s.object.GetEntity().GetCenter()
+	s.forceStaticClamp = false
 }
 
 func (s *Cage) addClampNormal(nX, nY, nZ float64) {
@@ -700,9 +733,9 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	origTX, origTY, origTZ = s.tX, s.tY, s.tZ
 	ent := s.object.GetEntity()
 	curX, curY, curZ := ent.GetCenter()
-	s.cX, s.cY, s.cZ = s.clampX, s.clampY, s.clampZ
-	s.tX, s.tY, s.tZ = curX, curY, curZ
-	s.dX, s.dY, s.dZ = curX-s.cX, curY-s.cY, curZ-s.cZ
+	s.cX, s.cY, s.cZ = s.clampX+s.objOffX, s.clampY+s.objOffY, s.clampZ+s.objOffZ
+	s.tX, s.tY, s.tZ = curX+s.objOffX, curY+s.objOffY, curZ+s.objOffZ
+	s.dX, s.dY, s.dZ = s.tX-s.cX, s.tY-s.cY, s.tZ-s.cZ
 	sx, sy, sz := ent.GetSweptHalfExtents()
 	if sx < s.eRadX {
 		sx = s.eRadX
@@ -750,7 +783,7 @@ func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 			return false
 		}
 		preBaseZ := s.GetBaseZ()
-		if preBaseZ >= rMaxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon {
+		if preBaseZ >= rMaxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && rMaxZ-curBaseZ <= floorGroundTolerance {
 			return false
 		}
 	}
@@ -835,7 +868,7 @@ func (s *Cage) GetPushOffset() (float64, float64, float64) {
 	if s.applied {
 		return curX - s.appliedX, curY - s.appliedY, curZ - s.appliedZ
 	}
-	return curX - s.cX, curY - s.cY, curZ - s.cZ
+	return (curX + s.objOffX) - s.cX, (curY + s.objOffY) - s.cY, (curZ + s.objOffZ) - s.cZ
 }
 
 // computeFace calculates the penetration and distance of a face relative to an ellipsoid's motion and assigns a collision bucket.[cite: 6]
@@ -974,16 +1007,17 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 	pen0 := math.Max(0.0, rayEff-distStart)
 	deltaPen := math.Max(0.0, penetration-pen0)
 
+	const multiAxisThreshold = 0.05
 	normOX := oX
-	if solidWE && nAbsX > 1e-5 && nAbsX < 1.0 {
+	if nAbsX > 1e-5 && nAbsX < 1.0 {
 		normOX = oX / nAbsX
 	}
 	normOY := oY
-	if solidNS && nAbsY > 1e-5 && nAbsY < 1.0 {
+	if nAbsY > 1e-5 && nAbsY < 1.0 {
 		normOY = oY / nAbsY
 	}
 	normOZ := oZ
-	if !solidWE && !solidNS && nAbsZ > 1e-5 && nAbsZ < 1.0 {
+	if nAbsZ > 1e-5 && nAbsZ < 1.0 {
 		normOZ = oZ / nAbsZ
 	}
 	var axisOverlap float64
@@ -993,6 +1027,29 @@ func (s *Cage) computeFace(lAABB *aabb.AABB, rFace IFace, offX, offY, offZ float
 		axisOverlap = normOY
 	} else {
 		axisOverlap = normOZ
+	}
+	if distTarget >= 0.0 {
+		activeAxes := 0
+		if nAbsX > multiAxisThreshold {
+			activeAxes++
+		}
+		if nAbsY > multiAxisThreshold {
+			activeAxes++
+		}
+		if nAbsZ > multiAxisThreshold {
+			activeAxes++
+		}
+		if activeAxes > 1 {
+			if nAbsX > multiAxisThreshold && normOX > axisOverlap {
+				axisOverlap = normOX
+			}
+			if nAbsY > multiAxisThreshold && normOY > axisOverlap {
+				axisOverlap = normOY
+			}
+			if nAbsZ > multiAxisThreshold && normOZ > axisOverlap {
+				axisOverlap = normOZ
+			}
+		}
 	}
 	// Cap steep upward spike-tip pushout by vertical clearance only when an upward spike tip pokes beneath the body top.
 	spikeTipCap := false

@@ -116,51 +116,45 @@ type Cinematic struct {
 	iyy float64
 	iyz float64
 	izz float64
-	// Body-space inertia tensor.
-	bodyIxx, bodyIxy, bodyIxz float64
-	bodyIyy, bodyIyz, bodyIzz float64
 
-	// Body-space inverse inertia tensor.
-	bodyInvIxx, bodyInvIxy, bodyInvIxz float64
-	bodyInvIyy, bodyInvIyz, bodyInvIzz float64
-	vx                                 float64
-	vy                                 float64
-	vz                                 float64
-	ax                                 float64
-	ay                                 float64
-	az                                 float64
-	wx                                 float64
-	wy                                 float64
-	wz                                 float64
-	torqueX                            float64
-	torqueY                            float64
-	torqueZ                            float64
-	vMin                               float64
-	airFriction                        float64
-	airDamping                         float64
-	airAngDamping                      float64
-	gForce                             float64
-	material                           *PhysicsMaterial
-	maxVelocitySq                      float64
-	sleepThresholdSq                   float64
-	dt                                 float64
-	terminalZVelocity                  float64
-	onGround                           bool
-	isTilted                           bool
-	keepUpright                        bool
-	uprightLocked                      bool
-	groundYawDamping                   float64
-	groundTiltDamping                  float64
-	lowEnergyTiltDamping               float64
-	faceAlignCos                       float64
-	ridgeBreakApplied                  bool
-	sleeping                           bool
-	sleepTimer                         float64
-	r                                  *Matrix3x3
-	body                               *Matrix3x3
-	bodyInv                            *Matrix3x3
-	world                              *Matrix3x3
-	worldInv                           *Matrix3x3
+	vx                   float64
+	vy                   float64
+	vz                   float64
+	ax                   float64
+	ay                   float64
+	az                   float64
+	wx                   float64
+	wy                   float64
+	wz                   float64
+	torqueX              float64
+	torqueY              float64
+	torqueZ              float64
+	vMin                 float64
+	airFriction          float64
+	airDamping           float64
+	airAngDamping        float64
+	gForce               float64
+	material             *PhysicsMaterial
+	maxVelocitySq        float64
+	sleepThresholdSq     float64
+	dt                   float64
+	terminalZVelocity    float64
+	onGround             bool
+	isTilted             bool
+	keepUpright          bool
+	uprightLocked        bool
+	groundYawDamping     float64
+	groundTiltDamping    float64
+	lowEnergyTiltDamping float64
+	faceAlignCos         float64
+	ridgeBreakApplied    bool
+	sleeping             bool
+	sleepTimer           float64
+	r                    *Matrix3x3
+	body                 *Matrix3x3 // Body-space inertia tensor.
+	bodyInv              *Matrix3x3 // Body-space inverse inertia tensor.
+	world                *Matrix3x3
+	worldInv             *Matrix3x3
 }
 
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
@@ -182,7 +176,7 @@ func NewCinematic(dt float64, mass, restitution, groundFriction float64, restCom
 		material:         mat,
 		onGround:         false,
 		airFriction:      airFriction,
-		keepUpright:      false, //true //MODIFICATO,true,
+		keepUpright:      false,
 		r:                NewMatrix3x3(),
 		body:             NewMatrix3x3(),
 		bodyInv:          NewMatrix3x3(),
@@ -277,12 +271,12 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 		return false
 	}
 
-	e.bodyIxx, e.bodyIxy, e.bodyIxz = a, b, c
-	e.bodyIyy, e.bodyIyz, e.bodyIzz = d, f, g
+	//e.bodyIxx, e.bodyIxy, e.bodyIxz = a, b, c
+	//e.bodyIyy, e.bodyIyz, e.bodyIzz = d, f, g
 	e.body.Set(a, b, c, b, d, f, c, f, g)
 
-	e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = invA, invB, invC
-	e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = invD, invF, invG
+	//e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = invA, invB, invC
+	//e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = invD, invF, invG
 	e.bodyInv.Set(invA, invB, invC, invB, invD, invF, invC, invF, invG)
 
 	return true
@@ -292,12 +286,7 @@ func (e *Cinematic) SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz float64) bool 
 // and initializes the world-space inverse inertia tensor.
 func (e *Cinematic) UpdateInertia(w, h, d float64) {
 	if e.invMass == 0.0 || e.mass <= 0.0 {
-		e.bodyIxx, e.bodyIxy, e.bodyIxz = 0, 0, 0
-		e.bodyIyy, e.bodyIyz, e.bodyIzz = 0, 0, 0
 		e.body.Set(0, 0, 0, 0, 0, 0, 0, 0, 0)
-
-		e.bodyInvIxx, e.bodyInvIxy, e.bodyInvIxz = 0, 0, 0
-		e.bodyInvIyy, e.bodyInvIyz, e.bodyInvIzz = 0, 0, 0
 		e.bodyInv.Set(0, 0, 0, 0, 0, 0, 0, 0, 0)
 
 		e.ixx, e.ixy, e.ixz = 0, 0, 0
@@ -450,11 +439,6 @@ func (e *Cinematic) UpdateSleepState(canSleep bool, pushSq float64) bool {
 	e.sleepTimer += e.dt
 	return e.sleepTimer >= sleepTimeThreshold
 }
-
-// AngularMomentum returns the world-space angular momentum L = I_world * omega.
-//func (e *Cinematic) AngularMomentum() (float64, float64, float64) {
-//	return e.angularMomentumFor(e.wx, e.wy, e.wz)
-//}
 
 // AddImpulseAtOffset applies an angular impulse Δω = I_world^-1 (r × J) generated by linear impulse (jx, jy, jz) at lever arm (rx, ry, rz).
 func (e *Cinematic) AddImpulseAtOffset(jx, jy, jz, rx, ry, rz float64) {

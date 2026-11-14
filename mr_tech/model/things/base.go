@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 type IThingHandler interface {
@@ -224,6 +225,7 @@ func (t *Base) StagePrepare(session uint64) {
 	entity := t.VerticesGetVolume().GetEntity()
 	entity.Update()
 	t.angle = entity.GetYaw()
+	t.VerticesCompile(textures.GlobalTick())
 	t.cage.Rebuild(t.maxStep, session)
 }
 
@@ -311,7 +313,12 @@ func (t *Base) StageApply() {
 		slot := t.cage.GetSlot(i)
 		switch slot.GetImpactMode() {
 		case collisions.ImpactStep:
-			entity.MoveToZ(slot.GetMaxZ())
+			_, _, tz := t.cage.GetT()
+			_, _, rz := t.cage.GetRad()
+			_, _, pz := t.cage.GetPushOffset()
+			if stepZ := slot.GetMaxZ() - (tz - rz + pz); stepZ > 0 {
+				entity.AddTo(0, 0, stepZ)
+			}
 		case collisions.ImpactElastic:
 			rCage := slot.GetRCage()
 			rId := rCage.GetEntity().GetId()

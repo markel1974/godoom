@@ -24,6 +24,12 @@ type Vertices3D struct {
 	maxX          float64
 	maxY          float64
 	maxZ          float64
+	compiled      bool
+	compiledTick  uint64
+	compiledQX    float64
+	compiledQY    float64
+	compiledQZ    float64
+	compiledQW    float64
 }
 
 // NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
@@ -63,6 +69,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	if v.minZ <= v.maxZ {
 		if baseZ := -(v.minZ + v.maxZ) * 0.5; math.Abs(baseZ) > 1e-6 {
 			v.joints.SetBaseOffsetZ(baseZ)
+			v.compiled = false
 			v.VerticesCompile(0)
 		}
 	}
@@ -98,6 +105,7 @@ func (v *Vertices3D) VerticesSetRagdoll() {
 	if v.joints.IsRagdoll() {
 		return
 	}
+	v.compiled = false
 	v.elements.vVolume.entity.LockUpright()
 	v.elements.Freeze()
 	v.joints.SetRagdollCollapse()
@@ -116,6 +124,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 		return
 	}
 	v.currentAction = idx
+	v.compiled = false
 	enteringRagdoll := false
 	eoLen := v.links.ExecutionOrderLen()
 	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
@@ -147,6 +156,7 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 // to the closest articulated part, exciting the 5+ joint DoFs along the kinematic chain, jolting ragdoll bodies,
 // and triggering dismemberment on critical or post-mortem hits.
 func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
+	v.compiled = false
 	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
 }
 
@@ -156,6 +166,17 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 	ent := v.elements.vVolume.entity
 
 	cx, cy, cz := ent.GetCenter()
+	qx, qy, qz, qw := ent.GetQRotation().Get()
+	if v.compiled && v.compiledTick == tick && qx == v.compiledQX && qy == v.compiledQY && qz == v.compiledQZ && qw == v.compiledQW {
+		if v.minX <= v.maxX {
+			ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+		}
+		return false
+	}
+	v.compiled = true
+	v.compiledTick = tick
+	v.compiledQX, v.compiledQY, v.compiledQZ, v.compiledQW = qx, qy, qz, qw
+
 	v.joints.StepJoints(tick)
 
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64

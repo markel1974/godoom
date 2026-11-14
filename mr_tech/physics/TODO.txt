@@ -1,6 +1,3 @@
-2) Warm Starting sugli impulsi persistenti
-
-In Entry.Rebuild accNormal, accTx, accTy, accTz ripartono da 0 a ogni frame. Trasferire una frazione degli impulsi accumulati dal frame precedente ai contatti persistenti aumenterebbe molto la rigidità di pile alte a parità di SolverIterations.
 
 3) Rilassamento iterativo / split-impulse anche sul push-out posizionale (StageApply)
 

@@ -22,6 +22,7 @@ type Entry struct {
 	accTz         float64
 	restTarget    float64
 	hasRestTarget bool
+	warmConsumed  bool
 }
 
 // NewCageEntry creates and returns a new instance of Entry initialized with default zero values.
@@ -101,6 +102,7 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace
 	s.accTz = 0
 	s.restTarget = 0
 	s.hasRestTarget = false
+	s.warmConsumed = false
 }
 
 const maxPushDepth = 8

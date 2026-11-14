@@ -263,7 +263,7 @@ func (br *Builder) ToLightKind(tex, ambient, target string) config.LightKind {
 
 // createPlayer initializes and returns a Player instance with specified position, angle, and predefined configurations.
 func (br *Builder) createPlayer(playerPos geometry.XYZ, playerAngle float64) *config.Player {
-	player := config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 25, 80)
+	player := config.NewConfigPlayer(playerPos, playerAngle, 100, 1200, 20, 60)
 	_ = common.NewPlayer(player)
 	player.GForce = GForce
 	player.JumpForce = JumpForce

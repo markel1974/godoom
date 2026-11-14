@@ -34,6 +34,8 @@ type IThing interface {
 
 	StageApply()
 
+	StageResolvePosition()
+
 	StartLoop()
 
 	PostMessage(ec *ThingEvent)

@@ -76,70 +76,35 @@ const FacesPerBucket = 16
 // warmStartFactor controls the fraction of previous-frame impulses carried over to persistent contacts.
 const warmStartFactor = 0.80
 
-// warmSlot snapshots a previous-frame persistent contact for zero-allocation warm starting.
-type warmSlot struct {
-	rEntityId uint64
-	rFace     IFace
-	nX        float64
-	nY        float64
-	nZ        float64
-	p0X       float64
-	p0Y       float64
-	p0Z       float64
-	accNormal float64
-	accTx     float64
-	accTy     float64
-	accTz     float64
-	consumed  bool
-}
-
-// Bucket holds collision data for a specific bucket, including spare and active cage entries and counters.
+// Bucket holds collision data for a specific bucket, using double-buffered Entry pointer pools for zero-copy warm starting.
 type Bucket struct {
 	bucket           BucketType
-	spare            [FacesPerBucket]*Entry
-	container        [FacesPerBucket]*Entry
+	poolA            [FacesPerBucket]*Entry
+	poolB            [FacesPerBucket]*Entry
+	currPool         *[FacesPerBucket]*Entry
+	prevPool         *[FacesPerBucket]*Entry
 	containerCounter int
-	prev             [FacesPerBucket]warmSlot
 	prevCount        int
 }
 
-// NewBucket creates a new Bucket for a given BucketType, initializing its spare and container arrays.
+// NewBucket creates a new Bucket for a given BucketType, preallocating its double-buffered Entry pools.
 func NewBucket(bucket BucketType) *Bucket {
 	b := &Bucket{
-		bucket:           bucket,
-		containerCounter: 0,
+		bucket: bucket,
 	}
+	b.currPool = &b.poolA
+	b.prevPool = &b.poolB
 	for i := 0; i < FacesPerBucket; i++ {
-		b.spare[i] = NewCageEntry()
-		b.container[i] = nil
+		b.poolA[i] = NewCageEntry()
+		b.poolB[i] = NewCageEntry()
 	}
 	return b
 }
 
-// Rebuild snapshots active accumulated impulses from the previous frame and resets containerCounter to 0.
+// Rebuild swaps current and previous Entry pools in O(1) without copying and resets containerCounter to 0.
 func (b *Bucket) Rebuild() {
-	prevIdx := 0
-	for i := 0; i < b.containerCounter; i++ {
-		entry := b.container[i]
-		if entry.accNormal <= 0.0 {
-			continue
-		}
-		w := &b.prev[prevIdx]
-		if entry.rCage != nil {
-			w.rEntityId = entry.rCage.object.GetEntity().GetId()
-			w.rFace = nil
-		} else {
-			w.rEntityId = 0
-			w.rFace = entry.rFace
-		}
-		w.nX, w.nY, w.nZ = entry.nX, entry.nY, entry.nZ
-		w.p0X, w.p0Y, w.p0Z = entry.p0X, entry.p0Y, entry.p0Z
-		w.accNormal = entry.accNormal
-		w.accTx, w.accTy, w.accTz = entry.accTx, entry.accTy, entry.accTz
-		w.consumed = false
-		prevIdx++
-	}
-	b.prevCount = prevIdx
+	b.currPool, b.prevPool = b.prevPool, b.currPool
+	b.prevCount = b.containerCounter
 	b.containerCounter = 0
 }
 
@@ -151,7 +116,7 @@ func (b *Bucket) Count() int {
 // HasEntryFor reports whether the Bucket currently holds an active dynamic entry for entityId.
 func (b *Bucket) HasEntryFor(entityId uint64) bool {
 	for i := 0; i < b.containerCounter; i++ {
-		if rCage := b.container[i].rCage; rCage != nil && rCage.object.GetEntity().GetId() == entityId {
+		if rCage := b.currPool[i].rCage; rCage != nil && rCage.object.GetEntity().GetId() == entityId {
 			return true
 		}
 	}
@@ -170,7 +135,7 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 	}
 	// Scorriamo TUTTE le entità in questo bucket (multi-pushing)
 	for i := 0; i < b.containerCounter; i++ {
-		entry := b.container[i]
+		entry := b.currPool[i]
 		// Se tocchiamo direttamente un muro, il bucket è bloccato
 		if entry.iMode == ImpactInelastic {
 			return false
@@ -192,7 +157,7 @@ func (b *Bucket) penetrable(from uint64, depth int) bool {
 // Add inserts or updates a collision entry in the bucket based on specific conditions, ensuring deduplication and prioritization.
 func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	for i := 0; i < b.containerCounter; i++ {
-		existing := b.container[i]
+		existing := b.currPool[i]
 		// Deduplicate coincident dynamic contact points for the same body, preserving up to 4 manifold corners.
 		if rCage != nil && existing.rCage != nil {
 			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
@@ -236,21 +201,20 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 
 	// Insert a new plane into the non-full bucket
 	if b.containerCounter < FacesPerBucket {
-		target := b.spare[b.containerCounter]
+		target := b.currPool[b.containerCounter]
 		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
-		b.container[b.containerCounter] = target
 		b.containerCounter++
 		return target
 	}
 
 	// Replace the least relevant face (respecting impactModePriority first, then penetration depth)
 	minIdx := 0
-	minPrio := b.container[0].iMode.Priority()
-	minPen := b.container[0].penetration
+	minPrio := b.currPool[0].iMode.Priority()
+	minPen := b.currPool[0].penetration
 	for i := 1; i < FacesPerBucket; i++ {
-		cPrio := b.container[i].iMode.Priority()
-		cPen := b.container[i].penetration
+		cPrio := b.currPool[i].iMode.Priority()
+		cPen := b.currPool[i].penetration
 		if cPrio < minPrio || (cPrio == minPrio && cPen < minPen) {
 			minPrio = cPrio
 			minPen = cPen
@@ -259,7 +223,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	}
 	inPrio := iMode.Priority()
 	if inPrio > minPrio || (inPrio == minPrio && penetration > minPen) {
-		target := b.container[minIdx]
+		target := b.currPool[minIdx]
 		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 	}
@@ -291,11 +255,18 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 	lCage := entry.lCage
 	warmRadius := math.Max(0.5, math.Min(lCage.eRadX, math.Min(lCage.eRadY, lCage.eRadZ))*0.25)
 	bestDistSq := warmRadius * warmRadius
-	bestIdx := -1
+	var bestPrev *Entry
 
 	for i := 0; i < b.prevCount; i++ {
-		w := &b.prev[i]
-		if w.consumed || w.rEntityId != targetId {
+		w := b.prevPool[i]
+		if w.warmConsumed || w.accNormal <= 0.0 {
+			continue
+		}
+		var wId uint64
+		if w.rCage != nil {
+			wId = w.rCage.object.GetEntity().GetId()
+		}
+		if wId != targetId {
 			continue
 		}
 		nDot := entry.nX*w.nX + entry.nY*w.nY + entry.nZ*w.nZ
@@ -310,17 +281,16 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 		dz := entry.p0Z - w.p0Z
 		if distSq := dx*dx + dy*dy + dz*dz; distSq < bestDistSq {
 			bestDistSq = distSq
-			bestIdx = i
+			bestPrev = w
 		}
 	}
-	if bestIdx >= 0 {
-		w := &b.prev[bestIdx]
-		w.consumed = true
+	if bestPrev != nil {
+		bestPrev.warmConsumed = true
 		entry.SetWarmImpulse(
-			w.accNormal*warmStartFactor,
-			w.accTx*warmStartFactor,
-			w.accTy*warmStartFactor,
-			w.accTz*warmStartFactor,
+			bestPrev.accNormal*warmStartFactor,
+			bestPrev.accTx*warmStartFactor,
+			bestPrev.accTy*warmStartFactor,
+			bestPrev.accTz*warmStartFactor,
 		)
 	}
 }

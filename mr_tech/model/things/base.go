@@ -256,7 +256,7 @@ func (t *Base) StageResolve() {
 	}
 }
 
-// StageApply applies physical and geometrical adjustments to the entity based on collision resolution and position corrections.
+// StageApply advances entity position by its frame displacement, applies step-ups, and dispatches collision callbacks.
 func (t *Base) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location.(*volumes.Volume)
@@ -266,20 +266,45 @@ func (t *Base) StageApply() {
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
 	t.cage.SetApplied()
-	_, _, targetZ := t.cage.GetT()
-	_, _, targetRadZ := t.cage.GetRad()
-	targetBaseZ := targetZ - targetRadZ
-	// RISOLUZIONE GEOMETRICA (Push-out)
-	// Ora che siamo nel punto di impatto, le correzioni spingeranno l'entità esattamente sulla superficie dell'ostacolo.
+
 	var lastCollisionId uint64
 	hasCollisionId := false
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
-		iMode := slot.GetImpactMode()
-		switch iMode {
+		switch slot.GetImpactMode() {
 		case collisions.ImpactStep:
 			entity.MoveToZ(slot.GetMaxZ())
-			continue
+		case collisions.ImpactElastic:
+			rCage := slot.GetRCage()
+			rId := rCage.GetEntity().GetId()
+			if !hasCollisionId || lastCollisionId != rId {
+				t.onCollision(rCage.GetObject().(volumes.IThing))
+				lastCollisionId = rId
+				hasCollisionId = true
+			}
+		case collisions.ImpactInelastic:
+			rParent := slot.GetRemoteFace().GetParent().(*volumes.Volume)
+			if thing := rParent.GetThing(); thing != nil {
+				t.onCollision(thing)
+			}
+		}
+	}
+}
+
+// StageResolvePosition performs one Gauss-Seidel positional push-out sweep across this entity's active contacts.
+func (t *Base) StageResolvePosition() {
+	slotsLen := t.cage.GetSlotsLen()
+	if slotsLen == 0 {
+		return
+	}
+	entity := t.VerticesGetVolume().GetEntity()
+	_, _, targetZ := t.cage.GetT()
+	_, _, targetRadZ := t.cage.GetRad()
+	targetBaseZ := targetZ - targetRadZ
+
+	for i := 0; i < slotsLen; i++ {
+		slot := t.cage.GetSlot(i)
+		switch slot.GetImpactMode() {
 		case collisions.ImpactElastic:
 			nX, nY, nZ := slot.GetNormal()
 			rCage := slot.GetRCage()
@@ -294,12 +319,6 @@ func (t *Base) StageApply() {
 					entity.ResolveElasticPenetration(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen)
 				}
 			}
-			rId := rCage.GetEntity().GetId()
-			if !hasCollisionId || lastCollisionId != rId {
-				t.onCollision(rCage.GetObject().(volumes.IThing))
-				lastCollisionId = rId
-				hasCollisionId = true
-			}
 		case collisions.ImpactInelastic:
 			nX, nY, nZ := slot.GetNormal()
 			sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
@@ -308,18 +327,11 @@ func (t *Base) StageApply() {
 			if pen > 0 {
 				entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 			}
-			rParent := slot.GetRemoteFace().GetParent().(*volumes.Volume)
-			if thing := rParent.GetThing(); thing != nil {
-				t.onCollision(thing)
-			}
 		}
 	}
 }
 
 func clampUpwardPenetration(pen, alreadyResolved, nZ, maxZ, currentBaseZ, sPushZ float64) float64 {
-	if alreadyResolved < 0.0 {
-		alreadyResolved = 0.0
-	}
 	pen -= alreadyResolved
 	if pen > 0 && sPushZ > 0.0 && nZ > 0.70 {
 		remZ := maxZ - currentBaseZ

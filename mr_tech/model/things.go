@@ -369,6 +369,19 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		t2.StageApply()
 	}
 
+	// Positional relaxation sweep to prevent vertical stack compression on tall piles.
+	for si := 0; si < th.solverIterations; si++ {
+		if si&1 == 0 {
+			for x := 0; x < runningLen; x++ {
+				th.running[x].StageResolvePosition()
+			}
+		} else {
+			for x := runningLen - 1; x >= 0; x-- {
+				th.running[x].StageResolvePosition()
+			}
+		}
+	}
+
 	// COMMIT SPAZIALE E INTEGRAZIONE
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]

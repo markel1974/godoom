@@ -20,6 +20,9 @@ const (
 
 	defaultPenetrationSlop = 0.02
 
+	// Positional Gauss-Seidel relaxation factor applied per iteration during StageResolvePosition.
+	posCorrectionFactor = 0.75
+
 	maxTiltVel = 2.5
 
 	maxYawVel = 4.5
@@ -1058,7 +1061,7 @@ func (e *Cinematic) ResolveElasticPenetration(other *Cinematic, otherFloor bool,
 	if invMassSum <= 0.0 {
 		return 0, 0, false
 	}
-	correction := depth
+	correction := depth * posCorrectionFactor
 	p1 := correction * (invMass1 / invMassSum)
 	p2 := correction * (invMass2 / invMassSum)
 
@@ -1086,7 +1089,7 @@ func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float6
 			e.vz = 0.0
 		}
 	}
-	return pen, true
+	return pen * posCorrectionFactor, true
 }
 
 // rotationalMass returns the inverse-inertia response for r x d and its rotational effective mass contribution.

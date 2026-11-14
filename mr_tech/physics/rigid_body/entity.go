@@ -63,14 +63,19 @@ func (e *Entity) GetId() uint64 {
 	return e.id
 }
 
-// Rebuild updates the bounding box position and dimensions and refreshes the cuboid inertia tensor.
-func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
-	e.BoundingBox.Rebuild(x, y, z, w, h, d)
+// syncInertia updates the cuboid fallback inertia for (w, h, d), reapplies any custom inertia tensor, and syncs world tensors.
+func (e *Entity) syncInertia(w, h, d float64) {
 	e.Cinematic.UpdateInertia(w, h, d)
 	if e.hasInertia {
 		e.Cinematic.SetInertiaTensor(e.eixx, e.eixy, e.eixz, e.eiyy, e.eiyz, e.eizz)
 	}
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+}
+
+// Rebuild updates the bounding box position and dimensions and refreshes the inertia tensor.
+func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
+	e.BoundingBox.Rebuild(x, y, z, w, h, d)
+	e.syncInertia(w, h, d)
 }
 
 func (e *Entity) SetCentroid(cx, cy, cz float64) {
@@ -86,10 +91,14 @@ func (e *Entity) SetCentroid(cx, cy, cz float64) {
 	e.hasCentroid = true
 }
 
+// SetInertia sets a custom body-space inertia tensor per unit mass and applies it immediately if valid.
 func (e *Entity) SetInertia(ixx, ixy, ixz, iyy, iyz, izz float64) {
 	e.eixx, e.eixy, e.eixz = ixx, ixy, ixz
 	e.eiyy, e.eiyz, e.eizz = iyy, iyz, izz
 	e.hasInertia = true
+	if e.Cinematic.SetInertiaTensor(ixx, ixy, ixz, iyy, iyz, izz) {
+		e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+	}
 }
 
 // SetKeepUpright enables or disables upright stabilization and the bounding box tilt limit.
@@ -115,18 +124,16 @@ func (e *Entity) GetSize() (float64, float64, float64) {
 	return e.BoundingBox.GetSize()
 }
 
-// SetSize updates the bounding box dimensions and refreshes the cuboid inertia tensor.
+// SetSize updates the bounding box dimensions and refreshes the inertia tensor.
 func (e *Entity) SetSize(w, h, d float64) {
 	e.BoundingBox.SetSize(w, h, d)
-	e.Cinematic.UpdateInertia(w, h, d)
-	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+	e.syncInertia(w, h, d)
 }
 
-// AddSize increments the bounding box dimensions and refreshes the cuboid inertia tensor.
+// AddSize increments the bounding box dimensions and refreshes the inertia tensor.
 func (e *Entity) AddSize(w, h, d float64) {
 	e.BoundingBox.AddSize(w, h, d)
-	e.Cinematic.UpdateInertia(e.GetWidth(), e.GetHeight(), e.GetDepth())
-	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+	e.syncInertia(e.GetWidth(), e.GetHeight(), e.GetDepth())
 }
 
 // SetRotationAngleZ sets the OBB orientation to a yaw rotation around Z and synchronizes the world inertia tensor.

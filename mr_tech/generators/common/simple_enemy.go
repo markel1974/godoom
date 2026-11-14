@@ -249,6 +249,7 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 		} else {
 			entity.SetKeepUpright(false)
 		}
+
 		entity.SetOnGround(false)
 		entity.WakeUp()
 		e.self.SetMaxStep(0)

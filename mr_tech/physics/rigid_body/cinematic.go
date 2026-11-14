@@ -791,12 +791,6 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	}
 }
 
-// ResolveImpact resolves a 6-DoF rigid-body collision between two Cinematic objects,
-// applying normal and Coulomb tangential impulses to both linear velocity v and angular velocity ω.
-//func (e *Cinematic) ResolveImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64) {
-//	e.ResolveImpactAccumulated(e2, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, nil, nil, nil, nil, nil, nil)
-//}
-
 // WarmStartImpact pre-applies persisted normal and tangential impulses before PGS iterations begin.
 func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, accNormal, accTx, accTy, accTz *float64) {
 	if accNormal == nil || *accNormal <= 0.0 {

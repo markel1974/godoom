@@ -110,6 +110,13 @@ const (
 	frictionLowEnergyTiltSq = 2.25
 
 	frictionEdgeRotScale = 0.35
+
+	// World-to-SI scale matching GForce = 9.8 * 50.0 (50 engine units per meter).
+	worldUnitsPerMeter = 50.0
+
+	invWorldUnitsSq = 1.0 / (worldUnitsPerMeter * worldUnitsPerMeter)
+
+	angLimitEpsilon = 1e-9
 )
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
@@ -148,6 +155,13 @@ type Cinematic struct {
 	faceAlignCos         float64
 	sleeping             bool
 	sleepTimer           float64
+	preSolveVx           float64
+	preSolveVy           float64
+	preSolveVz           float64
+	preSolveWx           float64
+	preSolveWy           float64
+	preSolveWz           float64
+	hasPreSolve          bool
 	r                    *Matrix3x3
 	body                 *Matrix3x3 // Body-space inertia tensor.
 	bodyInv              *Matrix3x3 // Body-space inverse inertia tensor.
@@ -791,7 +805,67 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 	r1x, r1y, r1z := px-cx1, py-cy1, pz-cz1
 	r2x, r2y, r2z := px-cx2, py-cy2, pz-cz2
 
+	// Skip warm-starting if the contact point is already separating to prevent injecting kinetic energy.
+	vrx := (e.vx + (e.wy*r1z - e.wz*r1y)) - (e2.vx + (e2.wy*r2z - e2.wz*r2y))
+	vry := (e.vy + (e.wz*r1x - e.wx*r1z)) - (e2.vy + (e2.wz*r2x - e2.wx*r2z))
+	vrz := (e.vz + (e.wx*r1y - e.wy*r1x)) - (e2.vz + (e2.wx*r2y - e2.wy*r2x))
+	if vrx*nx+vry*ny+vrz*nz > 0.0 {
+		*accNormal = 0.0
+		if accTx != nil && accTy != nil && accTz != nil {
+			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
+		}
+		return
+	}
+
 	jn := *accNormal
+	var u1nx, u1ny, u1nz float64
+	var u2nx, u2ny, u2nz float64
+	alpha := 1.0
+	if invMass1 > 0.0 {
+		u1nx, u1ny, u1nz, _ = e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
+		if !e.keepUpright {
+			if s := maxAngularImpulseScale(e.wx, jn*u1nx, maxTiltVel); s < alpha {
+				alpha = s
+			}
+			if s := maxAngularImpulseScale(e.wy, jn*u1ny, maxTiltVel); s < alpha {
+				alpha = s
+			}
+			if s := maxAngularImpulseScale(e.wz, jn*u1nz, maxYawVel); s < alpha {
+				alpha = s
+			}
+		}
+	}
+	if invMass2 > 0.0 {
+		u2nx, u2ny, u2nz, _ = e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
+		if !e2.keepUpright {
+			if s := maxAngularImpulseScale(e2.wx, -jn*u2nx, maxTiltVel); s < alpha {
+				alpha = s
+			}
+			if s := maxAngularImpulseScale(e2.wy, -jn*u2ny, maxTiltVel); s < alpha {
+				alpha = s
+			}
+			if s := maxAngularImpulseScale(e2.wz, -jn*u2nz, maxYawVel); s < alpha {
+				alpha = s
+			}
+		}
+	}
+	if alpha <= 0.0 {
+		*accNormal = 0.0
+		if accTx != nil && accTy != nil && accTz != nil {
+			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
+		}
+		return
+	}
+	if alpha < 1.0 {
+		jn *= alpha
+		*accNormal = jn
+		if accTx != nil && accTy != nil && accTz != nil {
+			*accTx *= alpha
+			*accTy *= alpha
+			*accTz *= alpha
+		}
+	}
+
 	jx, jy, jz := jn*nx, jn*ny, jn*nz
 	e.vx += jx * invMass1
 	e.vy += jy * invMass1
@@ -801,11 +875,9 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 	e2.vz -= jz * invMass2
 
 	if invMass1 > 0.0 {
-		u1nx, u1ny, u1nz, _ := e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
 		e.addClampedAngular(jn, u1nx, u1ny, u1nz)
 	}
 	if invMass2 > 0.0 {
-		u2nx, u2ny, u2nz, _ := e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
 		e2.addClampedAngular(-jn, u2nx, u2ny, u2nz)
 	}
 
@@ -913,16 +985,6 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 
 	invMass1, invMass2 := e.effectiveContactInvMasses(e2, nz)
 
-	var u1nx, u1ny, u1nz, rotMass1N float64
-	if invMass1 > 0.0 {
-		u1nx, u1ny, u1nz, rotMass1N = e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
-	}
-
-	var u2nx, u2ny, u2nz, rotMass2N float64
-	if invMass2 > 0.0 {
-		u2nx, u2ny, u2nz, rotMass2N = e2.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
-	}
-
 	var targetVelN float64
 	var actualRestitution float64
 	if firstIter {
@@ -953,6 +1015,17 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	} else if restTarget != nil {
 		targetVelN = *restTarget
 		actualRestitution = targetVelN
+	}
+
+	jDir := targetVelN - vRelDotN
+	var u1nx, u1ny, u1nz, rotMass1N float64
+	if invMass1 > 0.0 {
+		u1nx, u1ny, u1nz, rotMass1N = e.clampedRotationalMass(r1x, r1y, r1z, nx, ny, nz, jDir)
+	}
+
+	var u2nx, u2ny, u2nz, rotMass2N float64
+	if invMass2 > 0.0 {
+		u2nx, u2ny, u2nz, rotMass2N = e2.clampedRotationalMass(r2x, r2y, r2z, nx, ny, nz, -jDir)
 	}
 
 	effMassN := invMass1 + invMass2 + rotMass1N + rotMass2N
@@ -1165,6 +1238,124 @@ func (e *Cinematic) rotationalMass(rx, ry, rz float64, dx, dy, dz float64) (floa
 	ux, uy, uz := e.applyWorldInvInertia(cx, cy, cz)
 	mass := cx*ux + cy*uy + cz*uz
 	return ux, uy, uz, mass
+}
+
+// clampedRotationalMass excludes angular velocity axes already saturated against maxTiltVel/maxYawVel
+// in the candidate impulse direction jDir so normal effective mass stays consistent with clamped spin.
+func (e *Cinematic) clampedRotationalMass(rx, ry, rz, dx, dy, dz, jDir float64) (float64, float64, float64, float64) {
+	if e.keepUpright {
+		return 0.0, 0.0, 0.0, 0.0
+	}
+	cx := ry*dz - rz*dy
+	cy := rz*dx - rx*dz
+	cz := rx*dy - ry*dx
+	ux, uy, uz := e.applyWorldInvInertia(cx, cy, cz)
+	if isAxisSaturated(e.wx, jDir*ux, maxTiltVel) {
+		ux = 0.0
+	}
+	if isAxisSaturated(e.wy, jDir*uy, maxTiltVel) {
+		uy = 0.0
+	}
+	if isAxisSaturated(e.wz, jDir*uz, maxYawVel) {
+		uz = 0.0
+	}
+	mass := cx*ux + cy*uy + cz*uz
+	if mass < 0.0 {
+		mass = 0.0
+	}
+	return ux, uy, uz, mass
+}
+
+func isAxisSaturated(w, dW, limit float64) bool {
+	return (dW > 0.0 && w >= limit-angLimitEpsilon) || (dW < 0.0 && w <= -limit+angLimitEpsilon)
+}
+
+func maxAngularImpulseScale(w, dW, limit float64) float64 {
+	if dW > 0.0 {
+		avail := limit - w
+		if avail <= 0.0 {
+			return 0.0
+		}
+		if avail < dW {
+			return avail / dW
+		}
+	} else if dW < 0.0 {
+		avail := -limit - w
+		if avail >= 0.0 {
+			return 0.0
+		}
+		if avail > dW {
+			return avail / dW
+		}
+	}
+	return 1.0
+}
+
+// SnapshotPreSolve stores the entity's pre-solver linear and angular velocities for accurate impact reporting.
+func (e *Cinematic) SnapshotPreSolve() {
+	e.preSolveVx, e.preSolveVy, e.preSolveVz = e.vx, e.vy, e.vz
+	e.preSolveWx, e.preSolveWy, e.preSolveWz = e.wx, e.wy, e.wz
+	e.hasPreSolve = true
+}
+
+// ClearPreSolve invalidates the captured pre-solver velocity snapshot.
+func (e *Cinematic) ClearPreSolve() {
+	e.hasPreSolve = false
+}
+
+func (e *Cinematic) impactVelocities() (float64, float64, float64, float64, float64, float64) {
+	if e.hasPreSolve {
+		return e.preSolveVx, e.preSolveVy, e.preSolveVz, e.preSolveWx, e.preSolveWy, e.preSolveWz
+	}
+	return e.vx, e.vy, e.vz, e.wx, e.wy, e.wz
+}
+
+// ComputeNormalKineticImpact computes physical impact energy (Joules, 50 units/m) from pre-solve
+// closing normal velocity at the contact point (px, py, pz) along normal (nx, ny, nz).
+func (e *Cinematic) ComputeNormalKineticImpact(other *Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz float64) float64 {
+	if other == nil || e.mass <= 0.0 || other.mass <= 0.0 {
+		return 0.0
+	}
+	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	if nLen <= 0.0 {
+		return 0.0
+	}
+	nx /= nLen
+	ny /= nLen
+	nz /= nLen
+
+	v1x, v1y, v1z, w1x, w1y, w1z := e.impactVelocities()
+	v2x, v2y, v2z, w2x, w2y, w2z := other.impactVelocities()
+
+	r1x, r1y, r1z := px-cx1, py-cy1, pz-cz1
+	r2x, r2y, r2z := px-cx2, py-cy2, pz-cz2
+
+	vp1x := v1x + (w1y*r1z - w1z*r1y)
+	vp1y := v1y + (w1z*r1x - w1x*r1z)
+	vp1z := v1z + (w1x*r1y - w1y*r1x)
+
+	vp2x := v2x + (w2y*r2z - w2z*r2y)
+	vp2y := v2y + (w2z*r2x - w2x*r2z)
+	vp2z := v2z + (w2x*r2y - w2y*r2x)
+
+	vClose := -((vp1x-vp2x)*nx + (vp1y-vp2y)*ny + (vp1z-vp2z)*nz)
+	if vClose <= 0.0 {
+		return 0.0
+	}
+
+	effMassInv := e.invMass + other.invMass
+	if !e.keepUpright {
+		_, _, _, rot1 := e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
+		effMassInv += rot1
+	}
+	if !other.keepUpright {
+		_, _, _, rot2 := other.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
+		effMassInv += rot2
+	}
+	if effMassInv <= 0.0 {
+		return 0.0
+	}
+	return 0.5 * (vClose * vClose / effMassInv) * invWorldUnitsSq
 }
 
 // addClampedAngular adds a scaled angular impulse and clamps tilt and yaw velocities to their limits.

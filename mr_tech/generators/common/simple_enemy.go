@@ -362,7 +362,7 @@ func (e *Enemy) doShoot(self config.IThingConfig, selfX, selfY, selfZ, dz, angle
 	dirX := math.Cos(angle) * math.Cos(pitchRad)
 	dirY := math.Sin(angle) * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
-	const weaponForce = 50000.0 * 500.0 // TODO: CONFIG
+	const weaponForce = 50000.0 * 10.0 // TODO: CONFIG
 	self.FireHitscan("gun", spawnPos, weaponForce, dirX, dirY, dirZ)
 }
 

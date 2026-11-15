@@ -15,7 +15,7 @@ type BoundingBox struct {
 	bottomLeft       Point
 	center           Point
 	size             Size
-	axis             *Axis       // Local axes transformed into world space.
+	axis             *Axes       // Local axes transformed into world space.
 	qRotation        *Quaternion // Orientation quaternion.
 	qPrev            *Quaternion // Previous-step orientation quaternion for angular CCD.
 	qYaw             *Quaternion

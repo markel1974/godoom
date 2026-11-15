@@ -36,7 +36,7 @@ func (res *Sat) GetContact() (bool, int, float64, float64, float64, float64, flo
 // Compute runs a separating axis test between two oriented boxes and stores the contact or separation result.
 // dx, dy, and dz are the center offset from the first box to the second.
 // a and b provide box axes; scx, scy, scz and ocx, ocy, ocz provide their half-extents.
-func (res *Sat) Compute(dx, dy, dz float64, a *Axis, scx, scy, scz float64, b *Axis, ocx, ocy, ocz float64) {
+func (res *Sat) Compute(dx, dy, dz float64, a *Axes, scx, scy, scz float64, b *Axes, ocx, ocy, ocz float64) {
 	const epsilon = 1e-12
 	const crossAxisLenEps = 1e-6
 	const edgeAxisMinLen = 1e-4
@@ -169,7 +169,7 @@ func (res *Sat) recordGap(gap, nx, ny, nz float64) {
 
 // worldCrossUnitNormal returns the unit normal of the world-space cross axis from rows a[i] and b[j].
 // It divides by axisLen and flips the result when proj is positive to keep the normal consistently oriented.
-func worldCrossUnitNormal(a *Axis, i int, b *Axis, j int, axisLen, proj float64) (float64, float64, float64) {
+func worldCrossUnitNormal(a *Axes, i int, b *Axes, j int, axisLen, proj float64) (float64, float64, float64) {
 	ax, ay, az := a.data[i][0], a.data[i][1], a.data[i][2]
 	bx, by, bz := b.data[j][0], b.data[j][1], b.data[j][2]
 	cx := (ay*bz - az*by) / axisLen

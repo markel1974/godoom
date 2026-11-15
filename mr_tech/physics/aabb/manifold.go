@@ -21,8 +21,8 @@ type OBBManifold struct {
 	clipB                     *ClipPolygon
 	qInterpA                  *Quaternion
 	qInterpB                  *Quaternion
-	axesA                     *Axis
-	axesB                     *Axis
+	axesA                     *Axes
+	axesB                     *Axes
 }
 
 // NewOBBManifold creates a reusable OBB contact manifold with initialized SAT scratch state.
@@ -210,7 +210,7 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 }
 
 // buildFromSat populates the manifold from a successful SAT result and builds edge or face contacts.
-func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64) {
+func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
 	om.Hit = true
 	om.Penetration = sat.contactPen
 	om.Gap = 0.0
@@ -239,8 +239,8 @@ func (om *OBBManifold) copyCandidateToPoint(dstIdx, srcIdx int) {
 // buildEdgeManifoldAxes computes the closest-points contact for an edge-edge OBB collision from SAT state and axes.
 func (om *OBBManifold) buildEdgeManifoldAxes(
 	sat *Sat,
-	ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64,
-	bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64,
+	ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64,
+	bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64,
 ) {
 	axisIdx := sat.contactAxis - 6
 	i := axisIdx / 3
@@ -288,10 +288,10 @@ func (om *OBBManifold) buildEdgeManifoldAxes(
 }
 
 // buildFaceManifoldAxes constructs clipped contact points for a face-axis OBB collision from SAT state and axes.
-func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axis, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axis, bhx, bhy, bhz float64) {
+func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
 	var refX, refY, refZ, refHX, refHY, refHZ float64
 	var incX, incY, incZ, incHX, incHY, incHZ float64
-	var refAxes, incAxes *Axis
+	var refAxes, incAxes *Axes
 	var refIdx int
 	var rnx, rny, rnz float64
 
@@ -321,15 +321,13 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	eU := axisHalfExtent(refHX, refHY, refHZ, uIdx)
 	eV := axisHalfExtent(refHX, refHY, refHZ, vIdx)
 
-	fillIncidentFaceQuad(clipA, incX, incY, incZ, incAxes, incHX, incHY, incHZ, rnx, rny, rnz)
+	clipA.FillIncidentFaceQuad(incX, incY, incZ, incAxes, incHX, incHY, incHZ, rnx, rny, rnz)
 
 	// Clip against the 4 side planes bounding the reference face rectangle.
 	rcU := rcx*rux + rcy*ruy + rcz*ruz
 	rcV := rcx*rvx + rcy*rvy + rcz*rvz
-	if clipA.ClipPlane(rux, ruy, ruz, rcU+eU, clipB) == 0 ||
-		clipB.ClipPlane(-rux, -ruy, -ruz, -rcU+eU, clipA) == 0 ||
-		clipA.ClipPlane(rvx, rvy, rvz, rcV+eV, clipB) == 0 ||
-		clipB.ClipPlane(-rvx, -rvy, -rvz, -rcV+eV, clipA) == 0 {
+	if clipA.ClipPlane(clipB, rux, ruy, ruz, rcU+eU) == 0 || clipB.ClipPlane(clipA, -rux, -ruy, -ruz, -rcU+eU) == 0 ||
+		clipA.ClipPlane(clipB, rvx, rvy, rvz, rcV+eV) == 0 || clipB.ClipPlane(clipA, -rvx, -rvy, -rvz, -rcV+eV) == 0 {
 		om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
 		return
 	}
@@ -349,7 +347,7 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 
 	px, py, pz := self.center.Get()
 	hx, hy, hz := self.size.GetCenter()
-	fillIncidentFaceQuad(om.clipA, px+offX, py+offY, pz+offZ, self.axis, hx, hy, hz, nx, ny, nz)
+	om.clipA.FillIncidentFaceQuad(px+offX, py+offY, pz+offZ, self.axis, hx, hy, hz, nx, ny, nz)
 
 	// Align triangle winding normal with (nx, ny, nz) so edge×effN points strictly outward from each edge.
 	e1x, e1y, e1z := v1x-v0x, v1y-v0y, v1z-v0z
@@ -362,9 +360,9 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 		effNX, effNY, effNZ = -nx, -ny, -nz
 	}
 
-	if !clipEdgeHalfSpace(om.clipA, om.clipB, v0x, v0y, v0z, v1x, v1y, v1z, effNX, effNY, effNZ) ||
-		!clipEdgeHalfSpace(om.clipB, om.clipA, v1x, v1y, v1z, v2x, v2y, v2z, effNX, effNY, effNZ) ||
-		!clipEdgeHalfSpace(om.clipA, om.clipB, v2x, v2y, v2z, v0x, v0y, v0z, effNX, effNY, effNZ) {
+	if !om.clipA.ClipEdgeHalfSpace(om.clipB, v0x, v0y, v0z, v1x, v1y, v1z, effNX, effNY, effNZ) ||
+		!om.clipB.ClipEdgeHalfSpace(om.clipA, v1x, v1y, v1z, v2x, v2y, v2z, effNX, effNY, effNZ) ||
+		!om.clipA.ClipEdgeHalfSpace(om.clipB, v2x, v2y, v2z, v0x, v0y, v0z, effNX, effNY, effNZ) {
 		om.Count = 0
 		return false
 	}
@@ -378,76 +376,13 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 	return om.Count > 0
 }
 
-// clipEdgeHalfSpace clips src against the outward normal plane of edge (ax,ay,az)->(bx,by,bz) in the plane with aligned normal effN.
-func clipEdgeHalfSpace(src, dst *ClipPolygon, ax, ay, az, bx, by, bz, effNX, effNY, effNZ float64) bool {
-	ex, ey, ez := bx-ax, by-ay, bz-az
-	ox := ey*effNZ - ez*effNY
-	oy := ez*effNX - ex*effNZ
-	oz := ex*effNY - ey*effNX
-	oLen := math.Sqrt(ox*ox + oy*oy + oz*oz)
-	if oLen <= 1e-12 {
-		return false
-	}
-	invLen := 1.0 / oLen
-	ox *= invLen
-	oy *= invLen
-	oz *= invLen
-	limit := ax*ox + ay*oy + az*oz + 1e-4
-	return src.ClipPlane(ox, oy, oz, limit, dst) > 0
-}
-
-// fillIncidentFaceQuad populates clip with the 4 world-space vertices of the OBB face most anti-parallel to (refNX, refNY, refNZ).
-func fillIncidentFaceQuad(clip *ClipPolygon, incX, incY, incZ float64, incAxes *Axis, incHX, incHY, incHZ, refNX, refNY, refNZ float64) {
-	incFaceIdx := 0
-	maxAbsDot := -1.0
-	incDotSign := 1.0
-	for k := 0; k < 3; k++ {
-		kx, ky, kz := incAxes.GetRow(k)
-		d := refNX*kx + refNY*ky + refNZ*kz
-		if ad := math.Abs(d); ad > maxAbsDot {
-			maxAbsDot = ad
-			incFaceIdx = k
-			if d > 0.0 {
-				incDotSign = -1.0
-			} else {
-				incDotSign = 1.0
-			}
-		}
-	}
-
-	inx, iny, inz := incAxes.GetRow(incFaceIdx)
-	incHalfN := incDotSign * axisHalfExtent(incHX, incHY, incHZ, incFaceIdx)
-	icx := incX + inx*incHalfN
-	icy := incY + iny*incHalfN
-	icz := incZ + inz*incHalfN
-
-	iu := (incFaceIdx + 1) % 3
-	iv := (incFaceIdx + 2) % 3
-	ux, uy, uz := incAxes.GetRow(iu)
-	vx, vy, vz := incAxes.GetRow(iv)
-	hu := axisHalfExtent(incHX, incHY, incHZ, iu)
-	hv := axisHalfExtent(incHX, incHY, incHZ, iv)
-	ux *= hu
-	uy *= hu
-	uz *= hu
-	vx *= hv
-	vy *= hv
-	vz *= hv
-
-	clip.count = 0
-	clip.Add(icx+ux+vx, icy+uy+vy, icz+uz+vz)
-	clip.Add(icx-ux+vx, icy-uy+vy, icz-uz+vz)
-	clip.Add(icx-ux-vx, icy-uy-vy, icz-uz-vz)
-	clip.Add(icx+ux-vx, icy+uy-vy, icz+uz-vz)
-}
-
 // collectPlaneCandidates projects clipped polygon vertices onto plane (planeX/Y/Z, planeNX/Y/Z) with depth > 0 into om.candidates.
 func (om *OBBManifold) collectPlaneCandidates(poly *ClipPolygon, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth float64) int {
 	candidates := &om.candidates
 	candCount := 0
 	const clipDedupSq = 1e-8
 	for i := 0; i < poly.count; i++ {
-		px, py, pz := poly.x[i], poly.y[i], poly.z[i]
+		px, py, pz := poly.Get(i)
 		rawDepth := (planeX-px)*planeNX + (planeY-py)*planeNY + (planeZ-pz)*planeNZ
 		if rawDepth <= 0.0 {
 			continue
@@ -580,7 +515,7 @@ func (om *OBBManifold) reduceManifoldPoints(candCount int) {
 }
 
 // edgeMidpointAnchor returns an anchor point at the midpoint of a box edge selected by skipIdx and direction.
-func edgeMidpointAnchor(cx, cy, cz float64, axes *Axis, hx, hy, hz float64, skipIdx int, dirX, dirY, dirZ, tieX, tieY, tieZ float64) (float64, float64, float64) {
+func edgeMidpointAnchor(cx, cy, cz float64, axes *Axes, hx, hy, hz float64, skipIdx int, dirX, dirY, dirZ, tieX, tieY, tieZ float64) (float64, float64, float64) {
 	px, py, pz := cx, cy, cz
 	for k := 0; k < 3; k++ {
 		if k == skipIdx {

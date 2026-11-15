@@ -2,7 +2,7 @@ package aabb
 
 import "math"
 
-// IObject represents an interface defining objects that can provide an Axis-Aligned Bounding Box (AABB).
+// IObject represents an interface defining objects that can provide an Axes-Aligned Bounding Box (AABB).
 // GetAABB retrieves the AABB associated with the object implementing the IAABB interface.
 type IObject interface {
 	GetAABB() *AABB

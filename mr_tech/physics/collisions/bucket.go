@@ -361,11 +361,13 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 // rebuildKeepingWarm rebuilds entry and preserves or restores warm-start impulses when applicable.
 func (b *Bucket) rebuildKeepingWarm(entry *Entry, bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {
 	wN, wTx, wTy, wTz := entry.GetWarmImpulse()
+	wasWarmEligible := entry.warmEligible
 	entry.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 	if iMode == ImpactStep {
 		return
 	}
 	if wN > 0.0 {
+		entry.warmEligible = wasWarmEligible
 		entry.SetWarmImpulse(wN, wTx, wTy, wTz)
 		return
 	}
@@ -416,6 +418,15 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 	}
 	if bestPrev != nil {
 		bestPrev.warmConsumed = true
+		// Ignore impulses from bouncing contacts or initial single-frame crash transients;
+		// once persistent across consecutive frames without rebound, seed warm-starting from frame 2+.
+		if bestPrev.restTarget > 1e-3 {
+			return
+		}
+		entry.warmEligible = true
+		if !bestPrev.warmEligible {
+			return
+		}
 		entry.SetWarmImpulse(
 			bestPrev.accNormal*warmStartFactor,
 			bestPrev.accTx*warmStartFactor,

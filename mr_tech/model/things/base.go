@@ -223,6 +223,8 @@ func (t *Base) GetSolverIndex() int {
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *Base) StagePrepare(session uint64) {
 	entity := t.VerticesGetVolume().GetEntity()
+	entity.ClearActiveContact()
+	entity.ClearPreSolve()
 	entity.Update()
 	t.angle = entity.GetYaw()
 	t.VerticesCompile(textures.GlobalTick())
@@ -322,16 +324,39 @@ func (t *Base) StageApply() {
 			}
 		case collisions.ImpactElastic:
 			rCage := slot.GetRCage()
-			rId := rCage.GetEntity().GetId()
+			rEnt := rCage.GetEntity()
+			rId := rEnt.GetId()
 			if !hasCollisionId || lastCollisionId != rId {
+				bestNX, bestNY, bestNZ := slot.GetNormal()
+				bestPX, bestPY, bestPZ := slot.GetPoint()
+				bestEnergy := entity.ComputeNormalKineticImpactAt(rEnt, bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
+				for j := i + 1; j < t.cage.GetSlotsLen(); j++ {
+					s2 := t.cage.GetSlot(j)
+					if s2.GetImpactMode() != collisions.ImpactElastic || s2.GetRCage().GetEntity().GetId() != rId {
+						break
+					}
+					nx2, ny2, nz2 := s2.GetNormal()
+					px2, py2, pz2 := s2.GetPoint()
+					if candE := entity.ComputeNormalKineticImpactAt(rEnt, nx2, ny2, nz2, px2, py2, pz2); candE > bestEnergy {
+						bestEnergy = candE
+						bestNX, bestNY, bestNZ = nx2, ny2, nz2
+						bestPX, bestPY, bestPZ = px2, py2, pz2
+					}
+				}
+				entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
 				t.onCollision(rCage.GetObject().(volumes.IThing))
+				entity.ClearActiveContact()
 				lastCollisionId = rId
 				hasCollisionId = true
 			}
 		case collisions.ImpactInelastic:
 			rParent := slot.GetRemoteFace().GetParent().(*volumes.Volume)
 			if thing := rParent.GetThing(); thing != nil {
+				nX, nY, nZ := slot.GetNormal()
+				pX, pY, pZ := slot.GetPoint()
+				entity.SetActiveContact(nX, nY, nZ, pX, pY, pZ)
 				t.onCollision(thing)
+				entity.ClearActiveContact()
 			}
 		}
 	}

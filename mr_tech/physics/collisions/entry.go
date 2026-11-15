@@ -25,6 +25,7 @@ type Entry struct {
 	restTarget    float64
 	hasRestTarget bool
 	warmConsumed  bool
+	warmEligible  bool
 	isCorner      bool
 	origNX        float64
 	origNY        float64
@@ -112,6 +113,7 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace
 	s.restTarget = 0
 	s.hasRestTarget = false
 	s.warmConsumed = false
+	s.warmEligible = false
 	s.isCorner = false
 	s.origNX, s.origNY, s.origNZ = 0, 0, 0
 	s.origAX, s.origAY, s.origAZ = 0, 0, 0

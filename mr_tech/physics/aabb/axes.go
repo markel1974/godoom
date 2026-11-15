@@ -4,52 +4,52 @@ import "math"
 
 var _axisId = NewAxis(1, 0, 0, 0, 1, 0, 0, 0, 1)
 
-// Axis represents a 3x3 matrix used to store local axes for oriented bounding box calculations.
-type Axis struct {
+// Axes represents a 3x3 matrix used to store local axes for oriented bounding box calculations.
+type Axes struct {
 	data [3][3]float64
 }
 
-// NewAxis returns a new Axis initialized with the provided 3x3 matrix values in row-major order.
-func NewAxis(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) *Axis {
-	return &Axis{data: [3][3]float64{{a00, a01, a02}, {a10, a11, a12}, {a20, a21, a22}}}
+// NewAxis returns a new Axes initialized with the provided 3x3 matrix values in row-major order.
+func NewAxis(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) *Axes {
+	return &Axes{data: [3][3]float64{{a00, a01, a02}, {a10, a11, a12}, {a20, a21, a22}}}
 }
 
-func (r *Axis) Set(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
+func (r *Axes) Set(a00, a01, a02, a10, a11, a12, a20, a21, a22 float64) {
 	r.data[0][0], r.data[0][1], r.data[0][2], r.data[1][0], r.data[1][1], r.data[1][2], r.data[2][0], r.data[2][1], r.data[2][2] = a00, a01, a02, a10, a11, a12, a20, a21, a22
 }
 
 // Get returns all nine matrix values in row-major order.
-func (r *Axis) Get() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+func (r *Axes) Get() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	return r.data[0][0], r.data[0][1], r.data[0][2], r.data[1][0], r.data[1][1], r.data[1][2], r.data[2][0], r.data[2][1], r.data[2][2]
 }
 
 // Get0 returns the three values in the first row of the matrix.
-func (r *Axis) Get0() (float64, float64, float64) {
+func (r *Axes) Get0() (float64, float64, float64) {
 	return r.data[0][0], r.data[0][1], r.data[0][2]
 }
 
 // Get1 returns the three values in the second row of the matrix.
-func (r *Axis) Get1() (float64, float64, float64) {
+func (r *Axes) Get1() (float64, float64, float64) {
 	return r.data[1][0], r.data[1][1], r.data[1][2]
 }
 
 // Get2 returns the three values in the third row of the matrix.
-func (r *Axis) Get2() (float64, float64, float64) {
+func (r *Axes) Get2() (float64, float64, float64) {
 	return r.data[2][0], r.data[2][1], r.data[2][2]
 }
 
 // GetRow returns the three values in row i (0..2) of the matrix.
-func (r *Axis) GetRow(i int) (float64, float64, float64) {
+func (r *Axes) GetRow(i int) (float64, float64, float64) {
 	return r.data[i][0], r.data[i][1], r.data[i][2]
 }
 
 // GetIdentity returns the shared identity axis matrix.
-func (r *Axis) GetIdentity() *Axis {
+func (r *Axes) GetIdentity() *Axes {
 	return _axisId
 }
 
 // Project returns the axis-aligned extents of the oriented half-extents hx, hy, and hz.
-func (r *Axis) Project(hx, hy, hz float64) (float64, float64, float64) {
+func (r *Axes) Project(hx, hy, hz float64) (float64, float64, float64) {
 	ex := math.Abs(r.data[0][0])*hx + math.Abs(r.data[1][0])*hy + math.Abs(r.data[2][0])*hz
 	ey := math.Abs(r.data[0][1])*hx + math.Abs(r.data[1][1])*hy + math.Abs(r.data[2][1])*hz
 	ez := math.Abs(r.data[0][2])*hx + math.Abs(r.data[1][2])*hy + math.Abs(r.data[2][2])*hz
@@ -57,7 +57,7 @@ func (r *Axis) Project(hx, hy, hz float64) (float64, float64, float64) {
 }
 
 // ProjectNormal returns the oriented half-extent projected onto unit normal (nx, ny, nz).
-func (r *Axis) ProjectNormal(nx, ny, nz, hx, hy, hz float64) float64 {
+func (r *Axes) ProjectNormal(nx, ny, nz, hx, hy, hz float64) float64 {
 	return math.Abs(nx*r.data[0][0]+ny*r.data[0][1]+nz*r.data[0][2])*hx +
 		math.Abs(nx*r.data[1][0]+ny*r.data[1][1]+nz*r.data[1][2])*hy +
 		math.Abs(nx*r.data[2][0]+ny*r.data[2][1]+nz*r.data[2][2])*hz
@@ -65,13 +65,13 @@ func (r *Axis) ProjectNormal(nx, ny, nz, hx, hy, hz float64) float64 {
 
 // ComputeSupportPoint computes the exact extreme support point for an oriented box
 // from its center, direction, and half-extents without deadband or smoothing.
-func (r *Axis) ComputeSupportPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
+func (r *Axes) ComputeSupportPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
 	return r.computeExtremalPoint(cx, cy, cz, dirX, dirY, dirZ, hw, hh, hd, false)
 }
 
 // ComputeStabilizedContactPoint computes a contact-stabilized extreme point for an oriented box
 // along direction (dirX, dirY, dirZ), suppressing near-flat corner jitter via supportAxisFactor.
-func (r *Axis) ComputeStabilizedContactPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
+func (r *Axes) ComputeStabilizedContactPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64) (float64, float64, float64) {
 	lenSq := dirX*dirX + dirY*dirY + dirZ*dirZ
 	if lenSq <= 1e-24 {
 		return cx, cy, cz
@@ -87,7 +87,7 @@ func (r *Axis) ComputeStabilizedContactPoint(cx, cy, cz float64, dirX, dirY, dir
 
 // computeExtremalPoint returns the oriented box point farthest along the given direction.
 // It offsets the center by signed half-extents, optionally smoothing near-flat axis alignment.
-func (r *Axis) computeExtremalPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64, stabilized bool) (float64, float64, float64) {
+func (r *Axes) computeExtremalPoint(cx, cy, cz float64, dirX, dirY, dirZ float64, hw, hh, hd float64, stabilized bool) (float64, float64, float64) {
 	px, py, pz := cx, cy, cz
 	extents := [3]float64{hw, hh, hd}
 	for i := 0; i < 3; i++ {

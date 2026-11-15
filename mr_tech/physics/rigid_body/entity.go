@@ -43,6 +43,13 @@ type Entity struct {
 	eixx, eixy, eixz float64
 	eiyy, eiyz, eizz float64
 	hasInertia       bool
+	hasActiveContact bool
+	contactNX        float64
+	contactNY        float64
+	contactNZ        float64
+	contactPX        float64
+	contactPY        float64
+	contactPZ        float64
 	*aabb.BoundingBox
 	*Cinematic
 }
@@ -164,9 +171,39 @@ func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz)
 }
 
-// ComputeKineticImpact calculates the relative kinetic impact energy between this entity and another.
+// SetActiveContact scopes the contact normal and point used by ComputeKineticImpact during collision callbacks.
+func (e *Entity) SetActiveContact(nx, ny, nz, px, py, pz float64) {
+	e.contactNX, e.contactNY, e.contactNZ = nx, ny, nz
+	e.contactPX, e.contactPY, e.contactPZ = px, py, pz
+	e.hasActiveContact = true
+}
+
+// ClearActiveContact clears the active contact scope after a collision callback completes.
+func (e *Entity) ClearActiveContact() {
+	e.hasActiveContact = false
+}
+
+// ComputeNormalKineticImpactAt computes physical impact energy (Joules, 50 units/m) between this entity
+// and another along contact normal (nx, ny, nz) at world contact point (px, py, pz).
+func (e *Entity) ComputeNormalKineticImpactAt(otherEntity *Entity, nx, ny, nz, px, py, pz float64) float64 {
+	if otherEntity == nil {
+		return 0
+	}
+	cx1, cy1, cz1 := e.getCenterOfMass()
+	cx2, cy2, cz2 := otherEntity.getCenterOfMass()
+	return e.Cinematic.ComputeNormalKineticImpact(otherEntity.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz)
+}
+
+// ComputeKineticImpact calculates the physical kinetic impact energy (Joules, 50 units/m) between this entity and another.
+// When called inside a collision callback with an active contact, it evaluates pre-solve closing normal speed at the contact point.
 // It returns 0 if either entity has non-positive mass.
 func (e *Entity) ComputeKineticImpact(otherEntity *Entity) float64 {
+	if otherEntity == nil {
+		return 0
+	}
+	if e.hasActiveContact {
+		return e.ComputeNormalKineticImpactAt(otherEntity, e.contactNX, e.contactNY, e.contactNZ, e.contactPX, e.contactPY, e.contactPZ)
+	}
 	ovx, ovy, ovz := otherEntity.GetVelocity()
 	svx, svy, svz := e.GetVelocity()
 	otherMass := otherEntity.GetMass()
@@ -180,8 +217,7 @@ func (e *Entity) ComputeKineticImpact(otherEntity *Entity) float64 {
 		return 0
 	}
 	reducedMass := (otherMass * selfMass) / totalMass
-	impactEnergy := 0.5 * reducedMass * relativeSpeedSq
-	return impactEnergy
+	return 0.5 * reducedMass * relativeSpeedSq * invWorldUnitsSq
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.

@@ -456,7 +456,9 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
 		cage := t2.GetCage().(*collisions.Cage)
-		t2.GetEntity().SetOnGround(cage.HasFloor())
+		ent := t2.GetEntity()
+		ent.SetOnGround(cage.HasFloor())
+		ent.SnapshotPreSolve()
 	}
 
 	// Pre-apply warm-started impulses on persistent contacts before iterative PGS sweeps.

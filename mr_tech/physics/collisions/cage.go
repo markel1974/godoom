@@ -344,14 +344,20 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 		}
 
 		if fc.bucket.IsWall() {
-			if fc.cornerHit || iMode == ImpactStep {
-				if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+			if iMode == ImpactStep {
+				if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) ||
+					s.hasCoplanarInelasticSlot(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 					continue
 				}
-			}
-			if !fc.cornerHit && iMode == ImpactInelastic {
-				s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
-				s.pruneCoplanarCornerHits(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+			} else {
+				if fc.cornerHit && s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+					continue
+				}
+				s.pruneCoplanarStepSlots(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+				if !fc.cornerHit {
+					s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+					s.pruneCoplanarCornerHits(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+				}
 			}
 		}
 
@@ -359,8 +365,8 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 			s.addStaticTriangleManifold(rFace, &fc)
 		} else {
 			px, py, pz := s.projectStabilizedStaticContact(&fc)
-			if entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode); entry != nil && (fc.cornerHit || iMode == ImpactStep) {
-				entry.SetCornerOrigin(true, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+			if entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode); entry != nil && fc.bucket.IsWall() {
+				entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 			}
 		}
 
@@ -447,12 +453,39 @@ func (s *Cage) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
 	s.flatWallsLen++
 }
 
+func slotMatchesOrigPlane(slot *Entry, nX, nY, nZ, ax, ay, az float64) bool {
+	return slot.rCage == nil &&
+		slot.origNX*nX+slot.origNY*nY+slot.origNZ*nZ > 0.999 &&
+		math.Abs((slot.origAX-ax)*nX+(slot.origAY-ay)*nY+(slot.origAZ-az)*nZ) < planeEpsilon
+}
+
+func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
+	for i := 0; i < s.slotsLen; i++ {
+		slot := s.slots[i]
+		if slot.iMode == ImpactInelastic && slot.bucket.IsWall() && slotMatchesOrigPlane(slot, nX, nY, nZ, ax, ay, az) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Cage) pruneCoplanarStepSlots(nX, nY, nZ, ax, ay, az float64) {
+	for i := 0; i < s.slotsLen; {
+		slot := s.slots[i]
+		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slotMatchesOrigPlane(slot, nX, nY, nZ, ax, ay, az) {
+			s.buckets[slot.bucket].RemoveEntry(slot)
+			s.slotsLen--
+			s.slots[i] = s.slots[s.slotsLen]
+			continue
+		}
+		i++
+	}
+}
+
 func (s *Cage) pruneCoplanarCornerHits(nX, nY, nZ, ax, ay, az float64) {
 	for i := 0; i < s.slotsLen; {
 		slot := s.slots[i]
-		if slot.isCorner &&
-			slot.origNX*nX+slot.origNY*nY+slot.origNZ*nZ > 0.999 &&
-			math.Abs((slot.origAX-ax)*nX+(slot.origAY-ay)*nY+(slot.origAZ-az)*nZ) < planeEpsilon {
+		if slot.isCorner && slotMatchesOrigPlane(slot, nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			s.slotsLen--
 			s.slots[i] = s.slots[s.slotsLen]
@@ -1360,6 +1393,9 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		return true, true, hx, hy, horizPen3D, s.tX + qx3*s.eRadX, s.tY + qy3*s.eRadY
 	}
 	if tunneled && isTiltedOrCap {
+		if rMinZ > s.tZ+s.eRadZ || rMaxZ < s.tZ-s.eRadZ {
+			return false, false, 0, 0, 0, 0, 0
+		}
 		midX := 0.5 * (s.cX + s.tX)
 		midY := 0.5 * (s.cY + s.tY)
 		midZ := 0.5 * (s.cZ + s.tZ)

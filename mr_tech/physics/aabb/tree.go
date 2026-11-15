@@ -1,6 +1,6 @@
 package aabb
 
-// Tree is a spatial data structure optimized for efficient querying and management of Axis-Aligned Bounding Boxes (AABBs).
+// Tree is a spatial data structure optimized for efficient querying and management of Axes-Aligned Bounding Boxes (AABBs).
 type Tree struct {
 	nodes              []*Node
 	rootNodeIndex      uint

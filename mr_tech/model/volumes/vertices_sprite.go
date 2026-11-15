@@ -11,17 +11,30 @@ import (
 
 // VerticesSprite represents sprite data backed by a source volume and a view-specific volume.
 type VerticesSprite struct {
-	volume *Volume
+	thing     IThing
+	cfg       *config.Thing
+	materials *materials.Materials
+	volume    *Volume
 }
 
 // NewVerticesSprite creates a billboard-rendered vertex sprite for thing from cfg and optional sprite material.
 func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesSprite {
-	w := cfg.Radius * 2
-	d := cfg.Height
+	f := &VerticesSprite{
+		thing:     thing,
+		cfg:       cfg,
+		materials: materials,
+	}
+	return f
+}
+
+// Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
+func (v *VerticesSprite) Setup() error {
+	w := v.cfg.Radius * 2
+	d := v.cfg.Height
 
 	var material *textures.Material
-	if cfg.Sprite != nil {
-		material = materials.GetMaterial(cfg.Sprite.Material)
+	if v.cfg.Sprite != nil {
+		material = v.materials.GetMaterial(v.cfg.Sprite.Material)
 		if material != nil {
 			tex := material.GetCurrentFrame()
 			if tex != nil {
@@ -33,10 +46,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 	halfX := w * 0.5
 	halfY := w * 0.5
 
-	volume := NewVolume(0, "material", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
-	f := &VerticesSprite{
-		volume: volume,
-	}
+	v.volume = NewVolume(0, "material", "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
 	halfD := d * 0.5
@@ -51,7 +61,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 	v111 := geometry.XYZ{X: halfX, Y: halfY, Z: halfD}
 	v011 := geometry.XYZ{X: -halfX, Y: halfY, Z: halfD}
 
-	f.volume.ClearFaces()
+	v.volume.ClearFaces()
 
 	// Helper per aggiungere una faccia (2 triangoli)
 	addQuad := func(vA, vB, vC, vD geometry.XYZ) {
@@ -67,8 +77,8 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 		f0.LockUV(true)
 		f1.LockUV(true)
 
-		f.volume.AddFace(f0)
-		f.volume.AddFace(f1)
+		v.volume.AddFace(f0)
+		v.volume.AddFace(f1)
 	}
 
 	// Front (Y = -halfY)
@@ -85,20 +95,20 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 	addQuad(v000, v010, v110, v100)
 
 	// Ora Rebuild itera su un volume 3D reale. minY e maxY non sono più 0.
-	f.volume.Rebuild()
-	f.volume.GetEntity().LockUpright()
+	v.volume.Rebuild()
+	v.volume.GetEntity().LockUpright()
 
-	f.volume.SetThing(thing)
+	v.volume.SetThing(v.thing)
 
-	return f
+	return nil
 }
 
-// VerticesGetVolume returns the volume associated with the vertices sprite.
+// GetContainerVolume returns the volume associated with the vertices sprite.
 func (v *VerticesSprite) GetContainerVolume() IContainerVolume {
 	return v.volume
 }
 
-// VerticesGetEntity returns the physics entity associated with the sprite's volume.
+// GetEntity returns the physics entity associated with the sprite's volume.
 func (v *VerticesSprite) GetEntity() *rigid_body.Entity {
 	return v.volume.GetEntity()
 }
@@ -114,27 +124,28 @@ func (v *VerticesSprite) GetAABB() *aabb.AABB {
 	return b
 }
 
-// VerticesCompile updates the sprite's view volume from its current volume.
+// Compile updates the sprite's view volume from its current volume.
 // It ignores tick and returns false because no geometry is rebuilt.
 func (v *VerticesSprite) Compile(tick uint64) bool {
 	return false
 }
 
-// VerticesGet returns the view volume faces for both face sets, zero offset, and the render mode.
+// GetUIFaces returns the view volume faces for both face sets, zero offset, and the render mode.
 func (v *VerticesSprite) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	f := v.volume.GetFaces()
 	return f, f, 0.0, RenderModeBillboard
 }
 
-// VerticesSetAction applies the vertex action identified by idx.
+// SetAction applies the vertex action identified by idx.
 func (v *VerticesSprite) SetAction(idx int) {
 	//TODO IMPLEMENT
 	return
 }
 
-// VerticesApplyImpact is a no-op for billboard sprites without articulated sub-parts.
+// ApplyImpact applies an impact force vector at the given point to the vertices sprite.
 func (v *VerticesSprite) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
+// SetRagdollMode switches the vertices sprite to ragdoll behavior.
 func (v *VerticesSprite) SetRagdollMode() {
 }

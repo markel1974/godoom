@@ -74,8 +74,10 @@ func NewVAction(name string, start int, end int) *VAction {
 
 // Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
-	//viewVolume    *Volume
-	comp2         *Vertices3DEntryComposed
+	thing         IThing
+	cfg           *config.Thing
+	materials     *materials.Materials
+	comp          *Vertices3DEntryComposed
 	volumes       []*Volume
 	startFrame    int
 	endFrame      int
@@ -112,15 +114,22 @@ type Vertices3DEntry struct {
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
 // It panics if required frame, action interval, or group size configuration is invalid.
 func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
-	model := cfg.Model3DEntry
+	return &Vertices3DEntry{
+		thing: thing, cfg: cfg, materials: materials,
+	}
+}
+
+// Setup initializes model frames, actions, tags, volumes, interpolation state, and compiled geometry. Returns an error for invalid model data.
+func (v *Vertices3DEntry) Setup() error {
+	model := v.cfg.Model3DEntry
 	if len(model.Frames) <= 0 {
-		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
+		return fmt.Errorf("no Model3DEntry frames for thing %s", v.cfg.Id)
 	}
 	if len(model.ActionDefinitions) != len(model.ActionIntervals) {
-		panic("action definitions and intervals must be the same length")
+		return fmt.Errorf("action definitions and intervals must be the same length")
 	}
 	if model.GroupSize <= 0 {
-		panic("groupSize must be greater than 0")
+		return fmt.Errorf("groupSize must be greater than 0")
 	}
 
 	actions := make([]*VAction, len(model.ActionDefinitions))
@@ -136,26 +145,26 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 	}
 
 	tagCounter := 0
-	tagMap := make(map[string]int)
+	v.tagMap = make(map[string]int)
 	for _, cfgFrame := range model.Frames {
 		for tagName := range cfgFrame.Tags {
-			if _, exists := tagMap[tagName]; !exists {
-				tagMap[tagName] = tagCounter
+			if _, exists := v.tagMap[tagName]; !exists {
+				v.tagMap[tagName] = tagCounter
 				tagCounter++
 			}
 		}
 	}
 
-	vols := make([]*Volume, len(model.Frames))
+	v.volumes = make([]*Volume, len(model.Frames))
 	for frameIdx, cfgFrame := range model.Frames {
-		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		volume := NewVolume(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
+		baseId := fmt.Sprintf("%s_md1_frame_%d", v.cfg.Id, frameIdx)
+		volume := NewVolume(frameIdx, baseId, "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
 			var material *textures.Material
 			if tri.Material != nil {
-				material = materials.GetMaterial(tri.Material)
+				material = v.materials.GetMaterial(tri.Material)
 			}
 			face := NewFace(points, label, material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
@@ -164,14 +173,14 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		}
 		// Copy tags to volume
 		for tagName, tagData := range cfgFrame.Tags {
-			volume.SetVertexTag(tagMap[tagName], tagData.Origin, tagData.Axis)
+			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
-		vols[frameIdx] = volume
+		v.volumes[frameIdx] = volume
 	}
 
 	maxFaces := 0
-	for _, vol := range vols {
+	for _, vol := range v.volumes {
 		if c := vol.GetFaceCount(); c > maxFaces {
 			maxFaces = c
 		}
@@ -180,51 +189,47 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 	facesB := NewFaces(maxFaces, true)
 	for j := 0; j < maxFaces; j++ {
 		var mat *textures.Material
-		var u, v [3]float64
-		if len(vols) > 0 && vols[0] != nil && j < vols[0].GetFaceCount() {
-			src := vols[0].GetFace(j)
+		var tu, tv [3]float64
+		if len(v.volumes) > 0 && v.volumes[0] != nil && j < v.volumes[0].GetFaceCount() {
+			src := v.volumes[0].GetFace(j)
 			mat = src.material
-			u = src.u
-			v = src.v
+			tu = src.u
+			tv = src.v
 		}
-		facesA.Set(j, NewFaceEmpty(mat, u, v))
-		facesB.Set(j, NewFaceEmpty(mat, u, v))
+		facesA.Set(j, NewFaceEmpty(mat, tu, tv))
+		facesB.Set(j, NewFaceEmpty(mat, tu, tv))
 	}
 
-	endFrame := len(model.Frames) - 1
-	v := &Vertices3DEntry{
-		volumes:       vols,
-		groupSize:     float64(model.GroupSize),
-		actions:       actions,
-		startFrame:    0,
-		endFrame:      endFrame,
-		currentAction: -1,
-		tagMap:        tagMap,
-		volA:          vols[0],
-		volB:          vols[0],
-		comp2:         NewVertices3DEntryComposed(vols[0]),
-		lerpT:         0.0,
-		lastVolA:      nil,
-		salt:          uint64(rand.Intn(len(model.Frames))),
-		facesA:        facesA,
-		facesB:        facesB,
-		rot:           articulated_dynamics.NewTagAxisIdentity(),
-		lastQw:        1.0,
-		singleFrame:   endFrame == 0,
-	}
+	v.groupSize = float64(model.GroupSize)
+	v.actions = actions
+	v.startFrame = 0
+	v.endFrame = len(model.Frames) - 1
+	v.currentAction = -1
+	v.volA = v.volumes[0]
+	v.volB = v.volumes[0]
+	v.comp = NewVertices3DEntryComposed(v.volumes[0])
+	v.lerpT = 0.0
+	v.lastVolA = nil
+	v.salt = uint64(rand.Intn(len(model.Frames)))
+	v.facesA = facesA
+	v.facesB = facesB
+	v.rot = articulated_dynamics.NewTagAxisIdentity()
+	v.lastQw = 1.0
+	v.singleFrame = v.endFrame == 0
+
 	if len(v.actions) > 0 {
 		v.SetAction(0)
 	}
 	v.Compile(0)
 	for _, f := range v.volumes {
-		f.SetThing(thing)
+		f.SetThing(v.thing)
 	}
-	return v
+	return nil
 }
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
-	ent := v.comp2.GetEntity()
+	ent := v.comp.GetEntity()
 	b := ent.GetAABB()
 	if v.singleFrame {
 		qx, qy, qz, qw := ent.GetQRotation().Get()
@@ -237,12 +242,12 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 	return b
 }
 
-// VerticesGetVolume returns the current view volume for this vertices entry.
+// GetContainerVolume returns the current view volume for this vertices entry.
 func (v *Vertices3DEntry) GetContainerVolume() IContainerVolume {
-	return v.comp2
+	return v.comp
 }
 
-// VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
+// SetAction selects the animation action at idx and resets timing for its frame interval.
 func (v *Vertices3DEntry) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		fmt.Printf("Invalid action index: %d\n", idx)
@@ -262,12 +267,12 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 		v.volA = v.volumes[v.startFrame]
 		v.volB = v.volumes[v.startFrame]
 		v.lerpT = 0.0
-		v.comp2.SetVolume(v.volA)
+		v.comp.SetVolume(v.volA)
 		v.lastVolA = v.volA
 	}
 }
 
-// VerticesCompile updates the active animation frames and interpolation factor for the given tick.
+// Compile updates the active animation frames and interpolation factor for the given tick.
 func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	if v.singleFrame {
 		v.lerpT = 0.0
@@ -309,7 +314,7 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 		v.lerpT = lerpT
 	}
 
-	entity := v.comp2.GetEntity()
+	entity := v.comp.GetEntity()
 	q := entity.GetQRotation()
 	qx, qy, qz, qw := q.Get()
 	isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
@@ -399,7 +404,7 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	}
 
 	if v.lastVolA != v.volA {
-		v.comp2.SetVolume(v.volA)
+		v.comp.SetVolume(v.volA)
 		v.lastVolA = v.volA
 	}
 
@@ -409,7 +414,7 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	return true
 }
 
-// VerticesGet returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
+// GetUIFaces returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
 func (v *Vertices3DEntry) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
@@ -419,11 +424,11 @@ func (v *Vertices3DEntry) GetVolumes() (*Volume, *Volume, float64) {
 	return v.volA, v.volB, v.lerpT
 }
 
-// VerticesApplyImpact is a no-op for single-part 3D entries (handled by 6-DoF Entity dynamics).
+// ApplyImpact is a no-op for single-part 3D entries (handled by 6-DoF Entity dynamics).
 func (v *Vertices3DEntry) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
-// VerticesSetRagdoll switches the vertices entry to ragdoll behavior.
+// SetRagdollMode switches the vertices entry to ragdoll behavior.
 func (v *Vertices3DEntry) SetRagdollMode() {
 }
 

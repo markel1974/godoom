@@ -31,7 +31,7 @@ func (v *VirtualVolume) GetEntity() *rigid_body.Entity {
 // QueryOverlaps interroga i volumi attivi di tutte le parti che compongono Vertices3D
 func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	for _, el := range v.elements.entries {
-		el.comp2.QueryOverlaps(object, callback)
+		el.comp.QueryOverlaps(object, callback)
 	}
 }
 

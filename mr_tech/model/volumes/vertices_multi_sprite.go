@@ -55,6 +55,9 @@ func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
 
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
+	thing     IThing
+	cfg       *config.Thing
+	materials *materials.Materials
 	//currentAngle  int
 	volumes       []*Volume
 	comp          *VerticeMultiSpriteComposed
@@ -75,39 +78,46 @@ type VerticesMultiSprite struct {
 // It panics if a view is nil, has no textures, or face creation fails
 func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesMultiSprite {
 	f := &VerticesMultiSprite{
-		volumes: make([]*Volume, len(cfg.MultiSprite.Views)),
+		thing:     thing,
+		cfg:       cfg,
+		materials: materials,
+		volumes:   make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
 		clampAnim:  make([]bool, len(cfg.MultiSprite.Views)),
 		debug:      false,
 	}
-	f.standingHalfH = cfg.Height * 0.5
-	if f.standingHalfH <= 0 && len(cfg.MultiSprite.Views) > 0 {
-		if mat0 := materials.GetMaterial(cfg.MultiSprite.Views[0]); mat0 != nil {
+	return f
+}
+
+func (v *VerticesMultiSprite) Setup() error {
+	v.standingHalfH = v.cfg.Height * 0.5
+	if v.standingHalfH <= 0 && len(v.cfg.MultiSprite.Views) > 0 {
+		if mat0 := v.materials.GetMaterial(v.cfg.MultiSprite.Views[0]); mat0 != nil {
 			if head0 := mat0.GetHeadFrame(); head0 != nil {
 				_, h0 := head0.GetSize()
-				f.standingHalfH = h0 * 0.5
+				v.standingHalfH = h0 * 0.5
 			}
 		}
 	}
-	if f.standingHalfH <= 0 {
-		f.standingHalfH = 28.0
+	if v.standingHalfH <= 0 {
+		v.standingHalfH = 28.0
 	}
-	if f.debug {
-		f.renderMode = RenderModeModel3D
+	if v.debug {
+		v.renderMode = RenderModeModel3D
 	}
-	for viewIdx, view := range cfg.MultiSprite.Views {
+	for viewIdx, view := range v.cfg.MultiSprite.Views {
 		if view == nil {
-			panic(fmt.Sprintf("view is nil for viewIdx %d", viewIdx))
+			return fmt.Errorf("view is nil for viewIdx %d", viewIdx)
 		}
 		if len(view.Textures) == 0 {
-			panic(fmt.Sprintf("view Frames is empty for viewIdx %d", viewIdx))
+			return fmt.Errorf("view Frames is empty for viewIdx %d", viewIdx)
 		}
-		baseId := fmt.Sprintf("%s_multisprite_anim_%d", cfg.Id, viewIdx)
-		thingId := fmt.Sprintf("thing_%s_%d", cfg.Id, viewIdx)
-		volume := NewVolume(viewIdx, baseId, thingId, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
-		material := materials.GetMaterial(view)
-		faces, err := f.createFaces(material)
+		baseId := fmt.Sprintf("%s_multisprite_anim_%d", v.cfg.Id, viewIdx)
+		thingId := fmt.Sprintf("thing_%s_%d", v.cfg.Id, viewIdx)
+		volume := NewVolume(viewIdx, baseId, thingId, v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
+		mat := v.materials.GetMaterial(view)
+		faces, err := v.createFaces(mat)
 		if err != nil {
 			panic(fmt.Sprintf("[error] NewVerticesMultiSprite createFaces error: %s", err.Error()))
 		}
@@ -115,29 +125,29 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 			volume.AddFace(face)
 		}
 		volume.Rebuild()
-		f.volumes[viewIdx] = volume
+		v.volumes[viewIdx] = volume
 	}
 
-	f.comp = NewVerticeMultiSpriteComposed(f.volumes[0])
+	v.comp = NewVerticeMultiSpriteComposed(v.volumes[0])
 	//f.ent = f.volumes[0].entity
 	//f.actionVolume = f.volumes[0]
 
-	for _, viewIdx := range cfg.MultiSprite.Clamps {
-		if viewIdx < len(f.volumes) {
-			f.clampAnim[viewIdx] = true
+	for _, viewIdx := range v.cfg.MultiSprite.Clamps {
+		if viewIdx < len(v.volumes) {
+			v.clampAnim[viewIdx] = true
 		}
 	}
 
-	for _, volume := range f.volumes {
-		volume.SetThing(thing)
-		if f.renderMode == RenderModeBillboard {
+	for _, volume := range v.volumes {
+		volume.SetThing(v.thing)
+		if v.renderMode == RenderModeBillboard {
 			volume.GetEntity().LockUpright()
 		}
 	}
 
-	f.updateBounds()
-	f.Compile(0)
-	return f
+	v.updateBounds()
+	v.Compile(0)
+	return nil
 }
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.

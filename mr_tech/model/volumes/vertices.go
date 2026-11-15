@@ -24,6 +24,8 @@ type IContainerVolume interface {
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
 type IVertices interface {
+	Setup() error
+
 	GetAABB() *aabb.AABB
 
 	Compile(uint64) bool
@@ -39,8 +41,8 @@ type IVertices interface {
 	SetRagdollMode()
 }
 
-// VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.
-func VerticesFactory(thing IThing, cfg *config.Thing, materials *materials.Materials) IVertices {
+// CreateVertices returns an implementation of IVertices based on the provided Thing configuration and material.
+func CreateVertices(thing IThing, cfg *config.Thing, materials *materials.Materials) (IVertices, error) {
 	var out IVertices
 	if cfg.Model3D != nil {
 		out = NewVertices3D(thing, cfg, materials)
@@ -51,5 +53,8 @@ func VerticesFactory(thing IThing, cfg *config.Thing, materials *materials.Mater
 	} else {
 		out = NewVerticesSprite(thing, cfg, materials)
 	}
-	return out
+	if err := out.Setup(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

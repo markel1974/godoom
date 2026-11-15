@@ -12,6 +12,9 @@ import (
 
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
 type Vertices3D struct {
+	thing         IThing
+	cfg           *config.Thing
+	materials     *materials.Materials
 	actions       *Vertices3DActions
 	currentAction int
 	links         *articulated_dynamics.Links
@@ -35,33 +38,39 @@ type Vertices3D struct {
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
+		thing:         thing,
+		cfg:           cfg,
+		materials:     materials,
 		links:         articulated_dynamics.NewLinks(),
 		joints:        articulated_dynamics.NewJoints(),
 		elements:      NewVertices3DElements(),
 		actions:       NewVertices3DActions(),
 		currentAction: -1,
 	}
-	if err := v.elements.Setup(thing, cfg, materials); err != nil {
-		panic("Error setting up vertices elements: " + err.Error())
-	}
+	return v
+}
 
-	configLinks, cErr := v.createConfigLinks(cfg.Model3D)
+// Setup initializes model elements, links, joints, and actions, compiles bounds, and returns any setup error.
+func (v *Vertices3D) Setup() error {
+	if err := v.elements.Setup(v.thing, v.cfg, v.materials); err != nil {
+		return err
+	}
+	configLinks, cErr := v.createConfigLinks(v.cfg.Model3D)
 	if cErr != nil {
-		panic("Error setting up config links elements: " + cErr.Error())
+		return cErr
 	}
 	if err := v.links.Setup(configLinks); err != nil {
-		panic("Error setting up links elements: " + err.Error())
+		return err
 	}
-
-	configJoints, cErr := v.createConfigJoints(cfg.Model3D, v.elements)
+	configJoints, cErr := v.createConfigJoints(v.cfg.Model3D, v.elements)
 	if cErr != nil {
-		panic("Error setting up config joints elements: " + cErr.Error())
+		return cErr
 	}
 	if err := v.joints.Setup(v.elements.vVolume.entity, configJoints, v.links); err != nil {
-		panic("Error setting up joints elements: " + err.Error())
+		return err
 	}
-	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
-		panic("Error setting up vertices elements: " + err.Error())
+	if err := v.actions.Setup(v.cfg.Model3D, v.elements); err != nil {
+		return err
 	}
 
 	v.Compile(0)
@@ -74,8 +83,7 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	}
 
 	v.elements.UpdateEntityBounds()
-
-	return v
+	return nil
 }
 
 // GetContainerVolume returns the composite view volume of the model, or nil if unavailable.

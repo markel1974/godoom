@@ -58,9 +58,13 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	if cfg.Mass == 0 {
 		panic("mass is zero for thing:" + cfg.Id)
 	}
+	vertices, err := volumes.CreateVertices(thing, cfg, things.GetMaterials())
+	if err != nil {
+		panic("failed to create vertices for thing:" + cfg.Id)
+	}
 
 	t := &Base{
-		IVertices:      volumes.VerticesFactory(thing, cfg, things.GetMaterials()),
+		IVertices:      vertices,
 		id:             cfg.Id,
 		angle:          cfg.Angle,
 		kind:           cfg.Kind,

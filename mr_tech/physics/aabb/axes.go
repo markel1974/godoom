@@ -109,6 +109,20 @@ func (r *Axes) computeExtremalPoint(cx, cy, cz float64, dirX, dirY, dirZ float64
 	return px, py, pz
 }
 
+// WorldCrossUnitNormal returns the unit normal of the world-space cross axis from rows a[i] and b[j].
+// It divides by axisLen and flips the result when proj is positive to keep the normal consistently oriented.
+func (r *Axes) WorldCrossUnitNormal(i int, b *Axes, j int, axisLen, proj float64) (float64, float64, float64) {
+	ax, ay, az := r.data[i][0], r.data[i][1], r.data[i][2]
+	bx, by, bz := b.data[j][0], b.data[j][1], b.data[j][2]
+	cx := (ay*bz - az*by) / axisLen
+	cy := (az*bx - ax*bz) / axisLen
+	cz := (ax*by - ay*bx) / axisLen
+	if proj > 0.0 {
+		cx, cy, cz = -cx, -cy, -cz
+	}
+	return cx, cy, cz
+}
+
 // supportAxisFactor smoothly maps an axis-normal alignment dot product to [-1, 1],
 // suppressing discontinuous corner snaps within a small near-flat deadband.
 func supportAxisFactor(d float64) float64 {

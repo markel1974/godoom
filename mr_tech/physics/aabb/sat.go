@@ -132,7 +132,7 @@ func (res *Sat) Compute(dx, dy, dz float64, a *Axes, scx, scy, scz float64, b *A
 				separated = true
 				if axisLen > crossAxisLenEps {
 					if g := (distance - (ra + rb)) / axisLen; g > res.maxGap {
-						nx, ny, nz := worldCrossUnitNormal(a, i, b, j, axisLen, proj)
+						nx, ny, nz := a.WorldCrossUnitNormal(i, b, j, axisLen, proj)
 						res.recordGap(g, nx, ny, nz)
 					}
 				}
@@ -145,7 +145,7 @@ func (res *Sat) Compute(dx, dy, dz float64, a *Axes, scx, scy, scz float64, b *A
 				if axisLen > edgeAxisMinLen && p < faceBestPen*0.98-1e-6 && p < res.contactPen {
 					res.contactPen = p
 					res.contactAxis = 6 + i*3 + j
-					res.nx, res.ny, res.nz = worldCrossUnitNormal(a, i, b, j, axisLen, proj)
+					res.nx, res.ny, res.nz = a.WorldCrossUnitNormal(i, b, j, axisLen, proj)
 				}
 			}
 		}
@@ -263,18 +263,4 @@ func (res *Sat) recordGap(gap, nx, ny, nz float64) {
 		res.maxGap = gap
 		res.gx, res.gy, res.gz = nx, ny, nz
 	}
-}
-
-// worldCrossUnitNormal returns the unit normal of the world-space cross axis from rows a[i] and b[j].
-// It divides by axisLen and flips the result when proj is positive to keep the normal consistently oriented.
-func worldCrossUnitNormal(a *Axes, i int, b *Axes, j int, axisLen, proj float64) (float64, float64, float64) {
-	ax, ay, az := a.data[i][0], a.data[i][1], a.data[i][2]
-	bx, by, bz := b.data[j][0], b.data[j][1], b.data[j][2]
-	cx := (ay*bz - az*by) / axisLen
-	cy := (az*bx - ax*bz) / axisLen
-	cz := (ax*by - ay*bx) / axisLen
-	if proj > 0.0 {
-		cx, cy, cz = -cx, -cy, -cz
-	}
-	return cx, cy, cz
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
@@ -79,14 +78,9 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 	return v
 }
 
-// VerticesGetVolume returns the composite view volume of the model, or nil if unavailable.
+// GetContainerVolume returns the composite view volume of the model, or nil if unavailable.
 func (v *Vertices3D) GetContainerVolume() IContainerVolume {
 	return v.elements.vVolume
-}
-
-// GetEntity returns the physics entity for the composite model, or the first element's entity if unset.
-func (v *Vertices3D) GetEntity() *rigid_body.Entity {
-	return v.elements.vVolume.entity
 }
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
@@ -100,7 +94,7 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return b
 }
 
-// VerticesSetRagdoll freezes the model and activates ragdoll collapse if it is not already ragdoll.
+// SetRagdollMode freezes the model and activates ragdoll collapse if it is not already ragdoll.
 func (v *Vertices3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
@@ -112,7 +106,7 @@ func (v *Vertices3D) SetRagdollMode() {
 	v.joints.ActivateRagdoll()
 }
 
-// VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
+// SetAction selects action idx and propagates mapped sub-actions to parts in execution order.
 func (v *Vertices3D) SetAction(idx int) {
 	if idx < 0 {
 		return
@@ -152,7 +146,7 @@ func (v *Vertices3D) SetAction(idx int) {
 	}
 }
 
-// VerticesApplyImpact routes a localized 3D impact force (fx, fy, fz) at world point (px, py, pz)
+// ApplyImpact routes a localized 3D impact force (fx, fy, fz) at world point (px, py, pz)
 // to the closest articulated part, exciting the 5+ joint DoFs along the kinematic chain, jolting ragdoll bodies,
 // and triggering dismemberment on critical or post-mortem hits.
 func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
@@ -160,7 +154,7 @@ func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
 }
 
-// VerticesCompile updates all model parts for the tick and writes transformed frame data into render buffers.
+// Compile updates all model parts for the tick and writes transformed frame data into render buffers.
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) Compile(tick uint64) bool {
 	ent := v.elements.vVolume.entity
@@ -254,7 +248,7 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 	return false
 }
 
-// VerticesGet returns the current face sets, interpolation factor, and render mode.
+// GetUIFaces returns the current face sets, interpolation factor, and render mode.
 func (v *Vertices3D) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
 }

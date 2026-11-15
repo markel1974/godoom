@@ -142,10 +142,8 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
 func (v *VerticesMultiSprite) updateBounds() {
-	if v.comp == nil || v.comp.volume == nil {
-		return
-	}
-	w, _, d := v.comp.volume.GetEntity().GetSize()
+	ent := v.comp.GetEntity()
+	w, _, d := ent.GetSize()
 	halfW := w * 0.5
 	v.minX = -halfW
 	v.maxX = halfW
@@ -155,28 +153,30 @@ func (v *VerticesMultiSprite) updateBounds() {
 	v.maxZ = -v.standingHalfH + d
 }
 
-// VerticesGetVolume returns the currently active action volume.
+// GetContainerVolume returns the currently active action volume.
 func (v *VerticesMultiSprite) GetContainerVolume() IContainerVolume {
 	return v.comp
 }
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
-	cx, cy, cz := v.comp.GetEntity().GetCenter()
-	b := v.comp.GetEntity().GetAABB()
+	ent := v.comp.GetEntity()
+	cx, cy, cz := ent.GetCenter()
+	b := ent.GetAABB()
 	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 	return b
 }
 
-// VerticesCompile updates the view volume to the current action volume and refreshes the enclosing AABB.
+// Compile updates the view volume to the current action volume and refreshes the enclosing AABB.
 func (v *VerticesMultiSprite) Compile(tick uint64) bool {
+	ent := v.comp.GetEntity()
 	v.updateBounds()
-	cx, cy, cz := v.comp.GetEntity().GetCenter()
-	v.comp.GetEntity().GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	cx, cy, cz := ent.GetCenter()
+	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 	return true
 }
 
-// VerticesGet returns the current view volume faces twice, a zero value, and the active render mode.
+// GetUIFaces returns the current view volume faces twice, a zero value, and the active render mode.
 func (v *VerticesMultiSprite) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	f := v.comp.GetFaces()
 	return f, f, 0.0, v.renderMode
@@ -208,11 +208,11 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	}
 }
 
-// VerticesApplyImpact is a no-op for multi-sprite views without articulated 3D sub-parts.
+// ApplyImpact is a no-op for multi-sprite views without articulated 3D sub-parts.
 func (v *VerticesMultiSprite) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
-// VerticesSetRagdoll is a no-op for multi-sprite volumes without ragdoll state.
+// SetRagdollMode is a no-op for multi-sprite volumes without ragdoll state.
 func (v *VerticesMultiSprite) SetRagdollMode() {
 }
 

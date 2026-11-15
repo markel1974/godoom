@@ -12,6 +12,7 @@ type ImpactMode int
 
 type IObject interface {
 	GetAABB() *aabb.AABB
+
 	GetEntity() *rigid_body.Entity
 }
 
@@ -124,7 +125,16 @@ type Cage struct {
 	forceStaticClamp    bool
 	clampNormals        [16][3]float64
 	clampNormalsLen     int
+	flatWalls           [32]flatWallPlane
+	flatWallsLen        int
+	clampCorners        [16]IFace
+	clampCornersLen     int
 	solverIdx           int
+}
+
+type flatWallPlane struct {
+	nX, nY, nZ float64
+	pX, pY, pZ float64
 }
 
 //var _counter uint64
@@ -243,6 +253,8 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.applied = false
 	s.clampX, s.clampY, s.clampZ = entCX, entCY, entCZ
 	s.clampNormalsLen = 0
+	s.flatWallsLen = 0
+	s.clampCornersLen = 0
 
 	//clear(s.seen)
 	s.maxStep = maxStep
@@ -265,16 +277,19 @@ func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 }
 
 type staticFaceContact struct {
-	bucket     BucketType
-	dist       float64
-	pen        float64
-	nX, nY, nZ float64
-	anchorX    float64
-	anchorY    float64
-	anchorZ    float64
-	minX, maxX float64
-	minY, maxY float64
-	minZ, maxZ float64
+	bucket                 BucketType
+	dist                   float64
+	pen                    float64
+	nX, nY, nZ             float64
+	anchorX                float64
+	anchorY                float64
+	anchorZ                float64
+	origNX, origNY, origNZ float64
+	origAX, origAY, origAZ float64
+	minX, maxX             float64
+	minY, maxY             float64
+	minZ, maxZ             float64
+	cornerHit              bool
 }
 
 // Commit processes pending face overlaps in this Cage against either another dynamic Cage or static world geometry.
@@ -332,11 +347,24 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 			}
 		}
 
+		if fc.bucket.IsWall() && iMode == ImpactInelastic {
+			if fc.cornerHit {
+				if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+					continue
+				}
+			} else {
+				s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+				s.pruneCoplanarCornerHits(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+			}
+		}
+
 		if iMode == ImpactInelastic && !keepUpright {
 			s.addStaticTriangleManifold(rFace, &fc)
 		} else {
 			px, py, pz := s.projectStabilizedStaticContact(&fc)
-			s.addToBucket(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode)
+			if entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode); entry != nil && fc.cornerHit && iMode == ImpactInelastic {
+				entry.SetCornerOrigin(true, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+			}
 		}
 
 		if fc.bucket == BucketFloor {
@@ -387,13 +415,54 @@ func (s *Cage) projectStabilizedStaticContact(fc *staticFaceContact) (float64, f
 
 // addToBucket adds a collision cage to the specified bucket and updates the slot list if a new cage is created.[cite: 6]
 func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) bool {
-	cage := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
-	if cage != nil {
-		s.slots[s.slotsLen] = cage
+	return s.addToBucketEntry(bucket, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode) != nil
+}
+
+func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
+	entry := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
+	if entry != nil {
+		s.slots[s.slotsLen] = entry
 		s.slotsLen++
-		return true
+		return entry
+	}
+	return nil
+}
+
+func (s *Cage) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64) bool {
+	for i := 0; i < s.flatWallsLen; i++ {
+		w := &s.flatWalls[i]
+		if nX*w.nX+nY*w.nY+nZ*w.nZ > 0.999 &&
+			math.Abs((ax-w.pX)*w.nX+(ay-w.pY)*w.nY+(az-w.pZ)*w.nZ) < planeEpsilon {
+			return true
+		}
 	}
 	return false
+}
+
+func (s *Cage) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
+	if s.hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az) || s.flatWallsLen >= len(s.flatWalls) {
+		return
+	}
+	s.flatWalls[s.flatWallsLen] = flatWallPlane{
+		nX: nX, nY: nY, nZ: nZ,
+		pX: ax, pY: ay, pZ: az,
+	}
+	s.flatWallsLen++
+}
+
+func (s *Cage) pruneCoplanarCornerHits(nX, nY, nZ, ax, ay, az float64) {
+	for i := 0; i < s.slotsLen; {
+		slot := s.slots[i]
+		if slot.isCorner &&
+			slot.origNX*nX+slot.origNY*nY+slot.origNZ*nZ > 0.999 &&
+			math.Abs((slot.origAX-ax)*nX+(slot.origAY-ay)*nY+(slot.origAZ-az)*nZ) < planeEpsilon {
+			s.buckets[slot.bucket].RemoveEntry(slot)
+			s.slotsLen--
+			s.slots[i] = s.slots[s.slotsLen]
+			continue
+		}
+		i++
+	}
 }
 
 func classifyBucketNormal(nX, nY, nZ float64) BucketType {
@@ -767,7 +836,37 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	minZ := s.cZ - sz + math.Min(0.0, s.dZ)
 	maxZ := s.cZ + sz + math.Max(0.0, s.dZ)
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
+	s.flatWallsLen = 0
+	s.clampCornersLen = 0
 	return origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
+}
+
+func (s *Cage) clampStaticWallShouldSkip(fc *staticFaceContact) bool {
+	curBaseZ := s.tZ - s.eRadZ
+	if fc.maxZ <= curBaseZ+satFilterEpsilon {
+		return true
+	}
+	preBaseZ := s.GetBaseZ()
+	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
+}
+
+// staticClampApplyContact clamps velocity, resolves penetration, updates cage displacement, and reports whether it moved.
+func (s *Cage) staticClampApplyContact(fc *staticFaceContact) bool {
+	ent := s.object.GetEntity()
+	s.addClampNormal(fc.nX, fc.nY, fc.nZ)
+	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
+	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
+	if !ok || p <= 0.0 {
+		return false
+	}
+	ent.AddTo(fc.nX*p, fc.nY*p, fc.nZ*p)
+	s.tX += fc.nX * p
+	s.tY += fc.nY * p
+	s.tZ += fc.nZ * p
+	s.dX = s.tX - s.cX
+	s.dY = s.tY - s.cY
+	s.dZ = s.tZ - s.cZ
+	return true
 }
 
 // ClampStaticFace tests one static face against the entity sweep [clamp -> cur] and immediately projects out
@@ -792,30 +891,45 @@ func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 		s.object.GetEntity().SetOnGround(true)
 	}
 	if fc.bucket.IsWall() {
-		curBaseZ := s.tZ - s.eRadZ
-		if fc.maxZ <= curBaseZ+satFilterEpsilon {
+		if s.clampStaticWallShouldSkip(&fc) {
 			return false
 		}
-		preBaseZ := s.GetBaseZ()
-		if preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance {
-			return false
+		if fc.cornerHit {
+			if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				return false
+			}
+			if s.clampCornersLen < len(s.clampCorners) {
+				s.clampCorners[s.clampCornersLen] = rFace
+				s.clampCornersLen++
+				return false
+			}
+		} else {
+			s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 		}
 	}
-	ent := s.object.GetEntity()
-	s.addClampNormal(fc.nX, fc.nY, fc.nZ)
-	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
-	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
-	if !ok || p <= 0.0 {
-		return false
+	return s.staticClampApplyContact(&fc)
+}
+
+// FlushStaticClamp resolves deferred wall corner contacts not overridden by a coplanar flat wall in the same pass.
+func (s *Cage) FlushStaticClamp(lAABB *aabb.AABB) bool {
+	moved := false
+	for i := 0; i < s.clampCornersLen; i++ {
+		fc, ok := s.evaluateStaticFace(lAABB, s.clampCorners[i])
+		if !ok || fc.pen <= 0.0 {
+			continue
+		}
+		if fc.bucket.IsWall() {
+			if s.clampStaticWallShouldSkip(&fc) ||
+				s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				continue
+			}
+		}
+		if s.staticClampApplyContact(&fc) {
+			moved = true
+		}
 	}
-	ent.AddTo(fc.nX*p, fc.nY*p, fc.nZ*p)
-	s.tX += fc.nX * p
-	s.tY += fc.nY * p
-	s.tZ += fc.nZ * p
-	s.dX = s.tX - s.cX
-	s.dY = s.tY - s.cY
-	s.dZ = s.tZ - s.cZ
-	return true
+	s.clampCornersLen = 0
+	return moved
 }
 
 // EndStaticClamp restores the pre-clamp cage center, displacement, and target fields after post-push static clamping.
@@ -967,6 +1081,8 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	out.dist = dist
 	out.nX, out.nY, out.nZ = nX, nY, nZ
 	out.anchorX, out.anchorY, out.anchorZ = p0x, p0y, p0z
+	out.origNX, out.origNY, out.origNZ = nX, nY, nZ
+	out.origAX, out.origAY, out.origAZ = p0x, p0y, p0z
 	out.minX, out.maxX = rMinX, rMaxX
 	out.minY, out.maxY = rMinY, rMaxY
 	out.minZ, out.maxZ = rMinZ, rMaxZ
@@ -1014,6 +1130,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			out.dist = dist
 			out.nX, out.nY, out.nZ = nX, nY, 0.0
 			out.anchorX, out.anchorY, out.anchorZ = qxW, qyW, s.tZ
+			out.cornerHit = true
 		}
 	}
 
@@ -1157,30 +1274,6 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		return outCount
 	}
 
-	pointInConvexPoly2D := func(poly *[6][2]float64, n int) bool {
-		hasPos := false
-		hasNeg := false
-		areaAbsSum := 0.0
-		for i := 0; i < n; i++ {
-			j := i + 1
-			if j == n {
-				j = 0
-			}
-			cross := poly[i][0]*poly[j][1] - poly[i][1]*poly[j][0]
-			areaAbsSum += math.Abs(cross)
-			if cross > 1e-12 {
-				hasPos = true
-			} else if cross < -1e-12 {
-				hasNeg = true
-			}
-			if hasPos && hasNeg {
-				return false
-			}
-		}
-		// Require non-zero 2D area so degenerate vertical walls fall through to edge/face distance check.
-		return areaAbsSum > 1e-12 && (hasPos != hasNeg)
-	}
-
 	var bufA, bufB [6][3]float64
 	var poly2D [6][2]float64
 
@@ -1194,11 +1287,11 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 
 	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
 	if n < 3 {
-		return tunneled, false, 0, 0, 0, 0, 0
+		return false, false, 0, 0, 0, 0, 0
 	}
 	n = clipPolyZSlab(&bufB, n, &bufA, s.tZ+s.eRadZ, false)
 	if n < 3 {
-		return tunneled, false, 0, 0, 0, 0, 0
+		return false, false, 0, 0, 0, 0, 0
 	}
 
 	invRX := 1.0 / s.eRadX
@@ -1209,7 +1302,30 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		poly2D[i][1] = (bufA[i][1] - s.tY) * invRY
 	}
 
-	if pointInConvexPoly2D(&poly2D, n) {
+	//point in convexPoly2D
+	const polyMax = 1e-12
+	hasPos := false
+	hasNeg := false
+	areaAbsSum := 0.0
+	hasHalt := false
+	for i := 0; i < n; i++ {
+		j := i + 1
+		if j == n {
+			j = 0
+		}
+		cross := poly2D[i][0]*poly2D[j][1] - poly2D[i][1]*poly2D[j][0]
+		areaAbsSum += math.Abs(cross)
+		if cross > polyMax {
+			hasPos = true
+		} else if cross < -polyMax {
+			hasNeg = true
+		}
+		if hasPos && hasNeg {
+			hasHalt = true
+			break
+		}
+	}
+	if !hasHalt && areaAbsSum > polyMax && (hasPos != hasNeg) {
 		return true, false, 0, 0, 0, 0, 0
 	}
 
@@ -1262,7 +1378,12 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	nXY := math.Hypot(nX, nY)
 	if nXY > 1e-9 {
 		fnX, fnY := nX/nXY, nY/nXY
-		if horizPen >= penetration-1e-4 && hx*fnX+hy*fnY > 0.999 {
+		dot := hx*fnX + hy*fnY
+		// Reject pushouts pointing strongly behind a non-flipped wall plane (overshoot from the front side).
+		if dot < -0.5 {
+			return true, false, 0, 0, 0, 0, 0
+		}
+		if horizPen >= penetration-1e-4 && dot > 0.999 {
 			return true, false, 0, 0, 0, 0, 0
 		}
 	}

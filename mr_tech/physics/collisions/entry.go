@@ -25,6 +25,13 @@ type Entry struct {
 	restTarget    float64
 	hasRestTarget bool
 	warmConsumed  bool
+	isCorner      bool
+	origNX        float64
+	origNY        float64
+	origNZ        float64
+	origAX        float64
+	origAY        float64
+	origAZ        float64
 }
 
 // NewCageEntry creates and returns a new instance of Entry initialized with default zero values.
@@ -105,6 +112,16 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace
 	s.restTarget = 0
 	s.hasRestTarget = false
 	s.warmConsumed = false
+	s.isCorner = false
+	s.origNX, s.origNY, s.origNZ = 0, 0, 0
+	s.origAX, s.origAY, s.origAZ = 0, 0, 0
+}
+
+// SetCornerOrigin records whether this entry came from a wall corner refinement and stores the unrefined triangle plane.
+func (s *Entry) SetCornerOrigin(isCorner bool, nx, ny, nz, ax, ay, az float64) {
+	s.isCorner = isCorner
+	s.origNX, s.origNY, s.origNZ = nx, ny, nz
+	s.origAX, s.origAY, s.origAZ = ax, ay, az
 }
 
 // Penetrable reports whether this entry can be penetrated or pushed, following remote cages up to depth.

@@ -111,6 +111,9 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 			})
 			return false
 		})
+		if cage.FlushStaticClamp(lAABB) {
+			moved = true
+		}
 		cage.EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ)
 		if !moved {
 			break

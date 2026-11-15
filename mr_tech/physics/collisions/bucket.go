@@ -115,6 +115,19 @@ func (b *Bucket) Count() int {
 	return b.containerCounter
 }
 
+// RemoveEntry swaps target out of the active pool while preserving all preallocated Entry buffers.
+func (b *Bucket) RemoveEntry(target *Entry) bool {
+	for i := 0; i < b.containerCounter; i++ {
+		if b.currPool[i] == target {
+			last := b.containerCounter - 1
+			b.currPool[i], b.currPool[last] = b.currPool[last], b.currPool[i]
+			b.containerCounter = last
+			return true
+		}
+	}
+	return false
+}
+
 // HasEntryFor reports whether the Bucket currently holds an active dynamic entry for entityId.
 func (b *Bucket) HasEntryFor(entityId uint64) bool {
 	for i := 0; i < b.containerCounter; i++ {

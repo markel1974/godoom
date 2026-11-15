@@ -80,7 +80,7 @@ func (c *SimpleCrosshair) Create() *config.Thing {
 	)
 	thing.OnBind = func(self config.IThingConfig) {}
 	thing.OnImpact = func(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {}
-	thing.OnCollision = func(other config.IThingConfig) {}
+	thing.OnCollision = func(other config.IThingConfig, energy float64) {}
 	thing.OnThinking = func(playerX, playerY, playerZ float64) {}
 	thing.Sprite = sprite
 	return thing

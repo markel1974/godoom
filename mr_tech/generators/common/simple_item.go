@@ -23,7 +23,7 @@ func (e *Item) OnBind(self config.IThingConfig) {
 }
 
 // OnCollision handles the collision event between the current item and another object.
-func (e *Item) OnCollision(other config.IThingConfig) {
+func (e *Item) OnCollision(other config.IThingConfig, impactEnergy float64) {
 	//otherId := "UNKNOWN"
 	//if other != nil {
 	//	otherId = other.GetId()

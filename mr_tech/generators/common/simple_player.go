@@ -26,7 +26,7 @@ func (e *Player) OnBind(self config.IThingConfig) {
 }
 
 // OnCollision handles collision events between the player and another object, identified by their configurations.
-func (e *Player) OnCollision(other config.IThingConfig) {
+func (e *Player) OnCollision(other config.IThingConfig, impactEnergy float64) {
 	//otherId := "UNKNOWN"
 	//if other != nil {
 	//	otherId = other.GetId()

@@ -109,11 +109,6 @@ func (t *Base) GetLocation() *volumes.Volume {
 	return t.location
 }
 
-// GetCage retrieves the CollisionCage instance associated with the Base, which defines its physical boundaries.
-//func (t *Base) GetCage() volumes.ICollisionCage {
-//	return t.cage
-//}
-
 // GetAngle returns the current rotation angle of the Base instance as a float64 value.
 func (t *Base) GetAngle() float64 {
 	return t.angle
@@ -347,7 +342,7 @@ func (t *Base) StageApply() {
 					}
 				}
 				entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-				t.onCollision(rCage.GetObject().(volumes.IThing))
+				t.onCollision(rCage.GetObject().(volumes.IThing), bestEnergy)
 				entity.ClearActiveContact()
 				lastCollisionId = rId
 				hasCollisionId = true
@@ -358,7 +353,7 @@ func (t *Base) StageApply() {
 				nX, nY, nZ := slot.GetNormal()
 				pX, pY, pZ := slot.GetPoint()
 				entity.SetActiveContact(nX, nY, nZ, pX, pY, pZ)
-				t.onCollision(thing)
+				t.onCollision(thing, 0)
 				entity.ClearActiveContact()
 			}
 		}

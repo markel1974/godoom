@@ -12,7 +12,7 @@ type BindFunc func(self IThingConfig)
 type ThinkingFunc func(playerX, playerY, playerZ float64)
 
 // CollisionFunc defines a function type for handling collisions with another IThingConfig entity.
-type CollisionFunc func(other IThingConfig)
+type CollisionFunc func(other IThingConfig, energy float64)
 
 // ImpactFunc defines a function type for handling the impact between two configurable entities with force and direction inputs.
 type ImpactFunc func(other IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64)

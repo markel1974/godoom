@@ -77,12 +77,12 @@ func (e *Enemy) OnBind(self config.IThingConfig) {
 }
 
 // OnCollision defines the optional behavior when this Enemy collides with another object.
-func (e *Enemy) OnCollision(other config.IThingConfig) {
+func (e *Enemy) OnCollision(other config.IThingConfig, impactEnergy float64) {
 	if e.state == EnemyStateDead {
 		return
 	}
-	selfEntity := e.self.GetEntity()
-	impactEnergy := selfEntity.ComputeKineticImpact(other.GetEntity())
+	//selfEntity := e.self.GetEntity()
+	//impactEnergy := selfEntity.ComputeKineticImpact(other.GetEntity())
 	//fmt.Println("impact energy:", impactEnergy)
 	const painfulEnergy = 10.0
 	if impactEnergy >= painfulEnergy {

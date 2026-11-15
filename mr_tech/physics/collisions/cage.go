@@ -1119,17 +1119,78 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 // refineKeepUprightWall clips a wall triangle to the upright body's Z slab and checks its scaled 2D footprint,
 // rejecting phantom infinite-plane hits outside the slab and computing smooth corner pushouts on edge/vertex hits.
 func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled bool) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
+	clipPolyZSlab := func(in *[6][3]float64, count int, out *[6][3]float64, zBound float64, keepAbove bool) int {
+		outCount := 0
+		for i := 0; i < count; i++ {
+			curr := in[i]
+			nextIdx := i + 1
+			if nextIdx == count {
+				nextIdx = 0
+			}
+			next := in[nextIdx]
+			var currIn, nextIn bool
+			if keepAbove {
+				currIn = curr[2] >= zBound
+				nextIn = next[2] >= zBound
+			} else {
+				currIn = curr[2] <= zBound
+				nextIn = next[2] <= zBound
+			}
+			if currIn {
+				out[outCount] = curr
+				outCount++
+				if !nextIn {
+					t := (zBound - curr[2]) / (next[2] - curr[2])
+					out[outCount][0] = curr[0] + t*(next[0]-curr[0])
+					out[outCount][1] = curr[1] + t*(next[1]-curr[1])
+					out[outCount][2] = zBound
+					outCount++
+				}
+			} else if nextIn {
+				t := (zBound - curr[2]) / (next[2] - curr[2])
+				out[outCount][0] = curr[0] + t*(next[0]-curr[0])
+				out[outCount][1] = curr[1] + t*(next[1]-curr[1])
+				out[outCount][2] = zBound
+				outCount++
+			}
+		}
+		return outCount
+	}
+
+	pointInConvexPoly2D := func(poly *[6][2]float64, n int) bool {
+		hasPos := false
+		hasNeg := false
+		areaAbsSum := 0.0
+		for i := 0; i < n; i++ {
+			j := i + 1
+			if j == n {
+				j = 0
+			}
+			cross := poly[i][0]*poly[j][1] - poly[i][1]*poly[j][0]
+			areaAbsSum += math.Abs(cross)
+			if cross > 1e-12 {
+				hasPos = true
+			} else if cross < -1e-12 {
+				hasNeg = true
+			}
+			if hasPos && hasNeg {
+				return false
+			}
+		}
+		// Require non-zero 2D area so degenerate vertical walls fall through to edge/face distance check.
+		return areaAbsSum > 1e-12 && (hasPos != hasNeg)
+	}
+
+	var bufA, bufB [6][3]float64
+	var poly2D [6][2]float64
+
 	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
 		return true, false, 0, 0, 0, 0, 0
 	}
-	v0x, v0y, v0z := rFace.Get0()
-	v1x, v1y, v1z := rFace.Get1()
-	v2x, v2y, v2z := rFace.Get2()
 
-	var bufA, bufB [6][3]float64
-	bufA[0][0], bufA[0][1], bufA[0][2] = v0x, v0y, v0z
-	bufA[1][0], bufA[1][1], bufA[1][2] = v1x, v1y, v1z
-	bufA[2][0], bufA[2][1], bufA[2][2] = v2x, v2y, v2z
+	bufA[0][0], bufA[0][1], bufA[0][2] = rFace.Get0()
+	bufA[1][0], bufA[1][1], bufA[1][2] = rFace.Get1()
+	bufA[2][0], bufA[2][1], bufA[2][2] = rFace.Get2()
 
 	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
 	if n < 3 {
@@ -1142,7 +1203,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 
 	invRX := 1.0 / s.eRadX
 	invRY := 1.0 / s.eRadY
-	var poly2D [6][2]float64
+
 	for i := 0; i < n; i++ {
 		poly2D[i][0] = (bufA[i][0] - s.tX) * invRX
 		poly2D[i][1] = (bufA[i][1] - s.tY) * invRY
@@ -1206,68 +1267,6 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		}
 	}
 	return true, true, hx, hy, horizPen, s.tX + qx*s.eRadX, s.tY + qy*s.eRadY
-}
-
-func clipPolyZSlab(in *[6][3]float64, count int, out *[6][3]float64, zBound float64, keepAbove bool) int {
-	outCount := 0
-	for i := 0; i < count; i++ {
-		curr := in[i]
-		nextIdx := i + 1
-		if nextIdx == count {
-			nextIdx = 0
-		}
-		next := in[nextIdx]
-		var currIn, nextIn bool
-		if keepAbove {
-			currIn = curr[2] >= zBound
-			nextIn = next[2] >= zBound
-		} else {
-			currIn = curr[2] <= zBound
-			nextIn = next[2] <= zBound
-		}
-		if currIn {
-			out[outCount] = curr
-			outCount++
-			if !nextIn {
-				t := (zBound - curr[2]) / (next[2] - curr[2])
-				out[outCount][0] = curr[0] + t*(next[0]-curr[0])
-				out[outCount][1] = curr[1] + t*(next[1]-curr[1])
-				out[outCount][2] = zBound
-				outCount++
-			}
-		} else if nextIn {
-			t := (zBound - curr[2]) / (next[2] - curr[2])
-			out[outCount][0] = curr[0] + t*(next[0]-curr[0])
-			out[outCount][1] = curr[1] + t*(next[1]-curr[1])
-			out[outCount][2] = zBound
-			outCount++
-		}
-	}
-	return outCount
-}
-
-func pointInConvexPoly2D(poly *[6][2]float64, n int) bool {
-	hasPos := false
-	hasNeg := false
-	areaAbsSum := 0.0
-	for i := 0; i < n; i++ {
-		j := i + 1
-		if j == n {
-			j = 0
-		}
-		cross := poly[i][0]*poly[j][1] - poly[i][1]*poly[j][0]
-		areaAbsSum += math.Abs(cross)
-		if cross > 1e-12 {
-			hasPos = true
-		} else if cross < -1e-12 {
-			hasNeg = true
-		}
-		if hasPos && hasNeg {
-			return false
-		}
-	}
-	// Require non-zero 2D area so degenerate vertical walls fall through to edge/face distance check.
-	return areaAbsSum > 1e-12 && (hasPos != hasNeg)
 }
 
 // growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.

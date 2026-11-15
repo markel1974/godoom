@@ -20,7 +20,6 @@ const solverJitter = 1e-6
 
 // Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
 type Things struct {
-	cageIdx           uint64
 	config            []*config.Thing
 	volumes           *Volumes
 	materials         *materials.Materials
@@ -59,7 +58,6 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		solverIterations = 10
 	}
 	e := &Things{
-		cageIdx:           0,
 		maxOverlapsWorld:  maxOverlaps,
 		maxOverlapsThings: maxOverlaps / 2,
 		solverIterations:  solverIterations,
@@ -304,13 +302,6 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) volumes.IThin
 	entity := thing.GetEntity()
 	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
 	return thing
-}
-
-// CreateCage creates and returns a new collision cage for the given thing.
-func (th *Things) CreateCage(t volumes.IThing) *collisions.Cage {
-	idx := th.cageIdx
-	th.cageIdx++
-	return collisions.NewCage(idx, t)
 }
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.

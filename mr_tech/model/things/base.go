@@ -12,8 +12,6 @@ import (
 )
 
 type IThingHandler interface {
-	CreateCage(t volumes.IThing) *collisions.Cage
-
 	GetMaterials() *materials.Materials
 
 	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
@@ -90,7 +88,8 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
 	}
 
-	t.cage = things.CreateCage(thing)
+	//TODO REIMPLEMENT!
+	t.cage = t.IVertices.GetCage().(*collisions.Cage)
 
 	return t
 }
@@ -111,9 +110,9 @@ func (t *Base) GetLocation() *volumes.Volume {
 }
 
 // GetCage retrieves the CollisionCage instance associated with the Base, which defines its physical boundaries.
-func (t *Base) GetCage() volumes.ICollisionCage {
-	return t.cage
-}
+//func (t *Base) GetCage() volumes.ICollisionCage {
+//	return t.cage
+//}
 
 // GetAngle returns the current rotation angle of the Base instance as a float64 value.
 func (t *Base) GetAngle() float64 {

@@ -11,6 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -75,6 +76,7 @@ func NewVAction(name string, start int, end int) *VAction {
 // Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
 	thing         IThing
+	cage          ICollisionCage
 	cfg           *config.Thing
 	materials     *materials.Materials
 	comp          *Vertices3DEntryComposed
@@ -115,7 +117,10 @@ type Vertices3DEntry struct {
 // It panics if required frame, action interval, or group size configuration is invalid.
 func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
 	return &Vertices3DEntry{
-		thing: thing, cfg: cfg, materials: materials,
+		cage:      collisions.NewCageSequence(thing),
+		thing:     thing,
+		cfg:       cfg,
+		materials: materials,
 	}
 }
 
@@ -225,6 +230,11 @@ func (v *Vertices3DEntry) Setup() error {
 		f.SetThing(v.thing)
 	}
 	return nil
+}
+
+// GetCage returns the collision cage associated with this 3D vertices entry.
+func (v *Vertices3DEntry) GetCage() ICollisionCage {
+	return v.cage
 }
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.

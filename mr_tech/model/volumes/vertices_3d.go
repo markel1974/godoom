@@ -8,11 +8,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
 type Vertices3D struct {
 	thing         IThing
+	cage          ICollisionCage
 	cfg           *config.Thing
 	materials     *materials.Materials
 	actions       *Vertices3DActions
@@ -38,6 +40,7 @@ type Vertices3D struct {
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
+		cage:          collisions.NewCageSequence(thing),
 		thing:         thing,
 		cfg:           cfg,
 		materials:     materials,
@@ -84,6 +87,11 @@ func (v *Vertices3D) Setup() error {
 
 	v.elements.UpdateEntityBounds()
 	return nil
+}
+
+// GetCage returns the collision cage associated with this 3D model.
+func (v *Vertices3D) GetCage() ICollisionCage {
+	return v.cage
 }
 
 // GetContainerVolume returns the composite view volume of the model, or nil if unavailable.

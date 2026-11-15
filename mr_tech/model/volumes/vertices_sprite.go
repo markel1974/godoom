@@ -5,6 +5,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -12,6 +13,7 @@ import (
 // VerticesSprite represents sprite data backed by a source volume and a view-specific volume.
 type VerticesSprite struct {
 	thing     IThing
+	cage      ICollisionCage
 	cfg       *config.Thing
 	materials *materials.Materials
 	volume    *Volume
@@ -21,6 +23,7 @@ type VerticesSprite struct {
 func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesSprite {
 	f := &VerticesSprite{
 		thing:     thing,
+		cage:      collisions.NewCageSequence(thing),
 		cfg:       cfg,
 		materials: materials,
 	}
@@ -101,6 +104,11 @@ func (v *VerticesSprite) Setup() error {
 	v.volume.SetThing(v.thing)
 
 	return nil
+}
+
+// GetCage returns the collision cage associated with the sprite vertices.
+func (v *VerticesSprite) GetCage() ICollisionCage {
+	return v.cage
 }
 
 // GetContainerVolume returns the volume associated with the vertices sprite.

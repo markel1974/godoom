@@ -2,6 +2,7 @@ package collisions
 
 import (
 	"math"
+	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -139,7 +140,14 @@ type flatWallPlane struct {
 	pX, pY, pZ float64
 }
 
-//var _counter uint64
+var _counter uint64
+
+// NewCageSequence creates a new Cage for object using the next sequence ID.
+func NewCageSequence(object IObject) *Cage {
+	c := NewCage(_counter, object)
+	atomic.AddUint64(&_counter, 1)
+	return c
+}
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
 func NewCage(id uint64, object IObject) *Cage {

@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -55,10 +56,10 @@ func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
 
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
-	thing     IThing
-	cfg       *config.Thing
-	materials *materials.Materials
-	//currentAngle  int
+	thing         IThing
+	cage          ICollisionCage
+	cfg           *config.Thing
+	materials     *materials.Materials
 	volumes       []*Volume
 	comp          *VerticeMultiSpriteComposed
 	renderMode    float64
@@ -71,6 +72,7 @@ type VerticesMultiSprite struct {
 	maxX          float64
 	maxY          float64
 	maxZ          float64
+	//currentAngle  int
 }
 
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
@@ -81,6 +83,7 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 		thing:     thing,
 		cfg:       cfg,
 		materials: materials,
+		cage:      collisions.NewCageSequence(thing),
 		volumes:   make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
@@ -90,6 +93,7 @@ func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *material
 	return f
 }
 
+// Setup initializes multi-sprite volumes, view materials, bounds, render mode, animation clamps, and composition.
 func (v *VerticesMultiSprite) Setup() error {
 	v.standingHalfH = v.cfg.Height * 0.5
 	if v.standingHalfH <= 0 && len(v.cfg.MultiSprite.Views) > 0 {
@@ -148,6 +152,11 @@ func (v *VerticesMultiSprite) Setup() error {
 	v.updateBounds()
 	v.Compile(0)
 	return nil
+}
+
+// GetCage returns the collision cage associated with the multi-sprite vertices.
+func (v *VerticesMultiSprite) GetCage() ICollisionCage {
+	return v.cage
 }
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.

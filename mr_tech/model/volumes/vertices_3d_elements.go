@@ -12,11 +12,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
+// VirtualVolume represents a virtual 3D volume used for geometric or physics computations.
 type VirtualVolume struct {
 	entity   *rigid_body.Entity
 	elements *Vertices3DElements
 }
 
+// NewVirtualVolume creates a virtual volume using the provided vertex elements and rigid body entity.
 func NewVirtualVolume(elements *Vertices3DElements, entity *rigid_body.Entity) *VirtualVolume {
 	return &VirtualVolume{
 		elements: elements,
@@ -24,6 +26,7 @@ func NewVirtualVolume(elements *Vertices3DElements, entity *rigid_body.Entity) *
 	}
 }
 
+// GetEntity returns the rigid body entity associated with the virtual volume.
 func (v *VirtualVolume) GetEntity() *rigid_body.Entity {
 	return v.entity
 }

@@ -14,8 +14,6 @@ type IThing interface {
 
 	IsEqual(other IThing) bool
 
-	GetCage() ICollisionCage
-
 	GetDistSq(pX, pY, pZ float64) float64
 
 	IsActive() bool

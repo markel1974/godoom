@@ -26,13 +26,15 @@ type IContainerVolume interface {
 type IVertices interface {
 	Setup() error
 
-	GetAABB() *aabb.AABB
-
 	Compile(uint64) bool
 
-	GetUIFaces() (*Faces, *Faces, float64, float64)
+	GetAABB() *aabb.AABB
+
+	GetCage() ICollisionCage
 
 	GetContainerVolume() IContainerVolume
+
+	GetUIFaces() (*Faces, *Faces, float64, float64)
 
 	SetAction(idx int)
 

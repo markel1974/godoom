@@ -240,104 +240,16 @@ func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay,
 	om.normalX, om.normalY, om.normalZ = sat.GetNormal()
 
 	if sat.contactAxis >= 6 {
-		om.buildEdgeManifoldAxes(sat, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
+		cx, cy, cz, cPen := sat.BuildEdgeManifoldAxes(ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
+		om.points.SetSinglePoint(cx, cy, cz, cPen)
 		return
 	}
-	om.buildFaceManifoldAxes(sat, clipA, clipB, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
-}
 
-// buildEdgeManifoldAxes computes the closest-points contact for an edge-edge OBB collision from SAT state and axes.
-func (om *OBBManifold) buildEdgeManifoldAxes(sat *Sat, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
-	axisIdx := sat.contactAxis - 6
-	i := axisIdx / 3
-	j := axisIdx % 3
-
-	nx, ny, nz := sat.nx, sat.ny, sat.nz
-	tieX, tieY, tieZ := bx-ax, by-ay, bz-az
-	ptAx, ptAy, ptAz := EdgeMidpointAnchor(ax, ay, az, aAxes, ahx, ahy, ahz, i, -nx, -ny, -nz, tieX, tieY, tieZ)
-	ptBx, ptBy, ptBz := EdgeMidpointAnchor(bx, by, bz, bAxes, bhx, bhy, bhz, j, nx, ny, nz, -tieX, -tieY, -tieZ)
-
-	uAx, uAy, uAz := aAxes.GetRow(i)
-	uBx, uBy, uBz := bAxes.GetRow(j)
-	limA := AxisHalfExtent(ahx, ahy, ahz, i)
-	limB := AxisHalfExtent(bhx, bhy, bhz, j)
-
-	k := uAx*uBx + uAy*uBy + uAz*uBz
-	rx, ry, rz := ptAx-ptBx, ptAy-ptBy, ptAz-ptBz
-	ca := uAx*rx + uAy*ry + uAz*rz
-	cb := uBx*rx + uBy*ry + uBz*rz
-	denom := 1.0 - k*k
-	var sA, sB float64
-	if denom > 1e-12 {
-		sA = (k*cb - ca) / denom
-		sB = (cb - k*ca) / denom
-	}
-	if sA < -limA {
-		sA = -limA
-		sB = ClampFloat(cb+k*sA, -limB, limB)
-	} else if sA > limA {
-		sA = limA
-		sB = ClampFloat(cb+k*sA, -limB, limB)
-	}
-	if sB < -limB {
-		sB = -limB
-		sA = ClampFloat(k*sB-ca, -limA, limA)
-	} else if sB > limB {
-		sB = limB
-		sA = ClampFloat(k*sB-ca, -limA, limA)
-	}
-
-	cx := 0.5 * (ptAx + uAx*sA + ptBx + uBx*sB)
-	cy := 0.5 * (ptAy + uAy*sA + ptBy + uBy*sB)
-	cz := 0.5 * (ptAz + uAz*sA + ptBz + uBz*sB)
-	om.points.SetSinglePoint(cx, cy, cz, sat.contactPen)
-}
-
-// buildFaceManifoldAxes constructs clipped contact points for a face-axis OBB collision from SAT state and axes.
-func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
-	var refX, refY, refZ, refHX, refHY, refHZ float64
-	var incX, incY, incZ, incHX, incHY, incHZ float64
-	var refAxes, incAxes *Axes
-	var refIdx int
-	var rnx, rny, rnz float64
-
-	if sat.contactAxis < 3 {
-		refIdx = sat.contactAxis
-		refX, refY, refZ, refHX, refHY, refHZ, refAxes = ax, ay, az, ahx, ahy, ahz, aAxes
-		incX, incY, incZ, incHX, incHY, incHZ, incAxes = bx, by, bz, bhx, bhy, bhz, bAxes
-		// SAT normal points from B to A, so outward normal of reference face A toward B is -n.
-		rnx, rny, rnz = -sat.nx, -sat.ny, -sat.nz
-	} else {
-		refIdx = sat.contactAxis - 3
-		refX, refY, refZ, refHX, refHY, refHZ, refAxes = bx, by, bz, bhx, bhy, bhz, bAxes
-		incX, incY, incZ, incHX, incHY, incHZ, incAxes = ax, ay, az, ahx, ahy, ahz, aAxes
-		// Outward normal of reference face B toward A is +n.
-		rnx, rny, rnz = sat.nx, sat.ny, sat.nz
-	}
-
-	refDepthHalf := AxisHalfExtent(refHX, refHY, refHZ, refIdx)
-	rcx := refX + rnx*refDepthHalf
-	rcy := refY + rny*refDepthHalf
-	rcz := refZ + rnz*refDepthHalf
-
-	uIdx := (refIdx + 1) % 3
-	vIdx := (refIdx + 2) % 3
-	rux, ruy, ruz := refAxes.GetRow(uIdx)
-	rvx, rvy, rvz := refAxes.GetRow(vIdx)
-	eU := AxisHalfExtent(refHX, refHY, refHZ, uIdx)
-	eV := AxisHalfExtent(refHX, refHY, refHZ, vIdx)
-
-	clipA.FillIncidentFaceQuad(incX, incY, incZ, incAxes, incHX, incHY, incHZ, rnx, rny, rnz)
-
-	// Clip against the 4 side planes bounding the reference face rectangle.
-	rcU := rcx*rux + rcy*ruy + rcz*ruz
-	rcV := rcx*rvx + rcy*rvy + rcz*rvz
-	if clipA.ClipPlane(clipB, rux, ruy, ruz, rcU+eU) == 0 || clipB.ClipPlane(clipA, -rux, -ruy, -ruz, -rcU+eU) == 0 ||
-		clipA.ClipPlane(clipB, rvx, rvy, rvz, rcV+eV) == 0 || clipB.ClipPlane(clipA, -rvx, -rvy, -rvz, -rcV+eV) == 0 {
+	rcx, rcy, rcz, rnx, rny, rnz, single := sat.BuildFaceManifoldAxes(clipA, clipB, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
+	if single {
 		om.points.SetSinglePoint(rcx, rcy, rcz, sat.contactPen)
 		return
 	}
-
 	candidatesCount := om.candidates.CollectPlaneCandidates(clipA, rcx, rcy, rcz, rnx, rny, rnz, 0.5, 0.0)
 	om.candidates.FinalizeInto(om.points, candidatesCount, rcx, rcy, rcz, sat.contactPen)
 }

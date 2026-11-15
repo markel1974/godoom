@@ -81,22 +81,8 @@ func (e *Enemy) OnCollision(other config.IThingConfig) {
 	if e.state == EnemyStateDead {
 		return
 	}
-	otherEntity := other.GetEntity()
 	selfEntity := e.self.GetEntity()
-	ovx, ovy, ovz := otherEntity.GetVelocity()
-	svx, svy, svz := selfEntity.GetVelocity()
-	otherMass := otherEntity.GetMass()
-	selfMass := selfEntity.GetMass()
-	dvx := ovx - svx
-	dvy := ovy - svy
-	dvz := ovz - svz
-	relativeSpeedSq := dvx*dvx + dvy*dvy + dvz*dvz
-	totalMass := otherMass + selfMass
-	if otherMass <= 0 || selfMass <= 0 || totalMass <= 0 {
-		return
-	}
-	reducedMass := (otherMass * selfMass) / totalMass
-	impactEnergy := 0.5 * reducedMass * relativeSpeedSq
+	impactEnergy := selfEntity.ComputeKineticImpact(other.GetEntity())
 	//fmt.Println("impact energy:", impactEnergy)
 	const painfulEnergy = 10.0
 	if impactEnergy >= painfulEnergy {

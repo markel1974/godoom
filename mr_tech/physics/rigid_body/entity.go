@@ -78,6 +78,7 @@ func (e *Entity) Rebuild(x, y, z, w, h, d float64) {
 	e.syncInertia(w, h, d)
 }
 
+// SetCentroid sets the entity centroid to the given world-space coordinates.
 func (e *Entity) SetCentroid(cx, cy, cz float64) {
 	gx, gy, gz := e.BoundingBox.GetCenter()
 	dx := cx - gx
@@ -161,6 +162,26 @@ func (e *Entity) SyncRotation() {
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	cx, cy, cz := e.getCenterOfMass()
 	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz)
+}
+
+// ComputeKineticImpact calculates the relative kinetic impact energy between this entity and another.
+// It returns 0 if either entity has non-positive mass.
+func (e *Entity) ComputeKineticImpact(otherEntity *Entity) float64 {
+	ovx, ovy, ovz := otherEntity.GetVelocity()
+	svx, svy, svz := e.GetVelocity()
+	otherMass := otherEntity.GetMass()
+	selfMass := e.GetMass()
+	dvx := ovx - svx
+	dvy := ovy - svy
+	dvz := ovz - svz
+	relativeSpeedSq := dvx*dvx + dvy*dvy + dvz*dvz
+	totalMass := otherMass + selfMass
+	if otherMass <= 0 || selfMass <= 0 || totalMass <= 0 {
+		return 0
+	}
+	reducedMass := (otherMass * selfMass) / totalMass
+	impactEnergy := 0.5 * reducedMass * relativeSpeedSq
+	return impactEnergy
 }
 
 // Update integrates linear and angular velocities, applies righting torque on Roll/Pitch, and updates the OBB quaternion.

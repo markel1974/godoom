@@ -32,6 +32,13 @@ func (e *Player) OnCollision(other config.IThingConfig) {
 	//	otherId = other.GetId()
 	//}
 	//fmt.Println("Player.OnCollision:", self.GetId(), otherId)
+	/*
+		selfEntity := e.self.GetEntity()
+		impactEnergy := selfEntity.ComputeKineticImpact(other.GetEntity())
+		if impactEnergy > 1000 {
+			fmt.Println("player high impact energy:", impactEnergy)
+		}
+	*/
 }
 
 func (e *Player) OnImpact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {

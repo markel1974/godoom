@@ -4,12 +4,16 @@ import (
 	"math"
 )
 
+// ContactPoints stores a bounded set of collision contact candidates and their aggregate penetration state.
 type ContactPoints struct {
-	data        [MaxManifoldPoints]ContactPoint
-	ptr         [MaxManifoldPoints]*ContactPoint
+	data        [MaxCandidatePoints]ContactPoint
+	ptr         [MaxCandidatePoints]*ContactPoint
 	penetration float64
+	count       int
 }
 
+// NewContactPoints creates a ContactPoints value with its internal point pointers initialized.
+// It returns an empty contact point collection ready for reuse.
 func NewContactPoints() *ContactPoints {
 	z := &ContactPoints{}
 	for i := range z.ptr {
@@ -18,32 +22,124 @@ func NewContactPoints() *ContactPoints {
 	return z
 }
 
-func (cp *ContactPoints) Shift(count int, shiftX, shiftY, shiftZ float64) {
-	for i := 0; i < count; i++ {
+// SetPenetration sets the aggregate penetration depth for the contact points.
+func (cp *ContactPoints) SetPenetration(p float64) {
+	cp.penetration = p
+}
+
+// SetCount sets the number of active contact points.
+func (cp *ContactPoints) SetCount(c int) {
+	cp.count = c
+}
+
+// GetPenetration returns the stored penetration depth for the contact points.
+func (cp *ContactPoints) GetPenetration() float64 {
+	return cp.penetration
+}
+
+// GetCount returns the number of active contact points.
+func (cp *ContactPoints) GetCount() int {
+	return cp.count
+}
+
+// Shift translates active contact points and raises any shallower penetration to the current penetration.
+func (cp *ContactPoints) Shift(shiftX, shiftY, shiftZ float64) {
+	for i := 0; i < cp.count; i++ {
 		p := cp.ptr[i]
-		p.X += shiftX
-		p.Y += shiftY
-		p.Z += shiftZ
-		if p.Penetration < cp.penetration {
-			p.Penetration = cp.penetration
+		p.x += shiftX
+		p.y += shiftY
+		p.z += shiftZ
+		if p.penetration < cp.penetration {
+			p.penetration = cp.penetration
 		}
 	}
 }
 
-func (cp *ContactPoints) Set(idx int, x, y, z, penetration float64) {
+// Finalize clamps the candidate count, records it, and moves the deepest penetration point to index 0.
+func (cp *ContactPoints) Finalize(candCount int) {
+	if candCount <= 0 {
+		cp.count = 0
+		return
+	}
+	if candCount > len(cp.ptr) {
+		candCount = len(cp.ptr)
+	}
+	deepestIdx := 0
+	for i := 1; i < candCount; i++ {
+		if cp.ptr[i].penetration > cp.ptr[deepestIdx].penetration {
+			deepestIdx = i
+		}
+	}
+	cp.count = candCount
+	if deepestIdx > 0 {
+		deepPtr := cp.ptr[deepestIdx]
+		for i := deepestIdx; i > 0; i-- {
+			cp.ptr[i] = cp.ptr[i-1]
+		}
+		cp.ptr[0] = deepPtr
+	}
+}
+
+// CopyFrom copies up to count contact points from src and updates the stored count.
+// It clamps count to the valid range for both source and destination.
+func (cp *ContactPoints) CopyFrom(src *ContactPoints, count int) {
+	if count < 0 {
+		count = 0
+	}
+	if count > len(cp.ptr) {
+		count = len(cp.ptr)
+	}
+	if count > len(src.ptr) {
+		count = len(src.ptr)
+	}
+	cp.count = count
+	for i := 0; i < count; i++ {
+		s := src.ptr[i]
+		cp.ptr[i].Set(s.x, s.y, s.z, s.penetration)
+	}
+}
+
+// SetSinglePoint sets this collection to a single contact point with the given position and penetration depth.
+func (cp *ContactPoints) SetSinglePoint(x, y, z, penetration float64) {
+	cp.count = 1
+	cp.ptr[0].Set(x, y, z, penetration)
+}
+
+// SetIndex updates the contact point at idx with the given coordinates and penetration depth.
+func (cp *ContactPoints) SetIndex(idx int, x, y, z, penetration float64) {
 	p := cp.ptr[idx]
 	p.Set(x, y, z, penetration)
 }
 
-func (cp *ContactPoints) Copy(dstIdx, srcIdx int) {
-	src := cp.ptr[srcIdx]
-	dst := cp.ptr[dstIdx]
-	dst.Set(src.X, src.Y, src.Z, src.Penetration)
+// SetPenetrationIndex updates the penetration depth of the contact point at idx.
+func (cp *ContactPoints) SetPenetrationIndex(idx int, penetration float64) {
+	p := cp.ptr[idx]
+	p.SetPenetration(penetration)
 }
 
+// GetIndex returns the x, y, z coordinates and penetration depth for the contact point at idx.
+func (cp *ContactPoints) GetIndex(idx int) (float64, float64, float64, float64) {
+	p := cp.ptr[idx]
+	return p.Get()
+}
+
+// AssignIndex copies src coordinates and penetration into the contact point at dstIdx.
+func (cp *ContactPoints) AssignIndex(dstIdx int, src *ContactPoint) {
+	dst := cp.ptr[dstIdx]
+	dst.Set(src.x, src.y, src.z, src.penetration)
+}
+
+// CopyIndex copies the contact point at srcIdx into dstIdx, including coordinates and penetration depth.
+func (cp *ContactPoints) CopyIndex(dstIdx int, srcIdx int) {
+	dst := cp.ptr[dstIdx]
+	src := cp.ptr[srcIdx]
+	dst.Set(src.x, src.y, src.z, src.penetration)
+}
+
+// CollectPlaneCandidates gathers penetrating polygon vertices projected along the plane normal as contact candidates.
+// It clamps stored depth to maxDepth when positive, removes duplicates, and returns the candidate count.
 func (cp *ContactPoints) CollectPlaneCandidates(poly *ClipPolygon, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth float64) int {
 	count := 0
-	const clipDedupSq = 1e-8
 	for i := 0; i < poly.count; i++ {
 		px, py, pz := poly.Get(i)
 		rawDepth := (planeX-px)*planeNX + (planeY-py)*planeNY + (planeZ-pz)*planeNZ
@@ -58,31 +154,18 @@ func (cp *ContactPoints) CollectPlaneCandidates(poly *ClipPolygon, planeX, plane
 		cx := px + planeNX*shift
 		cy := py + planeNY*shift
 		cz := pz + planeNZ*shift
-		duplicate := false
-		for j := 0; j < count; j++ {
-			target := cp.ptr[j]
-			if pointDistSq(cx, cy, cz, target.X, target.Y, target.Z) < clipDedupSq {
-				if depth > target.Penetration {
-					target.Penetration = depth
-				}
-				duplicate = true
-				break
-			}
-		}
-		if !duplicate && count < len(cp.data) {
-			cp.ptr[count].Set(cx, cy, cz, depth)
-			count++
-		}
+		count = cp.RemoveDuplicate(count, depth, cx, cy, cz)
 	}
 	return count
 }
 
-// ReduceManifoldPoints keeps the deepest candidate and spatially spreads the remaining manifold points.
-func (cp *ContactPoints) ReduceManifoldPoints(count int) (int, int, int, int) {
+// Reduce selects four representative contact points from the first count candidates.
+// It keeps the deepest point, then chooses remaining points to maximize spatial spread.
+func (cp *ContactPoints) Reduce(count int) (*ContactPoint, *ContactPoint, *ContactPoint, *ContactPoint) {
 	// Deepest vertex.
 	i0 := 0
 	for i := 1; i < count; i++ {
-		if cp.ptr[i].Penetration > cp.ptr[i0].Penetration {
+		if cp.ptr[i].penetration > cp.ptr[i0].penetration {
 			i0 = i
 		}
 	}
@@ -95,7 +178,7 @@ func (cp *ContactPoints) ReduceManifoldPoints(count int) (int, int, int, int) {
 		if i == i0 {
 			continue
 		}
-		if d := pointDistSq(cp.ptr[i].X, cp.ptr[i].Y, cp.ptr[i].Z, p0.X, p0.Y, p0.Z); d > maxD1 {
+		if d := pointDistSq(cp.ptr[i].x, cp.ptr[i].y, cp.ptr[i].z, p0.x, p0.y, p0.z); d > maxD1 {
 			maxD1 = d
 			i1 = i
 		}
@@ -105,12 +188,12 @@ func (cp *ContactPoints) ReduceManifoldPoints(count int) (int, int, int, int) {
 	// Largest triangle area with (p0, p1).
 	i2 := 0
 	maxArea := -1.0
-	e01x, e01y, e01z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	e01x, e01y, e01z := p1.x-p0.x, p1.y-p0.y, p1.z-p0.z
 	for i := 0; i < count; i++ {
 		if i == i0 || i == i1 {
 			continue
 		}
-		vx, vy, vz := cp.ptr[i].X-p0.X, cp.ptr[i].Y-p0.Y, cp.ptr[i].Z-p0.Z
+		vx, vy, vz := cp.ptr[i].x-p0.x, cp.ptr[i].y-p0.y, cp.ptr[i].z-p0.z
 		cx := e01y*vz - e01z*vy
 		cy := e01z*vx - e01x*vz
 		cz := e01x*vy - e01y*vx
@@ -129,9 +212,9 @@ func (cp *ContactPoints) ReduceManifoldPoints(count int) (int, int, int, int) {
 			continue
 		}
 		c := cp.ptr[i]
-		d0 := pointDistSq(c.X, c.Y, c.Z, p0.X, p0.Y, p0.Z)
-		d1 := pointDistSq(c.X, c.Y, c.Z, p1.X, p1.Y, p1.Z)
-		d2 := pointDistSq(c.X, c.Y, c.Z, p2.X, p2.Y, p2.Z)
+		d0 := pointDistSq(c.x, c.y, c.z, p0.x, p0.y, p0.z)
+		d1 := pointDistSq(c.x, c.y, c.z, p1.x, p1.y, p1.z)
+		d2 := pointDistSq(c.x, c.y, c.z, p2.x, p2.y, p2.z)
 		minD := math.Min(d0, math.Min(d1, d2))
 		if minD > maxMinD {
 			maxMinD = minD
@@ -139,9 +222,32 @@ func (cp *ContactPoints) ReduceManifoldPoints(count int) (int, int, int, int) {
 		}
 	}
 
-	return i0, i1, i2, i3
+	return cp.ptr[i0], cp.ptr[i1], cp.ptr[i2], cp.ptr[i3]
 }
 
+// RemoveDuplicate adds a contact point unless it matches an existing one, updating duplicate penetration if deeper.
+// It returns the resulting number of stored candidate contact points.
+func (cp *ContactPoints) RemoveDuplicate(count int, depth float64, cx, cy, cz float64) int {
+	const clipDedupSq = 1e-8
+	duplicate := false
+	for j := 0; j < count; j++ {
+		ptr := cp.ptr[j]
+		if pointDistSq(cx, cy, cz, ptr.x, ptr.y, ptr.z) < clipDedupSq {
+			if depth > ptr.penetration {
+				ptr.penetration = depth
+			}
+			duplicate = true
+			break
+		}
+	}
+	if !duplicate && count < len(cp.ptr) {
+		cp.ptr[count].Set(cx, cy, cz, depth)
+		count++
+	}
+	return count
+}
+
+// Len returns the fixed storage capacity for contact points.
 func (cp *ContactPoints) Len() int {
 	return len(cp.data)
 }

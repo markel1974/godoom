@@ -10,12 +10,10 @@ const MaxCandidatePoints = 8
 // It includes collision state, contact normal, penetration or gap, and generated contact points.
 type OBBManifold struct {
 	Hit                       bool
-	Penetration               float64
 	Gap                       float64
 	NormalX, NormalY, NormalZ float64
-	Count                     int
-	Points                    [MaxManifoldPoints]ContactPoint
-	candidates                [MaxCandidatePoints]ContactPoint
+	Points                    *ContactPoints
+	candidates                *ContactPoints
 	sat                       *Sat
 	clipA                     *ClipPolygon
 	clipB                     *ClipPolygon
@@ -28,13 +26,15 @@ type OBBManifold struct {
 // NewOBBManifold creates a reusable OBB contact manifold with initialized SAT scratch state.
 func NewOBBManifold() *OBBManifold {
 	return &OBBManifold{
-		sat:      NewSat(),
-		clipA:    NewClipPolygon(),
-		clipB:    NewClipPolygon(),
-		qInterpA: NewQuaternionEmpty(),
-		qInterpB: NewQuaternionEmpty(),
-		axesA:    NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
-		axesB:    NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
+		sat:        NewSat(),
+		Points:     NewContactPoints(),
+		candidates: NewContactPoints(),
+		clipA:      NewClipPolygon(),
+		clipB:      NewClipPolygon(),
+		qInterpA:   NewQuaternionEmpty(),
+		qInterpB:   NewQuaternionEmpty(),
+		axesA:      NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
+		axesB:      NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 	}
 }
 
@@ -48,10 +48,12 @@ func (om *OBBManifold) ComputeAtOffset(self *BoundingBox, other *BoundingBox, of
 	om.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, self.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
 	if !om.sat.hit {
 		om.Hit = false
-		om.Penetration = 0.0
 		om.Gap = om.sat.maxGap
 		om.NormalX, om.NormalY, om.NormalZ = om.sat.GetNormal()
-		om.Count = 0
+		om.Points.SetPenetration(0)
+		om.Points.SetCount(0)
+		//om.Penetration = 0.0
+		//om.Count = 0
 		return
 	}
 
@@ -98,20 +100,20 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 	}
 
 	missHit := om.Hit
-	missPen := om.Penetration
 	missGap := om.Gap
 	missNX, missNY, missNZ := om.NormalX, om.NormalY, om.NormalZ
-	missCount := om.Count
+	missPen := om.Points.GetPenetration()
+	missCount := om.Points.GetCount()
 
 	if toi, ok := om.findSweptImpact(om.sat, om.clipA, om.clipB, self, other, dAX, dAY, dAZ, dBX, dBY, dBZ, offX, offY, offZ, rotBound); ok {
 		return toi
 	}
 
 	om.Hit = missHit
-	om.Penetration = missPen
 	om.Gap = missGap
 	om.NormalX, om.NormalY, om.NormalZ = missNX, missNY, missNZ
-	om.Count = missCount
+	om.Points.SetPenetration(missPen)
+	om.Points.SetCount(missCount)
 	return 1.0
 }
 
@@ -182,40 +184,45 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 	} else {
 		om.Hit = true
 		om.NormalX, om.NormalY, om.NormalZ = sat.gx, sat.gy, sat.gz
-		om.Penetration = math.Max(1e-4, -sat.maxGap)
+		om.Points.SetPenetration(math.Max(1e-4, -sat.maxGap))
 		om.Gap = 0.0
 		sx, sy, sz := om.axesA.ComputeStabilizedContactPoint(axT, ayT, azT, -om.NormalX, -om.NormalY, -om.NormalZ, scx, scy, scz)
-		om.setSinglePoint(sx, sy, sz, om.Penetration)
+		om.Points.SetSinglePoint(sx, sy, sz, om.Points.GetPenetration())
+		//om.setSinglePoint(sx, sy, sz, om.Penetration)
 	}
 
 	remT := 1.0 - t
 	linAdv := math.Max(0.0, offX*om.NormalX+offY*om.NormalY+offZ*om.NormalZ) * remT
 	angAdv := rotBound * remT * 0.5
-	if advPen := linAdv + angAdv; advPen > om.Penetration {
-		om.Penetration = advPen
+	if advPen := linAdv + angAdv; advPen > om.Points.GetPenetration() {
+		om.Points.SetPenetration(advPen)
 	}
 	shiftX := 0.5 * remT * (dAX + dBX)
 	shiftY := 0.5 * remT * (dAY + dBY)
 	shiftZ := 0.5 * remT * (dAZ + dBZ)
-	for i := 0; i < om.Count; i++ {
-		p := &om.Points[i]
-		p.X += shiftX
-		p.Y += shiftY
-		p.Z += shiftZ
-		if p.Penetration < om.Penetration {
-			p.Penetration = om.Penetration
+	om.Points.Shift(shiftX, shiftY, shiftZ)
+	/*
+		for i := 0; i < om.Count; i++ {
+			p := &om.Points[i]
+			p.X += shiftX
+			p.Y += shiftY
+			p.Z += shiftZ
+			if p.Penetration < om.Penetration {
+				p.Penetration = om.Penetration
+			}
 		}
-	}
+
+	*/
 	return t, true
 }
 
 // buildFromSat populates the manifold from a successful SAT result and builds edge or face contacts.
 func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
 	om.Hit = true
-	om.Penetration = sat.contactPen
+	om.Points.SetPenetration(sat.contactPen)
+	om.Points.SetCount(0)
 	om.Gap = 0.0
 	om.NormalX, om.NormalY, om.NormalZ = sat.GetNormal()
-	om.Count = 0
 
 	if sat.contactAxis >= 6 {
 		om.buildEdgeManifoldAxes(sat, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
@@ -224,24 +231,8 @@ func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay,
 	om.buildFaceManifoldAxes(sat, clipA, clipB, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
 }
 
-// setSinglePoint resets the manifold to one contact point with the given position and penetration depth.
-func (om *OBBManifold) setSinglePoint(x, y, z, penetration float64) {
-	om.Count = 1
-	om.Points[0].Set(x, y, z, penetration)
-}
-
-// copyCandidateToPoint copies a candidate contact point into the manifold point at the given indices.
-func (om *OBBManifold) copyCandidateToPoint(dstIdx, srcIdx int) {
-	c := &om.candidates[srcIdx]
-	om.Points[dstIdx].Set(c.X, c.Y, c.Z, c.Penetration)
-}
-
 // buildEdgeManifoldAxes computes the closest-points contact for an edge-edge OBB collision from SAT state and axes.
-func (om *OBBManifold) buildEdgeManifoldAxes(
-	sat *Sat,
-	ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64,
-	bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64,
-) {
+func (om *OBBManifold) buildEdgeManifoldAxes(sat *Sat, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
 	axisIdx := sat.contactAxis - 6
 	i := axisIdx / 3
 	j := axisIdx % 3
@@ -284,7 +275,7 @@ func (om *OBBManifold) buildEdgeManifoldAxes(
 	cx := 0.5 * (ptAx + uAx*sA + ptBx + uBx*sB)
 	cy := 0.5 * (ptAy + uAy*sA + ptBy + uBy*sB)
 	cz := 0.5 * (ptAz + uAz*sA + ptBz + uBz*sB)
-	om.setSinglePoint(cx, cy, cz, sat.contactPen)
+	om.Points.SetSinglePoint(cx, cy, cz, sat.contactPen)
 }
 
 // buildFaceManifoldAxes constructs clipped contact points for a face-axis OBB collision from SAT state and axes.
@@ -328,7 +319,8 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	rcV := rcx*rvx + rcy*rvy + rcz*rvz
 	if clipA.ClipPlane(clipB, rux, ruy, ruz, rcU+eU) == 0 || clipB.ClipPlane(clipA, -rux, -ruy, -ruz, -rcU+eU) == 0 ||
 		clipA.ClipPlane(clipB, rvx, rvy, rvz, rcV+eV) == 0 || clipB.ClipPlane(clipA, -rvx, -rvy, -rvz, -rcV+eV) == 0 {
-		om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
+		om.Points.SetSinglePoint(rcx, rcy, rcz, sat.contactPen)
+		//om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
 		return
 	}
 
@@ -342,7 +334,7 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ float64, nx, ny, nz float64, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z float64, maxPen float64) bool {
 	om.Hit = true
 	om.NormalX, om.NormalY, om.NormalZ = nx, ny, nz
-	om.Penetration = maxPen
+	om.Points.SetPenetration(maxPen)
 	om.Gap = 0.0
 
 	px, py, pz := self.center.Get()
@@ -363,155 +355,42 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 	if !om.clipA.ClipEdgeHalfSpace(om.clipB, v0x, v0y, v0z, v1x, v1y, v1z, effNX, effNY, effNZ) ||
 		!om.clipB.ClipEdgeHalfSpace(om.clipA, v1x, v1y, v1z, v2x, v2y, v2z, effNX, effNY, effNZ) ||
 		!om.clipA.ClipEdgeHalfSpace(om.clipB, v2x, v2y, v2z, v0x, v0y, v0z, effNX, effNY, effNZ) {
-		om.Count = 0
+		om.Points.SetCount(0)
 		return false
 	}
 
-	candCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, maxPen)
-	if candCount == 0 {
-		om.Count = 0
+	candidatesCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, maxPen)
+	if candidatesCount == 0 {
+		om.Points.SetCount(0)
 		return false
 	}
-	om.finalizePlaneCandidates(candCount, v0x, v0y, v0z, maxPen)
-	return om.Count > 0
+	om.finalizePlaneCandidates(candidatesCount, v0x, v0y, v0z, maxPen)
+	return om.Points.GetCount() > 0
 }
 
 // collectPlaneCandidates projects clipped polygon vertices onto plane (planeX/Y/Z, planeNX/Y/Z) with depth > 0 into om.candidates.
 func (om *OBBManifold) collectPlaneCandidates(poly *ClipPolygon, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth float64) int {
-	candidates := &om.candidates
-	candCount := 0
-	const clipDedupSq = 1e-8
-	for i := 0; i < poly.count; i++ {
-		px, py, pz := poly.Get(i)
-		rawDepth := (planeX-px)*planeNX + (planeY-py)*planeNY + (planeZ-pz)*planeNZ
-		if rawDepth <= 0.0 {
-			continue
-		}
-		depth := rawDepth
-		if maxDepth > 0.0 && depth > maxDepth {
-			depth = maxDepth
-		}
-		shift := shiftScale * rawDepth
-		cx := px + planeNX*shift
-		cy := py + planeNY*shift
-		cz := pz + planeNZ*shift
-		duplicate := false
-		for j := 0; j < candCount; j++ {
-			if pointDistSq(cx, cy, cz, candidates[j].X, candidates[j].Y, candidates[j].Z) < clipDedupSq {
-				if depth > candidates[j].Penetration {
-					candidates[j].Penetration = depth
-				}
-				duplicate = true
-				break
-			}
-		}
-		if !duplicate && candCount < len(candidates) {
-			candidates[candCount].Set(cx, cy, cz, depth)
-			candCount++
-		}
-	}
-	return candCount
+	candidatesCount := om.candidates.CollectPlaneCandidates(poly, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth)
+	return candidatesCount
 }
 
 // finalizePlaneCandidates reduces candCount candidate contact points to at most MaxManifoldPoints or falls back to a single point.
-func (om *OBBManifold) finalizePlaneCandidates(candCount int, fallbackX, fallbackY, fallbackZ, fallbackPen float64) {
-	if candCount == 0 {
-		om.setSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
+func (om *OBBManifold) finalizePlaneCandidates(candidatesCount int, fallbackX, fallbackY, fallbackZ, fallbackPen float64) {
+	if candidatesCount == 0 {
+		om.Points.SetSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
 		return
 	}
-
-	if candCount <= MaxManifoldPoints {
-		deepestIdx := 0
-		for i := 1; i < candCount; i++ {
-			if om.candidates[i].Penetration > om.candidates[deepestIdx].Penetration {
-				deepestIdx = i
-			}
-		}
-		om.Count = candCount
-		om.copyCandidateToPoint(0, deepestIdx)
-		dst := 1
-		for i := 0; i < candCount; i++ {
-			if i == deepestIdx {
-				continue
-			}
-			om.copyCandidateToPoint(dst, i)
-			dst++
-		}
+	if candidatesCount <= MaxManifoldPoints {
+		om.candidates.Finalize(candidatesCount)
+		om.Points.CopyFrom(om.candidates, candidatesCount)
 		return
 	}
-
-	om.reduceManifoldPoints(candCount)
-}
-
-// reduceManifoldPoints keeps the deepest candidate and spatially spreads the remaining manifold points.
-func (om *OBBManifold) reduceManifoldPoints(candCount int) {
-	cands := &om.candidates
-
-	// Deepest vertex.
-	i0 := 0
-	for i := 1; i < candCount; i++ {
-		if cands[i].Penetration > cands[i0].Penetration {
-			i0 = i
-		}
-	}
-	p0 := &cands[i0]
-
-	// Farthest from p0.
-	i1 := 0
-	maxD1 := -1.0
-	for i := 0; i < candCount; i++ {
-		if i == i0 {
-			continue
-		}
-		if d := pointDistSq(cands[i].X, cands[i].Y, cands[i].Z, p0.X, p0.Y, p0.Z); d > maxD1 {
-			maxD1 = d
-			i1 = i
-		}
-	}
-	p1 := &cands[i1]
-
-	// Largest triangle area with (p0, p1).
-	i2 := 0
-	maxArea := -1.0
-	e01x, e01y, e01z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-	for i := 0; i < candCount; i++ {
-		if i == i0 || i == i1 {
-			continue
-		}
-		vx, vy, vz := cands[i].X-p0.X, cands[i].Y-p0.Y, cands[i].Z-p0.Z
-		cx := e01y*vz - e01z*vy
-		cy := e01z*vx - e01x*vz
-		cz := e01x*vy - e01y*vx
-		if areaSq := cx*cx + cy*cy + cz*cz; areaSq > maxArea {
-			maxArea = areaSq
-			i2 = i
-		}
-	}
-	p2 := &cands[i2]
-
-	// Widest spread from existing triangle {p0, p1, p2}.
-	i3 := 0
-	maxMinD := -1.0
-	for i := 0; i < candCount; i++ {
-		if i == i0 || i == i1 || i == i2 {
-			continue
-		}
-		c := &cands[i]
-		d0 := pointDistSq(c.X, c.Y, c.Z, p0.X, p0.Y, p0.Z)
-		d1 := pointDistSq(c.X, c.Y, c.Z, p1.X, p1.Y, p1.Z)
-		d2 := pointDistSq(c.X, c.Y, c.Z, p2.X, p2.Y, p2.Z)
-		minD := math.Min(d0, math.Min(d1, d2))
-		if minD > maxMinD {
-			maxMinD = minD
-			i3 = i
-		}
-	}
-
-	om.Count = MaxManifoldPoints
-	om.copyCandidateToPoint(0, i0)
-	om.copyCandidateToPoint(1, i1)
-	om.copyCandidateToPoint(2, i2)
-	om.copyCandidateToPoint(3, i3)
+	i0, i1, i2, i3 := om.candidates.Reduce(candidatesCount)
+	om.Points.SetCount(MaxManifoldPoints)
+	om.Points.AssignIndex(0, i0)
+	om.Points.AssignIndex(1, i1)
+	om.Points.AssignIndex(2, i2)
+	om.Points.AssignIndex(3, i3)
 }
 
 // edgeMidpointAnchor returns an anchor point at the midpoint of a box edge selected by skipIdx and direction.

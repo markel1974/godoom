@@ -389,12 +389,13 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 		v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z,
 		fc.pen,
 	) {
-		for pi := 0; pi < s.manifold.Count; pi++ {
-			pt := &s.manifold.Points[pi]
-			if pt.Penetration <= 0 {
+		for pi := 0; pi < s.manifold.Points.GetCount(); pi++ {
+			ptX, ptY, ptZ, ptPen := s.manifold.Points.GetIndex(pi)
+			//pt := &s.manifold.Points[pi]
+			if ptPen <= 0 {
 				continue
 			}
-			s.addToBucket(fc.bucket, nil, rFace, -pt.Penetration, pt.Penetration, fc.nX, fc.nY, fc.nZ, pt.X, pt.Y, pt.Z, fc.maxZ, ImpactInelastic)
+			s.addToBucket(fc.bucket, nil, rFace, -ptPen, ptPen, fc.nX, fc.nY, fc.nZ, ptX, ptY, ptZ, fc.maxZ, ImpactInelastic)
 		}
 		return
 	}
@@ -535,14 +536,16 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		return
 	}
 
-	dist := -m.Penetration
+	penetration := m.Points.GetPenetration()
+	count := m.Points.GetCount()
+	dist := -penetration
 	if b == BucketFloor && m.NormalZ >= floorNormalThreshold && dist <= floorGroundTolerance {
 		s.hasFloor = true
 	} else if b == BucketCeiling && m.NormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance {
 		rCage.hasFloor = true
 	}
 
-	if m.Penetration <= 0 || m.Count == 0 {
+	if penetration <= 0 || count == 0 {
 		return
 	}
 
@@ -562,16 +565,16 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		}
 	}
 
-	for pi := 0; pi < m.Count; pi++ {
-		pt := &m.Points[pi]
-		if pt.Penetration <= 0 {
+	for pi := 0; pi < count; pi++ {
+		ptX, ptY, ptZ, ptPen := m.Points.GetIndex(pi)
+		if ptPen <= 0 {
 			continue
 		}
-		ptDist := -pt.Penetration
-		s.addToBucket(b, rCage, rFace, ptDist, pt.Penetration, m.NormalX, m.NormalY, m.NormalZ, pt.X, pt.Y, pt.Z, rMaxZ, iMode)
+		ptDist := -ptPen
+		s.addToBucket(b, rCage, rFace, ptDist, ptPen, m.NormalX, m.NormalY, m.NormalZ, ptX, ptY, ptZ, rMaxZ, iMode)
 		if iMode == ImpactElastic {
 			oppB := b.Opposite()
-			rCage.addToBucket(oppB, s, recipFace, ptDist, pt.Penetration, -m.NormalX, -m.NormalY, -m.NormalZ, pt.X, pt.Y, pt.Z, lMaxZ, ImpactElastic)
+			rCage.addToBucket(oppB, s, recipFace, ptDist, ptPen, -m.NormalX, -m.NormalY, -m.NormalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
 			if oppB == BucketFloor {
 				rCage.hasFloor = true
 			}

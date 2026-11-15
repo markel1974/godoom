@@ -1,15 +1,25 @@
 package aabb
 
-// ContactPoint represents a single contact vertex and its penetration depth in world space.
+// ContactPoint represents a collision contact position and its penetration depth.
 type ContactPoint struct {
-	X, Y, Z     float64
-	Penetration float64
+	x, y, z     float64
+	penetration float64
 }
 
-// Set updates all coordinates and the penetration depth of this contact point in-place.
+// Set updates the contact point coordinates and penetration depth.
 func (cp *ContactPoint) Set(x, y, z, penetration float64) {
-	cp.X = x
-	cp.Y = y
-	cp.Z = z
-	cp.Penetration = penetration
+	cp.x = x
+	cp.y = y
+	cp.z = z
+	cp.penetration = penetration
+}
+
+// SetPenetration sets the contact point's penetration depth.
+func (cp *ContactPoint) SetPenetration(penetration float64) {
+	cp.penetration = penetration
+}
+
+// Get returns the x, y, z coordinates and penetration depth.
+func (cp *ContactPoint) Get() (float64, float64, float64, float64) {
+	return cp.x, cp.y, cp.z, cp.penetration
 }

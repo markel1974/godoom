@@ -130,6 +130,7 @@ type Cage struct {
 	flatWallsLen        int
 	clampCorners        [16]IFace
 	clampCornersLen     int
+	pendingStepZ        float64
 	solverIdx           int
 }
 
@@ -252,6 +253,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 
 	//clear(s.seen)
 	s.maxStep = maxStep
+	s.pendingStepZ = 0
 }
 
 // AddFace adds a pair of faces (rFace and lFace) to the Cage, resizing the internal slice if needed.[cite: 6]
@@ -341,12 +343,13 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 			}
 		}
 
-		if fc.bucket.IsWall() && iMode == ImpactInelastic {
-			if fc.cornerHit {
+		if fc.bucket.IsWall() {
+			if fc.cornerHit || iMode == ImpactStep {
 				if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 					continue
 				}
-			} else {
+			}
+			if !fc.cornerHit && iMode == ImpactInelastic {
 				s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 				s.pruneCoplanarCornerHits(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 			}
@@ -356,7 +359,7 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 			s.addStaticTriangleManifold(rFace, &fc)
 		} else {
 			px, py, pz := s.projectStabilizedStaticContact(&fc)
-			if entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode); entry != nil && fc.cornerHit && iMode == ImpactInelastic {
+			if entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode); entry != nil && (fc.cornerHit || iMode == ImpactStep) {
 				entry.SetCornerOrigin(true, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 			}
 		}
@@ -963,6 +966,29 @@ func (s *Cage) SetApplied() {
 	s.appliedX, s.appliedY, s.appliedZ = lEnt.GetCenter()
 }
 
+// SetPendingStepZ stores a pending vertical step-up candidate computed in StageApply.
+func (s *Cage) SetPendingStepZ(stepZ float64) {
+	s.pendingStepZ = stepZ
+}
+
+// ConsumePendingStepZ returns and clears any pending vertical step-up candidate.
+func (s *Cage) ConsumePendingStepZ() float64 {
+	v := s.pendingStepZ
+	s.pendingStepZ = 0
+	return v
+}
+
+// GetStaticClampState returns the current static clamp baseline coordinates and floor flag.
+func (s *Cage) GetStaticClampState() (float64, float64, float64, bool) {
+	return s.clampX, s.clampY, s.clampZ, s.hasFloor
+}
+
+// RestoreStaticClampState restores the static clamp baseline coordinates and floor flag.
+func (s *Cage) RestoreStaticClampState(cx, cy, cz float64, hasFloor bool) {
+	s.clampX, s.clampY, s.clampZ = cx, cy, cz
+	s.hasFloor = hasFloor
+}
+
 // GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.[cite: 6]
 func (s *Cage) GetPushOffset() (float64, float64, float64) {
 	lEnt := s.object.GetEntity()
@@ -1296,34 +1322,56 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	if bestSq3D >= 1.0-1e-9 && !tunneled {
 		return false, false, 0, 0, 0, 0, 0
 	}
-	if !tunneled && bestSq3D > 1e-12 && bestSq3D < 1.0-1e-9 {
-		rMinZ := math.Min(bufA[0][2], math.Min(bufA[1][2], bufA[2][2]))
-		rMaxZ := math.Max(bufA[0][2], math.Max(bufA[1][2], bufA[2][2]))
-		if rMinZ > s.tZ || rMaxZ < s.tZ {
-			rZ := math.Sqrt(math.Max(0.0, 1.0-qz3*qz3))
-			qXY3 := math.Hypot(qx3, qy3)
-			if qXY3 > 1e-6 && rZ > qXY3 {
-				scaleH := rZ/qXY3 - 1.0
-				dxH := -qx3 * scaleH * s.eRadX
-				dyH := -qy3 * scaleH * s.eRadY
-				horizPen3D := math.Hypot(dxH, dyH)
-				if horizPen3D <= 1e-12 {
-					return false, false, 0, 0, 0, 0, 0
-				}
-				hx := dxH / horizPen3D
-				hy := dyH / horizPen3D
-				dot := 1.0
-				if nXY := math.Hypot(nX, nY); nXY > 1e-9 {
-					dot = hx*(nX/nXY) + hy*(nY/nXY)
-				}
-				if dot >= -0.5 {
-					if horizPen3D >= penetration*1.5 && dot > 0.7 {
-						return true, false, 0, 0, 0, 0, 0
-					}
-					return true, true, hx, hy, horizPen3D, s.tX + qx3*s.eRadX, s.tY + qy3*s.eRadY
-				}
-			}
+	_, _, rNZ := rFace.GetNormal()
+	rMinZ := math.Min(bufA[0][2], math.Min(bufA[1][2], bufA[2][2]))
+	rMaxZ := math.Max(bufA[0][2], math.Max(bufA[1][2], bufA[2][2]))
+	isTiltedOrCap := rMinZ > s.tZ || rMaxZ < s.tZ || math.Abs(rNZ) > 1e-3
+	if !tunneled && (isTiltedOrCap || bestSq3D < 1.0-1e-9) {
+		if bestSq3D <= 1e-12 {
+			return true, false, 0, 0, 0, 0, 0
 		}
+		rZ := math.Sqrt(math.Max(0.0, 1.0-qz3*qz3))
+		qXY3 := math.Hypot(qx3, qy3)
+		if qXY3 <= 1e-6 || rZ <= qXY3 {
+			return true, false, 0, 0, 0, 0, 0
+		}
+		scaleH := rZ/qXY3 - 1.0
+		dxH := -qx3 * scaleH * s.eRadX
+		dyH := -qy3 * scaleH * s.eRadY
+		horizPen3D := math.Hypot(dxH, dyH)
+		if horizPen3D <= 1e-12 {
+			return false, false, 0, 0, 0, 0, 0
+		}
+		hx := dxH / horizPen3D
+		hy := dyH / horizPen3D
+		dot := 1.0
+		if nXY := math.Hypot(nX, nY); nXY > 1e-9 {
+			dot = hx*(nX/nXY) + hy*(nY/nXY)
+		}
+		if dot < -0.5 {
+			return true, false, 0, 0, 0, 0, 0
+		}
+		if horizPen3D >= penetration-1e-4 && dot > 0.999 {
+			return true, false, 0, 0, 0, 0, 0
+		}
+		if isTiltedOrCap && horizPen3D >= penetration*1.5 && dot > 0.7 {
+			return true, false, 0, 0, 0, 0, 0
+		}
+		return true, true, hx, hy, horizPen3D, s.tX + qx3*s.eRadX, s.tY + qy3*s.eRadY
+	}
+	if tunneled && isTiltedOrCap {
+		midX := 0.5 * (s.cX + s.tX)
+		midY := 0.5 * (s.cY + s.tY)
+		midZ := 0.5 * (s.cZ + s.tZ)
+		mx3, my3, mz3, _ := closestPointOnTriangleZero(
+			(bufA[0][0]-midX)*invRX, (bufA[0][1]-midY)*invRY, (bufA[0][2]-midZ)*invRZ,
+			(bufA[1][0]-midX)*invRX, (bufA[1][1]-midY)*invRY, (bufA[1][2]-midZ)*invRZ,
+			(bufA[2][0]-midX)*invRX, (bufA[2][1]-midY)*invRY, (bufA[2][2]-midZ)*invRZ,
+		)
+		if mx3*mx3+my3*my3+mz3*mz3 >= 1.0-1e-9 {
+			return false, false, 0, 0, 0, 0, 0
+		}
+		return true, false, 0, 0, 0, 0, 0
 	}
 
 	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
@@ -1428,8 +1476,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	return true, true, hx, hy, horizPen, s.tX + qx*s.eRadX, s.tY + qy*s.eRadY
 }
 
-// closestPointOnSegmentZero returns the point on segment AB closest to the origin.
-// closestPointOnSegmentZero returns A when the segment is degenerate.
+// closestPointOnSegmentZero returns the point on segment AB closest to the origin, returns A when the segment is degenerate.
 func closestPointOnSegmentZero(ax, ay, az, bx, by, bz float64) (float64, float64, float64) {
 	abx, aby, abz := bx-ax, by-ay, bz-az
 	denom := abx*abx + aby*aby + abz*abz

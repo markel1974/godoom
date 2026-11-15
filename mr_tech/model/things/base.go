@@ -309,6 +309,7 @@ func (t *Base) StageApply() {
 
 	var lastCollisionId uint64
 	hasCollisionId := false
+	stepZ := 0.0
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 		switch slot.GetImpactMode() {
@@ -316,8 +317,8 @@ func (t *Base) StageApply() {
 			_, _, tz := t.cage.GetT()
 			_, _, rz := t.cage.GetRad()
 			_, _, pz := t.cage.GetPushOffset()
-			if stepZ := slot.GetMaxZ() - (tz - rz + pz); stepZ > 0 {
-				entity.AddTo(0, 0, stepZ)
+			if cand := slot.GetMaxZ() - (tz - rz + pz + stepZ); cand > 0 {
+				stepZ += cand
 			}
 		case collisions.ImpactElastic:
 			rCage := slot.GetRCage()
@@ -334,6 +335,10 @@ func (t *Base) StageApply() {
 			}
 		}
 	}
+	if t.maxStep > 0 && stepZ > t.maxStep {
+		stepZ = t.maxStep
+	}
+	t.cage.SetPendingStepZ(stepZ)
 }
 
 // StageResolvePosition performs one Gauss-Seidel positional push-out sweep across this entity's active contacts.

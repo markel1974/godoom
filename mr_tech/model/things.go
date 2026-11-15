@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -358,6 +359,31 @@ func (th *Things) StageCommit() {
 
 }
 
+// applySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
+// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
+func (th *Things) applySafeStepUp(cage *collisions.Cage, stepZ float64) {
+	ent := cage.GetEntity()
+	preX, preY, preZ := ent.GetCenter()
+	preVX, preVY, preVZ := ent.GetVelocity()
+	origCX, origCY, origCZ, origHasFloor := cage.GetStaticClampState()
+
+	cage.RestoreStaticClampState(preX, preY, preZ, origHasFloor)
+	ent.AddTo(0, 0, stepZ)
+	th.volumes.ClampStaticCage(cage)
+	postX, postY, postZ := ent.GetCenter()
+
+	dzAfter := postZ - preZ
+	dXY := math.Hypot(postX-preX, postY-preY)
+	if dzAfter < stepZ-0.25 || dXY > 2.0 {
+		ent.AddTo(preX-postX, preY-postY, preZ-postZ)
+		ent.SetV(preVX, preVY, preVZ)
+		cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
+		return
+	}
+	ent.SetV(preVX, preVY, preVZ)
+	cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
+}
+
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	th.session++
@@ -456,6 +482,10 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	for x := 0; x < runningLen; x++ {
 		t2 := th.running[x]
 		t2.StageApply()
+		cage := t2.GetCage().(*collisions.Cage)
+		if stepZ := cage.ConsumePendingStepZ(); stepZ > 0 {
+			th.applySafeStepUp(cage, stepZ)
+		}
 	}
 
 	// Positional relaxation sweep coupled with per-iteration static world clamping so pushed bodies

@@ -341,13 +341,7 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 // ComputeStaticTriangle clips the incident face of OBB self (shifted by offX, offY, offZ) against the static triangle
 // (v0, v1, v2) with plane normal (nx, ny, nz) pointing toward self, retaining up to MaxManifoldPoints contact points.
 // It reports whether clipping produced at least one penetrating contact point.
-func (om *OBBManifold) ComputeStaticTriangle(
-	self *BoundingBox,
-	offX, offY, offZ float64,
-	nx, ny, nz float64,
-	v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z float64,
-	maxPen float64,
-) bool {
+func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ float64, nx, ny, nz float64, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z float64, maxPen float64) bool {
 	om.Hit = true
 	om.NormalX, om.NormalY, om.NormalZ = nx, ny, nz
 	om.Penetration = maxPen

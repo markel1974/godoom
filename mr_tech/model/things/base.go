@@ -19,10 +19,6 @@ type IThingHandler interface {
 	CreateThrowable(t volumes.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
 }
 
-type IVolumeHandler interface {
-	QueryPoint(px, py, pz float64) (*volumes.Volume, *volumes.Face)
-}
-
 // Base represents the fundamental attributes and behaviors of an object in the system.
 type Base struct {
 	volumes.IVertices

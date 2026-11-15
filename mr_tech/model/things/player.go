@@ -1,7 +1,6 @@
 package things
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -25,7 +24,7 @@ type Player struct {
 	flash          *Flash
 	visible        bool
 	debug          bool
-	volumes        IVolumeHandler
+	vol            *volumes.Volume
 	things         IThingHandler
 	cfg            *config.Player
 	wasGrounded    bool
@@ -36,11 +35,11 @@ type Player struct {
 // NewPlayer creates and initializes a new Player entity using the provided configuration, world, and things.
 // It ensures the player is placed in a valid sector and properly configures position, angle, and other properties.
 // Returns the initialized Player or an error if the player's sector is not found or configuration fails.
-func NewPlayer(volumes IVolumeHandler, things IThingHandler, c *config.Player, debug bool) *Player {
+func NewPlayer(things IThingHandler, c *config.Player, vol *volumes.Volume, debug bool) *Player {
 	player := &Player{
-		volumes:        volumes,
 		things:         things,
 		cfg:            c,
+		vol:            vol,
 		pitch:          0,
 		pitchState:     0,
 		bobbing:        NewBobbing(c.Bobbing),
@@ -57,11 +56,7 @@ func NewPlayer(volumes IVolumeHandler, things IThingHandler, c *config.Player, d
 
 // Setup initializes the Player instance and prepares it for operation, returning an error if initialization fails.
 func (pr *Player) Setup() error {
-	location, _ := pr.volumes.QueryPoint(pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
-	if location == nil {
-		return fmt.Errorf("can't find 3d player location at X: %f Y: %f Z: %f\n", pr.cfg.Position.X, pr.cfg.Position.Y, pr.cfg.Position.Z)
-	}
-	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, location)
+	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, pr.vol)
 	pr.cfg.Thing.OnBind(pr)
 	entity := pr.GetEntity()
 	entity.SetKeepUpright(true)

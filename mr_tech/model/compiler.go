@@ -101,7 +101,12 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 	fmt.Printf("things initialized in %s \n", time.Since(now))
 
-	r.player = things.NewPlayer(r.volumes, r.things, cfg.Player, false)
+	pX, pY, pZ := cfg.Player.Position.X, cfg.Player.Position.Y, cfg.Player.Position.Z
+	pLoc, _ := r.volumes.QueryPoint(pX, pY, pZ)
+	if pLoc == nil {
+		return fmt.Errorf("can't find 3d player location at X: %f Y: %f Z: %f\n", pX, pY, pZ)
+	}
+	r.player = things.NewPlayer(r.things, cfg.Player, pLoc, false)
 	if err := r.player.Setup(); err != nil {
 		return err
 	}

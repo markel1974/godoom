@@ -225,6 +225,30 @@ func (cp *ContactPoints) Reduce(count int) (*ContactPoint, *ContactPoint, *Conta
 	return cp.ptr[i0], cp.ptr[i1], cp.ptr[i2], cp.ptr[i3]
 }
 
+// ReduceInto selects MaxManifoldPoints well-spread representative candidates from cp and writes them into dst.
+func (cp *ContactPoints) ReduceInto(dst *ContactPoints, count int) {
+	i0, i1, i2, i3 := cp.Reduce(count)
+	dst.SetCount(MaxManifoldPoints)
+	dst.AssignIndex(0, i0)
+	dst.AssignIndex(1, i1)
+	dst.AssignIndex(2, i2)
+	dst.AssignIndex(3, i3)
+}
+
+// FinalizeInto writes up to MaxManifoldPoints finalized candidates from cp into dst, falling back to a single point when empty.
+func (cp *ContactPoints) FinalizeInto(dst *ContactPoints, count int, fallbackX, fallbackY, fallbackZ, fallbackPen float64) {
+	if count <= 0 {
+		dst.SetSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
+		return
+	}
+	if count <= MaxManifoldPoints {
+		cp.Finalize(count)
+		dst.CopyFrom(cp, count)
+		return
+	}
+	cp.ReduceInto(dst, count)
+}
+
 // RemoveDuplicate adds a contact point unless it matches an existing one, updating duplicate penetration if deeper.
 // It returns the resulting number of stored candidate contact points.
 func (cp *ContactPoints) RemoveDuplicate(count int, depth float64, cx, cy, cz float64) int {

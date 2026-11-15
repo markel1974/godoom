@@ -63,6 +63,7 @@ func (om *OBBManifold) GetCount() int {
 	return om.points.GetCount()
 }
 
+// GetPoint returns the world-space x, y, z coordinates and penetration depth of contact point i.
 func (om *OBBManifold) GetPoint(i int) (float64, float64, float64, float64) {
 	return om.points.GetIndex(i)
 }
@@ -81,8 +82,6 @@ func (om *OBBManifold) ComputeAtOffset(self *BoundingBox, other *BoundingBox, of
 		om.normalX, om.normalY, om.normalZ = om.sat.GetNormal()
 		om.points.SetPenetration(0)
 		om.points.SetCount(0)
-		//om.Penetration = 0.0
-		//om.Count = 0
 		return
 	}
 
@@ -217,7 +216,6 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 		om.gap = 0.0
 		sx, sy, sz := om.axesA.ComputeStabilizedContactPoint(axT, ayT, azT, -om.normalX, -om.normalY, -om.normalZ, scx, scy, scz)
 		om.points.SetSinglePoint(sx, sy, sz, om.points.GetPenetration())
-		//om.setSinglePoint(sx, sy, sz, om.Penetration)
 	}
 
 	remT := 1.0 - t
@@ -337,12 +335,11 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	if clipA.ClipPlane(clipB, rux, ruy, ruz, rcU+eU) == 0 || clipB.ClipPlane(clipA, -rux, -ruy, -ruz, -rcU+eU) == 0 ||
 		clipA.ClipPlane(clipB, rvx, rvy, rvz, rcV+eV) == 0 || clipB.ClipPlane(clipA, -rvx, -rvy, -rvz, -rcV+eV) == 0 {
 		om.points.SetSinglePoint(rcx, rcy, rcz, sat.contactPen)
-		//om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
 		return
 	}
 
-	candidatesCount := om.collectPlaneCandidates(clipA, rcx, rcy, rcz, rnx, rny, rnz, 0.5, 0.0)
-	om.finalizePlaneCandidates(candidatesCount, rcx, rcy, rcz, sat.contactPen)
+	candidatesCount := om.candidates.CollectPlaneCandidates(clipA, rcx, rcy, rcz, rnx, rny, rnz, 0.5, 0.0)
+	om.candidates.FinalizeInto(om.points, candidatesCount, rcx, rcy, rcz, sat.contactPen)
 }
 
 // ComputeStaticTriangle clips the incident face of OBB self (shifted by offX, offY, offZ) against the static triangle
@@ -376,38 +373,13 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 		return false
 	}
 
-	candidatesCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, maxPen)
+	candidatesCount := om.candidates.CollectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, maxPen)
 	if candidatesCount == 0 {
 		om.points.SetCount(0)
 		return false
 	}
-	om.finalizePlaneCandidates(candidatesCount, v0x, v0y, v0z, maxPen)
+	om.candidates.FinalizeInto(om.points, candidatesCount, v0x, v0y, v0z, maxPen)
 	return om.points.GetCount() > 0
-}
-
-// collectPlaneCandidates projects clipped polygon vertices onto plane (planeX/Y/Z, planeNX/Y/Z) with depth > 0 into om.candidates.
-func (om *OBBManifold) collectPlaneCandidates(poly *ClipPolygon, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth float64) int {
-	candidatesCount := om.candidates.CollectPlaneCandidates(poly, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth)
-	return candidatesCount
-}
-
-// finalizePlaneCandidates reduces candCount candidate contact points to at most MaxManifoldPoints or falls back to a single point.
-func (om *OBBManifold) finalizePlaneCandidates(candidatesCount int, fallbackX, fallbackY, fallbackZ, fallbackPen float64) {
-	if candidatesCount == 0 {
-		om.points.SetSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
-		return
-	}
-	if candidatesCount <= MaxManifoldPoints {
-		om.candidates.Finalize(candidatesCount)
-		om.points.CopyFrom(om.candidates, candidatesCount)
-		return
-	}
-	i0, i1, i2, i3 := om.candidates.Reduce(candidatesCount)
-	om.points.SetCount(MaxManifoldPoints)
-	om.points.AssignIndex(0, i0)
-	om.points.AssignIndex(1, i1)
-	om.points.AssignIndex(2, i2)
-	om.points.AssignIndex(3, i3)
 }
 
 // edgeMidpointAnchor returns an anchor point at the midpoint of a box edge selected by skipIdx and direction.

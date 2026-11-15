@@ -9,10 +9,10 @@ const MaxCandidatePoints = 8
 // OBBManifold stores the result of an oriented bounding box contact test.
 // It includes collision state, contact normal, penetration or gap, and generated contact points.
 type OBBManifold struct {
-	Hit                       bool
-	Gap                       float64
-	NormalX, NormalY, NormalZ float64
-	Points                    *ContactPoints
+	hit                       bool
+	gap                       float64
+	normalX, normalY, normalZ float64
+	points                    *ContactPoints
 	candidates                *ContactPoints
 	sat                       *Sat
 	clipA                     *ClipPolygon
@@ -27,7 +27,7 @@ type OBBManifold struct {
 func NewOBBManifold() *OBBManifold {
 	return &OBBManifold{
 		sat:        NewSat(),
-		Points:     NewContactPoints(),
+		points:     NewContactPoints(),
 		candidates: NewContactPoints(),
 		clipA:      NewClipPolygon(),
 		clipB:      NewClipPolygon(),
@@ -36,6 +36,35 @@ func NewOBBManifold() *OBBManifold {
 		axesA:      NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 		axesB:      NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 	}
+}
+
+// GetNormal returns the contact normal components for the manifold.
+func (om *OBBManifold) GetNormal() (float64, float64, float64) {
+	return om.normalX, om.normalY, om.normalZ
+}
+
+// GetHit reports whether the last contact test found an intersection.
+func (om *OBBManifold) GetHit() bool {
+	return om.hit
+}
+
+// GetGap returns the separation gap from the last contact test, or zero when the boxes overlap.
+func (om *OBBManifold) GetGap() float64 {
+	return om.gap
+}
+
+// GetPenetration returns the contact penetration depth from the current manifold.
+func (om *OBBManifold) GetPenetration() float64 {
+	return om.points.GetPenetration()
+}
+
+// GetCount returns the number of contact points in the manifold.
+func (om *OBBManifold) GetCount() int {
+	return om.points.GetCount()
+}
+
+func (om *OBBManifold) GetPoint(i int) (float64, float64, float64, float64) {
+	return om.points.GetIndex(i)
 }
 
 // ComputeAtOffset computes the contact manifold between r and other with other translated by the given offset.
@@ -47,11 +76,11 @@ func (om *OBBManifold) ComputeAtOffset(self *BoundingBox, other *BoundingBox, of
 
 	om.sat.Compute(tx-px+offX, ty-py+offY, tz-pz+offZ, self.axis, scx, scy, scz, other.axis, ocx, ocy, ocz)
 	if !om.sat.hit {
-		om.Hit = false
-		om.Gap = om.sat.maxGap
-		om.NormalX, om.NormalY, om.NormalZ = om.sat.GetNormal()
-		om.Points.SetPenetration(0)
-		om.Points.SetCount(0)
+		om.hit = false
+		om.gap = om.sat.maxGap
+		om.normalX, om.normalY, om.normalZ = om.sat.GetNormal()
+		om.points.SetPenetration(0)
+		om.points.SetCount(0)
 		//om.Penetration = 0.0
 		//om.Count = 0
 		return
@@ -74,7 +103,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 		return 1.0
 	}
 
-	if om.Hit {
+	if om.hit {
 		minDim := math.Min(
 			math.Min(self.GetWidth(), math.Min(self.GetHeight(), self.GetDepth())),
 			math.Min(other.GetWidth(), math.Min(other.GetHeight(), other.GetDepth())),
@@ -82,7 +111,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 		if totalSweep <= minDim*0.5 {
 			return 1.0
 		}
-		if (om.NormalX*offX + om.NormalY*offY + om.NormalZ*offZ) >= -1e-4 {
+		if (om.normalX*offX + om.normalY*offY + om.normalZ*offZ) >= -1e-4 {
 			// Skip CCD only if bodies were already overlapping at t=0; if separated at t=0 they tunneled past halfway.
 			ax0, ay0, az0 := self.center.Get()
 			bx0, by0, bz0 := other.center.Get()
@@ -99,21 +128,21 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 		}
 	}
 
-	missHit := om.Hit
-	missGap := om.Gap
-	missNX, missNY, missNZ := om.NormalX, om.NormalY, om.NormalZ
-	missPen := om.Points.GetPenetration()
-	missCount := om.Points.GetCount()
+	missHit := om.hit
+	missGap := om.gap
+	missNX, missNY, missNZ := om.normalX, om.normalY, om.normalZ
+	missPen := om.points.GetPenetration()
+	missCount := om.points.GetCount()
 
 	if toi, ok := om.findSweptImpact(om.sat, om.clipA, om.clipB, self, other, dAX, dAY, dAZ, dBX, dBY, dBZ, offX, offY, offZ, rotBound); ok {
 		return toi
 	}
 
-	om.Hit = missHit
-	om.Gap = missGap
-	om.NormalX, om.NormalY, om.NormalZ = missNX, missNY, missNZ
-	om.Points.SetPenetration(missPen)
-	om.Points.SetCount(missCount)
+	om.hit = missHit
+	om.gap = missGap
+	om.normalX, om.normalY, om.normalZ = missNX, missNY, missNZ
+	om.points.SetPenetration(missPen)
+	om.points.SetCount(missCount)
 	return 1.0
 }
 
@@ -182,47 +211,35 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 	if sat.hit && sat.contactAxis >= 0 {
 		om.buildFromSat(sat, clipA, clipB, axT, ayT, azT, om.axesA, scx, scy, scz, bxT, byT, bzT, om.axesB, ocx, ocy, ocz)
 	} else {
-		om.Hit = true
-		om.NormalX, om.NormalY, om.NormalZ = sat.gx, sat.gy, sat.gz
-		om.Points.SetPenetration(math.Max(1e-4, -sat.maxGap))
-		om.Gap = 0.0
-		sx, sy, sz := om.axesA.ComputeStabilizedContactPoint(axT, ayT, azT, -om.NormalX, -om.NormalY, -om.NormalZ, scx, scy, scz)
-		om.Points.SetSinglePoint(sx, sy, sz, om.Points.GetPenetration())
+		om.hit = true
+		om.normalX, om.normalY, om.normalZ = sat.gx, sat.gy, sat.gz
+		om.points.SetPenetration(math.Max(1e-4, -sat.maxGap))
+		om.gap = 0.0
+		sx, sy, sz := om.axesA.ComputeStabilizedContactPoint(axT, ayT, azT, -om.normalX, -om.normalY, -om.normalZ, scx, scy, scz)
+		om.points.SetSinglePoint(sx, sy, sz, om.points.GetPenetration())
 		//om.setSinglePoint(sx, sy, sz, om.Penetration)
 	}
 
 	remT := 1.0 - t
-	linAdv := math.Max(0.0, offX*om.NormalX+offY*om.NormalY+offZ*om.NormalZ) * remT
+	linAdv := math.Max(0.0, offX*om.normalX+offY*om.normalY+offZ*om.normalZ) * remT
 	angAdv := rotBound * remT * 0.5
-	if advPen := linAdv + angAdv; advPen > om.Points.GetPenetration() {
-		om.Points.SetPenetration(advPen)
+	if advPen := linAdv + angAdv; advPen > om.points.GetPenetration() {
+		om.points.SetPenetration(advPen)
 	}
 	shiftX := 0.5 * remT * (dAX + dBX)
 	shiftY := 0.5 * remT * (dAY + dBY)
 	shiftZ := 0.5 * remT * (dAZ + dBZ)
-	om.Points.Shift(shiftX, shiftY, shiftZ)
-	/*
-		for i := 0; i < om.Count; i++ {
-			p := &om.Points[i]
-			p.X += shiftX
-			p.Y += shiftY
-			p.Z += shiftZ
-			if p.Penetration < om.Penetration {
-				p.Penetration = om.Penetration
-			}
-		}
-
-	*/
+	om.points.Shift(shiftX, shiftY, shiftZ)
 	return t, true
 }
 
 // buildFromSat populates the manifold from a successful SAT result and builds edge or face contacts.
 func (om *OBBManifold) buildFromSat(sat *Sat, clipA, clipB *ClipPolygon, ax, ay, az float64, aAxes *Axes, ahx, ahy, ahz float64, bx, by, bz float64, bAxes *Axes, bhx, bhy, bhz float64) {
-	om.Hit = true
-	om.Points.SetPenetration(sat.contactPen)
-	om.Points.SetCount(0)
-	om.Gap = 0.0
-	om.NormalX, om.NormalY, om.NormalZ = sat.GetNormal()
+	om.hit = true
+	om.points.SetPenetration(sat.contactPen)
+	om.points.SetCount(0)
+	om.gap = 0.0
+	om.normalX, om.normalY, om.normalZ = sat.GetNormal()
 
 	if sat.contactAxis >= 6 {
 		om.buildEdgeManifoldAxes(sat, ax, ay, az, aAxes, ahx, ahy, ahz, bx, by, bz, bAxes, bhx, bhy, bhz)
@@ -275,7 +292,7 @@ func (om *OBBManifold) buildEdgeManifoldAxes(sat *Sat, ax, ay, az float64, aAxes
 	cx := 0.5 * (ptAx + uAx*sA + ptBx + uBx*sB)
 	cy := 0.5 * (ptAy + uAy*sA + ptBy + uBy*sB)
 	cz := 0.5 * (ptAz + uAz*sA + ptBz + uBz*sB)
-	om.Points.SetSinglePoint(cx, cy, cz, sat.contactPen)
+	om.points.SetSinglePoint(cx, cy, cz, sat.contactPen)
 }
 
 // buildFaceManifoldAxes constructs clipped contact points for a face-axis OBB collision from SAT state and axes.
@@ -319,23 +336,23 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	rcV := rcx*rvx + rcy*rvy + rcz*rvz
 	if clipA.ClipPlane(clipB, rux, ruy, ruz, rcU+eU) == 0 || clipB.ClipPlane(clipA, -rux, -ruy, -ruz, -rcU+eU) == 0 ||
 		clipA.ClipPlane(clipB, rvx, rvy, rvz, rcV+eV) == 0 || clipB.ClipPlane(clipA, -rvx, -rvy, -rvz, -rcV+eV) == 0 {
-		om.Points.SetSinglePoint(rcx, rcy, rcz, sat.contactPen)
+		om.points.SetSinglePoint(rcx, rcy, rcz, sat.contactPen)
 		//om.setSinglePoint(rcx, rcy, rcz, sat.contactPen)
 		return
 	}
 
-	candCount := om.collectPlaneCandidates(clipA, rcx, rcy, rcz, rnx, rny, rnz, 0.5, 0.0)
-	om.finalizePlaneCandidates(candCount, rcx, rcy, rcz, sat.contactPen)
+	candidatesCount := om.collectPlaneCandidates(clipA, rcx, rcy, rcz, rnx, rny, rnz, 0.5, 0.0)
+	om.finalizePlaneCandidates(candidatesCount, rcx, rcy, rcz, sat.contactPen)
 }
 
 // ComputeStaticTriangle clips the incident face of OBB self (shifted by offX, offY, offZ) against the static triangle
 // (v0, v1, v2) with plane normal (nx, ny, nz) pointing toward self, retaining up to MaxManifoldPoints contact points.
 // It reports whether clipping produced at least one penetrating contact point.
 func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ float64, nx, ny, nz float64, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z float64, maxPen float64) bool {
-	om.Hit = true
-	om.NormalX, om.NormalY, om.NormalZ = nx, ny, nz
-	om.Points.SetPenetration(maxPen)
-	om.Gap = 0.0
+	om.hit = true
+	om.normalX, om.normalY, om.normalZ = nx, ny, nz
+	om.points.SetPenetration(maxPen)
+	om.gap = 0.0
 
 	px, py, pz := self.center.Get()
 	hx, hy, hz := self.size.GetCenter()
@@ -355,17 +372,17 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 	if !om.clipA.ClipEdgeHalfSpace(om.clipB, v0x, v0y, v0z, v1x, v1y, v1z, effNX, effNY, effNZ) ||
 		!om.clipB.ClipEdgeHalfSpace(om.clipA, v1x, v1y, v1z, v2x, v2y, v2z, effNX, effNY, effNZ) ||
 		!om.clipA.ClipEdgeHalfSpace(om.clipB, v2x, v2y, v2z, v0x, v0y, v0z, effNX, effNY, effNZ) {
-		om.Points.SetCount(0)
+		om.points.SetCount(0)
 		return false
 	}
 
 	candidatesCount := om.collectPlaneCandidates(om.clipB, v0x, v0y, v0z, nx, ny, nz, 1.0, maxPen)
 	if candidatesCount == 0 {
-		om.Points.SetCount(0)
+		om.points.SetCount(0)
 		return false
 	}
 	om.finalizePlaneCandidates(candidatesCount, v0x, v0y, v0z, maxPen)
-	return om.Points.GetCount() > 0
+	return om.points.GetCount() > 0
 }
 
 // collectPlaneCandidates projects clipped polygon vertices onto plane (planeX/Y/Z, planeNX/Y/Z) with depth > 0 into om.candidates.
@@ -377,20 +394,20 @@ func (om *OBBManifold) collectPlaneCandidates(poly *ClipPolygon, planeX, planeY,
 // finalizePlaneCandidates reduces candCount candidate contact points to at most MaxManifoldPoints or falls back to a single point.
 func (om *OBBManifold) finalizePlaneCandidates(candidatesCount int, fallbackX, fallbackY, fallbackZ, fallbackPen float64) {
 	if candidatesCount == 0 {
-		om.Points.SetSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
+		om.points.SetSinglePoint(fallbackX, fallbackY, fallbackZ, fallbackPen)
 		return
 	}
 	if candidatesCount <= MaxManifoldPoints {
 		om.candidates.Finalize(candidatesCount)
-		om.Points.CopyFrom(om.candidates, candidatesCount)
+		om.points.CopyFrom(om.candidates, candidatesCount)
 		return
 	}
 	i0, i1, i2, i3 := om.candidates.Reduce(candidatesCount)
-	om.Points.SetCount(MaxManifoldPoints)
-	om.Points.AssignIndex(0, i0)
-	om.Points.AssignIndex(1, i1)
-	om.Points.AssignIndex(2, i2)
-	om.Points.AssignIndex(3, i3)
+	om.points.SetCount(MaxManifoldPoints)
+	om.points.AssignIndex(0, i0)
+	om.points.AssignIndex(1, i1)
+	om.points.AssignIndex(2, i2)
+	om.points.AssignIndex(3, i3)
 }
 
 // edgeMidpointAnchor returns an anchor point at the midpoint of a box edge selected by skipIdx and direction.

@@ -382,16 +382,10 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 	v0x, v0y, v0z := rFace.Get0()
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
-	if s.manifold.ComputeStaticTriangle(
-		s.object.GetEntity().BoundingBox,
-		s.dX, s.dY, s.dZ,
-		fc.nX, fc.nY, fc.nZ,
-		v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z,
-		fc.pen,
-	) {
-		for pi := 0; pi < s.manifold.Points.GetCount(); pi++ {
-			ptX, ptY, ptZ, ptPen := s.manifold.Points.GetIndex(pi)
-			//pt := &s.manifold.Points[pi]
+	m := s.manifold
+	if m.ComputeStaticTriangle(s.object.GetEntity().BoundingBox, s.dX, s.dY, s.dZ, fc.nX, fc.nY, fc.nZ, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z, fc.pen) {
+		for pi := 0; pi < m.GetCount(); pi++ {
+			ptX, ptY, ptZ, ptPen := m.GetPoint(pi)
 			if ptPen <= 0 {
 				continue
 			}
@@ -523,25 +517,25 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 
 	rTx, rTy, rTz := rCage.GetT()
 	rRadX, rRadY, rRadZ := rCage.GetRad()
-
-	b := Normal2BucketType(m.NormalX, m.NormalY, m.NormalZ)
-	if !m.Hit {
-		if m.Gap <= floorGroundTolerance && s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY) {
-			if b == BucketFloor && m.NormalZ >= floorNormalThreshold {
+	mNormalX, mNormalY, mNormalZ := m.GetNormal()
+	b := Normal2BucketType(mNormalX, mNormalY, mNormalZ)
+	if !m.GetHit() {
+		if m.GetGap() <= floorGroundTolerance && s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY) {
+			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
 				s.hasFloor = true
-			} else if b == BucketCeiling && m.NormalZ <= -floorNormalThreshold {
+			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {
 				rCage.hasFloor = true
 			}
 		}
 		return
 	}
 
-	penetration := m.Points.GetPenetration()
-	count := m.Points.GetCount()
+	penetration := m.GetPenetration()
+	count := m.GetCount()
 	dist := -penetration
-	if b == BucketFloor && m.NormalZ >= floorNormalThreshold && dist <= floorGroundTolerance {
+	if b == BucketFloor && mNormalZ >= floorNormalThreshold && dist <= floorGroundTolerance {
 		s.hasFloor = true
-	} else if b == BucketCeiling && m.NormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance {
+	} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance {
 		rCage.hasFloor = true
 	}
 
@@ -566,15 +560,17 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 	}
 
 	for pi := 0; pi < count; pi++ {
-		ptX, ptY, ptZ, ptPen := m.Points.GetIndex(pi)
+		ptX, ptY, ptZ, ptPen := m.GetPoint(pi)
 		if ptPen <= 0 {
 			continue
 		}
+
 		ptDist := -ptPen
-		s.addToBucket(b, rCage, rFace, ptDist, ptPen, m.NormalX, m.NormalY, m.NormalZ, ptX, ptY, ptZ, rMaxZ, iMode)
+		//mNormalX, mNormalY, mNormalZ := m.GetNormal()
+		s.addToBucket(b, rCage, rFace, ptDist, ptPen, mNormalX, mNormalY, mNormalZ, ptX, ptY, ptZ, rMaxZ, iMode)
 		if iMode == ImpactElastic {
 			oppB := b.Opposite()
-			rCage.addToBucket(oppB, s, recipFace, ptDist, ptPen, -m.NormalX, -m.NormalY, -m.NormalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
+			rCage.addToBucket(oppB, s, recipFace, ptDist, ptPen, -mNormalX, -mNormalY, -mNormalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
 			if oppB == BucketFloor {
 				rCage.hasFloor = true
 			}

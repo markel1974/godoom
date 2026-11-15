@@ -79,7 +79,7 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		onCollision:    cfg.OnCollision,
 	}
 
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	entity.SetOnGround(false)
 	t.SetAngle(cfg.Angle)
 	if cfg.MaxStepFactor > 0 {
@@ -119,7 +119,7 @@ func (t *Base) GetAngle() float64 {
 // SetAngle updates the rotation angle of the Base instance and synchronizes the entity's orientation quaternion.
 func (t *Base) SetAngle(angle float64) {
 	t.angle = angle
-	t.VerticesGetVolume().GetEntity().SetRotationAngleZ(angle)
+	t.GetContainerVolume().GetEntity().SetRotationAngleZ(angle)
 }
 
 // GetMaxStep returns the maximum step value associated with the Base instance.
@@ -139,7 +139,7 @@ func (t *Base) GetSpeed() float64 {
 
 // GetDistSq returns the squared distance from the light's position to the given 3D point.
 func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	tx, ty, tz := entity.GetCenter()
 	dx := tx - pX
 	dy := ty - pY
@@ -149,7 +149,7 @@ func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
 }
 
 func (t *Base) GetEntity() *rigid_body.Entity {
-	return t.VerticesGetVolume().GetEntity()
+	return t.GetContainerVolume().GetEntity()
 }
 
 // GetImpulse returns the
@@ -184,17 +184,17 @@ func (t *Base) IsVisible() bool {
 
 // IsSleeping reports whether the entity's rigid body is currently asleep.
 func (t *Base) IsSleeping() bool {
-	return t.VerticesGetVolume().GetEntity().IsSleeping()
+	return t.GetContainerVolume().GetEntity().IsSleeping()
 }
 
 // WakeUp wakes the entity from sleep so it participates in physics steps.
 func (t *Base) WakeUp() {
-	t.VerticesGetVolume().GetEntity().WakeUp()
+	t.GetContainerVolume().GetEntity().WakeUp()
 }
 
 // EnterSleep puts the entity to sleep and clears any pending frame displacement.
 func (t *Base) EnterSleep() {
-	t.VerticesGetVolume().GetEntity().SetSleeping(true)
+	t.GetContainerVolume().GetEntity().SetSleeping(true)
 	t.cage.ZeroDisplacement()
 }
 
@@ -207,7 +207,7 @@ func (t *Base) CanSleep() bool {
 func (t *Base) UpdateSleepState() bool {
 	px, py, pz := t.cage.GetPushOffset()
 	pushSq := px*px + py*py + pz*pz
-	return t.VerticesGetVolume().GetEntity().UpdateSleepState(t.CanSleep(), pushSq)
+	return t.GetContainerVolume().GetEntity().UpdateSleepState(t.CanSleep(), pushSq)
 }
 
 // SetSolverIndex records this entity's active index in the current solver tick (-1 when inactive).
@@ -222,12 +222,12 @@ func (t *Base) GetSolverIndex() int {
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *Base) StagePrepare(session uint64) {
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	entity.ClearActiveContact()
 	entity.ClearPreSolve()
 	entity.Update()
 	t.angle = entity.GetYaw()
-	t.VerticesCompile(textures.GlobalTick())
+	t.Compile(textures.GlobalTick())
 	t.cage.Rebuild(t.maxStep, session)
 }
 
@@ -258,7 +258,7 @@ func (t *Base) StageWarmStart() {
 		return
 	}
 
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
 		rParentEnt := resolveSlotPartner(entity, slot)
@@ -282,7 +282,7 @@ func (t *Base) StageResolve() {
 		return
 	}
 
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
@@ -303,7 +303,7 @@ func (t *Base) StageApply() {
 	if location := t.cage.GetVolume(); location != nil {
 		t.location = location.(*volumes.Volume)
 	}
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
 	dx, dy, dz := t.cage.GetDisplacement()
 	entity.AddTo(dx, dy, dz)
@@ -372,7 +372,7 @@ func (t *Base) StageResolvePosition() {
 	if slotsLen == 0 {
 		return
 	}
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	_, _, targetZ := t.cage.GetT()
 	_, _, targetRadZ := t.cage.GetRad()
 	targetBaseZ := targetZ - targetRadZ
@@ -432,7 +432,7 @@ func clampUpwardPenetration(pen, alreadyResolved, nZ, maxZ, currentBaseZ, sPushZ
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *Base) MoveTowards(dirX, dirY, speed, accelForce float64) {
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * speed
 	desiredVy := dirY * speed
@@ -448,7 +448,7 @@ func (t *Base) GetBase() *Base {
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
 func (t *Base) Jump(self volumes.IThing, leapX float64, leapY float64, zFactor float64) bool {
-	entity := t.VerticesGetVolume().GetEntity()
+	entity := t.GetContainerVolume().GetEntity()
 	if !entity.IsOnGround() {
 		return false
 	}
@@ -491,7 +491,7 @@ func (t *Base) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, for
 		impactZ := pos.Z + (dirZ * closestDist)
 
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
-		closestThing.VerticesApplyImpact(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
+		closestThing.ApplyImpact(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDist, impactX, impactY, impactZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}

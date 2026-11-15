@@ -65,12 +65,12 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 		panic("Error setting up vertices elements: " + err.Error())
 	}
 
-	v.VerticesCompile(0)
+	v.Compile(0)
 	if v.minZ <= v.maxZ {
 		if baseZ := -(v.minZ + v.maxZ) * 0.5; math.Abs(baseZ) > 1e-6 {
 			v.joints.SetBaseOffsetZ(baseZ)
 			v.compiled = false
-			v.VerticesCompile(0)
+			v.Compile(0)
 		}
 	}
 
@@ -80,11 +80,11 @@ func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materia
 }
 
 // VerticesGetVolume returns the composite view volume of the model, or nil if unavailable.
-func (v *Vertices3D) VerticesGetVolume() IVolume {
+func (v *Vertices3D) GetContainerVolume() IContainerVolume {
 	return v.elements.vVolume
 }
 
-// VerticesGetEntity returns the physics entity for the composite model, or the first element's entity if unset.
+// GetEntity returns the physics entity for the composite model, or the first element's entity if unset.
 func (v *Vertices3D) GetEntity() *rigid_body.Entity {
 	return v.elements.vVolume.entity
 }
@@ -101,7 +101,7 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 }
 
 // VerticesSetRagdoll freezes the model and activates ragdoll collapse if it is not already ragdoll.
-func (v *Vertices3D) VerticesSetRagdoll() {
+func (v *Vertices3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
 	}
@@ -113,7 +113,7 @@ func (v *Vertices3D) VerticesSetRagdoll() {
 }
 
 // VerticesSetAction selects action idx and propagates mapped sub-actions to parts in execution order.
-func (v *Vertices3D) VerticesSetAction(idx int) {
+func (v *Vertices3D) SetAction(idx int) {
 	if idx < 0 {
 		return
 	}
@@ -137,13 +137,13 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 			continue
 		}
 		if targetAction, ok := v.actions.Get(i, idx); ok {
-			el.VerticesSetAction(targetAction)
+			el.SetAction(targetAction)
 			if el.IsActionClamped(targetAction) {
 				enteringRagdoll = true
 			}
 		} else {
 			fmt.Printf("[warning] Vertices3D: part %d has no mapping for action %d, falling back to action 0\n", i, idx)
-			el.VerticesSetAction(0)
+			el.SetAction(0)
 		}
 	}
 	if enteringRagdoll {
@@ -155,14 +155,14 @@ func (v *Vertices3D) VerticesSetAction(idx int) {
 // VerticesApplyImpact routes a localized 3D impact force (fx, fy, fz) at world point (px, py, pz)
 // to the closest articulated part, exciting the 5+ joint DoFs along the kinematic chain, jolting ragdoll bodies,
 // and triggering dismemberment on critical or post-mortem hits.
-func (v *Vertices3D) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
+func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	v.compiled = false
 	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
 }
 
 // VerticesCompile updates all model parts for the tick and writes transformed frame data into render buffers.
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
-func (v *Vertices3D) VerticesCompile(tick uint64) bool {
+func (v *Vertices3D) Compile(tick uint64) bool {
 	ent := v.elements.vVolume.entity
 
 	cx, cy, cz := ent.GetCenter()
@@ -255,7 +255,7 @@ func (v *Vertices3D) VerticesCompile(tick uint64) bool {
 }
 
 // VerticesGet returns the current face sets, interpolation factor, and render mode.
-func (v *Vertices3D) VerticesGet() (*Faces, *Faces, float64, float64) {
+func (v *Vertices3D) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
 }
 

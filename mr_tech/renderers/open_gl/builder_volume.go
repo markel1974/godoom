@@ -327,8 +327,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false                               // CULLATO! Non generiamo i vertici
 		}
 		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
-		thing.VerticesCompile(textures.GlobalTick())
-		pFaces, pNextFaces, lp, renderMode := thing.VerticesGet()
+		thing.Compile(textures.GlobalTick())
+		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 		if pFaces.Len() == 0 {
 			// Anche se non ha facce, teniamo vivo occlusion test
 			return false
@@ -343,8 +343,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	qStatic := func(object aabb.IObject) bool {
 		thing := object.(volumes.IThing)
-		thing.VerticesCompile(textures.GlobalTick())
-		faces, nextFaces, lp, renderMode := thing.VerticesGet()
+		thing.Compile(textures.GlobalTick())
+		faces, nextFaces, lp, renderMode := thing.GetUIFaces()
 		if faces.Len() > 0 {
 			pushPassThing(thing, faces, nextFaces, lp, renderMode)
 		}

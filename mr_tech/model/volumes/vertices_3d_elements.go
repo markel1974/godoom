@@ -124,7 +124,7 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 // Bind compiles element i for tick, caches its volumes, and records the first element's interpolation factor.
 func (v *Vertices3DElements) Bind(i int, tick uint64) {
 	element := v.entries[i]
-	_ = element.VerticesCompile(tick)
+	_ = element.Compile(tick)
 	volA, volB, lerpT := element.GetVolumes()
 	if i == 0 {
 		v.lerpT = lerpT

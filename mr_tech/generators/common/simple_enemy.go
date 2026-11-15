@@ -225,7 +225,7 @@ func (e *Enemy) setAnimationState(state config.EnemyState) int {
 		return 0
 	}
 	if state == config.EnemyStateDead {
-		e.self.VerticesSetRagdoll()
+		e.self.SetRagdollMode()
 		entity := e.self.GetEntity()
 		if e.hasAnimationState(state) {
 			// Models with keyframed death animations, sprites, or articulated ragdoll collapse
@@ -318,7 +318,7 @@ func (e *Enemy) playAnimation(category config.EnemyState, eAnim *config.EnemyAni
 	if !ok {
 		return 0, 0, false
 	}
-	e.self.VerticesSetAction(action)
+	e.self.SetAction(action)
 	return durationFrames, action, true
 }
 

@@ -94,7 +94,7 @@ func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Mat
 }
 
 // VerticesGetVolume returns the volume associated with the vertices sprite.
-func (v *VerticesSprite) VerticesGetVolume() IVolume {
+func (v *VerticesSprite) GetContainerVolume() IContainerVolume {
 	return v.volume
 }
 
@@ -116,25 +116,25 @@ func (v *VerticesSprite) GetAABB() *aabb.AABB {
 
 // VerticesCompile updates the sprite's view volume from its current volume.
 // It ignores tick and returns false because no geometry is rebuilt.
-func (v *VerticesSprite) VerticesCompile(tick uint64) bool {
+func (v *VerticesSprite) Compile(tick uint64) bool {
 	return false
 }
 
 // VerticesGet returns the view volume faces for both face sets, zero offset, and the render mode.
-func (v *VerticesSprite) VerticesGet() (*Faces, *Faces, float64, float64) {
+func (v *VerticesSprite) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	f := v.volume.GetFaces()
 	return f, f, 0.0, RenderModeBillboard
 }
 
 // VerticesSetAction applies the vertex action identified by idx.
-func (v *VerticesSprite) VerticesSetAction(idx int) {
+func (v *VerticesSprite) SetAction(idx int) {
 	//TODO IMPLEMENT
 	return
 }
 
 // VerticesApplyImpact is a no-op for billboard sprites without articulated sub-parts.
-func (v *VerticesSprite) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
+func (v *VerticesSprite) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
-func (v *VerticesSprite) VerticesSetRagdoll() {
+func (v *VerticesSprite) SetRagdollMode() {
 }

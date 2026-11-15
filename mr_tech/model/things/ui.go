@@ -59,16 +59,16 @@ func (t *UI) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }
 
 // VerticesCompile compiles base vertices for the given tick and always reports no UI-specific changes.
-func (t *UI) VerticesCompile(tick uint64) bool {
-	t.Base.VerticesCompile(tick)
+func (t *UI) Compile(tick uint64) bool {
+	t.Base.Compile(tick)
 	return false
 }
 
 // VerticesGet returns UI face data positioned at the origin with interface render mode.
-func (t *UI) VerticesGet() (*volumes.Faces, *volumes.Faces, float64, float64) {
+func (t *UI) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	//TODO posizione assoluta e' un pezzo dell'interfaccia
 	t.GetEntity().MoveTo(0, 0, 0)
-	f1, f2, lp, _ := t.Base.VerticesGet()
+	f1, f2, lp, _ := t.Base.GetUIFaces()
 	// Usiamo 1.1 (Spherical Billboard) in modo che lo shader originale lo processi correttamente
 	return f1, f2, lp, volumes.RenderModeInterface
 }

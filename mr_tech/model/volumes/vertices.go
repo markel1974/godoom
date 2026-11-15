@@ -16,7 +16,7 @@ const (
 	RenderModeInterface          = 3.0
 )
 
-type IVolume interface {
+type IContainerVolume interface {
 	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
 	GetEntity() *rigid_body.Entity
@@ -26,17 +26,17 @@ type IVolume interface {
 type IVertices interface {
 	GetAABB() *aabb.AABB
 
-	VerticesCompile(uint64) bool
+	Compile(uint64) bool
 
-	VerticesGet() (*Faces, *Faces, float64, float64)
+	GetUIFaces() (*Faces, *Faces, float64, float64)
 
-	VerticesGetVolume() IVolume
+	GetContainerVolume() IContainerVolume
 
-	VerticesSetAction(idx int)
+	SetAction(idx int)
 
-	VerticesApplyImpact(fx, fy, fz, px, py, pz float64)
+	ApplyImpact(fx, fy, fz, px, py, pz float64)
 
-	VerticesSetRagdoll()
+	SetRagdollMode()
 }
 
 // VerticesFactory returns an implementation of IVertices based on the provided Thing configuration and material.

@@ -25,9 +25,9 @@ type IThingConfig interface {
 
 	GetEntity() *rigid_body.Entity
 
-	VerticesSetAction(idx int)
+	SetAction(idx int)
 
-	VerticesSetRagdoll()
+	SetRagdollMode()
 
 	GetAngle() float64
 

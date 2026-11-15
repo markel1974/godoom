@@ -213,9 +213,9 @@ func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Ma
 		singleFrame:   endFrame == 0,
 	}
 	if len(v.actions) > 0 {
-		v.VerticesSetAction(0)
+		v.SetAction(0)
 	}
-	v.VerticesCompile(0)
+	v.Compile(0)
 	for _, f := range v.volumes {
 		f.SetThing(thing)
 	}
@@ -238,12 +238,12 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 }
 
 // VerticesGetVolume returns the current view volume for this vertices entry.
-func (v *Vertices3DEntry) VerticesGetVolume() IVolume {
+func (v *Vertices3DEntry) GetContainerVolume() IContainerVolume {
 	return v.comp2
 }
 
 // VerticesSetAction selects the animation action at idx and resets timing for its frame interval.
-func (v *Vertices3DEntry) VerticesSetAction(idx int) {
+func (v *Vertices3DEntry) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		fmt.Printf("Invalid action index: %d\n", idx)
 		return
@@ -268,7 +268,7 @@ func (v *Vertices3DEntry) VerticesSetAction(idx int) {
 }
 
 // VerticesCompile updates the active animation frames and interpolation factor for the given tick.
-func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
+func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	if v.singleFrame {
 		v.lerpT = 0.0
 	} else {
@@ -410,7 +410,7 @@ func (v *Vertices3DEntry) VerticesCompile(tick uint64) bool {
 }
 
 // VerticesGet returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
-func (v *Vertices3DEntry) VerticesGet() (*Faces, *Faces, float64, float64) {
+func (v *Vertices3DEntry) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 
@@ -420,11 +420,11 @@ func (v *Vertices3DEntry) GetVolumes() (*Volume, *Volume, float64) {
 }
 
 // VerticesApplyImpact is a no-op for single-part 3D entries (handled by 6-DoF Entity dynamics).
-func (v *Vertices3DEntry) VerticesApplyImpact(fx, fy, fz, px, py, pz float64) {
+func (v *Vertices3DEntry) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 }
 
 // VerticesSetRagdoll switches the vertices entry to ragdoll behavior.
-func (v *Vertices3DEntry) VerticesSetRagdoll() {
+func (v *Vertices3DEntry) SetRagdollMode() {
 }
 
 // IsActionClamped reports whether the action at idx is clamped (such as a death animation).

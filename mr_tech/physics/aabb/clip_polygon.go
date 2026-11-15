@@ -80,7 +80,7 @@ func (p *ClipPolygon) FillIncidentFaceQuad(incX, incY, incZ float64, incAxes *Ax
 	}
 
 	inx, iny, inz := incAxes.GetRow(incFaceIdx)
-	incHalfN := incDotSign * axisHalfExtent(incHX, incHY, incHZ, incFaceIdx)
+	incHalfN := incDotSign * AxisHalfExtent(incHX, incHY, incHZ, incFaceIdx)
 	icx := incX + inx*incHalfN
 	icy := incY + iny*incHalfN
 	icz := incZ + inz*incHalfN
@@ -89,8 +89,8 @@ func (p *ClipPolygon) FillIncidentFaceQuad(incX, incY, incZ float64, incAxes *Ax
 	iv := (incFaceIdx + 2) % 3
 	ux, uy, uz := incAxes.GetRow(iu)
 	vx, vy, vz := incAxes.GetRow(iv)
-	hu := axisHalfExtent(incHX, incHY, incHZ, iu)
-	hv := axisHalfExtent(incHX, incHY, incHZ, iv)
+	hu := AxisHalfExtent(incHX, incHY, incHZ, iu)
+	hv := AxisHalfExtent(incHX, incHY, incHZ, iv)
 	ux *= hu
 	uy *= hu
 	uz *= hu

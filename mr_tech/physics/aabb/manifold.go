@@ -254,13 +254,13 @@ func (om *OBBManifold) buildEdgeManifoldAxes(sat *Sat, ax, ay, az float64, aAxes
 
 	nx, ny, nz := sat.nx, sat.ny, sat.nz
 	tieX, tieY, tieZ := bx-ax, by-ay, bz-az
-	ptAx, ptAy, ptAz := edgeMidpointAnchor(ax, ay, az, aAxes, ahx, ahy, ahz, i, -nx, -ny, -nz, tieX, tieY, tieZ)
-	ptBx, ptBy, ptBz := edgeMidpointAnchor(bx, by, bz, bAxes, bhx, bhy, bhz, j, nx, ny, nz, -tieX, -tieY, -tieZ)
+	ptAx, ptAy, ptAz := EdgeMidpointAnchor(ax, ay, az, aAxes, ahx, ahy, ahz, i, -nx, -ny, -nz, tieX, tieY, tieZ)
+	ptBx, ptBy, ptBz := EdgeMidpointAnchor(bx, by, bz, bAxes, bhx, bhy, bhz, j, nx, ny, nz, -tieX, -tieY, -tieZ)
 
 	uAx, uAy, uAz := aAxes.GetRow(i)
 	uBx, uBy, uBz := bAxes.GetRow(j)
-	limA := axisHalfExtent(ahx, ahy, ahz, i)
-	limB := axisHalfExtent(bhx, bhy, bhz, j)
+	limA := AxisHalfExtent(ahx, ahy, ahz, i)
+	limB := AxisHalfExtent(bhx, bhy, bhz, j)
 
 	k := uAx*uBx + uAy*uBy + uAz*uBz
 	rx, ry, rz := ptAx-ptBx, ptAy-ptBy, ptAz-ptBz
@@ -274,17 +274,17 @@ func (om *OBBManifold) buildEdgeManifoldAxes(sat *Sat, ax, ay, az float64, aAxes
 	}
 	if sA < -limA {
 		sA = -limA
-		sB = clampFloat(cb+k*sA, -limB, limB)
+		sB = ClampFloat(cb+k*sA, -limB, limB)
 	} else if sA > limA {
 		sA = limA
-		sB = clampFloat(cb+k*sA, -limB, limB)
+		sB = ClampFloat(cb+k*sA, -limB, limB)
 	}
 	if sB < -limB {
 		sB = -limB
-		sA = clampFloat(k*sB-ca, -limA, limA)
+		sA = ClampFloat(k*sB-ca, -limA, limA)
 	} else if sB > limB {
 		sB = limB
-		sA = clampFloat(k*sB-ca, -limA, limA)
+		sA = ClampFloat(k*sB-ca, -limA, limA)
 	}
 
 	cx := 0.5 * (ptAx + uAx*sA + ptBx + uBx*sB)
@@ -315,7 +315,7 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 		rnx, rny, rnz = sat.nx, sat.ny, sat.nz
 	}
 
-	refDepthHalf := axisHalfExtent(refHX, refHY, refHZ, refIdx)
+	refDepthHalf := AxisHalfExtent(refHX, refHY, refHZ, refIdx)
 	rcx := refX + rnx*refDepthHalf
 	rcy := refY + rny*refDepthHalf
 	rcz := refZ + rnz*refDepthHalf
@@ -324,8 +324,8 @@ func (om *OBBManifold) buildFaceManifoldAxes(sat *Sat, clipA, clipB *ClipPolygon
 	vIdx := (refIdx + 2) % 3
 	rux, ruy, ruz := refAxes.GetRow(uIdx)
 	rvx, rvy, rvz := refAxes.GetRow(vIdx)
-	eU := axisHalfExtent(refHX, refHY, refHZ, uIdx)
-	eV := axisHalfExtent(refHX, refHY, refHZ, vIdx)
+	eU := AxisHalfExtent(refHX, refHY, refHZ, uIdx)
+	eV := AxisHalfExtent(refHX, refHY, refHZ, vIdx)
 
 	clipA.FillIncidentFaceQuad(incX, incY, incZ, incAxes, incHX, incHY, incHZ, rnx, rny, rnz)
 
@@ -380,56 +380,4 @@ func (om *OBBManifold) ComputeStaticTriangle(self *BoundingBox, offX, offY, offZ
 	}
 	om.candidates.FinalizeInto(om.points, candidatesCount, v0x, v0y, v0z, maxPen)
 	return om.points.GetCount() > 0
-}
-
-// edgeMidpointAnchor returns an anchor point at the midpoint of a box edge selected by skipIdx and direction.
-func edgeMidpointAnchor(cx, cy, cz float64, axes *Axes, hx, hy, hz float64, skipIdx int, dirX, dirY, dirZ, tieX, tieY, tieZ float64) (float64, float64, float64) {
-	px, py, pz := cx, cy, cz
-	for k := 0; k < 3; k++ {
-		if k == skipIdx {
-			continue
-		}
-		ax, ay, az := axes.GetRow(k)
-		step := -axisHalfExtent(hx, hy, hz, k)
-		dot := dirX*ax + dirY*ay + dirZ*az
-		if math.Abs(dot) <= 1e-12 {
-			dot = tieX*ax + tieY*ay + tieZ*az
-		}
-		if dot > 0.0 {
-			step = -step
-		}
-		px += ax * step
-		py += ay * step
-		pz += az * step
-	}
-	return px, py, pz
-}
-
-// axisHalfExtent returns the half extent for axis index idx: x for 0, y for 1, and z otherwise.
-func axisHalfExtent(x, y, z float64, idx int) float64 {
-	switch idx {
-	case 0:
-		return x
-	case 1:
-		return y
-	default:
-		return z
-	}
-}
-
-// pointDistSq returns the squared Euclidean distance between two 3D points.
-func pointDistSq(aX, aY, aZ, bX, bY, bZ float64) float64 {
-	dx, dy, dz := aX-bX, aY-bY, aZ-bZ
-	return dx*dx + dy*dy + dz*dz
-}
-
-// clampFloat returns v constrained to the inclusive range from minV to maxV.
-func clampFloat(v, minV, maxV float64) float64 {
-	if v < minV {
-		return minV
-	}
-	if v > maxV {
-		return maxV
-	}
-	return v
 }

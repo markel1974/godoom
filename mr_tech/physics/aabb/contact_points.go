@@ -55,31 +55,6 @@ func (cp *ContactPoints) Shift(shiftX, shiftY, shiftZ float64) {
 	}
 }
 
-// Finalize clamps the candidate count, records it, and moves the deepest penetration point to index 0.
-func (cp *ContactPoints) Finalize(candCount int) {
-	if candCount <= 0 {
-		cp.count = 0
-		return
-	}
-	if candCount > len(cp.ptr) {
-		candCount = len(cp.ptr)
-	}
-	deepestIdx := 0
-	for i := 1; i < candCount; i++ {
-		if cp.ptr[i].penetration > cp.ptr[deepestIdx].penetration {
-			deepestIdx = i
-		}
-	}
-	cp.count = candCount
-	if deepestIdx > 0 {
-		deepPtr := cp.ptr[deepestIdx]
-		for i := deepestIdx; i > 0; i-- {
-			cp.ptr[i] = cp.ptr[i-1]
-		}
-		cp.ptr[0] = deepPtr
-	}
-}
-
 // CopyFrom copies up to count contact points from src and updates the stored count.
 // It clamps count to the valid range for both source and destination.
 func (cp *ContactPoints) CopyFrom(src *ContactPoints, count int) {
@@ -89,9 +64,9 @@ func (cp *ContactPoints) CopyFrom(src *ContactPoints, count int) {
 	if count > len(cp.ptr) {
 		count = len(cp.ptr)
 	}
-	if count > len(src.ptr) {
-		count = len(src.ptr)
-	}
+	//if count > len(src.ptr) {
+	//	count = len(src.ptr)
+	//}
 	cp.count = count
 	for i := 0; i < count; i++ {
 		s := src.ptr[i]
@@ -136,6 +111,31 @@ func (cp *ContactPoints) CopyIndex(dstIdx int, srcIdx int) {
 	dst.Set(src.x, src.y, src.z, src.penetration)
 }
 
+// Finalize clamps the candidate count, records it, and moves the deepest penetration point to index 0.
+func (cp *ContactPoints) Finalize(candidatesCount int) {
+	if candidatesCount <= 0 {
+		cp.count = 0
+		return
+	}
+	if candidatesCount > len(cp.ptr) {
+		candidatesCount = len(cp.ptr)
+	}
+	deepestIdx := 0
+	for i := 1; i < candidatesCount; i++ {
+		if cp.ptr[i].penetration > cp.ptr[deepestIdx].penetration {
+			deepestIdx = i
+		}
+	}
+	cp.count = candidatesCount
+	if deepestIdx > 0 {
+		deepPtr := cp.ptr[deepestIdx]
+		for i := deepestIdx; i > 0; i-- {
+			cp.ptr[i] = cp.ptr[i-1]
+		}
+		cp.ptr[0] = deepPtr
+	}
+}
+
 // CollectPlaneCandidates gathers penetrating polygon vertices projected along the plane normal as contact candidates.
 // It clamps stored depth to maxDepth when positive, removes duplicates, and returns the candidate count.
 func (cp *ContactPoints) CollectPlaneCandidates(poly *ClipPolygon, planeX, planeY, planeZ, planeNX, planeNY, planeNZ, shiftScale, maxDepth float64) int {
@@ -178,7 +178,7 @@ func (cp *ContactPoints) Reduce(count int) (*ContactPoint, *ContactPoint, *Conta
 		if i == i0 {
 			continue
 		}
-		if d := pointDistSq(cp.ptr[i].x, cp.ptr[i].y, cp.ptr[i].z, p0.x, p0.y, p0.z); d > maxD1 {
+		if d := PointDistSq(cp.ptr[i].x, cp.ptr[i].y, cp.ptr[i].z, p0.x, p0.y, p0.z); d > maxD1 {
 			maxD1 = d
 			i1 = i
 		}
@@ -212,9 +212,9 @@ func (cp *ContactPoints) Reduce(count int) (*ContactPoint, *ContactPoint, *Conta
 			continue
 		}
 		c := cp.ptr[i]
-		d0 := pointDistSq(c.x, c.y, c.z, p0.x, p0.y, p0.z)
-		d1 := pointDistSq(c.x, c.y, c.z, p1.x, p1.y, p1.z)
-		d2 := pointDistSq(c.x, c.y, c.z, p2.x, p2.y, p2.z)
+		d0 := PointDistSq(c.x, c.y, c.z, p0.x, p0.y, p0.z)
+		d1 := PointDistSq(c.x, c.y, c.z, p1.x, p1.y, p1.z)
+		d2 := PointDistSq(c.x, c.y, c.z, p2.x, p2.y, p2.z)
 		minD := math.Min(d0, math.Min(d1, d2))
 		if minD > maxMinD {
 			maxMinD = minD
@@ -256,7 +256,7 @@ func (cp *ContactPoints) RemoveDuplicate(count int, depth float64, cx, cy, cz fl
 	duplicate := false
 	for j := 0; j < count; j++ {
 		ptr := cp.ptr[j]
-		if pointDistSq(cx, cy, cz, ptr.x, ptr.y, ptr.z) < clipDedupSq {
+		if PointDistSq(cx, cy, cz, ptr.x, ptr.y, ptr.z) < clipDedupSq {
 			if depth > ptr.penetration {
 				ptr.penetration = depth
 			}

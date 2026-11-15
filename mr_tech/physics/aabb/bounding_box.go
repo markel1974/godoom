@@ -166,15 +166,21 @@ func (r *BoundingBox) rotDotPrev() float64 {
 	return d
 }
 
-// GetAngularSweepArc returns the maximum corner arc distance R*theta traveled during this step's rotation.
-func (r *BoundingBox) GetAngularSweepArc() float64 {
-	cosHalf := r.rotDotPrev()
-	if cosHalf >= 1.0-1e-12 {
-		return 0.0
-	}
+// GetAngularSweepBounds returns the rotation angle (radians) from qPrev to qRotation and the bounding sphere radius.
+func (r *BoundingBox) GetAngularSweepBounds() (float64, float64) {
 	hx, hy, hz := r.size.GetCenter()
 	radius := math.Sqrt(hx*hx + hy*hy + hz*hz)
-	return radius * 2.0 * math.Acos(cosHalf)
+	cosHalf := r.rotDotPrev()
+	if cosHalf >= 1.0-1e-12 {
+		return 0.0, radius
+	}
+	return 2.0 * math.Acos(cosHalf), radius
+}
+
+// GetAngularSweepArc returns the maximum corner arc distance R*theta traveled during this step's rotation.
+func (r *BoundingBox) GetAngularSweepArc() float64 {
+	theta, radius := r.GetAngularSweepBounds()
+	return radius * theta
 }
 
 // GetSweptHalfExtents returns conservative world AABB half-extents enclosing the box rotation from qPrev to qRotation.

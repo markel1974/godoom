@@ -148,40 +148,51 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 // findSweptImpact advances two moving OBBs to their first swept contact and builds the contact manifold.
 // It returns the impact time in [0,1] and whether an impact was found.
 func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64, offX, offY, offZ, rotBound float64) (float64, bool) {
-	const maxCAIter = 16
+	const maxCAIter = 32
 	const ccdGapTol = 1e-3
-	const minStep = 1e-3
+	const minProgressStep = 1e-12
 
 	ax0, ay0, az0 := r.center.Get()
 	bx0, by0, bz0 := other.center.Get()
 	scx, scy, scz := r.size.GetCenter()
 	ocx, ocy, ocz := other.size.GetCenter()
 	baseDX, baseDY, baseDZ := bx0-ax0, by0-ay0, bz0-az0
+	offLen := math.Hypot(math.Hypot(offX, offY), offZ)
+	thetaA, radA := r.GetAngularSweepBounds()
+	thetaB, radB := other.GetAngularSweepBounds()
 
 	t := 0.0
 	closeRate := 0.0
 	hitFound := false
 
 	for iter := 0; iter < maxCAIter; iter++ {
-		r.qPrev.Nlerp(r.qRotation, t, om.qInterpA)
+		r.qPrev.Slerp(r.qRotation, t, om.qInterpA)
 		om.axesA.Set(om.qInterpA.ToAxes())
-		other.qPrev.Nlerp(other.qRotation, t, om.qInterpB)
+		other.qPrev.Slerp(other.qRotation, t, om.qInterpB)
 		om.axesB.Set(om.qInterpB.ToAxes())
 
-		sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
+		curDX := baseDX + offX*t
+		curDY := baseDY + offY*t
+		curDZ := baseDZ + offZ*t
+		sat.Compute(curDX, curDY, curDZ, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
 		if sat.hit {
 			hitFound = true
 			break
 		}
 		gap := sat.maxGap
 		gx, gy, gz := sat.gx, sat.gy, sat.gz
-		closeRate = math.Max(0.0, offX*gx+offY*gy+offZ*gz) + rotBound
+		// Bound rotational lever arm by maximum reachable separation over [t, 1] using constant-speed Slerp rates.
+		maxFutureDist := math.Sqrt(curDX*curDX+curDY*curDY+curDZ*curDZ) + offLen*(1.0-t)
+		effRadA := math.Min(radA, maxFutureDist+radB)
+		effRadB := math.Min(radB, maxFutureDist+radA)
+		effRotBound := effRadA*thetaA + effRadB*thetaB
+		closeRate = math.Max(0.0, offX*gx+offY*gy+offZ*gz) + effRotBound
 		if gap <= ccdGapTol {
 			if closeRate > 1e-9 && t < 1.0 {
 				t = math.Min(1.0, t+(gap+1e-4)/closeRate)
-				r.qPrev.Nlerp(r.qRotation, t, om.qInterpA)
+				r.qPrev.Slerp(r.qRotation, t, om.qInterpA)
 				om.axesA.Set(om.qInterpA.ToAxes())
-				other.qPrev.Nlerp(other.qRotation, t, om.qInterpB)
+				other.qPrev.Slerp(other.qRotation, t, om.qInterpB)
 				om.axesB.Set(om.qInterpB.ToAxes())
 				sat.Compute(baseDX+offX*t, baseDY+offY*t, baseDZ+offZ*t, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
 			}
@@ -192,8 +203,8 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 			return 1.0, false
 		}
 		dtStep := gap / closeRate
-		if dtStep < minStep {
-			dtStep = minStep
+		if dtStep < minProgressStep {
+			dtStep = minProgressStep
 		}
 		t += dtStep
 		if t > 1.0 {

@@ -385,7 +385,7 @@ func (b *Things) createPlayer(pos geometry.XYZ) *config.Player {
 	player.Bobbing.SwayScale = 1.0 //mod
 	player.Bobbing.SwayOffsetX = 50
 	player.Bobbing.SwayOffsetY = -0.9
-	player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
+	player.Bobbing.MaxAmplitudeX = 2.0 // Keep lateral bobbing within playerRadius (2.5) so camera never clips behind walls
 	player.Bobbing.MaxAmplitudeY = 5.5
 	player.Bobbing.StrideLength = 0.07 //mod //0.0015 // FREQUENCY: 1000 * 0.0007 = 0.7 rad/frame.
 	//breathing

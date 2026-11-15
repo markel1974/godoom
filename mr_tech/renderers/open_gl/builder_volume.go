@@ -319,8 +319,19 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		}
 	}
 
+	player := things.GetPlayer()
+	var playerID uint64
+	hasPlayer := player != nil
+	if hasPlayer {
+		playerID = player.GetEntity().GetId()
+	}
+
 	qOcclusion := func(object aabb.IObject) bool {
 		thing := object.(volumes.IThing)
+		isPlayer := hasPlayer && thing.GetEntity().GetId() == playerID
+		if !thing.IsVisible() {
+			return false
+		}
 		occState := w.occlusion.GetState(thing.GetEntity().GetId())
 		if occState != nil && !occState.IsVisible {
 			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
@@ -334,7 +345,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false
 		}
 
-		things.StageAdd(thing)
+		if !isPlayer {
+			things.StageAdd(thing)
+		}
 
 		pushPassThing(thing, pFaces, pNextFaces, lp, renderMode)
 		//counter++
@@ -351,6 +364,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		return false
 	}
 
+	if hasPlayer {
+		things.StageAdd(player)
+	}
 	things.QueryStatic(qStatic) //UI Objects
 	things.QueryFrustum(frustumFront, qOcclusion)
 

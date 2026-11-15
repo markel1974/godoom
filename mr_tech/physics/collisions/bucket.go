@@ -24,6 +24,27 @@ const (
 	BucketFloor     = BucketType(5) // +Z
 )
 
+// Normal2BucketType returns the bucket matching the dominant signed axis of the given normal vector.
+func Normal2BucketType(nX, nY, nZ float64) BucketType {
+	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
+	if nAbsX > nAbsY && nAbsX > nAbsZ {
+		if nX < 0 {
+			return BucketWallWest
+		}
+		return BucketWallEast
+	}
+	if nAbsY > nAbsZ {
+		if nY < 0 {
+			return BucketWallNorth
+		}
+		return BucketWallSouth
+	}
+	if nZ > 0 {
+		return BucketFloor
+	}
+	return BucketCeiling
+}
+
 // String returns the string representation of the BucketType value.
 func (p BucketType) String() string {
 	switch p {

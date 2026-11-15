@@ -123,6 +123,7 @@ type Cage struct {
 	prevQZ              float64
 	prevQW              float64
 	forceStaticClamp    bool
+	uprightHull         bool
 	clampNormals        [16][3]float64
 	clampNormalsLen     int
 	flatWalls           [32]flatWallPlane
@@ -184,6 +185,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	entCX, entCY, entCZ := lEnt.GetCenter()
 	s.cX, s.cY, s.cZ = entCX, entCY, entCZ
 	s.objOffX, s.objOffY, s.objOffZ = 0, 0, 0
+	s.uprightHull = false
 
 	if lEnt.KeepUpright() {
 		if objAABB := s.object.GetAABB(); objAABB != nil {
@@ -203,6 +205,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 				s.objOffX = s.cX - entCX
 				s.objOffY = s.cY - entCY
 				s.objOffZ = s.cZ - entCZ
+				s.uprightHull = true
 			}
 		}
 	}
@@ -219,16 +222,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
-	sx, sy, sz := lEnt.GetSweptHalfExtents()
-	if sx < s.eRadX {
-		sx = s.eRadX
-	}
-	if sy < s.eRadY {
-		sy = s.eRadY
-	}
-	if sz < s.eRadZ {
-		sz = s.eRadZ
-	}
+	sx, sy, sz := s.sweptHalfExtents(lEnt)
 
 	// Calculate absolute extremes (Broad-Phase Linear + Angular Swept Volume)
 	minX := s.cX - sx + math.Min(0, s.dX)
@@ -465,26 +459,6 @@ func (s *Cage) pruneCoplanarCornerHits(nX, nY, nZ, ax, ay, az float64) {
 	}
 }
 
-func classifyBucketNormal(nX, nY, nZ float64) BucketType {
-	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
-	if nAbsX > nAbsY && nAbsX > nAbsZ {
-		if nX < 0 {
-			return BucketWallWest
-		}
-		return BucketWallEast
-	}
-	if nAbsY > nAbsZ {
-		if nY < 0 {
-			return BucketWallNorth
-		}
-		return BucketWallSouth
-	}
-	if nZ > 0 {
-		return BucketFloor
-	}
-	return BucketCeiling
-}
-
 // commitDynamicManifold resolves an overlapping or swept-colliding OBB pair using 15-axis SAT (faces + edge-edge)
 // with angular+linear conservative advancement CCD and up to 4 clipped manifold contact points.
 func (s *Cage) commitDynamicManifold(rCage *Cage) {
@@ -513,7 +487,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 	rTx, rTy, rTz := rCage.GetT()
 	rRadX, rRadY, rRadZ := rCage.GetRad()
 
-	b := classifyBucketNormal(m.NormalX, m.NormalY, m.NormalZ)
+	b := Normal2BucketType(m.NormalX, m.NormalY, m.NormalZ)
 	if !m.Hit {
 		if m.Gap <= floorGroundTolerance && s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY) {
 			if b == BucketFloor && m.NormalZ >= floorNormalThreshold {
@@ -663,16 +637,7 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 				wHz += math.Abs(rDZ - s.dZ)
 			}
 		}
-		sx, sy, sz := lEnt.GetSweptHalfExtents()
-		if sx < s.eRadX {
-			sx = s.eRadX
-		}
-		if sy < s.eRadY {
-			sy = s.eRadY
-		}
-		if sz < s.eRadZ {
-			sz = s.eRadZ
-		}
+		sx, sy, sz := s.sweptHalfExtents(lEnt)
 		wHx += math.Abs(nX) * sx * 2.0
 		wHy += math.Abs(nY) * sy * 2.0
 		wHz += math.Abs(nZ) * sz * 2.0
@@ -808,6 +773,24 @@ func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
 	return false
 }
 
+// sweptHalfExtents returns the broad-phase half-extents for s without inflating upright unrotated hulls on yaw.
+func (s *Cage) sweptHalfExtents(ent *rigid_body.Entity) (float64, float64, float64) {
+	if s.uprightHull {
+		return s.eRadX, s.eRadY, s.eRadZ
+	}
+	sx, sy, sz := ent.GetSweptHalfExtents()
+	if sx < s.eRadX {
+		sx = s.eRadX
+	}
+	if sy < s.eRadY {
+		sy = s.eRadY
+	}
+	if sz < s.eRadZ {
+		sz = s.eRadZ
+	}
+	return sx, sy, sz
+}
+
 // BeginStaticClamp prepares a temporary swept broadphase cage from the last valid clamped center to the current entity center,
 // returning saved frame center, displacement, and target values for restoration in EndStaticClamp.
 func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64, lAABB *aabb.AABB) {
@@ -819,16 +802,7 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	s.cX, s.cY, s.cZ = s.clampX+s.objOffX, s.clampY+s.objOffY, s.clampZ+s.objOffZ
 	s.tX, s.tY, s.tZ = curX+s.objOffX, curY+s.objOffY, curZ+s.objOffZ
 	s.dX, s.dY, s.dZ = s.tX-s.cX, s.tY-s.cY, s.tZ-s.cZ
-	sx, sy, sz := ent.GetSweptHalfExtents()
-	if sx < s.eRadX {
-		sx = s.eRadX
-	}
-	if sy < s.eRadY {
-		sy = s.eRadY
-	}
-	if sz < s.eRadZ {
-		sz = s.eRadZ
-	}
+	sx, sy, sz := s.sweptHalfExtents(ent)
 	minX := s.cX - sx + math.Min(0.0, s.dX)
 	maxX := s.cX + sx + math.Max(0.0, s.dX)
 	minY := s.cY - sy + math.Min(0.0, s.dY)
@@ -1106,6 +1080,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 		return out, false
 	}
 
+	slopeAdjusted := false
 	if (solidWE || solidNS) && s.object.GetEntity().KeepUpright() {
 		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
 		var cornerHit bool
@@ -1120,7 +1095,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), 0.0
 			solidWE = nAbsX > nAbsY
 			solidNS = !solidWE
-			bucket = classifyBucketNormal(nX, nY, 0.0)
+			bucket = Normal2BucketType(nX, nY, 0.0)
 			rayEff = s.effectiveRadius(nX, nY, 0.0)
 			penetration = cPen
 			dist = -cPen
@@ -1131,6 +1106,30 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			out.nX, out.nY, out.nZ = nX, nY, 0.0
 			out.anchorX, out.anchorY, out.anchorZ = qxW, qyW, s.tZ
 			out.cornerHit = true
+		}
+	} else if s.object.GetEntity().KeepUpright() {
+		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
+		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW := s.refineKeepUprightSlope(rFace, bucket, nX, nY, nZ, penetration, tunneled)
+		if !valid {
+			return out, false
+		}
+		if adjusted {
+			nX, nY, nZ = cxN, cyN, czN
+			nAbsX, nAbsY, nAbsZ = math.Abs(nX), math.Abs(nY), math.Abs(nZ)
+			solidWE = nAbsX > nAbsY && nAbsX > nAbsZ
+			solidNS = !solidWE && nAbsY > nAbsZ
+			bucket = Normal2BucketType(nX, nY, nZ)
+			rayEff = s.effectiveRadius(nX, nY, nZ)
+			penetration = cPen
+			dist = -cPen
+			distTarget = rayEff - cPen
+			distStart = distTarget - (s.dX*nX + s.dY*nY + s.dZ*nZ)
+			out.bucket = bucket
+			out.dist = dist
+			out.nX, out.nY, out.nZ = nX, nY, nZ
+			out.anchorX, out.anchorY, out.anchorZ = qxW, qyW, qzW
+			out.cornerHit = cornerHit
+			slopeAdjusted = true
 		}
 	}
 
@@ -1219,7 +1218,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	}
 	minOverlap := axisOverlap + deltaPen
 
-	if penetration > minOverlap {
+	if !slopeAdjusted && penetration > minOverlap {
 		if spikeTipCap && distTarget >= -satFilterEpsilon {
 			penetration = minOverlap
 		} else if penetration > minOverlap+satFilterEpsilon {
@@ -1285,6 +1284,48 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	bufA[1][0], bufA[1][1], bufA[1][2] = rFace.Get1()
 	bufA[2][0], bufA[2][1], bufA[2][2] = rFace.Get2()
 
+	invRX := 1.0 / s.eRadX
+	invRY := 1.0 / s.eRadY
+	invRZ := 1.0 / s.eRadZ
+	qx3, qy3, qz3, _ := closestPointOnTriangleZero(
+		(bufA[0][0]-s.tX)*invRX, (bufA[0][1]-s.tY)*invRY, (bufA[0][2]-s.tZ)*invRZ,
+		(bufA[1][0]-s.tX)*invRX, (bufA[1][1]-s.tY)*invRY, (bufA[1][2]-s.tZ)*invRZ,
+		(bufA[2][0]-s.tX)*invRX, (bufA[2][1]-s.tY)*invRY, (bufA[2][2]-s.tZ)*invRZ,
+	)
+	bestSq3D := qx3*qx3 + qy3*qy3 + qz3*qz3
+	if bestSq3D >= 1.0-1e-9 && !tunneled {
+		return false, false, 0, 0, 0, 0, 0
+	}
+	if !tunneled && bestSq3D > 1e-12 && bestSq3D < 1.0-1e-9 {
+		rMinZ := math.Min(bufA[0][2], math.Min(bufA[1][2], bufA[2][2]))
+		rMaxZ := math.Max(bufA[0][2], math.Max(bufA[1][2], bufA[2][2]))
+		if rMinZ > s.tZ || rMaxZ < s.tZ {
+			rZ := math.Sqrt(math.Max(0.0, 1.0-qz3*qz3))
+			qXY3 := math.Hypot(qx3, qy3)
+			if qXY3 > 1e-6 && rZ > qXY3 {
+				scaleH := rZ/qXY3 - 1.0
+				dxH := -qx3 * scaleH * s.eRadX
+				dyH := -qy3 * scaleH * s.eRadY
+				horizPen3D := math.Hypot(dxH, dyH)
+				if horizPen3D <= 1e-12 {
+					return false, false, 0, 0, 0, 0, 0
+				}
+				hx := dxH / horizPen3D
+				hy := dyH / horizPen3D
+				dot := 1.0
+				if nXY := math.Hypot(nX, nY); nXY > 1e-9 {
+					dot = hx*(nX/nXY) + hy*(nY/nXY)
+				}
+				if dot >= -0.5 {
+					if horizPen3D >= penetration*1.5 && dot > 0.7 {
+						return true, false, 0, 0, 0, 0, 0
+					}
+					return true, true, hx, hy, horizPen3D, s.tX + qx3*s.eRadX, s.tY + qy3*s.eRadY
+				}
+			}
+		}
+	}
+
 	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
 	if n < 3 {
 		return false, false, 0, 0, 0, 0, 0
@@ -1293,9 +1334,6 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	if n < 3 {
 		return false, false, 0, 0, 0, 0, 0
 	}
-
-	invRX := 1.0 / s.eRadX
-	invRY := 1.0 / s.eRadY
 
 	for i := 0; i < n; i++ {
 		poly2D[i][0] = (bufA[i][0] - s.tX) * invRX
@@ -1388,6 +1426,161 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		}
 	}
 	return true, true, hx, hy, horizPen, s.tX + qx*s.eRadX, s.tY + qy*s.eRadY
+}
+
+// closestPointOnSegmentZero returns the point on segment AB closest to the origin.
+// closestPointOnSegmentZero returns A when the segment is degenerate.
+func closestPointOnSegmentZero(ax, ay, az, bx, by, bz float64) (float64, float64, float64) {
+	abx, aby, abz := bx-ax, by-ay, bz-az
+	denom := abx*abx + aby*aby + abz*abz
+	if denom <= 1e-18 {
+		return ax, ay, az
+	}
+	t := -(ax*abx + ay*aby + az*abz) / denom
+	if t <= 0.0 {
+		return ax, ay, az
+	}
+	if t >= 1.0 {
+		return bx, by, bz
+	}
+	return ax + t*abx, ay + t*aby, az + t*abz
+}
+
+// closestPointOnTriangleZero returns the closest point on 3D triangle (a, b, c) to the origin
+// and reports whether that point lies on a vertex or edge boundary rather than the triangle interior.
+func closestPointOnTriangleZero(ax, ay, az, bx, by, bz, cx, cy, cz float64) (qx, qy, qz float64, onBoundary bool) {
+	abx, aby, abz := bx-ax, by-ay, bz-az
+	acx, acy, acz := cx-ax, cy-ay, cz-az
+	apx, apy, apz := -ax, -ay, -az
+	d1 := abx*apx + aby*apy + abz*apz
+	d2 := acx*apx + acy*apy + acz*apz
+	if d1 <= 0.0 && d2 <= 0.0 {
+		return ax, ay, az, true
+	}
+
+	bpx, bpy, bpz := -bx, -by, -bz
+	d3 := abx*bpx + aby*bpy + abz*bpz
+	d4 := acx*bpx + acy*bpy + acz*bpz
+	if d3 >= 0.0 && d4 <= d3 {
+		return bx, by, bz, true
+	}
+
+	vc := d1*d4 - d3*d2
+	if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+		v := d1 / (d1 - d3)
+		return ax + v*abx, ay + v*aby, az + v*abz, true
+	}
+
+	cpx, cpy, cpz := -cx, -cy, -cz
+	d5 := abx*cpx + aby*cpy + abz*cpz
+	d6 := acx*cpx + acy*cpy + acz*cpz
+	if d6 >= 0.0 && d5 <= d6 {
+		return cx, cy, cz, true
+	}
+
+	vb := d5*d2 - d1*d6
+	if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+		w := d2 / (d2 - d6)
+		return ax + w*acx, ay + w*acy, az + w*acz, true
+	}
+
+	va := d3*d6 - d5*d4
+	if va <= 0.0 && (d4-d3) >= 0.0 && (d5-d6) >= 0.0 {
+		w := (d4 - d3) / ((d4 - d3) + (d5 - d6))
+		return bx + w*(cx-bx), by + w*(cy-by), bz + w*(cz-bz), true
+	}
+
+	denom := va + vb + vc
+	if denom <= 1e-18 {
+		q0x, q0y, q0z := closestPointOnSegmentZero(ax, ay, az, bx, by, bz)
+		bestSq := q0x*q0x + q0y*q0y + q0z*q0z
+		q1x, q1y, q1z := closestPointOnSegmentZero(ax, ay, az, cx, cy, cz)
+		if dSq := q1x*q1x + q1y*q1y + q1z*q1z; dSq < bestSq {
+			bestSq = dSq
+			q0x, q0y, q0z = q1x, q1y, q1z
+		}
+		q2x, q2y, q2z := closestPointOnSegmentZero(bx, by, bz, cx, cy, cz)
+		if dSq := q2x*q2x + q2y*q2y + q2z*q2z; dSq < bestSq {
+			q0x, q0y, q0z = q2x, q2y, q2z
+		}
+		return q0x, q0y, q0z, true
+	}
+
+	invDenom := 1.0 / denom
+	v := vb * invDenom
+	w := vc * invDenom
+	return ax + abx*v + acx*w, ay + aby*v + acy*w, az + abz*v + acz*w, false
+}
+
+// refineKeepUprightSlope validates finite 3D triangle vs ellipsoid contact for floor/ceiling faces
+// and redirects side-grazed bevel or ledge hits into smooth separation without vertical catapults.
+func (s *Cage) refineKeepUprightSlope(rFace IFace, bucket BucketType, nX, nY, nZ, penetration float64, tunneled bool) (valid, adjusted, cornerHit bool, cNX, cNY, cNZ, cPen, qxW, qyW, qzW float64) {
+	if s.eRadX <= 0 || s.eRadY <= 0 || s.eRadZ <= 0 {
+		return false, false, false, 0, 0, 0, 0, 0, 0, 0
+	}
+	invRX := 1.0 / s.eRadX
+	invRY := 1.0 / s.eRadY
+	invRZ := 1.0 / s.eRadZ
+
+	v0x, v0y, v0z := rFace.Get0()
+	v1x, v1y, v1z := rFace.Get1()
+	v2x, v2y, v2z := rFace.Get2()
+
+	qx, qy, qz, onBoundary := closestPointOnTriangleZero(
+		(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
+		(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
+		(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
+	)
+
+	bestSq := qx*qx + qy*qy + qz*qz
+	if bestSq >= 1.0-1e-9 {
+		return tunneled, false, false, 0, 0, 0, 0, 0, 0, 0
+	}
+	if bestSq <= 1e-12 {
+		return true, false, false, 0, 0, 0, 0, 0, 0, 0
+	}
+
+	qxW = s.tX + qx*s.eRadX
+	qyW = s.tY + qy*s.eRadY
+	qzW = s.tZ + qz*s.eRadZ
+
+	qLen := math.Sqrt(bestSq)
+	scale := 1.0/qLen - 1.0
+	dx := -qx * scale * s.eRadX
+	dy := -qy * scale * s.eRadY
+	dz := -qz * scale * s.eRadZ
+	pen3D := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	if pen3D <= 1e-12 {
+		return false, false, false, 0, 0, 0, 0, 0, 0, 0
+	}
+
+	// Side/edge hits on ledges or sloped bevels should separate horizontally when Z separation fights the floor/ceiling.
+	qXY := math.Hypot(qx, qy)
+	if !tunneled && qXY > 1e-6 && math.Abs(qz) < 1.0-1e-9 {
+		rZ := math.Sqrt(math.Max(0.0, 1.0-qz*qz))
+		if rZ > qXY {
+			scaleH := rZ/qXY - 1.0
+			dxH := -qx * scaleH * s.eRadX
+			dyH := -qy * scaleH * s.eRadY
+			if penHoriz := math.Hypot(dxH, dyH); penHoriz > 1e-12 {
+				wrongSideOfPlane := (bucket == BucketCeiling && qz < 0.0) || (bucket == BucketFloor && qz > 0.0)
+				midBodyEdge := onBoundary && math.Abs(qz) < 0.707 && penHoriz < penetration*0.85
+				if (wrongSideOfPlane && penHoriz <= pen3D*2.0) || midBodyEdge {
+					return true, true, onBoundary, dxH / penHoriz, dyH / penHoriz, 0.0, penHoriz, qxW, qyW, qzW
+				}
+			}
+		}
+	}
+
+	// For non-flat sloped ceiling/floor edges or oversized infinite-plane penetrations, use exact 3D finite-triangle separation.
+	if math.Abs(nZ) < 0.999 && (onBoundary || pen3D < penetration*0.75) {
+		nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
+		if pen3D < penetration-satFilterEpsilon || (nx3*nX+ny3*nY+nz3*nZ) > 0.0 {
+			return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW
+		}
+	}
+
+	return true, false, false, 0, 0, 0, 0, 0, 0, 0
 }
 
 // growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.

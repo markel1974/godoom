@@ -37,7 +37,7 @@ type Vertices3D struct {
 // It validates model parts, links, action maps, and initializes face and transform buffers.
 func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
-		solver:        collisions.NewSolver(),
+		solver:        nil,
 		links:         articulated_dynamics.NewLinks(),
 		joints:        articulated_dynamics.NewJoints(),
 		elements:      NewVertices3DElements(cfg, materials),
@@ -55,7 +55,7 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 	if cErr != nil {
 		panic(cErr)
 	}
-	if err := v.joints.Setup(v.elements.vVolume.entity, configJoints, v.links); err != nil {
+	if err := v.joints.Setup(v.elements.vVolume.solver, configJoints, v.links); err != nil {
 		panic(err)
 	}
 	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
@@ -80,6 +80,7 @@ func (v *Vertices3D) Setup(thing IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}
+	v.solver = v.elements.GetSolver()
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func (v *Vertices3D) GetContainerVolume() IContainerVolume {
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	ent := v.elements.vVolume.entity
+	ent := v.elements.vVolume.GetSolver().GetEntity()
 	cx, cy, cz := ent.GetCenter()
 	b := ent.GetAABB()
 	if v.minX <= v.maxX {
@@ -112,8 +113,9 @@ func (v *Vertices3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
 	}
+	ent := v.elements.vVolume.GetSolver().GetEntity()
 	v.compiled = false
-	v.elements.vVolume.entity.LockUpright()
+	ent.LockUpright()
 	v.elements.Freeze()
 	v.joints.SetRagdollCollapse()
 	v.joints.ActivateRagdoll()
@@ -154,7 +156,8 @@ func (v *Vertices3D) SetAction(idx int) {
 		}
 	}
 	if enteringRagdoll {
-		v.elements.vVolume.entity.LockUpright()
+		ent := v.elements.vVolume.GetSolver().GetEntity()
+		ent.LockUpright()
 		v.joints.ActivateRagdoll()
 	}
 }
@@ -170,7 +173,7 @@ func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 // Compile updates all model parts for the tick and writes transformed frame data into render buffers.
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) Compile(tick uint64) bool {
-	ent := v.elements.vVolume.entity
+	ent := v.elements.vVolume.GetSolver().GetEntity()
 
 	cx, cy, cz := ent.GetCenter()
 	qx, qy, qz, qw := ent.GetQRotation().Get()

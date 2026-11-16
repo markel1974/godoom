@@ -152,7 +152,7 @@ func (b *Bucket) RemoveEntry(target *Entry) bool {
 // HasEntryFor reports whether the Bucket currently holds an active dynamic entry for entityId.
 func (b *Bucket) HasEntryFor(entityId uint64) bool {
 	for i := 0; i < b.containerCounter; i++ {
-		if rCage := b.currPool[i].rCage; rCage != nil && rCage.object.GetEntity().GetId() == entityId {
+		if rCage := b.currPool[i].rCage; rCage != nil && rCage.GetEntity().GetId() == entityId {
 			return true
 		}
 	}
@@ -177,7 +177,7 @@ func (b *Bucket) Penetrable(from uint64, depth int) bool {
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.object.GetEntity().GetId() == from {
+		if entry.rCage != nil && entry.rCage.GetEntity().GetId() == from {
 			continue
 		}
 		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
@@ -206,7 +206,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 		existing := b.currPool[i]
 		// Deduplicate coincident dynamic contact points for the same body, preserving up to 4 manifold corners.
 		if rCage != nil && existing.rCage != nil {
-			if rCage.object.GetEntity().GetId() == existing.rCage.object.GetEntity().GetId() {
+			if rCage.GetEntity().GetId() == existing.rCage.GetEntity().GetId() {
 				dx := p0x - existing.p0X
 				dy := p0y - existing.p0Y
 				dz := p0z - existing.p0Z
@@ -381,7 +381,7 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 	}
 	var targetId uint64
 	if entry.rCage != nil {
-		targetId = entry.rCage.object.GetEntity().GetId()
+		targetId = entry.rCage.GetEntity().GetId()
 	}
 
 	lCage := entry.lCage
@@ -396,7 +396,7 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 		}
 		var wId uint64
 		if w.rCage != nil {
-			wId = w.rCage.object.GetEntity().GetId()
+			wId = w.rCage.GetEntity().GetId()
 		}
 		if wId != targetId {
 			continue

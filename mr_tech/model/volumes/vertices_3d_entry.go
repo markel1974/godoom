@@ -12,20 +12,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // Vertices3DEntryComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
 type Vertices3DEntryComposed struct {
 	volume *Volume
-	entity *rigid_body.Entity
+	solver *collisions.Solver
 }
 
 // NewVertices3DEntryComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
 func NewVertices3DEntryComposed(volume *Volume) *Vertices3DEntryComposed {
 	return &Vertices3DEntryComposed{
-		entity: volume.GetEntity(),
+		solver: volume.GetSolver(),
 		volume: volume,
 	}
 }
@@ -35,14 +34,14 @@ func (vm *Vertices3DEntryComposed) QueryOverlaps(object aabb.IObject, callback f
 	vm.volume.QueryOverlaps(object, callback)
 }
 
-// GetEntity returns the physics.Entity associated with the VerticeMultiSpriteEntity.
-func (vm *Vertices3DEntryComposed) GetEntity() *rigid_body.Entity {
-	return vm.entity
+// GetSolver returns the collision solver associated with the composed 3D vertices entry.
+func (vm *Vertices3DEntryComposed) GetSolver() *collisions.Solver {
+	return vm.solver
 }
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity encapsulated by this instance.
 func (vm *Vertices3DEntryComposed) GetAABB() *aabb.AABB {
-	return vm.entity.GetAABB()
+	return vm.solver.GetEntity().GetAABB()
 }
 
 // GetFaces retrieves the collection of faces associated with the entity's current volume.
@@ -116,7 +115,7 @@ type Vertices3DEntry struct {
 // It panics if required frame, action interval, or group size configuration is invalid.
 func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
 	v := &Vertices3DEntry{
-		solver:    collisions.NewSolver(),
+		solver:    nil,
 		cfg:       cfg,
 		materials: materials,
 	}
@@ -226,6 +225,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 
 // Setup assigns thing to all volumes and initializes the collision solver for it.
 func (v *Vertices3DEntry) Setup(thing IThing) error {
+	v.solver = v.comp.GetSolver()
 	for _, f := range v.volumes {
 		f.SetThing(thing)
 	}
@@ -242,7 +242,7 @@ func (v *Vertices3DEntry) GetSolver() *collisions.Solver {
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
-	ent := v.comp.GetEntity()
+	ent := v.comp.GetSolver().GetEntity()
 	b := ent.GetAABB()
 	if v.singleFrame {
 		qx, qy, qz, qw := ent.GetQRotation().Get()
@@ -327,8 +327,8 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 		v.lerpT = lerpT
 	}
 
-	entity := v.comp.GetEntity()
-	q := entity.GetQRotation()
+	ent := v.comp.GetSolver().GetEntity()
+	q := ent.GetQRotation()
 	qx, qy, qz, qw := q.Get()
 	isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
 
@@ -411,8 +411,8 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 		prevMinZ := v.minZ
 		v.minX, v.minY, v.minZ = minX, minY, minZ
 		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
-		if minZ > prevMinZ+1e-3 && entity.IsSleeping() {
-			entity.WakeUp()
+		if minZ > prevMinZ+1e-3 && ent.IsSleeping() {
+			ent.WakeUp()
 		}
 	}
 
@@ -421,8 +421,8 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 		v.lastVolA = v.volA
 	}
 
-	cx, cy, cz := entity.GetCenter()
-	entity.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	cx, cy, cz := ent.GetCenter()
+	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 
 	return true
 }

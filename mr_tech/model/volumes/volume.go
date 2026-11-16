@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -18,7 +19,7 @@ type Volume struct {
 	faces      *Faces
 	tag        string
 	light      *lights.Light
-	entity     *rigid_body.Entity
+	solver     *collisions.Solver
 	facesTree  *aabb.Tree
 	thing      IThing
 	sector     *sectors.Sector
@@ -34,7 +35,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction f
 		id:         id,
 		tag:        tag,
 		faces:      NewFaces(128, false),
-		entity:     rigid_body.NewEntity(mass, restitution, friction, restCombine, frictionCombine, gForce),
+		solver:     collisions.NewSolver(mass, restitution, friction, restCombine, frictionCombine, gForce),
 		facesTree:  aabb.NewTree(64, 0.0),
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
@@ -71,11 +72,10 @@ func (v *Volume) Rebuild() bool {
 
 	v.faces.Rebuild()
 
-	v.entity.Rebuild(minX, minY, minZ, w, h, d)
-
-	v.entity.SetCentroid(v.faces.GetCentroid())
-
-	v.entity.SetInertia(v.faces.GetInertia())
+	ent := v.solver.GetEntity()
+	ent.Rebuild(minX, minY, minZ, w, h, d)
+	ent.SetCentroid(v.faces.GetCentroid())
+	ent.SetInertia(v.faces.GetInertia())
 
 	v.dirty = true
 
@@ -122,14 +122,14 @@ func (v *Volume) GetThing() IThing {
 	return v.thing
 }
 
-// GetEntity returns the physics entity associated with the volume.
-func (v *Volume) GetEntity() *rigid_body.Entity {
-	return v.entity
+// GetSolver returns the collision solver associated with the volume.
+func (v *Volume) GetSolver() *collisions.Solver {
+	return v.solver
 }
 
-// GetAABB returns the axis-aligned bounding box associated with the volume's entity.
+// GetAABB returns the axis-aligned bounding box of the volume's collision entity.
 func (v *Volume) GetAABB() *aabb.AABB {
-	return v.entity.GetAABB()
+	return v.solver.GetEntity().GetAABB()
 }
 
 // GetModelId returns the model identifier assigned to the volume.

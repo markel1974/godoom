@@ -76,7 +76,7 @@ func (t *Base) Prepare(thing volumes.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
 	}
-	entity := t.GetContainerVolume().GetEntity()
+	entity := t.GetContainerVolume().GetSolver().GetEntity()
 	maxStep := 0.0
 	if t.maxStepFactor > 0 {
 		maxStep = entity.GetDepth() * t.maxStepFactor
@@ -118,7 +118,7 @@ func (t *Base) GetAngle() float64 {
 // SetAngle updates the rotation angle of the Base instance and synchronizes the entity's orientation quaternion.
 func (t *Base) SetAngle(angle float64) {
 	t.angle = angle
-	t.GetContainerVolume().GetEntity().SetRotationAngleZ(angle)
+	t.GetContainerVolume().GetSolver().GetEntity().SetRotationAngleZ(angle)
 }
 
 // GetMaxStep returns the maximum step value associated with the Base instance.
@@ -138,7 +138,7 @@ func (t *Base) GetSpeed() float64 {
 
 // GetDistSq returns the squared distance from the light's position to the given 3D point.
 func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
-	entity := t.GetContainerVolume().GetEntity()
+	entity := t.GetContainerVolume().GetSolver().GetEntity()
 	tx, ty, tz := entity.GetCenter()
 	dx := tx - pX
 	dy := ty - pY
@@ -148,7 +148,7 @@ func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
 }
 
 func (t *Base) GetEntity() *rigid_body.Entity {
-	return t.GetContainerVolume().GetEntity()
+	return t.GetContainerVolume().GetSolver().GetEntity()
 }
 
 // GetImpulse returns the
@@ -222,7 +222,7 @@ func (t *Base) GetSolver() *collisions.Solver {
 }
 
 func (t *Base) beforePrepare() {
-	entity := t.GetContainerVolume().GetEntity()
+	entity := t.GetContainerVolume().GetSolver().GetEntity()
 	t.angle = entity.GetYaw()
 	t.Compile(textures.GlobalTick())
 }
@@ -254,7 +254,7 @@ func (t *Base) StageResolvePosition() {
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *Base) MoveTowards(dirX, dirY, speed, accelForce float64) {
-	entity := t.GetContainerVolume().GetEntity()
+	entity := t.GetContainerVolume().GetSolver().GetEntity()
 	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * speed
 	desiredVy := dirY * speed
@@ -270,7 +270,7 @@ func (t *Base) GetBase() *Base {
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
 func (t *Base) Jump(self volumes.IThing, leapX float64, leapY float64, zFactor float64) bool {
-	entity := t.GetContainerVolume().GetEntity()
+	entity := t.GetContainerVolume().GetSolver().GetEntity()
 	if !entity.IsOnGround() {
 		return false
 	}

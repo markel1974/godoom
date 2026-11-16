@@ -5,7 +5,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 const (
@@ -20,7 +19,7 @@ const (
 type IContainerVolume interface {
 	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
-	GetEntity() *rigid_body.Entity
+	GetSolver() *collisions.Solver
 }
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.

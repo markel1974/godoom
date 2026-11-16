@@ -17,6 +17,7 @@ func noopHook() {}
 type Solver struct {
 	maxStep              float64
 	cage                 *Cage
+	object               IObject
 	entity               *rigid_body.Entity
 	location             IObject
 	isActive             bool
@@ -29,8 +30,9 @@ type Solver struct {
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
-func NewSolver() *Solver {
+func NewSolver(mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Solver {
 	s := &Solver{
+		entity:               rigid_body.NewEntity(mass, restitution, friction, restCombine, frictionCombine, gForce),
 		cage:                 NewCageSequence(),
 		maxStep:              0,
 		onElasticCollision:   nil,
@@ -50,11 +52,8 @@ func (t *Solver) Setup(object IObject) error {
 	if object == nil {
 		return fmt.Errorf("nil object in solver")
 	}
-	t.entity = object.GetEntity()
-	if t.entity == nil {
-		return fmt.Errorf("nil entity in solver")
-	}
-	if err := t.cage.Setup(t, object); err != nil {
+	t.object = object
+	if err := t.cage.Setup(t); err != nil {
 		return err
 	}
 	return nil
@@ -98,6 +97,11 @@ func (t *Solver) GetCage() *Cage {
 // GetEntity returns the rigid-body entity managed by this solver.
 func (t *Solver) GetEntity() *rigid_body.Entity {
 	return t.entity
+}
+
+// GetObject returns the object associated with the solver.
+func (t *Solver) GetObject() IObject {
+	return t.object
 }
 
 // GetLocation returns the current static container location recorded for this solver.
@@ -257,7 +261,7 @@ func (t *Solver) StageResolve() {
 // StageApply applies the cage displacement, records the current location, and marks the cage as applied.
 // StageApply processes impact slots to emit collision callbacks and compute any pending step-up adjustment.
 func (t *Solver) StageApply() {
-	if location := t.cage.GetVolume(); location != nil {
+	if location := t.cage.GetVolumeObject(); location != nil {
 		t.location = location
 	}
 	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
@@ -300,7 +304,7 @@ func (t *Solver) StageApply() {
 					bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestInelasticImpact(i, rId)
 					t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
 					if t.onInelasticCollision != nil {
-						t.onInelasticCollision(rParent, bestEnergy)
+						t.onInelasticCollision(rParent.GetObject(), bestEnergy)
 					}
 					t.entity.ClearActiveContact()
 					lastInelasticId = rId

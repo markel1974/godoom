@@ -9,26 +9,26 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
 // VirtualVolume represents a virtual 3D volume used for geometric or physics computations.
 type VirtualVolume struct {
-	entity   *rigid_body.Entity
+	solver   *collisions.Solver
 	elements *Vertices3DElements
 }
 
 // NewVirtualVolume creates a virtual volume using the provided vertex elements and rigid body entity.
-func NewVirtualVolume(elements *Vertices3DElements, entity *rigid_body.Entity) *VirtualVolume {
+func NewVirtualVolume(elements *Vertices3DElements, solver *collisions.Solver) *VirtualVolume {
 	return &VirtualVolume{
 		elements: elements,
-		entity:   entity,
+		solver:   solver,
 	}
 }
 
-// GetEntity returns the rigid body entity associated with the virtual volume.
-func (v *VirtualVolume) GetEntity() *rigid_body.Entity {
-	return v.entity
+// GetSolver returns the collision solver associated with the virtual volume.
+func (v *VirtualVolume) GetSolver() *collisions.Solver {
+	return v.solver
 }
 
 // QueryOverlaps interroga i volumi attivi di tutte le parti che compongono Vertices3D
@@ -117,7 +117,8 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		}
 	}
 
-	v.vVolume = NewVirtualVolume(v, rigid_body.NewEntity(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce))
+	solver := collisions.NewSolver(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
+	v.vVolume = NewVirtualVolume(v, solver)
 	return v
 }
 
@@ -214,6 +215,11 @@ func (v *Vertices3DElements) Len() int {
 	return len(v.entries)
 }
 
+// GetSolver returns the collision solver associated with the virtual volume.
+func (v *Vertices3DElements) GetSolver() *collisions.Solver {
+	return v.vVolume.GetSolver()
+}
+
 // GetEntry returns the vertices entry at index i, or nil if i is out of range.
 func (v *Vertices3DElements) GetEntry(i int) *Vertices3DEntry {
 	if i >= 0 && i < len(v.entries) {
@@ -237,5 +243,5 @@ func (v *Vertices3DElements) UpdateEntityBounds() {
 	w := maxX - minX
 	h := maxY - minY
 	d := maxZ - minZ
-	v.vVolume.entity.SetSize(w, h, d)
+	v.vVolume.GetSolver().GetEntity().SetSize(w, h, d)
 }

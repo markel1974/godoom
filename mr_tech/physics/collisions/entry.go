@@ -138,5 +138,5 @@ func (s *Entry) Penetrable(depth int) bool {
 	v := s.rCage.buckets[s.bucket]
 	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
 	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.object.GetEntity().GetId(), depth+1)
+	return v.Penetrable(s.lCage.GetEntity().GetId(), depth+1)
 }

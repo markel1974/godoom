@@ -14,7 +14,7 @@ type ImpactMode int
 type IObject interface {
 	GetAABB() *aabb.AABB
 
-	GetEntity() *rigid_body.Entity
+	//GetEntity() *rigid_body.Entity
 }
 
 type IFace interface {
@@ -26,7 +26,7 @@ type IFace interface {
 
 	Translate(int, float64, float64, float64) (float64, float64, float64)
 
-	GetParent() IObject
+	GetParent() *Solver
 
 	Get0() (float64, float64, float64)
 
@@ -95,7 +95,7 @@ type Cage struct {
 	dX, dY, dZ          float64
 	tX, tY, tZ          float64
 	eRadX, eRadY, eRadZ float64
-	volume              IObject
+	volumeObj           IObject
 	distance            float64
 	slots               []*Entry
 	slotsLen            int
@@ -157,7 +157,7 @@ func NewCage(id uint64) *Cage {
 		seen:      make([]uint64, max(id*2, 1024)),
 		solver:    nil,
 		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
-		volume:    nil,
+		volumeObj: nil,
 		slots:     make([]*Entry, totalSlots),
 		slotsLen:  0,
 		faces:     make([]*Faces, 8),
@@ -179,10 +179,10 @@ func NewCage(id uint64) *Cage {
 }
 
 // Setup assigns the object used by the cage and returns nil.
-func (s *Cage) Setup(solver *Solver, object IObject) error {
+func (s *Cage) Setup(solver *Solver) error {
 	s.solver = solver
-	s.object = object
-	s.entity = s.object.GetEntity()
+	s.object = solver.GetObject()
+	s.entity = s.solver.GetEntity()
 	return nil
 }
 
@@ -257,7 +257,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 		s.buckets[i].Rebuild()
 	}
 
-	s.volume = nil
+	s.volumeObj = nil
 	s.distance = math.MaxFloat64
 
 	s.slotsLen = 0
@@ -337,7 +337,7 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 		// Volume Priority per le mesh statiche[cite: 6]
 		if fc.dist < s.distance {
 			if volume := rFace.GetParent(); volume != nil {
-				s.volume = volume
+				s.volumeObj = volume.GetObject()
 				s.distance = fc.dist
 			}
 		}
@@ -743,8 +743,8 @@ func (s *Cage) GetSlotsLen() int { return s.slotsLen }
 // GetSlot returns the Entry at the specified index in the slots slice.[cite: 6]
 func (s *Cage) GetSlot(i int) *Entry { return s.slots[i] }
 
-// GetVolume returns the volume associated with the Cage.[cite: 6]
-func (s *Cage) GetVolume() IObject { return s.volume }
+// GetVolumeObject returns the cage volume object, or nil if no volume object is set.
+func (s *Cage) GetVolumeObject() IObject { return s.volumeObj }
 
 // GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.[cite: 6]
 func (s *Cage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }

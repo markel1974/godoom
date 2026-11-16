@@ -6,7 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
 // Joints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
@@ -55,7 +55,7 @@ type Joints struct {
 
 	//elems []IElements
 
-	ent *rigid_body.Entity
+	solver *collisions.Solver
 }
 
 // NewJoints creates a Joints instance with default state and identity root quaternions.
@@ -72,8 +72,8 @@ func NewJoints() *Joints {
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Joints) Setup(ent *rigid_body.Entity, configJoints []*Joint, links *Links) error {
-	v.ent = ent
+func (v *Joints) Setup(solver *collisions.Solver, configJoints []*Joint, links *Links) error {
+	v.solver = solver
 	v.numParts = len(configJoints)
 	v.links = links
 	v.rotationsA = make([]*TagAxis, v.numParts)
@@ -130,7 +130,7 @@ func (v *Joints) GetRotationB(i int) *TagAxis {
 
 // CompileDetached updates detached joint origins relative to the center and applies its stored detached rotation.
 func (v *Joints) CompileDetached(i int) {
-	cx, cy, cz := v.ent.GetCenter()
+	cx, cy, cz := v.solver.GetEntity().GetCenter()
 	j := v.data[i]
 	v.originsA[i].X = j.detWorldX - cx
 	v.originsA[i].Y = j.detWorldY - cy
@@ -213,7 +213,7 @@ func (v *Joints) detachPart(idx int, cx, cy, cz, dirX, dirY, dirZ, fMag float64)
 	if idx&1 == 1 {
 		sideSign = -1.0
 	}
-	_, _, halfD := v.ent.GetSizeCenter()
+	_, _, halfD := v.solver.GetEntity().GetSizeCenter()
 	j.Detach(halfD, cx, cy, cz, dirX, dirY, dirZ, fMag, orX, orY, orZ, sideSign)
 }
 
@@ -262,7 +262,7 @@ func (v *Joints) ActivateRagdoll() {
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			cx, cy, cz := v.ent.GetCenter()
+			cx, cy, cz := v.solver.GetEntity().GetCenter()
 			v.detachPart(v.lastHitPart, cx, cy, cz, dx, dy, dz, v.lastHitForce)
 		}
 	}
@@ -367,8 +367,10 @@ func (v *Joints) StepJoints(tick uint64) {
 		}
 
 		uprightScale := 1.0
-		if v.ent != nil && !v.ent.KeepUpright() {
-			_, _, az2 := v.ent.GetAxes2()
+
+		ent := v.solver.GetEntity()
+		if !ent.KeepUpright() {
+			_, _, az2 := ent.GetAxes2()
 			if az2 < 0.0 {
 				uprightScale = 0.0
 			} else if az2 < 1.0 {
@@ -379,7 +381,7 @@ func (v *Joints) StepJoints(tick uint64) {
 		collapseDrop := 0.0
 		effFallAngle := v.fallAngle * uprightScale
 		if v.ragdollCollapse {
-			_, _, halfD := v.ent.GetSizeCenter()
+			_, _, halfD := ent.GetSizeCenter()
 			collapseDrop = -math.Max(halfD-6.0, 0.0) * math.Sin(effFallAngle) * uprightScale
 		}
 		v.rootDropZ = collapseDrop + v.rootBounceZ
@@ -460,7 +462,7 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		return
 	}
 
-	cx, cy, cz := v.ent.GetCenter()
+	cx, cy, cz := v.solver.GetEntity().GetCenter()
 	relPx, relPy, relPz := px-cx, py-cy, pz-cz
 
 	// Locate the closest non-detached articulated part to the impact ray/point

@@ -105,8 +105,8 @@ func (fc *Face) GetUV2() (float64, float64) {
 }
 
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
-func (fc *Face) GetParent() collisions.IObject {
-	return fc.parent
+func (fc *Face) GetParent() *collisions.Solver {
+	return fc.parent.GetSolver()
 }
 
 // SetParent assigns a parent sector to the segment.

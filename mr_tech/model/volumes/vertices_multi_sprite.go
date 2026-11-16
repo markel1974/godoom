@@ -8,20 +8,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticeMultiSpriteComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
 type VerticeMultiSpriteComposed struct {
 	volume *Volume
-	entity *rigid_body.Entity
+	solver *collisions.Solver
 }
 
 // NewVerticeMultiSpriteComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
 func NewVerticeMultiSpriteComposed(volume *Volume) *VerticeMultiSpriteComposed {
 	return &VerticeMultiSpriteComposed{
-		entity: volume.GetEntity(),
+		solver: volume.GetSolver(),
 		volume: volume,
 	}
 }
@@ -31,14 +30,14 @@ func (vm *VerticeMultiSpriteComposed) QueryOverlaps(object aabb.IObject, callbac
 	vm.volume.QueryOverlaps(object, callback)
 }
 
-// GetEntity returns the physics.Entity associated with the VerticeMultiSpriteEntity.
-func (vm *VerticeMultiSpriteComposed) GetEntity() *rigid_body.Entity {
-	return vm.entity
+// GetSolver returns the collision solver associated with this composed multi-sprite entity.
+func (vm *VerticeMultiSpriteComposed) GetSolver() *collisions.Solver {
+	return vm.solver
 }
 
 // GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity encapsulated by this instance.
 func (vm *VerticeMultiSpriteComposed) GetAABB() *aabb.AABB {
-	return vm.entity.GetAABB()
+	return vm.solver.GetEntity().GetAABB()
 }
 
 // GetFaces retrieves the collection of faces associated with the entity's current volume.
@@ -81,7 +80,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 	v := &VerticesMultiSprite{
 		cfg:       cfg,
 		materials: materials,
-		solver:    collisions.NewSolver(),
+		solver:    nil,
 		volumes:   make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
@@ -144,13 +143,13 @@ func (v *VerticesMultiSprite) Setup(thing IThing) error {
 	for _, volume := range v.volumes {
 		volume.SetThing(thing)
 		if v.renderMode == RenderModeBillboard {
-			volume.GetEntity().LockUpright()
+			volume.GetSolver().GetEntity().LockUpright()
 		}
 	}
 
 	v.updateBounds()
 	v.Compile(0)
-
+	v.solver = v.comp.GetSolver()
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
@@ -164,7 +163,7 @@ func (v *VerticesMultiSprite) GetSolver() *collisions.Solver {
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
 func (v *VerticesMultiSprite) updateBounds() {
-	ent := v.comp.GetEntity()
+	ent := v.comp.GetSolver().GetEntity()
 	w, _, d := ent.GetSize()
 	halfW := w * 0.5
 	v.minX = -halfW
@@ -182,7 +181,7 @@ func (v *VerticesMultiSprite) GetContainerVolume() IContainerVolume {
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
-	ent := v.comp.GetEntity()
+	ent := v.comp.GetSolver().GetEntity()
 	cx, cy, cz := ent.GetCenter()
 	b := ent.GetAABB()
 	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
@@ -191,7 +190,7 @@ func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 
 // Compile updates the view volume to the current action volume and refreshes the enclosing AABB.
 func (v *VerticesMultiSprite) Compile(tick uint64) bool {
-	ent := v.comp.GetEntity()
+	ent := v.comp.GetSolver().GetEntity()
 	v.updateBounds()
 	cx, cy, cz := ent.GetCenter()
 	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)

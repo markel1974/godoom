@@ -133,6 +133,7 @@ type Cage struct {
 	clampCornersLen     int
 	pendingStepZ        float64
 	solverIdx           int
+	solver              *Solver
 }
 
 type flatWallPlane struct {
@@ -991,6 +992,16 @@ func (s *Cage) SetSolverIndex(idx int) {
 // GetSolverIndex returns the temporary per-tick solver index of this cage (-1 when inactive).
 func (s *Cage) GetSolverIndex() int {
 	return s.solverIdx
+}
+
+// SetSolver binds the owning Solver to this cage.
+func (s *Cage) SetSolver(solver *Solver) {
+	s.solver = solver
+}
+
+// GetSolver returns the owning Solver bound to this cage, or nil when unbound.
+func (s *Cage) GetSolver() *Solver {
+	return s.solver
 }
 
 // ZeroDisplacement resets any pending displacement delta on this cage when entering sleep.

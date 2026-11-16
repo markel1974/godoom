@@ -83,6 +83,7 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		locObj = location
 	}
 	t.solver = collisions.NewSolver(cage, entity, locObj, maxStep, canSleep, t.onElasticCollision, t.onInelasticCollision)
+	t.solver.SetPrepareHooks(t.beforePrepare, nil)
 
 	entity.SetOnGround(false)
 	t.SetAngle(cfg.Angle)
@@ -212,12 +213,19 @@ func (t *Base) GetSolverIndex() int {
 	return t.solver.GetSolverIndex()
 }
 
-// StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
-func (t *Base) StagePrepare(session uint64) {
+// GetSolver returns the collisions.Solver managing this thing's physics simulation.
+func (t *Base) GetSolver() *collisions.Solver {
+	return t.solver
+}
+
+func (t *Base) beforePrepare() {
 	entity := t.GetContainerVolume().GetEntity()
 	t.angle = entity.GetYaw()
 	t.Compile(textures.GlobalTick())
+}
 
+// StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
+func (t *Base) StagePrepare(session uint64) {
 	t.solver.StagePrepare(session)
 }
 

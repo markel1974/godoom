@@ -2,6 +2,7 @@ package volumes
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
 type ICollisionCage any
@@ -11,6 +12,8 @@ type IThing interface {
 	config.IThingConfig
 
 	IVertices
+
+	GetSolver() *collisions.Solver
 
 	IsEqual(other IThing) bool
 

@@ -1,10 +1,16 @@
 package collisions
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 type CollisionT func(other IObject, energy float64)
+
+type HookT func()
+
+func noopHook() {}
 
 // Solver manages physics simulation state for an object, including movement, collisions, and sleeping behavior.
 type Solver struct {
@@ -16,6 +22,9 @@ type Solver struct {
 	canSleep             bool
 	onElasticCollision   CollisionT
 	onInelasticCollision CollisionT
+	beforePrepare        HookT
+	afterPrepare         HookT
+	afterApply           HookT
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
@@ -32,7 +41,7 @@ func NewSolver(cage *Cage, entity *rigid_body.Entity, location IObject, maxStep 
 	if onInelasticCollision == nil {
 		panic("onInelasticCollision is nil in collisions.NewSolver")
 	}
-	return &Solver{
+	s := &Solver{
 		cage:                 cage,
 		entity:               entity,
 		maxStep:              maxStep,
@@ -41,7 +50,42 @@ func NewSolver(cage *Cage, entity *rigid_body.Entity, location IObject, maxStep 
 		canSleep:             canSleep,
 		location:             location,
 		isActive:             true,
+		beforePrepare:        noopHook,
+		afterPrepare:         noopHook,
+		afterApply:           noopHook,
 	}
+	cage.SetSolver(s)
+	return s
+}
+
+// SetPrepareHooks configures callbacks invoked immediately before and after StagePrepare.
+func (t *Solver) SetPrepareHooks(before, after HookT) {
+	if before == nil {
+		before = noopHook
+	}
+	if after == nil {
+		after = noopHook
+	}
+	t.beforePrepare = before
+	t.afterPrepare = after
+}
+
+// SetApplyHook configures a callback invoked at the end of StageApply.
+func (t *Solver) SetApplyHook(after HookT) {
+	if after == nil {
+		after = noopHook
+	}
+	t.afterApply = after
+}
+
+// GetCage returns the collision cage managed by this solver.
+func (t *Solver) GetCage() *Cage {
+	return t.cage
+}
+
+// GetEntity returns the rigid-body entity managed by this solver.
+func (t *Solver) GetEntity() *rigid_body.Entity {
+	return t.entity
 }
 
 // GetLocation returns the current static container location recorded for this solver.
@@ -109,11 +153,38 @@ func (t *Solver) GetSolverIndex() int {
 
 // StagePrepare resets transient contact state, updates the entity, and rebuilds its cage for the session.
 func (t *Solver) StagePrepare(session uint64) {
+	t.beforePrepare()
 	ent := t.entity
 	ent.ClearActiveContact()
 	ent.ClearPreSolve()
 	ent.Update()
 	t.cage.Rebuild(t.maxStep, session)
+	t.afterPrepare()
+}
+
+// ApplySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
+// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
+func ApplySafeStepUp(cage *Cage, stepZ float64, clampStatic func(*Cage)) {
+	ent := cage.GetEntity()
+	preX, preY, preZ := ent.GetCenter()
+	preVX, preVY, preVZ := ent.GetVelocity()
+	origCX, origCY, origCZ, origHasFloor := cage.GetStaticClampState()
+
+	cage.RestoreStaticClampState(preX, preY, preZ, origHasFloor)
+	ent.AddTo(0, 0, stepZ)
+	clampStatic(cage)
+	postX, postY, postZ := ent.GetCenter()
+
+	dzAfter := postZ - preZ
+	dXY := math.Hypot(postX-preX, postY-preY)
+	if dzAfter < stepZ-0.25 || dXY > 2.0 {
+		ent.AddTo(preX-postX, preY-postY, preZ-postZ)
+		ent.SetV(preVX, preVY, preVZ)
+		cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
+		return
+	}
+	ent.SetV(preVX, preVY, preVZ)
+	cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
 }
 
 // StageWarmStart reapplies cached contact impulses for valid collision slots to improve solver convergence.
@@ -216,6 +287,7 @@ func (t *Solver) StageApply() {
 		stepZ = t.maxStep
 	}
 	t.cage.SetPendingStepZ(stepZ)
+	t.afterApply()
 }
 
 // StageResolvePosition resolves remaining penetration for elastic contacts and static world geometry.

@@ -57,6 +57,8 @@ func NewPlayer(things IThingHandler, c *config.Player, vol *volumes.Volume, debu
 // Setup initializes the Player instance and prepares it for operation, returning an error if initialization fails.
 func (pr *Player) Setup() error {
 	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, pr.vol)
+	pr.GetSolver().SetPrepareHooks(pr.beforePrepare, pr.afterPrepare)
+	pr.GetSolver().SetApplyHook(pr.afterApply)
 	pr.cfg.Thing.OnBind(pr)
 	entity := pr.GetEntity()
 	entity.SetKeepUpright(true)
@@ -105,13 +107,20 @@ func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
 	pr.inbox <- ec
 }
 
-// StagePrepare prepares the stage for the Player by invoking the StagePrepare method of its Base.
-func (pr *Player) StagePrepare(session uint64) {
+func (pr *Player) beforePrepare() {
 	pr.GetEntity().StopAngular()
-	pr.Base.StagePrepare(session)
+	pr.Base.beforePrepare()
+}
+
+func (pr *Player) afterPrepare() {
 	entity := pr.GetEntity()
 	pr.wasGrounded = entity.IsOnGround()
 	pr.preImpactVz = entity.GetVz()
+}
+
+// StagePrepare prepares the stage for the Player by invoking the StagePrepare method of its Base.
+func (pr *Player) StagePrepare(session uint64) {
+	pr.Base.StagePrepare(session)
 }
 
 // StartLoop initializes and starts a concurrent processing loop for handling incoming events and player state updates.
@@ -308,10 +317,8 @@ func (pr *Player) StageThinking(playerX float64, playerY float64, playerZ float6
 	//
 }
 
-// StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
-func (pr *Player) StageApply() {
+func (pr *Player) afterApply() {
 	entity := pr.GetEntity()
-	pr.Base.StageApply()
 	// Trigger: Atterraggio rilevato dal solver
 	isGrounded := entity.IsOnGround()
 	if !pr.wasGrounded && isGrounded && pr.preImpactVz < 0.0 {
@@ -319,6 +326,11 @@ func (pr *Player) StageApply() {
 		pr.bobbing.InjectVerticalImpulse(pr.preImpactVz)
 	}
 	pr.bobbing.Compute(entity.GetDt(), pr.speed, entity.GetVx(), entity.GetVy())
+}
+
+// StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
+func (pr *Player) StageApply() {
+	pr.Base.StageApply()
 }
 
 // getEyeHeight computes the eye height of the player by considering their base height and ducking state.

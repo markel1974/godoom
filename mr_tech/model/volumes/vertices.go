@@ -16,12 +16,6 @@ const (
 	RenderModeInterface          = 3.0
 )
 
-type IContainerVolume interface {
-	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
-
-	//GetSolver() *collisions.Solver
-}
-
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
 type IVertices interface {
 	Setup(thing IThing) error
@@ -32,7 +26,7 @@ type IVertices interface {
 
 	GetSolver() *collisions.Solver
 
-	GetContainerVolume() IContainerVolume
+	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
 	GetUIFaces() (*Faces, *Faces, float64, float64)
 
@@ -55,6 +49,5 @@ func CreateVertices(cfg *config.Thing, materials *materials.Materials) IVertices
 	} else {
 		out = NewVerticesSprite(cfg, materials)
 	}
-
 	return out
 }

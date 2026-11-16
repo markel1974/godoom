@@ -26,6 +26,11 @@ func NewVerticeMultiSpriteComposed(volume *Volume) *VerticeMultiSpriteComposed {
 	}
 }
 
+// Setup initializes the composed multi-sprite volume's collision solver with object.
+func (vm *VerticeMultiSpriteComposed) Setup(object collisions.IObject) error {
+	return vm.solver.Setup(object)
+}
+
 // QueryOverlaps checks for overlaps between the entity's volume and the given object, invoking the callback for each match.
 func (vm *VerticeMultiSpriteComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	vm.volume.QueryOverlaps(object, callback)
@@ -149,10 +154,10 @@ func (v *VerticesMultiSprite) Setup(thing IThing) error {
 		}
 	}
 
-	v.solver = v.comp.GetSolver()
-	if err := v.solver.Setup(thing); err != nil {
+	if err := v.comp.Setup(thing); err != nil {
 		return err
 	}
+	v.solver = v.comp.GetSolver()
 	v.ent = v.solver.GetEntity()
 	v.Compile(0)
 	return nil
@@ -176,9 +181,9 @@ func (v *VerticesMultiSprite) updateBounds() {
 	v.maxZ = -v.standingHalfH + d
 }
 
-// GetContainerVolume returns the currently active action volume.
-func (v *VerticesMultiSprite) GetContainerVolume() IContainerVolume {
-	return v.comp
+// QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
+func (v *VerticesMultiSprite) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	v.comp.QueryOverlaps(object, callback)
 }
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.

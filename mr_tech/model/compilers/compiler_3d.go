@@ -45,6 +45,10 @@ func (r *Compiler3d) compile3d() []*volumes.Volume {
 	for _, cv := range vols {
 		// cv.Id and cv.Tag come from the BSP parser
 		volume := volumes.NewVolumeConcrete(modelSectorId, cv.Id, cv.Tag)
+		if err := volume.Setup(volume); err != nil {
+			fmt.Printf("error initializing volume %s: %s", cv.Id, err.Error())
+			continue
+		}
 		modelSectorId++
 		for _, cf := range cv.Faces {
 			pts := cf.Points

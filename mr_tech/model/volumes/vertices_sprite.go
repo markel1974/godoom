@@ -99,14 +99,14 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 // Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
 func (v *VerticesSprite) Setup(thing IThing) error {
 	vol := v.volume
+	if err := vol.Setup(thing); err != nil {
+		return err
+	}
 	v.solver = vol.GetSolver()
 	v.ent = v.solver.GetEntity()
 	vol.Rebuild()
 	//vol.SetThing(thing)
 	v.ent.LockUpright()
-	if err := v.solver.Setup(thing); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -115,9 +115,9 @@ func (v *VerticesSprite) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// GetContainerVolume returns the volume associated with the vertices sprite.
-func (v *VerticesSprite) GetContainerVolume() IContainerVolume {
-	return v.volume
+// QueryOverlaps searches the sprite volume for objects whose AABB overlaps the given object's AABB.
+func (v *VerticesSprite) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	v.volume.QueryOverlaps(object, callback)
 }
 
 // GetAABB returns the axis-aligned bounding box of the sprite's underlying entity.

@@ -30,6 +30,11 @@ func NewVertices3DEntryComposed(volume *Volume) *Vertices3DEntryComposed {
 	}
 }
 
+// Setup initializes the composed 3D entry volume's collision solver with object.
+func (vm *Vertices3DEntryComposed) Setup(object collisions.IObject) error {
+	return vm.solver.Setup(object)
+}
+
 // QueryOverlaps checks for overlaps between the entity's volume and the given object, invoking the callback for each match.
 func (vm *Vertices3DEntryComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	vm.volume.QueryOverlaps(object, callback)
@@ -230,11 +235,11 @@ func (v *Vertices3DEntry) Setup(thing IThing) error {
 	//for _, f := range v.volumes {
 	//	f.SetThing(thing)
 	//}
-	v.solver = v.comp.GetSolver()
-	if err := v.solver.Setup(thing); err != nil {
+	if err := v.comp.Setup(thing); err != nil {
 		return err
 	}
-	v.ent = v.comp.GetSolver().GetEntity()
+	v.solver = v.comp.GetSolver()
+	v.ent = v.solver.GetEntity()
 	return nil
 }
 
@@ -258,9 +263,9 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 	return b
 }
 
-// GetContainerVolume returns the current view volume for this vertices entry.
-func (v *Vertices3DEntry) GetContainerVolume() IContainerVolume {
-	return v.comp
+// QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
+func (v *Vertices3DEntry) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	v.comp.QueryOverlaps(object, callback)
 }
 
 // SetAction selects the animation action at idx and resets timing for its frame interval.

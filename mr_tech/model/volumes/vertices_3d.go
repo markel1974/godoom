@@ -82,10 +82,10 @@ func (v *Vertices3D) Setup(thing IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}
-	v.solver = v.elements.GetSolver()
-	if err := v.solver.Setup(thing); err != nil {
+	if err := v.elements.vVolume.Setup(thing); err != nil {
 		return err
 	}
+	v.solver = v.elements.GetSolver()
 	v.ent = v.solver.GetEntity()
 	return nil
 }
@@ -95,9 +95,9 @@ func (v *Vertices3D) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// GetContainerVolume returns the composite view volume of the model, or nil if unavailable.
-func (v *Vertices3D) GetContainerVolume() IContainerVolume {
-	return v.elements.vVolume
+// QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
+func (v *Vertices3D) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	v.elements.vVolume.QueryOverlaps(object, callback)
 }
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.

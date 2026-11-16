@@ -33,6 +33,9 @@ func NewVolumes(container []*volumes.Volume) *Volumes {
 // Setup constructs a new AABB tree based on the current container and populates it with rebuilt location objects.
 func (s *Volumes) Setup() error {
 	for _, volume := range s.container {
+		if err := volume.Setup(volume); err != nil {
+			return err
+		}
 		if volume.Rebuild() {
 			s.tree.InsertObject(volume)
 		}

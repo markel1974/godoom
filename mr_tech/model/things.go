@@ -130,11 +130,11 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 		}
 		pairCounter := 0
 		lEntityL, deltaX, deltaY, deltaZ := lCage.TranslateCage(0, rCage)
-		rThing.GetContainerVolume().QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
+		rThing.QueryOverlaps(lEntityL, func(rEnt aabb.IObject) bool {
 			rFace := rEnt.(*volumes.Face)
 			z := lCage.Translate(1, rFace, deltaX, deltaY, deltaZ)
 			// Query sul BVH del Self: basta il primo lFace sovrapposto per validare il contatto con rFace
-			lThing.GetContainerVolume().QueryOverlaps(z, func(lEnt aabb.IObject) bool {
+			lThing.QueryOverlaps(z, func(lEnt aabb.IObject) bool {
 				lFace := lEnt.(*volumes.Face)
 				lCage.AddFace(rFace, lFace)
 				pairCounter++

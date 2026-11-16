@@ -54,6 +54,14 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	return newVolume(false, modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), concreteGForce)
 }
 
+// Setup initializes the volume's collision solver and returns any setup error.
+func (v *Volume) Setup(object collisions.IObject) error {
+	if err := v.solver.Setup(object); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.
 func (v *Volume) Rebuild() bool {
 	v.faces.Rebuild()

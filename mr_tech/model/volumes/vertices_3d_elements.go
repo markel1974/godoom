@@ -27,6 +27,11 @@ func NewVirtualVolume(elements *Vertices3DElements, solver *collisions.Solver) *
 	}
 }
 
+// Setup initializes the virtual volume's collision solver with object.
+func (v *VirtualVolume) Setup(object collisions.IObject) error {
+	return v.solver.Setup(object)
+}
+
 // GetSolver returns the collision solver associated with the virtual volume.
 func (v *VirtualVolume) GetSolver() *collisions.Solver {
 	return v.solver

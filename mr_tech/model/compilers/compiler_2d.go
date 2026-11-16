@@ -354,6 +354,10 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 	for _, sector := range sectors2d {
 		id := fmt.Sprintf("%s_3d", sector.GetId())
 		vol3d := volumes.NewVolumeConcrete(sector.GetModelId(), id, sector.GetTag())
+		if err := vol3d.Setup(vol3d); err != nil {
+			fmt.Printf("error initializing volume %s: %s", id, err.Error())
+			continue
+		}
 
 		if cLight := sector.GetLight(); cLight != nil {
 			light := lights.NewLight()
@@ -552,7 +556,12 @@ func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncov
 		if su.GetMat() == nil || su.GetMat().GetHeadFrame() == nil {
 			continue
 		}
-		vol3d := volumes.NewVolumeConcrete(su.GetModelId(), fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId()), su.GetCsTag())
+		id := fmt.Sprintf("%s_wall_extra_%d", su.GetCsId(), su.GetModelId())
+		vol3d := volumes.NewVolumeConcrete(su.GetModelId(), id, su.GetCsTag())
+		if err := vol3d.Setup(vol3d); err != nil {
+			fmt.Printf("error initializing volume %s: %s", id, err.Error())
+			continue
+		}
 		if su.GetCsLight() != nil {
 			light := lights.NewLight()
 			light.Setup(su.GetCsLight(), su.GetLightPos())

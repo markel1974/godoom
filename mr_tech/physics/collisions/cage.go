@@ -87,6 +87,7 @@ type Cage struct {
 	session             uint64
 	id                  uint64
 	object              IObject
+	entity              *rigid_body.Entity
 	buckets             [BucketSize]*Bucket
 	ellipsoid           *rigid_body.Entity
 	ellipsoidLocal      [4]*rigid_body.Entity
@@ -141,13 +142,12 @@ type flatWallPlane struct {
 	pX, pY, pZ float64
 }
 
-var _counter uint64
+var _counter atomic.Uint64
 
 // NewCageSequence creates a new Cage for object using the next sequence ID.
 func NewCageSequence() *Cage {
-	c := NewCage(_counter)
-	atomic.AddUint64(&_counter, 1)
-	return c
+	id := _counter.Add(1) - 1
+	return NewCage(id)
 }
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
@@ -182,6 +182,7 @@ func NewCage(id uint64) *Cage {
 func (s *Cage) Setup(solver *Solver, object IObject) error {
 	s.solver = solver
 	s.object = object
+	s.entity = s.object.GetEntity()
 	return nil
 }
 
@@ -193,7 +194,7 @@ func (s *Cage) GetObject() IObject {
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.[cite: 6]
 func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.session = session
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	// Calculate Position
 	s.dX, s.dY, s.dZ = lEnt.GetFrameDisplacement()
 
@@ -317,7 +318,7 @@ func (s *Cage) Commit(rCage *Cage) {
 
 // commitStaticFaces evaluates accumulated static world triangles and inserts single-point or clipped multi-point contacts.
 func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
-	keepUpright := s.object.GetEntity().KeepUpright()
+	keepUpright := s.entity.KeepUpright()
 	baseZ := s.GetBaseZ()
 	minBaseZ := math.Min(baseZ, baseZ+s.dZ)
 	stepZ := baseZ + s.maxStep
@@ -399,7 +400,7 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
 	m := s.manifold
-	if m.ComputeStaticTriangle(s.object.GetEntity().BoundingBox, s.dX, s.dY, s.dZ, fc.nX, fc.nY, fc.nZ, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z, fc.pen) {
+	if m.ComputeStaticTriangle(s.entity.BoundingBox, s.dX, s.dY, s.dZ, fc.nX, fc.nY, fc.nZ, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z, fc.pen) {
 		for pi := 0; pi < m.GetCount(); pi++ {
 			ptX, ptY, ptZ, ptPen := m.GetPoint(pi)
 			if ptPen <= 0 {
@@ -416,7 +417,7 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 // projectStabilizedStaticContact projects the stabilized single-point support onto the static face plane,
 // clamped to the triangle's world AABB bounds.
 func (s *Cage) projectStabilizedStaticContact(fc *staticFaceContact) (float64, float64, float64) {
-	supX, supY, supZ := s.object.GetEntity().GetStabilizedContactPoint(-fc.nX, -fc.nY, -fc.nZ)
+	supX, supY, supZ := s.entity.GetStabilizedContactPoint(-fc.nX, -fc.nY, -fc.nZ)
 	supX += s.dX
 	supY += s.dY
 	supZ += s.dZ
@@ -525,7 +526,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		recipFace = rFace
 	}
 
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	rEnt := rCage.GetEntity()
 	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	m := s.manifold
@@ -617,7 +618,7 @@ func (s *Cage) TranslateWorldToLocal(slot int, deltaX, deltaY, deltaZ float64) *
 
 // TranslateCage translates the collision cage based on the given slot and reference cage, returning the local AABB and offsets.[cite: 6]
 func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, float64, float64) {
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	lOx, lOy, lOz := lEnt.GetCenter()
 	lOx += s.dX
 	lOy += s.dY
@@ -665,7 +666,7 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 	wCx, wCy, wCz := rLocCx+deltaX, rLocCy+deltaY, rLocCz+deltaZ
 	wHx, wHy, wHz := rLocHx, rLocHy, rLocHz
 
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	if f, ok := src.(IFace); ok {
 		nX, nY, nZ := f.GetNormal()
 		if p := f.GetParent(); p != nil {
@@ -779,13 +780,13 @@ func (s *Cage) NeedsStaticClamp() bool {
 	if s.forceStaticClamp {
 		return true
 	}
-	curX, curY, curZ := s.object.GetEntity().GetCenter()
+	curX, curY, curZ := s.entity.GetCenter()
 	return curX != s.clampX || curY != s.clampY || curZ != s.clampZ
 }
 
 // CommitStaticClamp records the current entity center as the latest statically clamped baseline position.
 func (s *Cage) CommitStaticClamp() {
-	s.clampX, s.clampY, s.clampZ = s.object.GetEntity().GetCenter()
+	s.clampX, s.clampY, s.clampZ = s.entity.GetCenter()
 	s.forceStaticClamp = false
 }
 
@@ -849,7 +850,7 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	origCX, origCY, origCZ = s.cX, s.cY, s.cZ
 	origDX, origDY, origDZ = s.dX, s.dY, s.dZ
 	origTX, origTY, origTZ = s.tX, s.tY, s.tZ
-	ent := s.object.GetEntity()
+	ent := s.entity
 	curX, curY, curZ := ent.GetCenter()
 	s.cX, s.cY, s.cZ = s.clampX+s.objOffX, s.clampY+s.objOffY, s.clampZ+s.objOffZ
 	s.tX, s.tY, s.tZ = curX+s.objOffX, curY+s.objOffY, curZ+s.objOffZ
@@ -867,18 +868,19 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	return origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
 }
 
+// clampStaticWallShouldSkip reports whether a wall contact is low enough to be ignored during static clamping.
 func (s *Cage) clampStaticWallShouldSkip(fc *staticFaceContact) bool {
 	curBaseZ := s.tZ - s.eRadZ
-	if fc.maxZ <= curBaseZ+satFilterEpsilon {
+	preBaseZ := s.GetBaseZ()
+	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
 		return true
 	}
-	preBaseZ := s.GetBaseZ()
 	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
 }
 
 // staticClampApplyContact clamps velocity, resolves penetration, updates cage displacement, and reports whether it moved.
 func (s *Cage) staticClampApplyContact(fc *staticFaceContact) bool {
-	ent := s.object.GetEntity()
+	ent := s.entity
 	s.addClampNormal(fc.nX, fc.nY, fc.nZ)
 	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
 	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
@@ -908,13 +910,13 @@ func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
 	if fc.pen <= 0.0 {
 		if fc.bucket == BucketFloor && fc.dist <= floorGroundTolerance {
 			s.hasFloor = true
-			s.object.GetEntity().SetOnGround(true)
+			s.entity.SetOnGround(true)
 		}
 		return false
 	}
 	if fc.bucket == BucketFloor {
 		s.hasFloor = true
-		s.object.GetEntity().SetOnGround(true)
+		s.entity.SetOnGround(true)
 	}
 	if fc.bucket.IsWall() {
 		if s.clampStaticWallShouldSkip(&fc) {
@@ -973,7 +975,7 @@ func (s *Cage) overlapsTargetXY(minX, maxX, minY, maxY float64) bool {
 // effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
 // using exact OBB axis projection for free 6-DoF bodies and ellipsoid extents otherwise.
 func (s *Cage) effectiveRadius(nX, nY, nZ float64) float64 {
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	if !lEnt.KeepUpright() {
 		return lEnt.ProjectExtent(nX, nY, nZ)
 	}
@@ -1010,13 +1012,13 @@ func (s *Cage) ZeroDisplacement() {
 
 // GetEntity returns the physics entity associated with the collision cage.[cite: 6]
 func (s *Cage) GetEntity() *rigid_body.Entity {
-	return s.object.GetEntity()
+	return s.entity
 }
 
 // SetApplied marks the collision cage as having applied its frame displacement and records entity center for tracking push-out offset.[cite: 6]
 func (s *Cage) SetApplied() {
 	s.applied = true
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	s.appliedX, s.appliedY, s.appliedZ = lEnt.GetCenter()
 }
 
@@ -1045,7 +1047,7 @@ func (s *Cage) RestoreStaticClampState(cx, cy, cz float64, hasFloor bool) {
 
 // GetPushOffset returns the accumulated positional push-out offset of the entity in the current frame.[cite: 6]
 func (s *Cage) GetPushOffset() (float64, float64, float64) {
-	lEnt := s.object.GetEntity()
+	lEnt := s.entity
 	curX, curY, curZ := lEnt.GetCenter()
 	if s.applied {
 		return curX - s.appliedX, curY - s.appliedY, curZ - s.appliedZ
@@ -1161,12 +1163,12 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	}
 
 	slopeAdjusted := false
-	if (solidWE || solidNS) && s.object.GetEntity().KeepUpright() {
+	if (solidWE || solidNS) && s.entity.KeepUpright() {
 		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
 		var cornerHit bool
 		var cxN, cyN, cPen, qxW, qyW float64
 		var valid bool
-		valid, cornerHit, cxN, cyN, cPen, qxW, qyW = s.refineKeepUprightWall(rFace, nX, nY, penetration, tunneled)
+		valid, cornerHit, cxN, cyN, cPen, qxW, qyW = s.refineKeepUprightWall(rFace, nX, nY, penetration, tunneled, distStart, distTarget)
 		if !valid {
 			return out, false
 		}
@@ -1187,7 +1189,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			out.anchorX, out.anchorY, out.anchorZ = qxW, qyW, s.tZ
 			out.cornerHit = true
 		}
-	} else if s.object.GetEntity().KeepUpright() {
+	} else if s.entity.KeepUpright() {
 		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
 		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW := s.refineKeepUprightSlope(rFace, bucket, nX, nY, nZ, penetration, tunneled)
 		if !valid {
@@ -1314,7 +1316,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 
 // refineKeepUprightWall clips a wall triangle to the upright body's Z slab and checks its scaled 2D footprint,
 // rejecting phantom infinite-plane hits outside the slab and computing smooth corner pushouts on edge/vertex hits.
-func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled bool) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
+func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled bool, distStart, distTarget float64) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
 	clipPolyZSlab := func(in *[6][3]float64, count int, out *[6][3]float64, zBound float64, keepAbove bool) int {
 		outCount := 0
 		for i := 0; i < count; i++ {
@@ -1373,17 +1375,81 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		(bufA[2][0]-s.tX)*invRX, (bufA[2][1]-s.tY)*invRY, (bufA[2][2]-s.tZ)*invRZ,
 	)
 	bestSq3D := qx3*qx3 + qy3*qy3 + qz3*qz3
-	if bestSq3D >= 1.0-1e-9 && !tunneled {
-		return false, false, 0, 0, 0, 0, 0
+	if bestSq3D >= 1.0-1e-9 {
+		var rx, ry, rz, qxW, qyW float64
+		var checkGraze bool
+		if tunneled {
+			tauPlane := 0.5
+			if denom := distStart - distTarget; denom > 1e-12 {
+				tauPlane = distStart / denom
+				if tauPlane < 0.0 {
+					tauPlane = 0.0
+				} else if tauPlane > 1.0 {
+					tauPlane = 1.0
+				}
+			}
+			px := s.cX + tauPlane*s.dX
+			py := s.cY + tauPlane*s.dY
+			pz := s.cZ + tauPlane*s.dZ
+			qpx, qpy, qpz, _ := closestPointOnTriangleZero(
+				(bufA[0][0]-px)*invRX, (bufA[0][1]-py)*invRY, (bufA[0][2]-pz)*invRZ,
+				(bufA[1][0]-px)*invRX, (bufA[1][1]-py)*invRY, (bufA[1][2]-pz)*invRZ,
+				(bufA[2][0]-px)*invRX, (bufA[2][1]-py)*invRY, (bufA[2][2]-pz)*invRZ,
+			)
+			planeSq := qpx*qpx + qpy*qpy + qpz*qpz
+			if planeSq >= 1.0-1e-9 {
+				return false, false, 0, 0, 0, 0, 0
+			}
+			if planeSq > 1e-12 {
+				rx, ry, rz = qpx, qpy, qpz
+				qxW, qyW = px+qpx*s.eRadX, py+qpy*s.eRadY
+				checkGraze = true
+			}
+		} else {
+			if s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
+				return false, false, 0, 0, 0, 0, 0
+			}
+			sx, sy, sz, qx, qy, qz, segSq, startSq, pierced := closestSegmentToTriangleFromOrigin(
+				s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
+				(bufA[0][0]-s.cX)*invRX, (bufA[0][1]-s.cY)*invRY, (bufA[0][2]-s.cZ)*invRZ,
+				(bufA[1][0]-s.cX)*invRX, (bufA[1][1]-s.cY)*invRY, (bufA[1][2]-s.cZ)*invRZ,
+				(bufA[2][0]-s.cX)*invRX, (bufA[2][1]-s.cY)*invRY, (bufA[2][2]-s.cZ)*invRZ,
+			)
+			if segSq >= 1.0-1e-9 || startSq < 1.0-1e-9 {
+				return false, false, 0, 0, 0, 0, 0
+			}
+			if !pierced && segSq > 1e-12 {
+				rx, ry, rz = qx-sx, qy-sy, qz-sz
+				qxW, qyW = s.cX+qx*s.eRadX, s.cY+qy*s.eRadY
+				checkGraze = true
+			}
+		}
+		if checkGraze {
+			if rXY := math.Hypot(rx, ry); rXY > 1e-6 {
+				if rZ := math.Sqrt(math.Max(0.0, 1.0-rz*rz)); rZ > rXY {
+					scaleH := rZ/rXY - 1.0
+					dxH := -rx * scaleH * s.eRadX
+					dyH := -ry * scaleH * s.eRadY
+					if horizPen := math.Hypot(dxH, dyH); horizPen > 1e-12 && horizPen <= satFilterEpsilon {
+						hx, hy := dxH/horizPen, dyH/horizPen
+						nXY := math.Hypot(nX, nY)
+						if nXY <= 1e-9 || (hx*(nX/nXY)+hy*(nY/nXY)) < 0.1 {
+							return true, true, hx, hy, horizPen, qxW, qyW
+						}
+					}
+				}
+			}
+		}
+		return true, false, 0, 0, 0, 0, 0
 	}
-	_, _, rNZ := rFace.GetNormal()
-	rMinZ := math.Min(bufA[0][2], math.Min(bufA[1][2], bufA[2][2]))
-	rMaxZ := math.Max(bufA[0][2], math.Max(bufA[1][2], bufA[2][2]))
-	isTiltedOrCap := rMinZ > s.tZ || rMaxZ < s.tZ || math.Abs(rNZ) > 1e-3
-	if !tunneled && (isTiltedOrCap || bestSq3D < 1.0-1e-9) {
+	if !tunneled {
 		if bestSq3D <= 1e-12 {
 			return true, false, 0, 0, 0, 0, 0
 		}
+		_, _, rNZ := rFace.GetNormal()
+		rMinZ := math.Min(bufA[0][2], math.Min(bufA[1][2], bufA[2][2]))
+		rMaxZ := math.Max(bufA[0][2], math.Max(bufA[1][2], bufA[2][2]))
+		isTiltedOrCap := rMinZ > s.tZ || rMaxZ < s.tZ || math.Abs(rNZ) > 1e-3
 		rZ := math.Sqrt(math.Max(0.0, 1.0-qz3*qz3))
 		qXY3 := math.Hypot(qx3, qy3)
 		if qXY3 <= 1e-6 || rZ <= qXY3 {
@@ -1413,31 +1479,14 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		}
 		return true, true, hx, hy, horizPen3D, s.tX + qx3*s.eRadX, s.tY + qy3*s.eRadY
 	}
-	if tunneled && isTiltedOrCap {
-		if rMinZ > s.tZ+s.eRadZ || rMaxZ < s.tZ-s.eRadZ {
-			return false, false, 0, 0, 0, 0, 0
-		}
-		midX := 0.5 * (s.cX + s.tX)
-		midY := 0.5 * (s.cY + s.tY)
-		midZ := 0.5 * (s.cZ + s.tZ)
-		mx3, my3, mz3, _ := closestPointOnTriangleZero(
-			(bufA[0][0]-midX)*invRX, (bufA[0][1]-midY)*invRY, (bufA[0][2]-midZ)*invRZ,
-			(bufA[1][0]-midX)*invRX, (bufA[1][1]-midY)*invRY, (bufA[1][2]-midZ)*invRZ,
-			(bufA[2][0]-midX)*invRX, (bufA[2][1]-midY)*invRY, (bufA[2][2]-midZ)*invRZ,
-		)
-		if mx3*mx3+my3*my3+mz3*mz3 >= 1.0-1e-9 {
-			return false, false, 0, 0, 0, 0, 0
-		}
-		return true, false, 0, 0, 0, 0, 0
-	}
 
 	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
 	if n < 3 {
-		return false, false, 0, 0, 0, 0, 0
+		return true, false, 0, 0, 0, 0, 0
 	}
 	n = clipPolyZSlab(&bufB, n, &bufA, s.tZ+s.eRadZ, false)
 	if n < 3 {
-		return false, false, 0, 0, 0, 0, 0
+		return true, false, 0, 0, 0, 0, 0
 	}
 
 	for i := 0; i < n; i++ {
@@ -1550,6 +1599,111 @@ func closestPointOnSegmentZero(ax, ay, az, bx, by, bz float64) (float64, float64
 	return ax + t*abx, ay + t*aby, az + t*abz
 }
 
+// closestPointsSegmentOriginSegment returns the closest point pair between segment [0 -> u] and segment [a -> b]
+// along with their squared distance.
+func closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz float64) (sx, sy, sz, qx, qy, qz, distSq float64) {
+	a := ux*ux + uy*uy + uz*uz
+	d2x, d2y, d2z := bx-ax, by-ay, bz-az
+	e := d2x*d2x + d2y*d2y + d2z*d2z
+	f := -(d2x*ax + d2y*ay + d2z*az)
+
+	var s, t float64
+	if a <= 1e-18 && e <= 1e-18 {
+		s, t = 0.0, 0.0
+	} else if a <= 1e-18 {
+		s = 0.0
+		t = math.Max(0.0, math.Min(1.0, f/e))
+	} else {
+		c := -(ux*ax + uy*ay + uz*az)
+		if e <= 1e-18 {
+			t = 0.0
+			s = math.Max(0.0, math.Min(1.0, -c/a))
+		} else {
+			b := ux*d2x + uy*d2y + uz*d2z
+			if denom := a*e - b*b; denom > 1e-18 {
+				s = math.Max(0.0, math.Min(1.0, (b*f-c*e)/denom))
+			} else {
+				s = 0.0
+			}
+			t = (b*s + f) / e
+			if t < 0.0 {
+				t = 0.0
+				s = math.Max(0.0, math.Min(1.0, -c/a))
+			} else if t > 1.0 {
+				t = 1.0
+				s = math.Max(0.0, math.Min(1.0, (b-c)/a))
+			}
+		}
+	}
+
+	sx, sy, sz = s*ux, s*uy, s*uz
+	qx, qy, qz = ax+t*d2x, ay+t*d2y, az+t*d2z
+	dx, dy, dz := sx-qx, sy-qy, sz-qz
+	distSq = dx*dx + dy*dy + dz*dz
+	return sx, sy, sz, qx, qy, qz, distSq
+}
+
+// closestSegmentToTriangleFromOrigin finds the closest point pair between segment [0 -> u] and triangle (a, b, c),
+// returning their squared distance, the start-point squared distance at the origin, and whether the segment pierces the triangle interior.
+func closestSegmentToTriangleFromOrigin(ux, uy, uz, ax, ay, az, bx, by, bz, cx, cy, cz float64) (sx, sy, sz, qx, qy, qz, bestSq, startSq float64, pierced bool) {
+	q0x, q0y, q0z, _ := closestPointOnTriangleZero(ax, ay, az, bx, by, bz, cx, cy, cz)
+	startSq = q0x*q0x + q0y*q0y + q0z*q0z
+	bestSq = startSq
+	sx, sy, sz = 0.0, 0.0, 0.0
+	qx, qy, qz = q0x, q0y, q0z
+
+	abx, aby, abz := bx-ax, by-ay, bz-az
+	acx, acy, acz := cx-ax, cy-ay, cz-az
+	nx := aby*acz - abz*acy
+	ny := abz*acx - abx*acz
+	nz := abx*acy - aby*acx
+	if denom := nx*ux + ny*uy + nz*uz; math.Abs(denom) > 1e-12 {
+		tau := (nx*ax + ny*ay + nz*az) / denom
+		if tau >= -1e-9 && tau <= 1.0+1e-9 {
+			if tau < 0.0 {
+				tau = 0.0
+			} else if tau > 1.0 {
+				tau = 1.0
+			}
+			px, py, pz := tau*ux, tau*uy, tau*uz
+			dx, dy, dz, onBoundary := closestPointOnTriangleZero(ax-px, ay-py, az-pz, bx-px, by-py, bz-pz, cx-px, cy-py, cz-pz)
+			dSq := dx*dx + dy*dy + dz*dz
+			if !onBoundary || dSq <= 1e-18 {
+				return px, py, pz, px, py, pz, 0.0, startSq, true
+			}
+			if dSq < bestSq {
+				bestSq = dSq
+				sx, sy, sz = px, py, pz
+				qx, qy, qz = px+dx, py+dy, pz+dz
+			}
+		}
+	}
+
+	q1x, q1y, q1z, _ := closestPointOnTriangleZero(ax-ux, ay-uy, az-uz, bx-ux, by-uy, bz-uz, cx-ux, cy-uy, cz-uz)
+	if dSq := q1x*q1x + q1y*q1y + q1z*q1z; dSq < bestSq {
+		bestSq = dSq
+		sx, sy, sz = ux, uy, uz
+		qx, qy, qz = ux+q1x, uy+q1y, uz+q1z
+	}
+
+	if csx, csy, csz, cqx, cqy, cqz, dSq := closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz); dSq < bestSq {
+		bestSq = dSq
+		sx, sy, sz = csx, csy, csz
+		qx, qy, qz = cqx, cqy, cqz
+	}
+	if csx, csy, csz, cqx, cqy, cqz, dSq := closestPointsSegmentOriginSegment(ux, uy, uz, bx, by, bz, cx, cy, cz); dSq < bestSq {
+		bestSq = dSq
+		sx, sy, sz = csx, csy, csz
+		qx, qy, qz = cqx, cqy, cqz
+	}
+	if csx, csy, csz, cqx, cqy, cqz, dSq := closestPointsSegmentOriginSegment(ux, uy, uz, cx, cy, cz, ax, ay, az); dSq < bestSq {
+		bestSq = dSq
+		sx, sy, sz = csx, csy, csz
+		qx, qy, qz = cqx, cqy, cqz
+	}
+	return sx, sy, sz, qx, qy, qz, bestSq, startSq, false
+}
+
 // closestPointOnTriangleZero returns the closest point on 3D triangle (a, b, c) to the origin
 // and reports whether that point lies on a vertex or edge boundary rather than the triangle interior.
 func closestPointOnTriangleZero(ax, ay, az, bx, by, bz, cx, cy, cz float64) (qx, qy, qz float64, onBoundary bool) {
@@ -1638,7 +1792,19 @@ func (s *Cage) refineKeepUprightSlope(rFace IFace, bucket BucketType, nX, nY, nZ
 
 	bestSq := qx*qx + qy*qy + qz*qz
 	if bestSq >= 1.0-1e-9 {
-		return tunneled, false, false, 0, 0, 0, 0, 0, 0, 0
+		if !tunneled && s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
+			return false, false, false, 0, 0, 0, 0, 0, 0, 0
+		}
+		_, _, _, _, _, _, segSq, startSq, _ := closestSegmentToTriangleFromOrigin(
+			s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
+			(v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ,
+			(v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ,
+			(v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ,
+		)
+		if segSq >= 1.0-1e-9 || (!tunneled && startSq < 1.0-1e-9) {
+			return false, false, false, 0, 0, 0, 0, 0, 0, 0
+		}
+		return true, false, false, 0, 0, 0, 0, 0, 0, 0
 	}
 	if bestSq <= 1e-12 {
 		return true, false, false, 0, 0, 0, 0, 0, 0, 0

@@ -164,8 +164,7 @@ func (e *Entity) SyncRotation() {
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
-// AddForceAtPoint applies a linear force (fx, fy, fz) at world point (px, py, pz) and generates 3D torque τ = r × F on the OBB
-// using exact Ray-OBB slab intersection and the world-space inverse inertia tensor I_world^-1 = R * I_body^-1 * R^T.
+// AddForceAtPoint applies a force at the given point relative to the entity's center of mass.
 func (e *Entity) AddForceAtPoint(fx, fy, fz, px, py, pz float64) {
 	cx, cy, cz := e.getCenterOfMass()
 	e.Cinematic.AddForceAtPoint(fx, fy, fz, px, py, pz, cx, cy, cz)

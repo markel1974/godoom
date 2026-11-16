@@ -1,6 +1,7 @@
 package collisions
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -28,16 +29,9 @@ type Solver struct {
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
-func NewSolver(cage *Cage, entity *rigid_body.Entity) *Solver {
-	if cage == nil {
-		panic("cage is nil in collisions.NewSolver")
-	}
-	if entity == nil {
-		panic("entity is nil in collisions.NewSolver")
-	}
+func NewSolver() *Solver {
 	s := &Solver{
-		cage:                 cage,
-		entity:               entity,
+		cage:                 NewCageSequence(),
 		maxStep:              0,
 		onElasticCollision:   nil,
 		onInelasticCollision: nil,
@@ -48,8 +42,22 @@ func NewSolver(cage *Cage, entity *rigid_body.Entity) *Solver {
 		afterPrepare:         noopHook,
 		afterApply:           noopHook,
 	}
-	cage.SetSolver(s)
 	return s
+}
+
+// Setup initializes the solver with the given object and stores its entity.
+func (t *Solver) Setup(object IObject) error {
+	if object == nil {
+		return fmt.Errorf("nil object in solver")
+	}
+	t.entity = object.GetEntity()
+	if t.entity == nil {
+		return fmt.Errorf("nil entity in solver")
+	}
+	if err := t.cage.Setup(t, object); err != nil {
+		return err
+	}
+	return nil
 }
 
 // SetElasticCollision sets the callback invoked when an elastic collision is handled.

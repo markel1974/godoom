@@ -35,11 +35,12 @@ type Base struct {
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
 	solver         *collisions.Solver
+	maxStepFactor  float64
 	done           chan struct{}
 }
 
 // NewBase creates a new Base instance with specified configuration, material, sector, world, and things.
-func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, location *volumes.Volume) *Base {
+func NewBase(things IThingHandler, cfg *config.Thing) *Base {
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
@@ -49,13 +50,9 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	if cfg.Mass == 0 {
 		panic("mass is zero for thing:" + cfg.Id)
 	}
-	vertices, err := volumes.CreateVertices(thing, cfg, things.GetMaterials())
-	if err != nil {
-		panic("failed to create vertices for thing:" + cfg.Id)
-	}
-
 	t := &Base{
-		IVertices:      vertices,
+		IVertices:      volumes.CreateVertices(cfg, things.GetMaterials()),
+		solver:         nil,
 		id:             cfg.Id,
 		angle:          cfg.Angle,
 		kind:           cfg.Kind,
@@ -64,21 +61,27 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		wakeupDistance: cfg.WakeupDistance,
 		jumpForce:      cfg.JumpForce,
 		acceleration:   cfg.Acceleration,
+		maxStepFactor:  cfg.MaxStepFactor,
 		things:         things,
 		inbox:          make(chan *volumes.ThingEvent, 16),
 		done:           make(chan struct{}),
 		onImpact:       cfg.OnImpact,
 		onCollision:    cfg.OnCollision,
 	}
+	return t
+}
+
+// Prepare initializes the volume thing, configures its solver, applies location and movement limits, and resets state.
+func (t *Base) Prepare(thing volumes.IThing, location *volumes.Volume) error {
+	if err := t.IVertices.Setup(thing); err != nil {
+		return err
+	}
 	entity := t.GetContainerVolume().GetEntity()
 	maxStep := 0.0
-	if cfg.MaxStepFactor > 0 {
-		maxStep = entity.GetDepth() * cfg.MaxStepFactor
+	if t.maxStepFactor > 0 {
+		maxStep = entity.GetDepth() * t.maxStepFactor
 	}
-
-	cage := t.IVertices.GetCage().(*collisions.Cage)
-
-	t.solver = collisions.NewSolver(cage, entity)
+	t.solver = t.IVertices.GetSolver()
 	t.solver.SetElasticCollision(t.onElasticCollision)
 	t.solver.SetInelasticCollision(t.onInelasticCollision)
 	t.solver.SetPrepareHooks(t.beforePrepare, nil)
@@ -87,9 +90,8 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 	t.solver.SetMaxStep(maxStep)
 
 	entity.SetOnGround(false)
-	t.SetAngle(cfg.Angle)
-
-	return t
+	t.SetAngle(t.angle)
+	return nil
 }
 
 // GetId returns the identifier string of the Base instance.

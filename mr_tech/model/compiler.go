@@ -107,7 +107,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return fmt.Errorf("can't find 3d player location at X: %f Y: %f Z: %f\n", pX, pY, pZ)
 	}
 	r.player = things.NewPlayer(r.things, cfg.Player, pLoc, false)
-	if err := r.player.Setup(); err != nil {
+	if err := r.player.Initialize(); err != nil {
 		return err
 	}
 	r.things.SetPlayer(r.player)

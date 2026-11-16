@@ -75,8 +75,7 @@ func NewVAction(name string, start int, end int) *VAction {
 
 // Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
-	thing         IThing
-	cage          ICollisionCage
+	solver        *collisions.Solver
 	cfg           *config.Thing
 	materials     *materials.Materials
 	comp          *Vertices3DEntryComposed
@@ -115,26 +114,22 @@ type Vertices3DEntry struct {
 
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
 // It panics if required frame, action interval, or group size configuration is invalid.
-func NewVertices3DEntry(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
-	return &Vertices3DEntry{
-		cage:      collisions.NewCageSequence(thing),
-		thing:     thing,
+func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
+	v := &Vertices3DEntry{
+		solver:    collisions.NewSolver(),
 		cfg:       cfg,
 		materials: materials,
 	}
-}
 
-// Setup initializes model frames, actions, tags, volumes, interpolation state, and compiled geometry. Returns an error for invalid model data.
-func (v *Vertices3DEntry) Setup() error {
 	model := v.cfg.Model3DEntry
 	if len(model.Frames) <= 0 {
-		return fmt.Errorf("no Model3DEntry frames for thing %s", v.cfg.Id)
+		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", v.cfg.Id))
 	}
 	if len(model.ActionDefinitions) != len(model.ActionIntervals) {
-		return fmt.Errorf("action definitions and intervals must be the same length")
+		panic(fmt.Sprintf("action definitions and intervals must be the same length"))
 	}
 	if model.GroupSize <= 0 {
-		return fmt.Errorf("groupSize must be greater than 0")
+		panic(fmt.Sprintf("groupSize must be greater than 0"))
 	}
 
 	actions := make([]*VAction, len(model.ActionDefinitions))
@@ -226,15 +221,23 @@ func (v *Vertices3DEntry) Setup() error {
 		v.SetAction(0)
 	}
 	v.Compile(0)
+	return v
+}
+
+// Setup assigns thing to all volumes and initializes the collision solver for it.
+func (v *Vertices3DEntry) Setup(thing IThing) error {
 	for _, f := range v.volumes {
-		f.SetThing(v.thing)
+		f.SetThing(thing)
+	}
+	if err := v.solver.Setup(thing); err != nil {
+		return err
 	}
 	return nil
 }
 
-// GetCage returns the collision cage associated with this 3D vertices entry.
-func (v *Vertices3DEntry) GetCage() ICollisionCage {
-	return v.cage
+// GetSolver returns the collision solver associated with this vertices entry.
+func (v *Vertices3DEntry) GetSolver() *collisions.Solver {
+	return v.solver
 }
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.

@@ -13,8 +13,12 @@ type Item struct {
 
 // NewItem creates a new Item instance by initializing its base properties using the provided configuration.
 func NewItem(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *Item {
-	item := &Item{}
-	item.Base = NewBase(item, things, cfg, volume)
+	item := &Item{
+		Base: NewBase(things, cfg),
+	}
+	if err := item.Prepare(item, volume); err != nil {
+		panic(err)
+	}
 	cfg.OnBind(item)
 	return item
 }

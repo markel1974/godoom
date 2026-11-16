@@ -15,8 +15,12 @@ type Throwable struct {
 
 // NewThingThrowable creates and initializes a new throwable object with specific parameters and assigns its properties.
 func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *Throwable {
-	throwable := &Throwable{}
-	throwable.Base = NewBase(throwable, things, cfg, volume)
+	throwable := &Throwable{
+		Base: NewBase(things, cfg),
+	}
+	if err := throwable.Prepare(throwable, volume); err != nil {
+		panic(err)
+	}
 	cfg.OnBind(throwable)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	throwable.SetMaxStep(0.0)

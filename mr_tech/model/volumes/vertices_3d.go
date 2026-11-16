@@ -13,10 +13,7 @@ import (
 
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
 type Vertices3D struct {
-	thing         IThing
-	cage          ICollisionCage
-	cfg           *config.Thing
-	materials     *materials.Materials
+	solver        *collisions.Solver
 	actions       *Vertices3DActions
 	currentAction int
 	links         *articulated_dynamics.Links
@@ -38,42 +35,31 @@ type Vertices3D struct {
 
 // NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
 // It validates model parts, links, action maps, and initializes face and transform buffers.
-func NewVertices3D(thing IThing, cfg *config.Thing, materials *materials.Materials) *Vertices3D {
+func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
-		cage:          collisions.NewCageSequence(thing),
-		thing:         thing,
-		cfg:           cfg,
-		materials:     materials,
+		solver:        collisions.NewSolver(),
 		links:         articulated_dynamics.NewLinks(),
 		joints:        articulated_dynamics.NewJoints(),
-		elements:      NewVertices3DElements(),
+		elements:      NewVertices3DElements(cfg, materials),
 		actions:       NewVertices3DActions(),
 		currentAction: -1,
 	}
-	return v
-}
-
-// Setup initializes model elements, links, joints, and actions, compiles bounds, and returns any setup error.
-func (v *Vertices3D) Setup() error {
-	if err := v.elements.Setup(v.thing, v.cfg, v.materials); err != nil {
-		return err
-	}
-	configLinks, cErr := v.createConfigLinks(v.cfg.Model3D)
+	configLinks, cErr := v.createConfigLinks(cfg.Model3D)
 	if cErr != nil {
-		return cErr
+		panic(cErr)
 	}
 	if err := v.links.Setup(configLinks); err != nil {
-		return err
+		panic(err)
 	}
-	configJoints, cErr := v.createConfigJoints(v.cfg.Model3D, v.elements)
+	configJoints, cErr := v.createConfigJoints(cfg.Model3D, v.elements)
 	if cErr != nil {
-		return cErr
+		panic(cErr)
 	}
 	if err := v.joints.Setup(v.elements.vVolume.entity, configJoints, v.links); err != nil {
-		return err
+		panic(err)
 	}
-	if err := v.actions.Setup(v.cfg.Model3D, v.elements); err != nil {
-		return err
+	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
+		panic(err)
 	}
 
 	v.Compile(0)
@@ -86,12 +72,24 @@ func (v *Vertices3D) Setup() error {
 	}
 
 	v.elements.UpdateEntityBounds()
+	return v
+}
+
+// Setup initializes model elements, links, joints, and actions, compiles bounds, and returns any setup error.
+func (v *Vertices3D) Setup(thing IThing) error {
+
+	if err := v.elements.Setup(thing); err != nil {
+		return err
+	}
+	if err := v.solver.Setup(thing); err != nil {
+		return err
+	}
 	return nil
 }
 
-// GetCage returns the collision cage associated with this 3D model.
-func (v *Vertices3D) GetCage() ICollisionCage {
-	return v.cage
+// GetSolver returns the collision solver associated with the model.
+func (v *Vertices3D) GetSolver() *collisions.Solver {
+	return v.solver
 }
 
 // GetContainerVolume returns the composite view volume of the model, or nil if unavailable.

@@ -12,26 +12,20 @@ import (
 
 // VerticesSprite represents sprite data backed by a source volume and a view-specific volume.
 type VerticesSprite struct {
-	thing     IThing
-	cage      ICollisionCage
+	solver    *collisions.Solver
 	cfg       *config.Thing
 	materials *materials.Materials
 	volume    *Volume
 }
 
 // NewVerticesSprite creates a billboard-rendered vertex sprite for thing from cfg and optional sprite material.
-func NewVerticesSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesSprite {
-	f := &VerticesSprite{
-		thing:     thing,
-		cage:      collisions.NewCageSequence(thing),
+func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *VerticesSprite {
+	v := &VerticesSprite{
+		solver:    collisions.NewSolver(),
 		cfg:       cfg,
 		materials: materials,
 	}
-	return f
-}
 
-// Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
-func (v *VerticesSprite) Setup() error {
 	w := v.cfg.Radius * 2
 	d := v.cfg.Height
 
@@ -97,18 +91,24 @@ func (v *VerticesSprite) Setup() error {
 	// Bottom (Z = 0)
 	addQuad(v000, v010, v110, v100)
 
+	return v
+}
+
+// Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
+func (v *VerticesSprite) Setup(thing IThing) error {
 	// Ora Rebuild itera su un volume 3D reale. minY e maxY non sono più 0.
 	v.volume.Rebuild()
 	v.volume.GetEntity().LockUpright()
-
-	v.volume.SetThing(v.thing)
-
+	v.volume.SetThing(thing)
+	if err := v.solver.Setup(thing); err != nil {
+		return err
+	}
 	return nil
 }
 
-// GetCage returns the collision cage associated with the sprite vertices.
-func (v *VerticesSprite) GetCage() ICollisionCage {
-	return v.cage
+// GetSolver returns the collision solver associated with the vertices sprite.
+func (v *VerticesSprite) GetSolver() *collisions.Solver {
+	return v.solver
 }
 
 // GetContainerVolume returns the volume associated with the vertices sprite.

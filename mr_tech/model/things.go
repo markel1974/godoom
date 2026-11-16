@@ -113,13 +113,13 @@ func (th *Things) querySolverContacts(cage *collisions.Cage, wake func(*collisio
 }
 
 func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wake func(*collisions.Solver)) {
-	lThing := lCage.GetThing().(volumes.IThing)
+	lThing := lCage.GetObject().(volumes.IThing)
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(volumes.IThing)
 		if lThing == rThing {
 			return false
 		}
-		rCage := rThing.GetCage().(*collisions.Cage)
+		rCage := rThing.GetSolver().GetCage()
 		if lCage.HasSeen(rCage) {
 			return false
 		}
@@ -287,7 +287,7 @@ func (th *Things) applySafeStepUp(cage *collisions.Cage, stepZ float64) {
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	if removables := th.coordinator.Removables(); len(removables) > 0 {
 		for _, s := range removables {
-			th.removeThing(s.GetCage().GetThing().(volumes.IThing))
+			th.removeThing(s.GetCage().GetObject().(volumes.IThing))
 		}
 		th.coordinator.ClearRemovables()
 	}

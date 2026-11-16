@@ -20,9 +20,12 @@ func NewEnemy(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *
 		panic("onThinking is nil for enemy:" + cfg.Id)
 	}
 	enemy := &Enemy{
+		Base:       NewBase(things, cfg),
 		onThinking: cfg.OnThinking,
 	}
-	enemy.Base = NewBase(enemy, things, cfg, volume)
+	if err := enemy.Prepare(enemy, volume); err != nil {
+		panic(err)
+	}
 	entity := enemy.GetEntity()
 	entity.SetKeepUpright(true)
 	cfg.OnBind(enemy)

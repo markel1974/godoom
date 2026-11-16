@@ -56,8 +56,7 @@ func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
 
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
-	thing         IThing
-	cage          ICollisionCage
+	solver        *collisions.Solver
 	cfg           *config.Thing
 	materials     *materials.Materials
 	volumes       []*Volume
@@ -78,23 +77,18 @@ type VerticesMultiSprite struct {
 // NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
 // It initializes per-view volumes, rendering mode, animation clamps, and binds each volume to thing.
 // It panics if a view is nil, has no textures, or face creation fails
-func NewVerticesMultiSprite(thing IThing, cfg *config.Thing, materials *materials.Materials) *VerticesMultiSprite {
-	f := &VerticesMultiSprite{
-		thing:     thing,
+func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *VerticesMultiSprite {
+	v := &VerticesMultiSprite{
 		cfg:       cfg,
 		materials: materials,
-		cage:      collisions.NewCageSequence(thing),
+		solver:    collisions.NewSolver(),
 		volumes:   make([]*Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
 		clampAnim:  make([]bool, len(cfg.MultiSprite.Views)),
 		debug:      false,
 	}
-	return f
-}
 
-// Setup initializes multi-sprite volumes, view materials, bounds, render mode, animation clamps, and composition.
-func (v *VerticesMultiSprite) Setup() error {
 	v.standingHalfH = v.cfg.Height * 0.5
 	if v.standingHalfH <= 0 && len(v.cfg.MultiSprite.Views) > 0 {
 		if mat0 := v.materials.GetMaterial(v.cfg.MultiSprite.Views[0]); mat0 != nil {
@@ -112,10 +106,10 @@ func (v *VerticesMultiSprite) Setup() error {
 	}
 	for viewIdx, view := range v.cfg.MultiSprite.Views {
 		if view == nil {
-			return fmt.Errorf("view is nil for viewIdx %d", viewIdx)
+			panic(fmt.Sprintf("view is nil for viewIdx %d", viewIdx))
 		}
 		if len(view.Textures) == 0 {
-			return fmt.Errorf("view Frames is empty for viewIdx %d", viewIdx)
+			panic(fmt.Sprintf("view Frames is empty for viewIdx %d", viewIdx))
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", v.cfg.Id, viewIdx)
 		thingId := fmt.Sprintf("thing_%s_%d", v.cfg.Id, viewIdx)
@@ -142,8 +136,13 @@ func (v *VerticesMultiSprite) Setup() error {
 		}
 	}
 
+	return v
+}
+
+// Setup assigns the thing to all volumes, refreshes bounds and compiled state, and initializes collision solving.
+func (v *VerticesMultiSprite) Setup(thing IThing) error {
 	for _, volume := range v.volumes {
-		volume.SetThing(v.thing)
+		volume.SetThing(thing)
 		if v.renderMode == RenderModeBillboard {
 			volume.GetEntity().LockUpright()
 		}
@@ -151,12 +150,16 @@ func (v *VerticesMultiSprite) Setup() error {
 
 	v.updateBounds()
 	v.Compile(0)
+
+	if err := v.solver.Setup(thing); err != nil {
+		return err
+	}
 	return nil
 }
 
-// GetCage returns the collision cage associated with the multi-sprite vertices.
-func (v *VerticesMultiSprite) GetCage() ICollisionCage {
-	return v.cage
+// GetSolver returns the collision solver associated with the multi-sprite.
+func (v *VerticesMultiSprite) GetSolver() *collisions.Solver {
+	return v.solver
 }
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.

@@ -144,18 +144,18 @@ type flatWallPlane struct {
 var _counter uint64
 
 // NewCageSequence creates a new Cage for object using the next sequence ID.
-func NewCageSequence(object IObject) *Cage {
-	c := NewCage(_counter, object)
+func NewCageSequence() *Cage {
+	c := NewCage(_counter)
 	atomic.AddUint64(&_counter, 1)
 	return c
 }
 
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
-func NewCage(id uint64, object IObject) *Cage {
+func NewCage(id uint64) *Cage {
 	c := &Cage{
 		id:        id,
 		seen:      make([]uint64, max(id*2, 1024)),
-		object:    object,
+		solver:    nil,
 		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volume:    nil,
 		slots:     make([]*Entry, totalSlots),
@@ -176,6 +176,13 @@ func NewCage(id uint64, object IObject) *Cage {
 		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
 	}
 	return c
+}
+
+// Setup assigns the object used by the cage and returns nil.
+func (s *Cage) Setup(solver *Solver, object IObject) error {
+	s.solver = solver
+	s.object = object
+	return nil
 }
 
 // GetObject returns the object associated with the cage.[cite: 6]
@@ -735,9 +742,6 @@ func (s *Cage) GetSlotsLen() int { return s.slotsLen }
 // GetSlot returns the Entry at the specified index in the slots slice.[cite: 6]
 func (s *Cage) GetSlot(i int) *Entry { return s.slots[i] }
 
-// GetThing returns the object associated with the cage.[cite: 6]
-func (s *Cage) GetThing() IObject { return s.object }
-
 // GetVolume returns the volume associated with the Cage.[cite: 6]
 func (s *Cage) GetVolume() IObject { return s.volume }
 
@@ -992,11 +996,6 @@ func (s *Cage) SetSolverIndex(idx int) {
 // GetSolverIndex returns the temporary per-tick solver index of this cage (-1 when inactive).
 func (s *Cage) GetSolverIndex() int {
 	return s.solverIdx
-}
-
-// SetSolver binds the owning Solver to this cage.
-func (s *Cage) SetSolver(solver *Solver) {
-	s.solver = solver
 }
 
 // GetSolver returns the owning Solver bound to this cage, or nil when unbound.

@@ -13,8 +13,12 @@ type UI struct {
 
 // NewUI creates a UI thing from the provided handler and configuration, initializes its base, and binds it.
 func NewUI(things IThingHandler, cfg *config.Thing) *UI {
-	ui := &UI{}
-	ui.Base = NewBase(ui, things, cfg, nil)
+	ui := &UI{
+		Base: NewBase(things, cfg),
+	}
+	if err := ui.Prepare(ui, nil); err != nil {
+		panic(err)
+	}
 	ui.SetAngle(0)
 	cfg.OnBind(ui)
 	return ui

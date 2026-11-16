@@ -52,15 +52,12 @@ type Vertices3DElements struct {
 }
 
 // NewVertices3DElements creates an empty Vertices3DElements collection.
-func NewVertices3DElements() *Vertices3DElements {
-	return &Vertices3DElements{}
-}
+func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *Vertices3DElements {
+	v := &Vertices3DElements{}
 
-// Setup initializes 3D vertex elements, face buffers, view volume, and entity from the given configuration.
-func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *materials.Materials) error {
 	numParts := len(cfg.Model3D.Parts)
 	if numParts == 0 {
-		return fmt.Errorf("no parts found in vertices_3d")
+		panic(fmt.Sprintf("no parts found in vertices_3d"))
 	}
 	v.entries = make([]*Vertices3DEntry, numParts)
 	v.partFaceOffsets = make([]int, numParts)
@@ -74,20 +71,20 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 
 	for i, part := range cfg.Model3D.Parts {
 		if part == nil {
-			return fmt.Errorf("nil part found in vertices_3d")
+			panic(fmt.Sprintf("nil part found in vertices_3d"))
 		}
 		c := cfg.Clone()
 		c.Model3DEntry = part
 		c.Model3D = nil
-		entry := NewVertices3DEntry(thing, c, materials)
+		entry := NewVertices3DEntry(c, materials)
 		entry.salt = salt
 		v.entries[i] = entry
 		if len(entry.volumes) == 0 {
-			return fmt.Errorf("empty volumes found in vertices_3d")
+			panic(fmt.Sprintf("empty volumes found in vertices_3d"))
 		}
 		vol := entry.volumes[0]
 		if vol == nil {
-			return fmt.Errorf("nil volumes[0] found in vertices_3d")
+			panic(fmt.Sprintf("nil volumes[0] found in vertices_3d"))
 		}
 		count := vol.GetFaceCount()
 		v.partFaceOffsets[i] = totalFaces
@@ -101,13 +98,13 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	// Initialize face buffers using partFaceOffsets to decouple buffer layout from execution order
 	for i, el := range v.entries {
 		if el == nil {
-			return fmt.Errorf("nil element found in vertices_3d")
+			panic(fmt.Sprintf("nil element found in vertices_3d"))
 		}
 		if len(el.volumes) == 0 {
-			return fmt.Errorf("nil volumes found in vertices_3d")
+			panic(fmt.Sprintf("nil volumes found in vertices_3d"))
 		}
 		if el.volumes[0] == nil {
-			return fmt.Errorf("nil volumes[0] found in vertices_3d")
+			panic(fmt.Sprintf("nil volumes[0] found in vertices_3d"))
 		}
 		target := el.volumes[0]
 		count := target.GetFaceCount()
@@ -121,6 +118,16 @@ func (v *Vertices3DElements) Setup(thing IThing, cfg *config.Thing, materials *m
 	}
 
 	v.vVolume = NewVirtualVolume(v, rigid_body.NewEntity(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce))
+	return v
+}
+
+// Setup initializes 3D vertex elements, face buffers, view volume, and entity from the given configuration.
+func (v *Vertices3DElements) Setup(thing IThing) error {
+	for _, entry := range v.entries {
+		if err := entry.Setup(thing); err != nil {
+			return fmt.Errorf("failed to setup vertices_3d entry: %w", err)
+		}
+	}
 	return nil
 }
 

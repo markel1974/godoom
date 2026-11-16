@@ -54,9 +54,12 @@ func NewPlayer(things IThingHandler, c *config.Player, vol *volumes.Volume, debu
 	return player
 }
 
-// Setup initializes the Player instance and prepares it for operation, returning an error if initialization fails.
-func (pr *Player) Setup() error {
-	pr.Base = NewBase(pr, pr.things, pr.cfg.Thing, pr.vol)
+// Initialize initializes the Player instance and prepares it for operation, returning an error if initialization fails.
+func (pr *Player) Initialize() error {
+	pr.Base = NewBase(pr.things, pr.cfg.Thing)
+	if err := pr.Prepare(pr, pr.vol); err != nil {
+		return err
+	}
 	pr.GetSolver().SetPrepareHooks(pr.beforePrepare, pr.afterPrepare)
 	pr.GetSolver().SetApplyHook(pr.afterApply)
 	pr.cfg.Thing.OnBind(pr)

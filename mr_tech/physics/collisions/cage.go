@@ -623,7 +623,7 @@ func (s *Cage) TranslateCage(slot int, rCage *Cage) (aabb.IObject, float64, floa
 	lOx += s.dX
 	lOy += s.dY
 	lOz += s.dZ
-	rEnt := rCage.object.GetEntity()
+	rEnt := rCage.GetEntity()
 	rOx, rOy, rOz := rEnt.GetCenter()
 	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
 	rOx += rDX

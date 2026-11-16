@@ -27,6 +27,7 @@ type Volume struct {
 	dirty      bool
 }
 
+// NewVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
 func NewVolume(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
 	v := &Volume{
 		modelId:    modelId,
@@ -42,6 +43,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction f
 	return v
 }
 
+// NewVolumeConcrete creates a Volume with concrete material physics defaults for the given model ID, ID, and tag.
 func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	const concreteMass = 0.0
 	const concreteRestitution = 0.0

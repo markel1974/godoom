@@ -138,6 +138,7 @@ type Cage struct {
 	passDY              float64
 	passDZ              float64
 	pendingStepZ        float64
+	collisionGroup      uint64
 	solverIdx           int
 	solver              *Solver
 }
@@ -766,6 +767,12 @@ func (s *Cage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY
 // GetT retrieves the current transformed coordinates (tX, tY, tZ) of the Cage.[cite: 6]
 func (s *Cage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
 
+// GetNetDisplacement returns the net center shift across the entire tick from start-of-step (cX, cY, cZ).
+func (s *Cage) GetNetDisplacement() (float64, float64, float64) {
+	curX, curY, curZ := s.entity.GetCenter()
+	return curX - s.cX, curY - s.cY, curZ - s.cZ
+}
+
 func (s *Cage) GetTZ() float64 { return s.tZ }
 
 // BucketCount returns the number of entries in the specified bucket.[cite: 6]
@@ -1006,6 +1013,16 @@ func (s *Cage) SetSolverIndex(idx int) {
 // GetSolverIndex returns the temporary per-tick solver index of this cage (-1 when inactive).
 func (s *Cage) GetSolverIndex() int {
 	return s.solverIdx
+}
+
+// SetCollisionGroup assigns a non-zero skeleton/island collision filter group ID.
+func (s *Cage) SetCollisionGroup(group uint64) {
+	s.collisionGroup = group
+}
+
+// GetCollisionGroup returns this cage's collision filter group ID (0 means default, collides with all).
+func (s *Cage) GetCollisionGroup() uint64 {
+	return s.collisionGroup
 }
 
 // GetSolver returns the owning Solver bound to this cage, or nil when unbound.

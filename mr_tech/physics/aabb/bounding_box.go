@@ -404,6 +404,13 @@ func (r *BoundingBox) MoveTo(x, y, z float64) {
 	r.rebuild()
 }
 
+// MoveCenterTo moves the bounding box so that its geometric center sits at (cx, cy, cz).
+func (r *BoundingBox) MoveCenterTo(cx, cy, cz float64) {
+	w, h, d := r.size.Get()
+	r.bottomLeft.Set(cx-w*0.5, cy-h*0.5, cz-d*0.5)
+	r.rebuild()
+}
+
 // MoveToZ changes the reference position's Z coordinate.
 func (r *BoundingBox) MoveToZ(z float64) {
 	r.bottomLeft.SetZ(z)

@@ -218,6 +218,20 @@ func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, orig
 	return minX, minY, minZ, maxX, maxY, maxZ
 }
 
+// ClearPart zeroes all face slots belonging to part i in both A and B render buffers.
+func (v *Vertices3DElements) ClearPart(i int) {
+	offset := v.partFaceOffsets[i]
+	partCount := v.partFaceCounts[i]
+	for j := 0; j < partCount; j++ {
+		if faceA := v.facesA.At(offset + j); faceA != nil {
+			faceA.Zero()
+		}
+		if faceB := v.facesB.At(offset + j); faceB != nil {
+			faceB.Zero()
+		}
+	}
+}
+
 // Len returns the number of 3D vertex elements.
 func (v *Vertices3DElements) Len() int {
 	return len(v.entries)

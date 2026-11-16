@@ -73,6 +73,11 @@ func (ta *TagAxis) ToQuaternion(q *aabb.Quaternion) {
 	)
 }
 
+// GetOrigin returns the local anchor offset stored in this TagAxis.
+func (ta *TagAxis) GetOrigin() (float64, float64, float64) {
+	return ta.originX, ta.originY, ta.originZ
+}
+
 // RotatePointByTag performs a 3D vector transformation using the matrix of the current TagAxis and the origin of the input TagAxis.
 func (ta *TagAxis) RotatePointByTag(k *TagAxis) (float64, float64, float64) {
 	x := k.originX*ta.data.Points[0].X + k.originY*ta.data.Points[1].X + k.originZ*ta.data.Points[2].X

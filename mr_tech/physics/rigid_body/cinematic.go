@@ -406,10 +406,34 @@ func (e *Cinematic) SetSleeping(sleeping bool) {
 	e.Stop()
 }
 
+// DampCalmRagdoll applies gentle joint-support damping to slow 6-DoF ragdoll limbs below ~0.1 m/s
+// so multi-link chains settle instead of orbiting endlessly on single corner contacts.
+func (e *Cinematic) DampCalmRagdoll() {
+	if e.keepUpright || e.invMass <= 0.0 {
+		return
+	}
+	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
+	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
+	if vSq < 25.0 && wSq < 0.16 {
+		e.vx *= 0.78
+		e.vy *= 0.78
+		e.vz *= 0.78
+		e.wx *= 0.78
+		e.wy *= 0.78
+		e.wz *= 0.78
+	}
+}
+
 // UpdateSleepState advances or resets the calm accumulator based on post-solver linear/angular speed and push-out delta.
 // It returns true when the body satisfies all rest conditions for at least sleepTimeThreshold seconds.
 func (e *Cinematic) UpdateSleepState(canSleep bool, pushSq float64) bool {
-	if !canSleep || e.invMass <= 0.0 || !e.onGround || (e.keepUpright && e.isTilted) || pushSq > sleepPushSlopSq {
+	return e.UpdateSleepStateWithSupport(canSleep, pushSq, false)
+}
+
+// UpdateSleepStateWithSupport behaves like UpdateSleepState, optionally treating externalSupport
+// (e.g. a grounded joint-connected neighbor) as ground support without altering ground friction.
+func (e *Cinematic) UpdateSleepStateWithSupport(canSleep bool, pushSq float64, externalSupport bool) bool {
+	if !canSleep || e.invMass <= 0.0 || (!e.onGround && !externalSupport) || (e.keepUpright && e.isTilted) || pushSq > sleepPushSlopSq {
 		e.sleepTimer = 0.0
 		return false
 	}
@@ -418,9 +442,20 @@ func (e *Cinematic) UpdateSleepState(canSleep bool, pushSq float64) bool {
 		return false
 	}
 	linThresh := math.Max(e.vMin*2.0, (sleepEpsilon/e.dt)*1.5)
+	angMaxSq := sleepAngVelMaxSq
+	if externalSupport || (!e.keepUpright && e.isTilted) {
+		// Free 6-DoF and joint-supported ragdoll limbs cannot snap flat under groundedFlat,
+		// so calibrate calm speed to ~8 cm/s (4.0 units/s at 50 units/m) alongside strict net-displacement slop.
+		if linThresh < 4.0 {
+			linThresh = 4.0
+		}
+		if angMaxSq < 0.16*0.16 {
+			angMaxSq = 0.16 * 0.16
+		}
+	}
 	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
 	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
-	if vSq > linThresh*linThresh || wSq > sleepAngVelMaxSq {
+	if vSq > linThresh*linThresh || wSq > angMaxSq {
 		e.sleepTimer = 0.0
 		return false
 	}
@@ -757,6 +792,13 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 		e.vx *= groundDamping
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
+		if !groundedFlat && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.16 {
+			e.vx *= 0.80
+			e.vy *= 0.80
+			e.wx *= 0.80
+			e.wy *= 0.80
+			e.wz *= 0.80
+		}
 		if groundedFlat {
 			if math.Abs(e.vx) < e.vMin {
 				e.vx = 0.0

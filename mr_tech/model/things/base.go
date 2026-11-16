@@ -17,6 +17,10 @@ type IThingHandler interface {
 	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
 
 	CreateThrowable(t volumes.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
+
+	CreateDetached(vol *volumes.Volume, location *volumes.Volume, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) volumes.IThing
+
+	AddJoint(joint *collisions.JointConstraint)
 }
 
 // Base represents the fundamental attributes and behaviors of an object in the system.
@@ -42,6 +46,11 @@ type Base struct {
 
 // NewBase creates a new Base instance with specified configuration, material, sector, world, and things.
 func NewBase(things IThingHandler, cfg *config.Thing) *Base {
+	return NewBaseWithVertices(things, cfg, volumes.CreateVertices(cfg, things.GetMaterials()))
+}
+
+// NewBaseWithVertices creates a Base instance using a caller-supplied IVertices implementation.
+func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts volumes.IVertices) *Base {
 	if cfg.OnCollision == nil {
 		panic("onCollision is nil for thing:" + cfg.Id)
 	}
@@ -52,7 +61,7 @@ func NewBase(things IThingHandler, cfg *config.Thing) *Base {
 		panic("mass is zero for thing:" + cfg.Id)
 	}
 	t := &Base{
-		IVertices:      volumes.CreateVertices(cfg, things.GetMaterials()),
+		IVertices:      verts,
 		id:             cfg.Id,
 		angle:          cfg.Angle,
 		kind:           cfg.Kind,
@@ -75,6 +84,26 @@ func NewBase(things IThingHandler, cfg *config.Thing) *Base {
 func (t *Base) Prepare(thing volumes.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
+	}
+	if det, ok := t.IVertices.(volumes.IDetachableVertices); ok {
+		det.SetOnDetach(func(vol *volumes.Volume, x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64) {
+			t.things.CreateDetached(vol, t.GetLocation(), geometry.XYZ{X: x, Y: y, Z: z}, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, 0)
+		})
+	}
+	if rag, ok := t.IVertices.(volumes.IRagdollVertices); ok {
+		rag.SetOnRagdoll(
+			func(vol *volumes.Volume, x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) volumes.IThing {
+				return t.things.CreateDetached(vol, t.GetLocation(), geometry.XYZ{X: x, Y: y, Z: z}, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, collisionGroup)
+			},
+			func(joint *collisions.JointConstraint, childThing volumes.IThing, canDetach bool, breakThreshold float64) {
+				t.things.AddJoint(joint)
+				if canDetach {
+					if binder, ok := childThing.(*Detached); ok {
+						binder.BindJoint(joint, breakThreshold)
+					}
+				}
+			},
+		)
 	}
 	t.solver = t.IVertices.GetSolver()
 	t.ent = t.solver.GetEntity()

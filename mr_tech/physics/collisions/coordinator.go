@@ -14,6 +14,9 @@ type Coordinator struct {
 	wakeQueue        []*Solver
 	islandParent     []int
 	islandSleep      []bool
+	jointSupported   []bool
+	joints           []*JointConstraint
+	jointsLen        int
 	wakeRunningFn    func(neighbor *Solver)
 }
 
@@ -33,9 +36,24 @@ func NewCoordinator(solverIterations, initialCap int) *Coordinator {
 		wakeQueue:        make([]*Solver, initialCap),
 		islandParent:     make([]int, initialCap),
 		islandSleep:      make([]bool, initialCap),
+		jointSupported:   make([]bool, initialCap),
+		joints:           make([]*JointConstraint, 0, initialCap),
 	}
 	c.wakeRunningFn = c.wakeRunningIsland
 	return c
+}
+
+// AddJoint registers an active bilateral joint constraint with the coordinator.
+func (c *Coordinator) AddJoint(j *JointConstraint) {
+	if j == nil {
+		return
+	}
+	if c.jointsLen < len(c.joints) {
+		c.joints[c.jointsLen] = j
+	} else {
+		c.joints = append(c.joints, j)
+	}
+	c.jointsLen++
 }
 
 // EnsureCapacity grows internal working buffers to hold at least minCap solvers without per-frame allocations.
@@ -61,6 +79,10 @@ func (c *Coordinator) EnsureCapacity(minCap int) {
 	newSleep := make([]bool, newCap)
 	copy(newSleep, c.islandSleep)
 	c.islandSleep = newSleep
+
+	newJointSup := make([]bool, newCap)
+	copy(newJointSup, c.jointSupported)
+	c.jointSupported = newJointSup
 }
 
 // Reset clears the staged solver list for the next frame.
@@ -121,6 +143,26 @@ func (c *Coordinator) wakeIsland(root *Solver, addToRunning bool) {
 			}
 			rSolver := rCage.GetSolver()
 			if rSolver == nil || !rSolver.IsActive() || !rSolver.IsSleeping() {
+				continue
+			}
+			rSolver.WakeUp()
+			if qLen < len(c.wakeQueue) {
+				c.wakeQueue[qLen] = rSolver
+				qLen++
+			}
+		}
+		for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+			jc := c.joints[jIdx]
+			if !jc.IsActive() {
+				continue
+			}
+			var rSolver *Solver
+			if jc.solverA == curr {
+				rSolver = jc.solverB
+			} else if jc.solverB == curr {
+				rSolver = jc.solverA
+			}
+			if rSolver == nil || !rSolver.IsSleeping() {
 				continue
 			}
 			rSolver.WakeUp()
@@ -195,15 +237,57 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 		queryContacts(c.running[cursor].cage, c.wakeRunningFn)
 	}
 
+	// Compact broken or inactive joints once per step before solving.
+	writeJ := 0
+	for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+		if c.joints[jIdx].IsActive() {
+			c.joints[writeJ] = c.joints[jIdx]
+			writeJ++
+		}
+	}
+	for k := writeJ; k < c.jointsLen; k++ {
+		c.joints[k] = nil
+	}
+	c.jointsLen = writeJ
+
 	for x := 0; x < c.runningLen; x++ {
 		s := c.running[x]
-		s.entity.SetOnGround(s.cage.HasFloor())
+		hasFloor := s.cage.HasFloor()
+		s.entity.SetOnGround(hasFloor)
+		c.jointSupported[x] = hasFloor
 		s.entity.SnapshotPreSolve()
 	}
 
-	// Pre-apply warm-started impulses on persistent contacts before iterative PGS sweeps.
+	if c.jointsLen > 0 {
+		for pass := 0; pass < 6; pass++ {
+			changed := false
+			for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+				jc := c.joints[jIdx]
+				ia := jc.solverA.GetSolverIndex()
+				ib := jc.solverB.GetSolverIndex()
+				if ia < 0 || ib < 0 {
+					continue
+				}
+				if c.jointSupported[ia] && !c.jointSupported[ib] {
+					c.jointSupported[ib] = true
+					changed = true
+				} else if c.jointSupported[ib] && !c.jointSupported[ia] {
+					c.jointSupported[ia] = true
+					changed = true
+				}
+			}
+			if !changed {
+				break
+			}
+		}
+	}
+
+	// Pre-apply warm-started impulses on persistent contacts and joints before iterative PGS sweeps.
 	for x := 0; x < c.runningLen; x++ {
 		c.running[x].StageWarmStart()
+	}
+	for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+		c.joints[jIdx].WarmStart()
 	}
 
 	for si := 0; si < c.solverIterations; si++ {
@@ -211,9 +295,15 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 			for x := 0; x < c.runningLen; x++ {
 				c.running[x].StageResolve()
 			}
+			for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+				c.joints[jIdx].ResolveVelocity()
+			}
 		} else {
 			for x := c.runningLen - 1; x >= 0; x-- {
 				c.running[x].StageResolve()
+			}
+			for jIdx := c.jointsLen - 1; jIdx >= 0; jIdx-- {
+				c.joints[jIdx].ResolveVelocity()
 			}
 		}
 	}
@@ -233,9 +323,15 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 			for x := 0; x < c.runningLen; x++ {
 				c.running[x].StageResolvePosition()
 			}
+			for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+				c.joints[jIdx].ResolvePosition()
+			}
 		} else {
 			for x := c.runningLen - 1; x >= 0; x-- {
 				c.running[x].StageResolvePosition()
+			}
+			for jIdx := c.jointsLen - 1; jIdx >= 0; jIdx-- {
+				c.joints[jIdx].ResolvePosition()
 			}
 		}
 		for x := 0; x < c.runningLen; x++ {
@@ -247,6 +343,9 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 	}
 	for x := 0; x < c.runningLen; x++ {
 		c.running[x].cage.CommitStaticClamp()
+		if c.jointsLen > 0 && c.jointSupported[x] {
+			c.running[x].entity.DampCalmRagdoll()
+		}
 	}
 
 	c.updateIslandSleep()
@@ -255,7 +354,7 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 func (c *Coordinator) updateIslandSleep() {
 	for x := 0; x < c.runningLen; x++ {
 		c.islandParent[x] = x
-		c.islandSleep[x] = c.running[x].UpdateSleepState()
+		c.islandSleep[x] = c.running[x].UpdateSleepStateWithSupport(c.jointSupported[x])
 	}
 	for x := 0; x < c.runningLen; x++ {
 		cage := c.running[x].cage
@@ -274,6 +373,19 @@ func (c *Coordinator) updateIslandSleep() {
 			if rx != ry {
 				c.islandParent[ry] = rx
 			}
+		}
+	}
+	for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+		jc := c.joints[jIdx]
+		ia := jc.solverA.GetSolverIndex()
+		ib := jc.solverB.GetSolverIndex()
+		if ia < 0 || ib < 0 || ia == ib {
+			continue
+		}
+		ra := c.findIsland(ia)
+		rb := c.findIsland(ib)
+		if ra != rb {
+			c.islandParent[rb] = ra
 		}
 	}
 	for x := 0; x < c.runningLen; x++ {

@@ -10,6 +10,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
+// DetachFunc handles spawning an autonomous rigid-body solver when a joint detaches.
+// origX/Y/Z is the detached part's pivot offset relative to the parent entity center.
+type DetachFunc func(partIdx int, origX, origY, origZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64)
+
 // Joints manages joint physics, ragdoll state, detachment, and transforms for linked 3D model parts.
 type Joints struct {
 	links             *Links
@@ -19,21 +23,7 @@ type Joints struct {
 	lastHitDirX       float64
 	lastHitDirY       float64
 	lastHitDirZ       float64
-
-	fallAxisX float64
-	fallAxisY float64
-	fallAngle float64
-	fallVel   float64
-
-	ragdollCollapse bool
-
-	rootRollAng      float64
-	rootRollVel      float64
-	rootBounceZ      float64
-	rootBounceVz     float64
-	rootDropZ        float64
-	baseOffsetZ      float64
-	hasRootTransform bool
+	baseOffsetZ       float64
 
 	rotationsA []*TagAxis
 	rotationsB []*TagAxis
@@ -41,36 +31,31 @@ type Joints struct {
 	lastHitPart  int
 	lastHitForce float64
 
-	rootQuat         *aabb.Quaternion
-	rootFallQuat     *aabb.Quaternion
-	rootRollQuat     *aabb.Quaternion
-	rootCombinedQuat *aabb.Quaternion
-
 	isRagdoll bool
-
-	lastTick uint64
+	lastTick  uint64
 
 	originsA []geometry.XYZ
 	originsB []geometry.XYZ
 	numParts int
 
-	//elems []IElements
-
-	solver *collisions.Solver
-	ent    *rigid_body.Entity
+	solver     *collisions.Solver
+	ent        *rigid_body.Entity
+	detachQuat *aabb.Quaternion
+	onDetach   DetachFunc
 }
 
-// NewJoints creates a Joints instance with default state and identity root quaternions.
+// NewJoints creates a Joints instance with default state.
 func NewJoints() *Joints {
 	pj := &Joints{
-		fallAxisX:        1.0,
-		lastHitPart:      -1,
-		rootQuat:         aabb.NewQuaternionIdentity(),
-		rootFallQuat:     aabb.NewQuaternionIdentity(),
-		rootRollQuat:     aabb.NewQuaternionIdentity(),
-		rootCombinedQuat: aabb.NewQuaternionIdentity(),
+		lastHitPart: -1,
+		detachQuat:  aabb.NewQuaternionIdentity(),
 	}
 	return pj
+}
+
+// SetOnDetach registers a callback invoked when a detachable joint breaks into an autonomous rigid body.
+func (v *Joints) SetOnDetach(fn DetachFunc) {
+	v.onDetach = fn
 }
 
 // Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
@@ -101,9 +86,14 @@ func (v *Joints) IsRagdoll() bool {
 	return v.isRagdoll
 }
 
-// SetRagdollCollapse marks the joint system to collapse when ragdoll mode is activated.
-func (v *Joints) SetRagdollCollapse() {
-	v.ragdollCollapse = true
+// GetJoint returns the joint specification at index i.
+func (v *Joints) GetJoint(i int) *Joint {
+	return v.data[i]
+}
+
+// LastHitImpulse returns the normalized last hit direction and force magnitude for seeding ragdoll collapse momentum.
+func (v *Joints) LastHitImpulse() (dirX, dirY, dirZ, fMag float64, hitPart int) {
+	return v.lastHitDirX, v.lastHitDirY, v.lastHitDirZ, v.lastHitForce, v.lastHitPart
 }
 
 // SetBaseOffsetZ records the static Z centering offset aligning model bounds with Entity center.
@@ -129,18 +119,6 @@ func (v *Joints) GetRotationA(i int) *TagAxis {
 // GetRotationB returns the secondary rotation axis for the joint at index i.
 func (v *Joints) GetRotationB(i int) *TagAxis {
 	return v.rotationsB[i]
-}
-
-// CompileDetached updates detached joint origins relative to the center and applies its stored detached rotation.
-func (v *Joints) CompileDetached(i int) {
-	cx, cy, cz := v.ent.GetCenter()
-	j := v.data[i]
-	v.originsA[i].X = j.detWorldX - cx
-	v.originsA[i].Y = j.detWorldY - cy
-	v.originsA[i].Z = j.detWorldZ - cz
-	v.originsB[i] = v.originsA[i]
-	v.rotationsA[i].SetFromQuaternion(j.detQuat)
-	v.rotationsB[i].SetFromQuaternion(j.detQuat)
 }
 
 // CompileNormal derives joint origins and rotations from parent transforms and optional tag axes.
@@ -194,8 +172,8 @@ func (v *Joints) CompileNormal(i int, pIdx int, tagAxisA, tagAxisB *TagAxis) {
 	}
 }
 
-// detachPart marks a detachable joint as detached and initializes its frozen frame and ballistic dynamics.
-func (v *Joints) detachPart(idx int, cx, cy, cz, dirX, dirY, dirZ, fMag float64) {
+// detachPart marks a detachable joint as detached, freezes its subtree frames, and emits a rigid-body handoff event.
+func (v *Joints) detachPart(idx int, dirX, dirY, dirZ, fMag float64) {
 	if idx <= 0 || idx >= len(v.data) || v.dismemberedCount >= 3 {
 		return
 	}
@@ -205,19 +183,26 @@ func (v *Joints) detachPart(idx int, cx, cy, cz, dirX, dirY, dirZ, fMag float64)
 	}
 	v.dismemberedCount++
 	v.hasActiveDynamics = true
+	sideSign := 1.0
+	if idx&1 == 1 {
+		sideSign = -1.0
+	}
+	vx, vy, vz, wx, wy, wz := j.Detach(dirX, dirY, dirZ, fMag, sideSign)
 	for i := 0; i < v.numParts; i++ {
 		if i == idx || v.IsPartDetached(i) {
 			v.data[i].elem.FreezeCurrentFrame()
 		}
 	}
-	v.rotationsA[idx].ToQuaternion(j.detQuat)
+	pvx, pvy, pvz := v.ent.GetVelocity()
+	vx += pvx
+	vy += pvy
+	vz += pvz
+	v.rotationsA[idx].ToQuaternion(v.detachQuat)
+	qx, qy, qz, qw := v.detachQuat.Get()
 	orX, orY, orZ := v.originsA[idx].X, v.originsA[idx].Y, v.originsA[idx].Z
-	sideSign := 1.0
-	if idx&1 == 1 {
-		sideSign = -1.0
+	if v.onDetach != nil {
+		v.onDetach(idx, orX, orY, orZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz)
 	}
-	_, _, halfD := v.ent.GetSizeCenter()
-	j.Detach(halfD, cx, cy, cz, dirX, dirY, dirZ, fMag, orX, orY, orZ, sideSign)
 }
 
 // IsPartDetached reports whether the part at i or any valid ancestor is marked detached.
@@ -235,64 +220,29 @@ func (v *Joints) IsPartDetached(i int) bool {
 	return false
 }
 
-// ActivateRagdoll enables ragdoll dynamics, seeds fall motion from the last hit, and may detach a damaged part.
+// ActivateRagdoll switches the articulated system into multi-body ragdoll mode and optionally detaches a fatally damaged extremity.
 func (v *Joints) ActivateRagdoll() {
 	v.isRagdoll = true
-	v.hasActiveDynamics = true
+	v.hasActiveDynamics = false
 
 	dx, dy, dz := v.lastHitDirX, v.lastHitDirY, v.lastHitDirZ
 	if dx*dx+dy*dy+dz*dz < 1e-6 {
 		dx = 1.0
 	}
 
-	horizLen := math.Hypot(dx, dy)
-	if horizLen > 1e-4 {
-		v.fallAxisX = -dy / horizLen
-		v.fallAxisY = dx / horizLen
-	} else {
-		v.fallAxisX = 1.0
-		v.fallAxisY = 0.0
-	}
-
-	if v.ragdollCollapse && v.fallAngle == 0 {
-		v.fallAngle = 0.08
-		v.fallVel = 3.8
-	}
-	v.rootRollVel += 2.6
-	v.rootBounceVz = 48.0
-
-	// If the killing blow hit a detachable extremity with sufficient accumulated stress, sever it on death
+	// If the killing blow hit a detachable extremity with sufficient accumulated stress, sever it on death.
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
 		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			cx, cy, cz := v.ent.GetCenter()
-			v.detachPart(v.lastHitPart, cx, cy, cz, dx, dy, dz, v.lastHitForce)
+			v.detachPart(v.lastHitPart, dx, dy, dz, v.lastHitForce)
 		}
-	}
-
-	tx := dy*0.55 - dz*0.25
-	ty := -dx*0.55 + dz*0.40
-	tz := (dx - dy) * 0.30
-
-	for i := 1; i < len(v.data); i++ {
-		j := v.data[i]
-		if j.detached {
-			continue
-		}
-		// Compute gravitational/impact slump target in the joint's local frame
-		lx, ly, lz := v.rotationsA[i].RotatePointInverse(tx, ty, tz)
-		sign := 1.0
-		if i&1 == 1 {
-			sign = -0.90
-		}
-		j.ActivateRagdoll(lx, ly, lz, sign)
 	}
 }
 
-// StepJoints advances joint and ragdoll dynamics to the given simulation tick.
-// It ignores zero, repeated, or older ticks and clamps large time steps for stability.
+// StepJoints advances live hit-flinch spring-dampers to the given simulation tick.
+// Once in multi-body ragdoll mode, simulation is handled directly by PGS solvers and constraints.
 func (v *Joints) StepJoints(tick uint64) {
-	if tick == 0 {
+	if tick == 0 || v.isRagdoll {
 		return
 	}
 	if v.lastTick == 0 {
@@ -304,7 +254,7 @@ func (v *Joints) StepJoints(tick uint64) {
 	}
 	dt := float64(tick-v.lastTick) / 120.0
 	v.lastTick = tick
-	if !v.hasActiveDynamics && !v.isRagdoll {
+	if !v.hasActiveDynamics {
 		return
 	}
 	if dt > 1.0/30.0 {
@@ -312,112 +262,12 @@ func (v *Joints) StepJoints(tick uint64) {
 	}
 
 	anyActive := false
-
-	// Root ragdoll collapse & post-mortem impact jolt integration
-	if v.isRagdoll {
-		rootActive := false
-		if v.ragdollCollapse {
-			const maxFallAngle = 1.48 // ~85 degrees onto floor
-			if v.fallAngle < maxFallAngle || math.Abs(v.fallVel) > 0.02 {
-				rootActive = true
-				grav := 18.0 * math.Sin(math.Max(v.fallAngle, 0.15))
-				v.fallVel += grav * dt
-				v.fallVel *= math.Pow(0.45, dt)
-				v.fallAngle += v.fallVel * dt
-				if v.fallAngle >= maxFallAngle {
-					v.fallAngle = maxFallAngle
-					if v.fallVel > 0.45 {
-						v.fallVel = -v.fallVel * 0.25
-					} else {
-						v.fallVel = 0.0
-					}
-				} else if v.fallAngle < 0.0 {
-					v.fallAngle = 0.0
-					v.fallVel = 0.0
-				}
-			}
-		}
-
-		// Secondary roll/jolt oscillation when corpse is shot
-		if math.Abs(v.rootRollAng) > 1e-4 || math.Abs(v.rootRollVel) > 1e-4 {
-			rootActive = true
-			alphaRoll := -32.0*v.rootRollAng - 5.5*v.rootRollVel
-			v.rootRollVel += alphaRoll * dt
-			v.rootRollAng += v.rootRollVel * dt
-			if math.Abs(v.rootRollAng) > 0.55 {
-				v.rootRollAng = math.Copysign(0.55, v.rootRollAng)
-				v.rootRollVel *= -0.35
-			}
-			if math.Abs(v.rootRollAng) < 1e-3 && math.Abs(v.rootRollVel) < 1e-3 {
-				v.rootRollAng = 0
-				v.rootRollVel = 0
-			}
-		}
-
-		// Vertical pop/bounce when corpse is hit
-		if v.rootBounceZ > 0 || math.Abs(v.rootBounceVz) > 1e-3 {
-			rootActive = true
-			v.rootBounceVz -= 480.0 * dt
-			v.rootBounceZ += v.rootBounceVz * dt
-			if v.rootBounceZ <= 0 {
-				v.rootBounceZ = 0
-				if v.rootBounceVz < -22.0 {
-					v.rootBounceVz = -v.rootBounceVz * 0.28
-				} else {
-					v.rootBounceVz = 0
-				}
-			}
-		}
-
-		uprightScale := 1.0
-
-		ent := v.ent
-		if !ent.KeepUpright() {
-			_, _, az2 := ent.GetAxes2()
-			if az2 < 0.0 {
-				uprightScale = 0.0
-			} else if az2 < 1.0 {
-				uprightScale = az2
-			}
-		}
-
-		collapseDrop := 0.0
-		effFallAngle := v.fallAngle * uprightScale
-		if v.ragdollCollapse {
-			_, _, halfD := ent.GetSizeCenter()
-			collapseDrop = -math.Max(halfD-6.0, 0.0) * math.Sin(effFallAngle) * uprightScale
-		}
-		v.rootDropZ = collapseDrop + v.rootBounceZ
-
-		if effFallAngle > 1e-4 || math.Abs(v.rootRollAng) > 1e-4 {
-			v.rootFallQuat.SetAxisAngle(v.fallAxisX, v.fallAxisY, 0, effFallAngle)
-			if math.Abs(v.rootRollAng) > 1e-4 {
-				v.rootRollQuat.SetAxisAngle(-v.fallAxisY, v.fallAxisX, 0.35, v.rootRollAng)
-				v.rootRollQuat.Multiplies(v.rootFallQuat, v.rootQuat)
-			} else {
-				v.rootQuat.CopyFrom(v.rootFallQuat)
-			}
-			v.hasRootTransform = true
-		} else {
-			v.hasRootTransform = false
-		}
-
-		if rootActive {
-			anyActive = true
-		}
-	}
-
-	// Detached limbs and connected 5+ DoF joint spring-dampers
 	for i := 1; i < len(v.data); i++ {
 		j := v.data[i]
 		if j.detached {
-			if !j.detSettled {
-				anyActive = true
-				j.Settle(dt)
-			}
 			continue
 		}
-		if j.Connect(v.isRagdoll, dt) {
+		if j.Connect(dt) {
 			anyActive = true
 		}
 	}
@@ -437,6 +287,9 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 
 	v.lastHitForce = fMag
 	v.lastHitDirX, v.lastHitDirY, v.lastHitDirZ = dirX, dirY, dirZ
+	if v.isRagdoll || v.numParts <= 1 {
+		return
+	}
 	v.hasActiveDynamics = true
 
 	// Normalize force magnitude to angular joint impulse (calibrated to weaponForce = 500,000)
@@ -445,34 +298,12 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		normImpulse = 0.45
 	}
 
-	// Always jolt root corpse when already in ragdoll state (even for single-mesh or torso hits)
-	if v.isRagdoll {
-		if v.ragdollCollapse && v.fallAngle > 1.15 {
-			// Make lying corpse pop/shudder on impact
-			v.fallVel -= 2.4 * normImpulse
-		} else {
-			v.fallVel += 2.8 * normImpulse
-		}
-		crossZ := dirX*v.fallAxisY - dirY*v.fallAxisX
-		if math.Abs(crossZ) < 0.25 {
-			crossZ = 0.55
-		}
-		v.rootRollVel += crossZ * 5.5 * normImpulse
-		v.rootBounceVz = math.Max(v.rootBounceVz, 60.0*normImpulse)
-	}
-
-	if v.numParts <= 1 {
-		return
-	}
-
 	cx, cy, cz := v.ent.GetCenter()
 	relPx, relPy, relPz := px-cx, py-cy, pz-cz
 
 	// Locate the closest non-detached articulated part to the impact ray/point
 	bestPart := -1
 	bestScore := math.MaxFloat64
-	bestDetachPart := -1
-	bestDetachScore := math.MaxFloat64
 
 	for i := 0; i < v.numParts; i++ {
 		if i > 0 && v.IsPartDetached(i) {
@@ -504,10 +335,6 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		if score < bestScore {
 			bestScore = score
 			bestPart = i
-		}
-		if i > 0 && j.canDetach && !j.detached && score < bestDetachScore {
-			bestDetachScore = score
-			bestDetachPart = i
 		}
 	}
 
@@ -561,9 +388,6 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		// Transform torque into the joint's local coordinate system
 		ltx, lty, ltz := v.rotationsA[curr].RotatePointInverse(tx, ty, tz)
 		kick := 9.5 * normImpulse * attenuation
-		if v.isRagdoll {
-			kick *= 1.45
-		}
 
 		const maxJointVel = 14.0
 		j.velX = math.Max(-maxJointVel, math.Min(maxJointVel, j.velX+ltx*kick*j.dofScaleX))
@@ -572,12 +396,9 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 
 		if j.canDetach && v.dismemberedCount < 3 {
 			stress := 0.75 * normImpulse * attenuation
-			if v.isRagdoll {
-				stress *= 1.65
-			}
 			j.damage += stress
 			if j.damage >= j.detachThreshold {
-				v.detachPart(curr, cx, cy, cz, dirX, dirY, dirZ, fMag)
+				v.detachPart(curr, dirX, dirY, dirZ, fMag)
 				break
 			}
 		}
@@ -585,46 +406,14 @@ func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		curr = v.links.data[curr].parent
 		attenuation *= 0.60
 	}
-
-	// When shooting a ragdoll corpse on the torso, also whip all connected limbs and stress the nearest detachable limb
-	if v.isRagdoll {
-		for i := 1; i < len(v.data); i++ {
-			j := v.data[i]
-			if i == targetPart || j.detached {
-				continue
-			}
-			sign := 1.0
-			if i&1 == 1 {
-				sign = -1.0
-			}
-			j.velX += (dirY * 3.2 * normImpulse * sign) * j.dofScaleX
-			j.velY += (-dirX * 3.2 * normImpulse) * j.dofScaleY
-			j.velZ += (2.2 * normImpulse * sign) * j.dofScaleZ
-		}
-		if bestDetachPart > 0 && bestDetachPart != targetPart && bestDetachScore < 3.2 && v.dismemberedCount < 3 {
-			dj := v.data[bestDetachPart]
-			dj.damage += 0.85 * normImpulse
-			if dj.damage >= dj.detachThreshold {
-				v.detachPart(bestDetachPart, cx, cy, cz, dirX, dirY, dirZ, fMag)
-			}
-		}
-	}
 }
 
-// Restore resets the joint origins and rotations at i using q and any active root transform.
+// Restore resets the joint origins and rotations at i using q.
 func (v *Joints) Restore(i int, q *aabb.Quaternion) {
-	zOff := v.baseOffsetZ + v.rootDropZ
-	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, zOff
-	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, zOff
-
-	if v.hasRootTransform {
-		v.rootQuat.Multiplies(q, v.rootCombinedQuat)
-		v.rotationsA[i].SetFromQuaternion(v.rootCombinedQuat)
-		v.rotationsB[i].SetFromQuaternion(v.rootCombinedQuat)
-	} else {
-		v.rotationsA[i].SetFromQuaternion(q)
-		v.rotationsB[i].SetFromQuaternion(q)
-	}
+	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.baseOffsetZ
+	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.baseOffsetZ
+	v.rotationsA[i].SetFromQuaternion(q)
+	v.rotationsB[i].SetFromQuaternion(q)
 }
 
 // Reset copies parent origins to joint i and updates its rotations, applying deflection when configured.

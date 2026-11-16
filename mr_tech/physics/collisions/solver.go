@@ -173,11 +173,36 @@ func (t *Solver) EnterSleep() {
 	t.cage.ZeroDisplacement()
 }
 
+// SetCollisionGroup sets a non-zero self-collision exclusion group ID on the solver's cage.
+func (t *Solver) SetCollisionGroup(group uint64) {
+	if t.cage != nil {
+		t.cage.SetCollisionGroup(group)
+	}
+}
+
+// GetCollisionGroup returns this solver's self-collision exclusion group ID (0 when none).
+func (t *Solver) GetCollisionGroup() uint64 {
+	if t.cage == nil {
+		return 0
+	}
+	return t.cage.GetCollisionGroup()
+}
+
 // UpdateSleepState updates the entity sleep state from sleep eligibility and cage push offset.
 func (t *Solver) UpdateSleepState() bool {
-	px, py, pz := t.cage.GetPushOffset()
+	return t.UpdateSleepStateWithSupport(false)
+}
+
+// UpdateSleepStateWithSupport updates sleep state, optionally honoring joint-derived ground support.
+func (t *Solver) UpdateSleepStateWithSupport(externalSupport bool) bool {
+	var px, py, pz float64
+	if externalSupport || !t.entity.KeepUpright() {
+		px, py, pz = t.cage.GetNetDisplacement()
+	} else {
+		px, py, pz = t.cage.GetPushOffset()
+	}
 	pushSq := px*px + py*py + pz*pz
-	return t.entity.UpdateSleepState(t.CanSleep(), pushSq)
+	return t.entity.UpdateSleepStateWithSupport(t.CanSleep(), pushSq, externalSupport)
 }
 
 // SetSolverIndex records this solver's active index for the current solver tick.

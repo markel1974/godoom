@@ -120,6 +120,9 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 			return false
 		}
 		rCage := rThing.GetSolver().GetCage()
+		if lGroup := lCage.GetCollisionGroup(); lGroup != 0 && lGroup == rCage.GetCollisionGroup() {
+			return false
+		}
 		if lCage.HasSeen(rCage) {
 			return false
 		}
@@ -257,6 +260,24 @@ func (th *Things) CreateThrowable(self volumes.IThing, throwableIndex int, onCol
 	th.hasPending = true
 }
 
+// CreateDetached wraps vol as an autonomous 6-DoF rigid-body Thing, queues it into the scene, and returns it.
+func (th *Things) CreateDetached(vol *volumes.Volume, location *volumes.Volume, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) volumes.IThing {
+	slot := th.pendingLen.Add(1) - 1
+	if slot >= int32(len(th.pending)) {
+		fmt.Println("max slot reached!")
+		return nil
+	}
+	detached := things.NewDetached(th, vol, location, utils.NextUUId(), pos, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, collisionGroup)
+	th.pending[slot] = detached
+	th.hasPending = true
+	return detached
+}
+
+// AddJoint registers an active bilateral PGS joint constraint with the coordinator.
+func (th *Things) AddJoint(joint *collisions.JointConstraint) {
+	th.coordinator.AddJoint(joint)
+}
+
 // StagePrepare resets staging state before collecting ready things and thinkers.
 func (th *Things) StagePrepare() {
 	th.coordinator.Reset()
@@ -309,6 +330,17 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 			t2.PostMessage(th.event)
 		}
 		th.event.Wait()
+	}
+
+	// Flush and stage any ragdoll/detached/throwable bodies spawned during Thinking so joints start synchronized on tick 0.
+	if th.hasPending {
+		for x := 0; x < int(th.pendingLen.Load()); x++ {
+			item := th.pending[x]
+			th.addThing(item)
+			th.StageAdd(item)
+		}
+		th.pendingLen.Store(0)
+		th.hasPending = false
 	}
 
 	th.coordinator.Step(th.queryContactsFn, th.clampStaticFn)

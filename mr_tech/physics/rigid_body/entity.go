@@ -158,6 +158,13 @@ func (e *Entity) SetRotationEuler(rollX, pitchY, yawZ float64) {
 	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
 }
 
+// SetRotationQuaternion sets the OBB orientation from a unit quaternion (x, y, z, w) and synchronizes the world inertia tensor.
+func (e *Entity) SetRotationQuaternion(x, y, z, w float64) {
+	e.Cinematic.WakeUp()
+	e.BoundingBox.SetRotationQuaternion(x, y, z, w)
+	e.Cinematic.SyncWorldInertia(e.BoundingBox.GetAxes())
+}
+
 // SyncRotation updates the OBB world axes and synchronizes the world-space inverse inertia tensor.
 func (e *Entity) SyncRotation() {
 	e.BoundingBox.SyncRotation()

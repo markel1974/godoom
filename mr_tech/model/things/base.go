@@ -223,8 +223,7 @@ func (t *Base) GetSolver() *collisions.Solver {
 
 // beforePrepare updates the base angle from its entity yaw and compiles textures for the current global tick.
 func (t *Base) beforePrepare() {
-	entity := t.ent
-	t.angle = entity.GetYaw()
+	t.angle = t.ent.GetYaw()
 	t.Compile(textures.GlobalTick())
 }
 
@@ -262,11 +261,6 @@ func (t *Base) MoveTowards(dirX, dirY, speed, accelForce float64) {
 	deltaVx := desiredVx - vx
 	deltaVy := desiredVy - vy
 	entity.AddForce(deltaVx*accelForce, deltaVy*accelForce, 0.0)
-}
-
-// GetBase returns the current instance of Base. Useful for method chaining or accessing the base object.
-func (t *Base) GetBase() *Base {
-	return t
 }
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.

@@ -30,10 +30,10 @@ type Solver struct {
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
-func NewSolver(mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Solver {
+func NewSolver(dynamic bool, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Solver {
 	s := &Solver{
 		entity:               rigid_body.NewEntity(mass, restitution, friction, restCombine, frictionCombine, gForce),
-		cage:                 NewCageSequence(),
+		cage:                 nil,
 		maxStep:              0,
 		onElasticCollision:   nil,
 		onInelasticCollision: nil,
@@ -44,6 +44,9 @@ func NewSolver(mass, restitution, friction float64, restCombine, frictionCombine
 		afterPrepare:         noopHook,
 		afterApply:           noopHook,
 	}
+	if dynamic {
+		s.cage = NewCageSequence()
+	}
 	return s
 }
 
@@ -53,8 +56,10 @@ func (t *Solver) Setup(object IObject) error {
 		return fmt.Errorf("nil object in solver")
 	}
 	t.object = object
-	if err := t.cage.Setup(t); err != nil {
-		return err
+	if t.cage != nil {
+		if err := t.cage.Setup(t); err != nil {
+			return err
+		}
 	}
 	return nil
 }

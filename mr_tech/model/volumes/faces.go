@@ -146,5 +146,6 @@ func (f *Faces) At(idx int) *Face {
 
 // Clear removes all faces from the collection.
 func (f *Faces) Clear() {
+	f.tree.Clear()
 	f.count = 0
 }

@@ -22,17 +22,16 @@ type Volume struct {
 	vertexTags []*articulated_dynamics.TagAxis
 	marker     int
 	dirty      bool
-	//thing      IThing
 }
 
 // NewVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
-func NewVolume(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
+func newVolume(dynamic bool, modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
 	v := &Volume{
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
 		faces:      NewFaces(128, false),
-		solver:     collisions.NewSolver(mass, restitution, friction, restCombine, frictionCombine, gForce),
+		solver:     collisions.NewSolver(dynamic, mass, restitution, friction, restCombine, frictionCombine, gForce),
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
@@ -41,13 +40,18 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction f
 	return v
 }
 
-// NewVolumeConcrete creates a Volume with concrete material physics defaults for the given model ID, ID, and tag.
+// NewVolumeDynamic creates a dynamic Volume with the given identifiers, tag, and physics settings.
+func NewVolumeDynamic(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
+	return newVolume(true, modelId, id, tag, mass, restitution, friction, restCombine, frictionCombine, gForce)
+}
+
+// NewVolumeConcrete creates a static Volume with concrete material physics defaults and the given identifiers and tag.
 func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	const concreteMass = 0.0
 	const concreteRestitution = 0.0
 	const concreteFriction = 0.2
 	const concreteGForce = 9.8
-	return NewVolume(modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), concreteGForce)
+	return newVolume(false, modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), concreteGForce)
 }
 
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.

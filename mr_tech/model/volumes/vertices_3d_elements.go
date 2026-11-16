@@ -119,7 +119,7 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		}
 	}
 
-	solver := collisions.NewSolver(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
+	solver := collisions.NewSolver(true, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 	v.vVolume = NewVirtualVolume(v, solver)
 	v.ent = v.vVolume.GetSolver().GetEntity()
 	return v

@@ -45,7 +45,7 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 	halfX := w * 0.5
 	halfY := w * 0.5
 
-	v.volume = NewVolume(0, "material", "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
+	v.volume = NewVolumeDynamic(0, "material", "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
 	halfD := d * 0.5

@@ -19,17 +19,34 @@ type Solver struct {
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
-func NewSolver(cage *Cage, entity *rigid_body.Entity, maxStep float64, canSleep bool, onElasticCollision, onInelasticCollision CollisionT) *Solver {
+func NewSolver(cage *Cage, entity *rigid_body.Entity, location IObject, maxStep float64, canSleep bool, onElasticCollision, onInelasticCollision CollisionT) *Solver {
+	if cage == nil {
+		panic("cage is nil in collisions.NewSolver")
+	}
+	if entity == nil {
+		panic("entity is nil in collisions.NewSolver")
+	}
+	if onElasticCollision == nil {
+		panic("onElasticCollision is nil in collisions.NewSolver")
+	}
+	if onInelasticCollision == nil {
+		panic("onInelasticCollision is nil in collisions.NewSolver")
+	}
 	return &Solver{
-		cage:                 cage, //NewCageSequence(object),
+		cage:                 cage,
 		entity:               entity,
 		maxStep:              maxStep,
 		onElasticCollision:   onElasticCollision,
 		onInelasticCollision: onInelasticCollision,
 		canSleep:             canSleep,
-		location:             nil,
+		location:             location,
 		isActive:             true,
 	}
+}
+
+// GetLocation returns the current static container location recorded for this solver.
+func (t *Solver) GetLocation() IObject {
+	return t.location
 }
 
 // IsActive reports whether the solver is currently active.
@@ -96,8 +113,6 @@ func (t *Solver) StagePrepare(session uint64) {
 	ent.ClearActiveContact()
 	ent.ClearPreSolve()
 	ent.Update()
-	//t.angle = ent.GetYaw()
-	//t.Compile(textures.GlobalTick())
 	t.cage.Rebuild(t.maxStep, session)
 }
 
@@ -110,8 +125,7 @@ func (t *Solver) resolveSlotPartner(slot *Entry) *rigid_body.Entity {
 		rParentEnt := rCage.GetEntity()
 		// Each active dynamic pair is solved once per solver pass by the canonical owner.
 		if t.entity.GetId() > rParentEnt.GetId() {
-			//rThing, ok := rCage.GetObject().(volumes.IThing)
-			if t.IsActive() && rCage.HasEntryFor(slot.GetBucket().Opposite(), t.entity.GetId()) {
+			if rCage.GetSolverIndex() >= 0 && rCage.HasEntryFor(slot.GetBucket().Opposite(), t.entity.GetId()) {
 				return nil
 			}
 		}

@@ -97,7 +97,7 @@ func (pr *Player) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, 
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
 func (pr *Player) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
-	pr.things.CreateThrowable(pr, throwableIndex, onCollision, onImpact, pr.location, pos, angle, pitch, speed)
+	pr.things.CreateThrowable(pr, throwableIndex, onCollision, onImpact, pr.GetLocation(), pos, angle, pitch, speed)
 }
 
 // PostMessage sends the provided ThingEvent to the Player's inbox channel for processing.

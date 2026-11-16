@@ -54,7 +54,7 @@ func (t *Enemy) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, di
 
 // LaunchObject spawns a bullet at the specified position, angle, and pitch using predefined physical parameters.
 func (t *Enemy) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
-	t.things.CreateThrowable(t, throwableIndex, onCollision, onImpact, t.location, pos, angle, pitch, speed)
+	t.things.CreateThrowable(t, throwableIndex, onCollision, onImpact, t.GetLocation(), pos, angle, pitch, speed)
 }
 
 // PostMessage sends a ThingEvent instance to the inbox channel of Enemy for processing.

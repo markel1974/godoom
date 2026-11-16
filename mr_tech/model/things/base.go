@@ -30,7 +30,6 @@ type Base struct {
 	wakeupDistance float64
 	acceleration   float64
 	jumpForce      float64
-	location       *volumes.Volume
 	things         IThingHandler
 	inbox          chan *volumes.ThingEvent
 	onCollision    config.CollisionFunc
@@ -65,7 +64,6 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		wakeupDistance: cfg.WakeupDistance,
 		jumpForce:      cfg.JumpForce,
 		acceleration:   cfg.Acceleration,
-		location:       location,
 		things:         things,
 		inbox:          make(chan *volumes.ThingEvent, 16),
 		done:           make(chan struct{}),
@@ -80,13 +78,14 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 
 	canSleep := t.kind != config.ThingPlayerDef
 	cage := t.IVertices.GetCage().(*collisions.Cage)
-	t.solver = collisions.NewSolver(cage, entity, maxStep, canSleep, t.onElasticCollision, t.onInelasticCollision)
+	var locObj collisions.IObject
+	if location != nil {
+		locObj = location
+	}
+	t.solver = collisions.NewSolver(cage, entity, locObj, maxStep, canSleep, t.onElasticCollision, t.onInelasticCollision)
 
 	entity.SetOnGround(false)
 	t.SetAngle(cfg.Angle)
-
-	//TODO REIMPLEMENT!
-	//t.cage = t.IVertices.GetCage().(*collisions.Cage)
 
 	return t
 }
@@ -103,7 +102,8 @@ func (t *Base) GetKind() config.ThingType {
 
 // GetLocation retrieves the current location associated with the Base instance.
 func (t *Base) GetLocation() *volumes.Volume {
-	return t.location
+	loc, _ := t.solver.GetLocation().(*volumes.Volume)
+	return loc
 }
 
 // GetAngle returns the current rotation angle of the Base instance as a float64 value.

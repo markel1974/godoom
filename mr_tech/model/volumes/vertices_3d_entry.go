@@ -45,11 +45,6 @@ func (vm *Vertices3DEntryComposed) GetSolver() *collisions.Solver {
 	return vm.solver
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity encapsulated by this instance.
-func (vm *Vertices3DEntryComposed) GetAABB() *aabb.AABB {
-	return vm.solver.GetEntity().GetAABB()
-}
-
 // GetFaces retrieves the collection of faces associated with the entity's current volume.
 func (vm *Vertices3DEntryComposed) GetFaces() *Faces {
 	return vm.volume.GetFaces()

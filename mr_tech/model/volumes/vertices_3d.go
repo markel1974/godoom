@@ -103,12 +103,12 @@ func (v *Vertices3D) QueryOverlaps(object aabb.IObject, callback func(object aab
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
 	ent := v.ent
-	cx, cy, cz := ent.GetCenter()
-	b := ent.GetAABB()
+	ab := ent.GetAABB()
 	if v.minX <= v.maxX {
-		b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+		cx, cy, cz := ent.GetCenter()
+		ab.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 	}
-	return b
+	return ab
 }
 
 // SetRagdollMode freezes the model and activates ragdoll collapse if it is not already ragdoll.

@@ -41,11 +41,6 @@ func (vm *VerticeMultiSpriteComposed) GetSolver() *collisions.Solver {
 	return vm.solver
 }
 
-// GetAABB retrieves the axis-aligned bounding box (AABB) associated with the entity encapsulated by this instance.
-func (vm *VerticeMultiSpriteComposed) GetAABB() *aabb.AABB {
-	return vm.solver.GetEntity().GetAABB()
-}
-
 // GetFaces retrieves the collection of faces associated with the entity's current volume.
 func (vm *VerticeMultiSpriteComposed) GetFaces() *Faces {
 	return vm.volume.GetFaces()

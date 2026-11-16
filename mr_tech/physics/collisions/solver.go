@@ -28,27 +28,21 @@ type Solver struct {
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
-func NewSolver(cage *Cage, entity *rigid_body.Entity, location IObject, maxStep float64, canSleep bool, onElasticCollision, onInelasticCollision CollisionT) *Solver {
+func NewSolver(cage *Cage, entity *rigid_body.Entity) *Solver {
 	if cage == nil {
 		panic("cage is nil in collisions.NewSolver")
 	}
 	if entity == nil {
 		panic("entity is nil in collisions.NewSolver")
 	}
-	if onElasticCollision == nil {
-		panic("onElasticCollision is nil in collisions.NewSolver")
-	}
-	if onInelasticCollision == nil {
-		panic("onInelasticCollision is nil in collisions.NewSolver")
-	}
 	s := &Solver{
 		cage:                 cage,
 		entity:               entity,
-		maxStep:              maxStep,
-		onElasticCollision:   onElasticCollision,
-		onInelasticCollision: onInelasticCollision,
-		canSleep:             canSleep,
-		location:             location,
+		maxStep:              0,
+		onElasticCollision:   nil,
+		onInelasticCollision: nil,
+		canSleep:             true,
+		location:             nil,
 		isActive:             true,
 		beforePrepare:        noopHook,
 		afterPrepare:         noopHook,
@@ -56,6 +50,16 @@ func NewSolver(cage *Cage, entity *rigid_body.Entity, location IObject, maxStep 
 	}
 	cage.SetSolver(s)
 	return s
+}
+
+// SetElasticCollision sets the callback invoked when an elastic collision is handled.
+func (t *Solver) SetElasticCollision(c CollisionT) {
+	t.onElasticCollision = c
+}
+
+// SetInelasticCollision sets the callback invoked for inelastic collisions.
+func (t *Solver) SetInelasticCollision(c CollisionT) {
+	t.onInelasticCollision = c
 }
 
 // SetPrepareHooks configures callbacks invoked immediately before and after StagePrepare.
@@ -93,6 +97,11 @@ func (t *Solver) GetLocation() IObject {
 	return t.location
 }
 
+// SetLocation sets the location object for the solver.
+func (t *Solver) SetLocation(location IObject) {
+	t.location = location
+}
+
 // IsActive reports whether the solver is currently active.
 func (t *Solver) IsActive() bool {
 	return t.isActive
@@ -111,6 +120,11 @@ func (t *Solver) GetMaxStep() float64 {
 // SetMaxStep sets the maximum step value used by the solver.
 func (t *Solver) SetMaxStep(maxStep float64) {
 	t.maxStep = maxStep
+}
+
+// SetCanSleep sets whether the solver can sleep.
+func (t *Solver) SetCanSleep(canSleep bool) {
+	t.canSleep = canSleep
 }
 
 // CanSleep reports whether the solver is allowed to enter the sleep state.
@@ -263,7 +277,9 @@ func (t *Solver) StageApply() {
 			if !hasElasticId || lastElasticId != rId {
 				bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestElasticImpact(i, rId, rEnt)
 				t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-				t.onElasticCollision(rCage.GetObject(), bestEnergy)
+				if t.onElasticCollision != nil {
+					t.onElasticCollision(rCage.GetObject(), bestEnergy)
+				}
 				t.entity.ClearActiveContact()
 				lastElasticId = rId
 				hasElasticId = true
@@ -275,8 +291,9 @@ func (t *Solver) StageApply() {
 				if !hasInelasticId || lastInelasticId != rId {
 					bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestInelasticImpact(i, rId)
 					t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-					t.onInelasticCollision(rParent, bestEnergy)
-					t.entity.ClearActiveContact()
+					if t.onInelasticCollision != nil {
+						t.onInelasticCollision(rParent, bestEnergy)
+					}
 					lastInelasticId = rId
 					hasInelasticId = true
 				}

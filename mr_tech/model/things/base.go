@@ -76,14 +76,15 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		maxStep = entity.GetDepth() * cfg.MaxStepFactor
 	}
 
-	canSleep := t.kind != config.ThingPlayerDef
 	cage := t.IVertices.GetCage().(*collisions.Cage)
-	var locObj collisions.IObject
-	if location != nil {
-		locObj = location
-	}
-	t.solver = collisions.NewSolver(cage, entity, locObj, maxStep, canSleep, t.onElasticCollision, t.onInelasticCollision)
+
+	t.solver = collisions.NewSolver(cage, entity)
+	t.solver.SetElasticCollision(t.onElasticCollision)
+	t.solver.SetInelasticCollision(t.onInelasticCollision)
 	t.solver.SetPrepareHooks(t.beforePrepare, nil)
+	t.solver.SetLocation(location)
+	t.solver.SetCanSleep(t.kind != config.ThingPlayerDef)
+	t.solver.SetMaxStep(maxStep)
 
 	entity.SetOnGround(false)
 	t.SetAngle(cfg.Angle)

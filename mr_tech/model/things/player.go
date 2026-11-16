@@ -2,12 +2,15 @@ package things
 
 import (
 	"math"
+	"strings"
+	"sync"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Player represents a controllable entity with movement, physics, and gameplay-related properties.
@@ -30,6 +33,8 @@ type Player struct {
 	cfg            *config.Player
 	wasGrounded    bool
 	preImpactVz    float64
+	keysMu         sync.RWMutex
+	keys           map[string]bool
 	*Base
 }
 
@@ -51,6 +56,7 @@ func NewPlayer(things IThingHandler, c *config.Player, vol *volumes.Volume, debu
 		pitchMax:       5.0,
 		pitchSens:      0.05,
 		visible:        c.IsVisible,
+		keys:           make(map[string]bool),
 	}
 	return player
 }
@@ -374,4 +380,60 @@ func (pr *Player) Fire(id string) {
 	// perfettamente con il mirino a schermo. Il self-culling è gestito nativamente in Base.FireHitscan.
 	spawnPos := geometry.XYZ{X: camX, Y: camY, Z: camZ}
 	pr.FireHitscan(id, spawnPos, weaponForce, dirX, dirY, dirZ)
+}
+
+// GiveKey adds keyId to the player's key inventory.
+func (pr *Player) GiveKey(keyId string) {
+	k := strings.ToLower(strings.TrimSpace(keyId))
+	if k == "" {
+		return
+	}
+	pr.keysMu.Lock()
+	if pr.keys == nil {
+		pr.keys = make(map[string]bool)
+	}
+	pr.keys[k] = true
+	pr.keysMu.Unlock()
+}
+
+// HasKey reports whether the player currently carries keyId.
+func (pr *Player) HasKey(keyId string) bool {
+	k := strings.ToLower(strings.TrimSpace(keyId))
+	if k == "" {
+		return true
+	}
+	pr.keysMu.RLock()
+	has := pr.keys[k]
+	pr.keysMu.RUnlock()
+	return has
+}
+
+// Use activates the closest interactive object within reach along the player's view direction.
+func (pr *Player) Use() bool {
+	const useDistance = 96.0
+	camX, camY, camZ := pr.GetVisualPosition()
+	pitchRad := -pr.pitch
+	dirX := pr.angleCos * math.Cos(pitchRad)
+	dirY := pr.angleSin * math.Cos(pitchRad)
+	dirZ := math.Sin(pitchRad)
+
+	var closestThing vertices.IThing
+	pr.things.QueryRay(camX, camY, camZ, dirX, dirY, dirZ, useDistance, func(object aabb.IObject, distance float64) (float64, bool) {
+		other, ok := object.(vertices.IThing)
+		if !ok || pr.IsEqual(other) {
+			return useDistance, false
+		}
+		if sub, ok := other.(vertices.ISubPart); ok && !sub.IsPhysicsFree() {
+			if owner := sub.GetOwner(); owner != nil && pr.IsEqual(owner) {
+				return useDistance, false
+			}
+		}
+		closestThing = other
+		return distance, true
+	})
+
+	if act, ok := closestThing.(IActivatable); ok {
+		return act.Activate(pr)
+	}
+	return false
 }

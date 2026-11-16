@@ -21,6 +21,7 @@ type Solver struct {
 	entity               *rigid_body.Entity
 	location             IObject
 	isActive             bool
+	ignoreStatic         bool
 	canSleep             bool
 	stagedEpoch          uint64
 	onElasticCollision   CollisionT
@@ -136,6 +137,16 @@ func (t *Solver) IsActive() bool {
 // SetActive updates whether the solver is active.
 func (t *Solver) SetActive(active bool) {
 	t.isActive = active
+}
+
+// SetIgnoreStatic configures whether this solver skips static world geometry queries and clamping.
+func (t *Solver) SetIgnoreStatic(ignore bool) {
+	t.ignoreStatic = ignore
+}
+
+// IgnoresStatic reports whether this solver skips static world geometry collisions.
+func (t *Solver) IgnoresStatic() bool {
+	return t.ignoreStatic
 }
 
 // GetMaxStep returns the maximum step value used by the solver.

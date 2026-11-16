@@ -21,6 +21,8 @@ type IRender interface {
 
 	RenderPlayerFire()
 
+	RenderPlayerUse()
+
 	RenderPlayerDuckingToggle()
 
 	RenderPlayerJump(multi bool)

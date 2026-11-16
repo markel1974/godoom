@@ -330,12 +330,14 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		if !thing.IsVisible() {
 			return false
 		}
-		occState := w.occlusion.GetState(thing.GetEntity().GetId())
-		if occState != nil && !occState.IsVisible {
-			w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
-			return false                               // CULLATO! Non generiamo i vertici
+		if thing.GetKind() != config.ThingDoorDef {
+			occState := w.occlusion.GetState(thing.GetEntity().GetId())
+			if occState != nil && !occState.IsVisible {
+				w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
+				return false                               // CULLATO! Non generiamo i vertici
+			}
+			w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
 		}
-		w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
 		thing.Compile(textures.GlobalTick())
 		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 		if pFaces.Len() == 0 {

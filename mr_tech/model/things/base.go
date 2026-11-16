@@ -21,6 +21,8 @@ type IThingHandler interface {
 
 	StagePart(part vertices.IThing)
 
+	StageRemove(thing vertices.IThing)
+
 	AddJoint(joint *collisions.JointConstraint)
 }
 
@@ -195,9 +197,14 @@ func (t *Base) IsActive() bool {
 	return t.solver.IsActive()
 }
 
-// SetActive updates the activation state of the Base instance and returns the updated state as a boolean.
+// SetActive updates the activation state of the Base instance and schedules removal when deactivated.
 func (t *Base) SetActive(active bool) {
 	t.solver.SetActive(active)
+	if !active && t.things != nil {
+		if selfThing, ok := t.solver.GetObject().(vertices.IThing); ok {
+			t.things.StageRemove(selfThing)
+		}
+	}
 }
 
 // SetMaxStep sets the maximum step value for the Base instance, which determines the allowable step height.

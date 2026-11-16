@@ -73,10 +73,6 @@ var _q1DictBModel = map[string]string{
 	"item_cells":         "maps/b_batt0.bsp",  // Celle di energia
 	"item_cells_large":   "maps/b_batt1.bsp",  // Cassa grande
 
-	// Keys (In Quake 1 vanilla, le chiavi sono BModels)
-	"item_key1": "maps/b_silkey.bsp", // Silver Key
-	"item_key2": "maps/b_gokey.bsp",  // Gold Key
-
 	// Misc
 	"misc_explobox":  "maps/b_explob.bsp", // Cassa esplosiva
 	"misc_explobox2": "maps/b_exbox2.bsp", // Cassa esplosiva grande

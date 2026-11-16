@@ -35,6 +35,8 @@ type Things struct {
 	hasPending        bool
 	pendingStage      []vertices.IThing
 	pendingStageMu    sync.Mutex
+	pendingRemove     []vertices.IThing
+	pendingRemoveMu   sync.Mutex
 	stageEpoch        uint64
 	event             *vertices.ThingEvent
 	cfg               []*config.Thing
@@ -83,6 +85,11 @@ func (th *Things) Setup() error {
 			continue
 		}
 		volume, _ := th.volumes.QueryPoint(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		if volume == nil && ct.Kind == config.ThingDoorDef {
+			if vols := th.volumes.GetVolumes(); len(vols) > 0 {
+				volume = vols[0]
+			}
+		}
 		if volume == nil {
 			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
 			continue
@@ -114,7 +121,9 @@ func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 }
 
 func (th *Things) querySolverContacts(cage *collisions.Cage, wake func(*collisions.Solver)) {
-	th.volumes.QueryCollisionCage(cage, th.maxOverlapsWorld)
+	if s := cage.GetSolver(); s == nil || !s.IgnoresStatic() {
+		th.volumes.QueryCollisionCage(cage, th.maxOverlapsWorld)
+	}
 	th.queryCollisionCage(cage, th.maxOverlapsThings, wake)
 }
 
@@ -228,7 +237,9 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 	case config.ThingThrowableDef:
 		thing = things.NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:
-		thing = things.NewItem(th, ct, volume)
+		thing = things.NewKey(th, ct, volume)
+	case config.ThingDoorDef:
+		thing = things.NewDoor(th, ct, volume)
 	case config.ThingInterfaceDef:
 		thing = things.NewUI(th, ct)
 	case config.ThingItemDef:
@@ -236,8 +247,10 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 	default:
 		thing = things.NewItem(th, ct, volume)
 	}
-	entity := thing.GetEntity()
-	entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
+	if ct.Kind != config.ThingDoorDef {
+		entity := thing.GetEntity()
+		entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
+	}
 	return thing
 }
 
@@ -279,6 +292,34 @@ func (th *Things) StagePart(part vertices.IThing) {
 	th.pendingStageMu.Lock()
 	th.pendingStage = append(th.pendingStage, part)
 	th.pendingStageMu.Unlock()
+}
+
+// StageRemove queues a deactivated Thing for safe removal from Things.tree and Things.entities.
+func (th *Things) StageRemove(thing vertices.IThing) {
+	if thing == nil {
+		return
+	}
+	th.pendingRemoveMu.Lock()
+	th.pendingRemove = append(th.pendingRemove, thing)
+	th.pendingRemoveMu.Unlock()
+}
+
+func (th *Things) flushPendingRemovals() {
+	th.pendingRemoveMu.Lock()
+	if len(th.pendingRemove) > 0 {
+		for _, item := range th.pendingRemove {
+			th.removeThing(item)
+		}
+		th.pendingRemove = th.pendingRemove[:0]
+	}
+	th.pendingRemoveMu.Unlock()
+
+	if removables := th.coordinator.Removables(); len(removables) > 0 {
+		for _, s := range removables {
+			th.removeThing(s.GetCage().GetObject().(vertices.IThing))
+		}
+		th.coordinator.ClearRemovables()
+	}
 }
 
 // StagePrepare resets staging state before collecting ready things and thinkers.
@@ -326,12 +367,7 @@ func (th *Things) applySafeStepUp(cage *collisions.Cage, stepZ float64) {
 
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
-	if removables := th.coordinator.Removables(); len(removables) > 0 {
-		for _, s := range removables {
-			th.removeThing(s.GetCage().GetObject().(vertices.IThing))
-		}
-		th.coordinator.ClearRemovables()
-	}
+	th.flushPendingRemovals()
 	if th.hasPending {
 		for x := 0; x < int(th.pendingLen.Load()); x++ {
 			th.addThing(th.pending[x])
@@ -371,6 +407,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	}
 
 	th.coordinator.Step(th.queryContactsFn, th.clampStaticFn)
+	th.flushPendingRemovals()
 
 	for _, s := range th.coordinator.Running() {
 		obj := s.GetCage().GetObject()
@@ -426,8 +463,15 @@ func (th *Things) addThing(ent vertices.IThing) {
 
 // removeThing removes an IThing instance from the spatial tree (when tree-resident) and the entities map.
 func (th *Things) removeThing(ent vertices.IThing) {
+	if ent == nil {
+		return
+	}
+	id := ent.GetEntity().GetId()
+	if _, ok := th.entities[id]; !ok {
+		return
+	}
 	if owner, ok := ent.(vertices.IPartOwner); !ok || owner.GetPartLen() == 0 {
 		th.tree.RemoveObject(ent)
 	}
-	delete(th.entities, ent.GetEntity().GetId())
+	delete(th.entities, id)
 }

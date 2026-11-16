@@ -174,18 +174,20 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 			pos = lumps.CreateXYZ(x, y, z)
 		}
 		if modelProp, _ := ent.GetProperty("model"); strings.HasPrefix(modelProp, "*") {
-			modelIdx, _ := strconv.Atoi(modelProp[1:])
-			rawFaces, err := q1.GetRawFaces(modelIdx)
-			if err != nil {
-				fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
-				continue
+			if classname == "func_door" {
+				modelIdx, _ := strconv.Atoi(modelProp[1:])
+				rawFaces, err := q1.GetRawFaces(modelIdx)
+				if err != nil {
+					fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
+					continue
+				}
+				cThing, err := things.CreateInternalBModel(rawFaces, pos, ent)
+				if err != nil {
+					fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
+					continue
+				}
+				root.Things = append(root.Things, cThing)
 			}
-			cThing, err := things.CreateInternalBModel(rawFaces, pos, classname)
-			if err != nil {
-				fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
-				continue
-			}
-			root.Things = append(root.Things, cThing)
 			continue
 		}
 

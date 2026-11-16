@@ -70,6 +70,7 @@ type Window struct {
 	playerMovesFn            func(float64, bool, bool, bool, bool)
 	playerThrowFn            func()
 	playerFireFn             func()
+	playerUseFn              func()
 	playerDuckingToggleFn    func()
 	playerJumpFn             func(multi bool)
 	toggleShadowsFn          func()
@@ -109,6 +110,7 @@ func (w *Window) Setup(r api.IRender) error {
 	w.playerMovesFn = r.RenderPlayerMoves
 	w.playerThrowFn = r.RenderPlayerThrow
 	w.playerFireFn = r.RenderPlayerFire
+	w.playerUseFn = r.RenderPlayerUse
 	w.playerDuckingToggleFn = r.RenderPlayerDuckingToggle
 	w.playerJumpFn = r.RenderPlayerJump
 	w.toggleShadowsFn = r.RenderToggleShadows
@@ -762,6 +764,9 @@ func (w *Window) doRun() {
 		}
 		if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
 			w.playerFireFn()
+		}
+		if w.JustPressed(KeyE) {
+			w.playerUseFn()
 		}
 		if w.JustPressed(KeyM) {
 			mouseConnected = !mouseConnected

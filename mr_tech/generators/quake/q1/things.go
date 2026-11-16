@@ -3,6 +3,7 @@ package q1
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -110,13 +111,28 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 	}
 
 	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, speed)
+	if keyId := q1KeyId(classname); keyId != "" {
+		thingCfg.Kind = config.ThingKeyDef
+		thingCfg.Mass = 0.1
+		thingCfg.Key = &config.KeySpec{KeyId: keyId}
+	}
 
 	return thingCfg, nil
 }
 
-// CreateInternalBModel generates a Thing with a 3D model from BSP face data, position, and classname configuration.
-func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geometry.XYZ, classname string) (*config.Thing, error) {
-	return nil, fmt.Errorf("warning disabled for now")
+func q1KeyId(classname string) string {
+	switch classname {
+	case "item_key1":
+		return "silver"
+	case "item_key2":
+		return "gold"
+	}
+	return ""
+}
+
+// CreateInternalBModel generates a Thing with a 3D model from BSP face data, base position, and entity properties.
+func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geometry.XYZ, ent *lumps.Entity) (*config.Thing, error) {
+	classname, _ := ent.GetProperty("classname")
 	// Geometry translation into agnostic Model3DEntry, collect all triangles in this single frame
 	var allTriangles []config.Model3DEntryTriangle
 	for _, bspFace := range rawFaces {
@@ -163,13 +179,21 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	center, size := model3d.CenterWithBounds([]string{"default"})
+	worldPos := geometry.XYZ{
+		X: position.X + center.X,
+		Y: position.Y + center.Y,
+		Z: position.Z + center.Z,
+	}
+	thingCfg := th.doCreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
 	const heavyMass = 1000.0
 	// Setup standard interactions based on classname
 	if strings.HasPrefix(classname, "func_door") {
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
+		thingCfg.GForce = 0.0
+		thingCfg.Door = buildQ1DoorSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_plat") {
 		thingCfg.Kind = config.ThingPlatformDef
 		thingCfg.Mass = heavyMass
@@ -181,6 +205,77 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	}
 
 	return thingCfg, nil
+}
+
+func buildQ1DoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
+	const (
+		q1DoorStartOpen = 1
+		q1DoorGoldKey   = 8
+		q1DoorSilverKey = 16
+	)
+
+	var dirX, dirY, dirZ float64
+	angle := 0.0
+	if rawAngle, ok := ent.GetProperty("angle"); ok {
+		if parsed, okParse := lumps.ParseFloat(rawAngle); okParse {
+			angle = parsed
+		}
+	}
+	switch angle {
+	case -1:
+		dirZ = 1.0
+	case -2:
+		dirZ = -1.0
+	default:
+		dirX, dirY, dirZ = lumps.CalcAngleDirectionZUP(angle)
+	}
+
+	lip := 8.0
+	if rawLip, ok := ent.GetProperty("lip"); ok {
+		if parsed, okParse := lumps.ParseFloat(rawLip); okParse {
+			lip = parsed
+		}
+	}
+	travel := math.Abs(dirX)*size.X + math.Abs(dirY)*size.Y + math.Abs(dirZ)*size.Z - lip
+	if travel <= 0 {
+		travel = math.Max(size.X, math.Max(size.Y, size.Z))
+	}
+
+	speed := 100.0
+	if rawSpeed, ok := ent.GetProperty("speed"); ok {
+		if parsed, okParse := lumps.ParseFloat(rawSpeed); okParse && parsed > 0 {
+			speed = parsed
+		}
+	}
+
+	waitSeconds := 3.0
+	if rawWait, ok := ent.GetProperty("wait"); ok {
+		if parsed, okParse := lumps.ParseFloat(rawWait); okParse {
+			waitSeconds = parsed
+		}
+	}
+
+	spawnflags := ent.GetSpawnFlags()
+	requiredKey := ""
+	if spawnflags&q1DoorGoldKey != 0 {
+		requiredKey = "gold"
+	} else if spawnflags&q1DoorSilverKey != 0 {
+		requiredKey = "silver"
+	}
+
+	targetName, _ := ent.GetProperty("targetname")
+	target, _ := ent.GetProperty("target")
+
+	return &config.DoorSpec{
+		RequiredKey: requiredKey,
+		OpenOffset:  geometry.XYZ{X: dirX * travel, Y: dirY * travel, Z: dirZ * travel},
+		Speed:       speed,
+		WaitSeconds: waitSeconds,
+		StartOpen:   spawnflags&q1DoorStartOpen != 0,
+		TargetName:  targetName,
+		Target:      target,
+		Activation:  config.DoorActivateTouch,
+	}
 }
 
 // CreateThingBSP loads a BSP file, processes its geometry, and creates a Thing with the specified position and classname.
@@ -256,6 +351,11 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	if keyId := q1KeyId(classname); keyId != "" {
+		thingCfg.Kind = config.ThingKeyDef
+		thingCfg.Mass = 0.1
+		thingCfg.Key = &config.KeySpec{KeyId: keyId}
+	}
 	return thingCfg, nil
 }
 

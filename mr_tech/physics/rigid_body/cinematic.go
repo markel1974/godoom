@@ -671,7 +671,7 @@ func (e *Cinematic) SetIsTilted(isTilted bool) {
 
 // Update advances the cinematic physics state using the supplied local Z orientation axis components (ax0, ax1, ax2).
 func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
-	if e.invMass == 0.0 {
+	if e.kinematic || e.invMass == 0.0 {
 		return
 	}
 
@@ -1247,11 +1247,11 @@ func (e *Cinematic) ResolveElasticPenetrationConstrained(other *Cinematic, other
 	}
 	invMass1 := e.GetInvMass()
 	invMass2 := other.GetInvMass()
-	// A body blocked along its push direction or resting on a ground support cannot be pushed into the obstacle.
-	if !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
+	// Kinematic or static-supported bodies behave as infinite mass along blocked axes.
+	if e.kinematic || !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
 		invMass1 = 0.0
 	}
-	if !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
+	if other.kinematic || !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
 		invMass2 = 0.0
 	}
 	invMassSum := invMass1 + invMass2

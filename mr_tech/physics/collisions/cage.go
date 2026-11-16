@@ -790,6 +790,9 @@ func (s *Cage) IsBucketPenetrable(b BucketType, from uint64) bool {
 
 // NeedsStaticClamp reports whether the entity center moved since the last validated static world clamp.
 func (s *Cage) NeedsStaticClamp() bool {
+	if s.solver != nil && s.solver.IgnoresStatic() {
+		return false
+	}
 	if s.forceStaticClamp {
 		return true
 	}

@@ -31,6 +31,34 @@ const (
 	ThingButtonDef
 )
 
+// DoorActivation defines how a door can be triggered by an actor.
+type DoorActivation int
+
+const (
+	// DoorActivateTouch opens the door automatically on actor collision as well as explicit Use.
+	DoorActivateTouch DoorActivation = iota
+	// DoorActivateUse opens the door only when explicitly activated via Use or trigger target.
+	DoorActivateUse
+)
+
+// DoorSpec defines kinematic translation, timing, and key lock parameters for a ThingDoorDef.
+type DoorSpec struct {
+	RequiredKey string         `json:"requiredKey,omitempty"`
+	OpenOffset  geometry.XYZ   `json:"openOffset"`
+	Speed       float64        `json:"speed"`
+	WaitSeconds float64        `json:"waitSeconds"`
+	StartOpen   bool           `json:"startOpen,omitempty"`
+	TargetName  string         `json:"targetName,omitempty"`
+	Target      string         `json:"target,omitempty"`
+	Activation  DoorActivation `json:"activation"`
+}
+
+// KeySpec defines key identity and optional target metadata for a ThingKeyDef.
+type KeySpec struct {
+	KeyId  string `json:"keyId"`
+	Target string `json:"target,omitempty"`
+}
+
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
 	Id                 string        `json:"id"`
@@ -56,6 +84,8 @@ type Thing struct {
 	MultiSprite        *MultiSprite  `json:"multiSprite"`
 	Sprite             *Sprite       `json:"sprite"`
 	MaxStepFactor      float64       `json:"maxStep"`
+	Door               *DoorSpec     `json:"door,omitempty"`
+	Key                *KeySpec      `json:"key,omitempty"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc
@@ -93,10 +123,23 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 // Scale applies the given scaling factors to the Position of the Thing by modifying its X, Y, and Z coordinates.
 func (t *Thing) Scale(scale geometry.XYZ) {
 	t.Position.Scale(scale)
+	if t.Door != nil {
+		t.Door.OpenOffset.Scale(scale)
+	}
 }
 
 // Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
 func (t *Thing) Clone() *Thing {
+	var doorCopy *DoorSpec
+	if t.Door != nil {
+		d := *t.Door
+		doorCopy = &d
+	}
+	var keyCopy *KeySpec
+	if t.Key != nil {
+		k := *t.Key
+		keyCopy = &k
+	}
 	return &Thing{
 		Id:          t.Id,
 		Position:    t.Position,
@@ -116,6 +159,8 @@ func (t *Thing) Clone() *Thing {
 		Model3D:      t.Model3D,
 		MultiSprite:  t.MultiSprite,
 		Sprite:       t.Sprite,
+		Door:         doorCopy,
+		Key:          keyCopy,
 		OnBind:       t.OnBind,
 		OnThinking:   t.OnThinking,
 		OnCollision:  t.OnCollision,

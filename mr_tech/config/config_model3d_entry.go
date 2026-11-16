@@ -150,8 +150,13 @@ func (m *Model3DEntry) GetBaseName(fn string) (string, int) {
 
 // Center repositions the 3D model by centering its vertices around the origin of the coordinate system.
 func (m *Model3DEntry) Center(referenceFrames []string) {
+	_, _ = m.CenterWithBounds(referenceFrames)
+}
+
+// CenterWithBounds centers the 3D model around the origin and returns the original world center offset and bounding box size.
+func (m *Model3DEntry) CenterWithBounds(referenceFrames []string) (geometry.XYZ, geometry.XYZ) {
 	if m == nil || len(m.Frames) == 0 {
-		return
+		return geometry.XYZ{}, geometry.XYZ{}
 	}
 
 	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
@@ -184,7 +189,7 @@ func (m *Model3DEntry) Center(referenceFrames []string) {
 	}
 
 	if !hasVertices {
-		return
+		return geometry.XYZ{}, geometry.XYZ{}
 	}
 
 	//idle := []string{"stand", "idle", "legs_idle", "hover"}
@@ -244,6 +249,8 @@ func (m *Model3DEntry) Center(referenceFrames []string) {
 			m.Frames[frameIdx].Tags[tagName] = tag
 		}
 	}
+
+	return geometry.XYZ{X: centerX, Y: centerY, Z: centerZ}, geometry.XYZ{X: maxX - minX, Y: maxY - minY, Z: maxZ - minZ}
 }
 
 // GetSize returns zero values when no vertices are present or computed dimensions do not exceed 1.0.

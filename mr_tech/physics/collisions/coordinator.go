@@ -209,6 +209,7 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 		}
 	}
 
+	writeStaged := 0
 	for x := 0; x < c.stagedLen; x++ {
 		s := c.staged[x]
 		if !s.IsActive() {
@@ -220,6 +221,8 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 			c.removablesLen++
 			continue
 		}
+		c.staged[writeStaged] = s
+		writeStaged++
 		if s.IsSleeping() {
 			s.SetSolverIndex(-1)
 			continue
@@ -229,6 +232,10 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 		c.running[c.runningLen] = s
 		c.runningLen++
 	}
+	for k := writeStaged; k < c.stagedLen; k++ {
+		c.staged[k] = nil
+	}
+	c.stagedLen = writeStaged
 
 	if c.runningLen == 0 {
 		return

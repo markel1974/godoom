@@ -287,6 +287,11 @@ func (w *RenderOpenGL) RenderPlayerFire() {
 	w.player.Fire("gun")
 }
 
+// RenderPlayerUse triggers interactive Use/activation along the player's view ray.
+func (w *RenderOpenGL) RenderPlayerUse() {
+	w.player.Use()
+}
+
 // RenderPlayerDuckingToggle toggles the player's ducking state through the player's SetDucking method.
 func (w *RenderOpenGL) RenderPlayerDuckingToggle() { w.player.SetDucking() }
 

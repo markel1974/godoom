@@ -34,6 +34,7 @@ const (
 	KeyS          = Button(83)
 	KeyA          = Button(65)
 	KeyD          = Button(68)
+	KeyE          = Button(69)
 	KeyLeftShift  = Button(340)
 	KeyRightShift = Button(344)
 	KeyUp         = Button(265)
@@ -59,6 +60,7 @@ var codeToButton = map[string]Button{
 	"KeyS":       KeyS,
 	"KeyA":       KeyA,
 	"KeyD":       KeyD,
+	"KeyE":       KeyE,
 	"ArrowUp":    KeyUp,
 	"ArrowDown":  KeyDown,
 	"ArrowLeft":  KeyLeft,
@@ -104,6 +106,7 @@ type Window struct {
 	playerMovesFn         func(float64, bool, bool, bool, bool)
 	playerThrowFn         func()
 	playerFireFn          func()
+	playerUseFn           func()
 	playerDuckingToggleFn func()
 	playerJumpFn          func(multi bool)
 	toggleShadowsFn       func()
@@ -335,6 +338,7 @@ func (w *Window) Setup(r api.IRender) error {
 	w.playerMovesFn = r.RenderPlayerMoves
 	w.playerThrowFn = r.RenderPlayerThrow
 	w.playerFireFn = r.RenderPlayerFire
+	w.playerUseFn = r.RenderPlayerUse
 	w.playerDuckingToggleFn = r.RenderPlayerDuckingToggle
 	w.playerJumpFn = r.RenderPlayerJump
 	w.toggleShadowsFn = r.RenderToggleShadows
@@ -450,6 +454,9 @@ func (w *Window) Start() {
 		//}
 		if w.JustPressed(KeyTab) || w.Pressed(MouseButton1) {
 			w.playerFireFn()
+		}
+		if w.JustPressed(KeyE) {
+			w.playerUseFn()
 		}
 		if w.JustPressed(KeyN) {
 			w.toggleShadowsFn()

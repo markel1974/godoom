@@ -534,7 +534,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 
 		vol3d.Rebuild()
 		volumes3d = append(volumes3d, vol3d)
-		vol3d.SetSector(sector)
+		vol3d.SetObject(sector)
 		volMap[sector] = vol3d
 	}
 

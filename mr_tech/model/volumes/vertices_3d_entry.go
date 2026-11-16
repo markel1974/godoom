@@ -227,9 +227,9 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 
 // Setup assigns thing to all volumes and initializes the collision solver for it.
 func (v *Vertices3DEntry) Setup(thing IThing) error {
-	for _, f := range v.volumes {
-		f.SetThing(thing)
-	}
+	//for _, f := range v.volumes {
+	//	f.SetThing(thing)
+	//}
 	v.solver = v.comp.GetSolver()
 	if err := v.solver.Setup(thing); err != nil {
 		return err

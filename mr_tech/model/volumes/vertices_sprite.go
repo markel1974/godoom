@@ -102,7 +102,7 @@ func (v *VerticesSprite) Setup(thing IThing) error {
 	v.solver = vol.GetSolver()
 	v.ent = v.solver.GetEntity()
 	vol.Rebuild()
-	vol.SetThing(thing)
+	//vol.SetThing(thing)
 	v.ent.LockUpright()
 	if err := v.solver.Setup(thing); err != nil {
 		return err

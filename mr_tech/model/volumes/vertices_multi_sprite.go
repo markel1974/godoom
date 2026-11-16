@@ -143,7 +143,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 // Setup assigns the thing to all volumes, refreshes bounds and compiled state, and initializes collision solving.
 func (v *VerticesMultiSprite) Setup(thing IThing) error {
 	for _, volume := range v.volumes {
-		volume.SetThing(thing)
+		//volume.SetThing(thing)
 		if v.renderMode == RenderModeBillboard {
 			volume.GetSolver().GetEntity().LockUpright()
 		}

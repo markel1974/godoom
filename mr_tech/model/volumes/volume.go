@@ -5,7 +5,6 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
-	"github.com/markel1974/godoom/mr_tech/model/sectors"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -20,12 +19,13 @@ type Volume struct {
 	tag        string
 	light      *lights.Light
 	solver     *collisions.Solver
+	aabb       *aabb.AABB
 	facesTree  *aabb.Tree
-	thing      IThing
-	sector     *sectors.Sector
+	object     any
 	vertexTags []*articulated_dynamics.TagAxis
 	marker     int
 	dirty      bool
+	//thing      IThing
 }
 
 // NewVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
@@ -41,6 +41,7 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction f
 		dirty:      true,
 		marker:     -1,
 	}
+	v.aabb = v.solver.GetEntity().GetAABB()
 	return v
 }
 
@@ -55,11 +56,10 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.
 func (v *Volume) Rebuild() bool {
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-
 	v.facesTree.Clear()
 
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	for x := 0; x < v.faces.Len(); x++ {
 		face := v.faces.container[x]
 		face.Rebuild()
@@ -72,10 +72,14 @@ func (v *Volume) Rebuild() bool {
 
 	v.faces.Rebuild()
 
-	ent := v.solver.GetEntity()
-	ent.Rebuild(minX, minY, minZ, w, h, d)
-	ent.SetCentroid(v.faces.GetCentroid())
-	ent.SetInertia(v.faces.GetInertia())
+	cx, cy, cz := v.faces.GetCentroid()
+	ixx, ixy, ixz, iyy, iyz, izz := v.faces.GetInertia()
+	v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+
+	//ent := v.solver.GetEntity()
+	//ent.Rebuild(minX, minY, minZ, w, h, d)
+	//ent.SetCentroid(v.faces.GetCentroid())
+	//ent.SetInertia(v.faces.GetInertia())
 
 	v.dirty = true
 
@@ -112,6 +116,7 @@ func (v *Volume) GetMarker() int {
 	return v.marker
 }
 
+/*
 // SetThing assigns the specified IThing instance to the volume.
 func (v *Volume) SetThing(thing IThing) {
 	v.thing = thing
@@ -122,6 +127,8 @@ func (v *Volume) GetThing() IThing {
 	return v.thing
 }
 
+*/
+
 // GetSolver returns the collision solver associated with the volume.
 func (v *Volume) GetSolver() *collisions.Solver {
 	return v.solver
@@ -129,7 +136,8 @@ func (v *Volume) GetSolver() *collisions.Solver {
 
 // GetAABB returns the axis-aligned bounding box of the volume's collision entity.
 func (v *Volume) GetAABB() *aabb.AABB {
-	return v.solver.GetEntity().GetAABB()
+	//return v.solver.GetEntity().GetAABB()
+	return v.aabb
 }
 
 // GetModelId returns the model identifier assigned to the volume.
@@ -178,14 +186,14 @@ func (v *Volume) SetLight(light *lights.Light) {
 	v.light.SetParent(v)
 }
 
-// GetSector returns the sector associated with the volume.
-func (v *Volume) GetSector() *sectors.Sector {
-	return v.sector
+// GetObject returns the object associated with the volume.
+func (v *Volume) GetObject() any {
+	return v.object
 }
 
-// SetSector assigns the sector associated with the volume.
-func (v *Volume) SetSector(s *sectors.Sector) {
-	v.sector = s
+// SetObject sets the sector object associated with the volume.
+func (v *Volume) SetObject(s any) {
+	v.object = s
 }
 
 // SetVertexTag sets the vertex tag at idx with the given origin and axis, growing storage as needed.

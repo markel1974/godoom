@@ -19,7 +19,7 @@ func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.
 	throwable.Base = NewBase(throwable, things, cfg, volume)
 	cfg.OnBind(throwable)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
-	throwable.maxStep = 0.0
+	throwable.SetMaxStep(0.0)
 	// Normalizzazione del Pitch (da [-5, 5] a radianti)
 	// Vettore Direzionale 3D normalizzato
 	dirX := math.Cos(throwable.angle) * math.Cos(cfg.Pitch)

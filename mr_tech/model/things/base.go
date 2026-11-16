@@ -25,7 +25,6 @@ type Base struct {
 	id             string
 	kind           config.ThingType
 	angle          float64
-	maxStep        float64
 	speed          float64
 	impulse        float64
 	wakeupDistance float64
@@ -33,11 +32,10 @@ type Base struct {
 	jumpForce      float64
 	location       *volumes.Volume
 	things         IThingHandler
-	isActive       bool
-	cage           *collisions.Cage
 	inbox          chan *volumes.ThingEvent
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
+	solver         *collisions.Solver
 	done           chan struct{}
 }
 
@@ -69,23 +67,26 @@ func NewBase(thing volumes.IThing, things IThingHandler, cfg *config.Thing, loca
 		acceleration:   cfg.Acceleration,
 		location:       location,
 		things:         things,
-		maxStep:        0,
-		isActive:       true,
 		inbox:          make(chan *volumes.ThingEvent, 16),
 		done:           make(chan struct{}),
 		onImpact:       cfg.OnImpact,
 		onCollision:    cfg.OnCollision,
 	}
-
 	entity := t.GetContainerVolume().GetEntity()
-	entity.SetOnGround(false)
-	t.SetAngle(cfg.Angle)
+	maxStep := 0.0
 	if cfg.MaxStepFactor > 0 {
-		t.maxStep = entity.GetDepth() * cfg.MaxStepFactor
+		maxStep = entity.GetDepth() * cfg.MaxStepFactor
 	}
 
+	canSleep := t.kind != config.ThingPlayerDef
+	cage := t.IVertices.GetCage().(*collisions.Cage)
+	t.solver = collisions.NewSolver(cage, entity, maxStep, canSleep, t.onElasticCollision, t.onInelasticCollision)
+
+	entity.SetOnGround(false)
+	t.SetAngle(cfg.Angle)
+
 	//TODO REIMPLEMENT!
-	t.cage = t.IVertices.GetCage().(*collisions.Cage)
+	//t.cage = t.IVertices.GetCage().(*collisions.Cage)
 
 	return t
 }
@@ -118,7 +119,7 @@ func (t *Base) SetAngle(angle float64) {
 
 // GetMaxStep returns the maximum step value associated with the Base instance.
 func (t *Base) GetMaxStep() float64 {
-	return t.maxStep
+	return t.solver.GetMaxStep()
 }
 
 // GetAcceleration returns the current acceleration value of the Base.
@@ -158,17 +159,17 @@ func (t *Base) GetWakeUpDistance() float64 {
 
 // IsActive checks if the Base instance is currently active.
 func (t *Base) IsActive() bool {
-	return t.isActive
+	return t.solver.IsActive()
 }
 
 // SetActive updates the activation state of the Base instance and returns the updated state as a boolean.
 func (t *Base) SetActive(active bool) {
-	t.isActive = active
+	t.solver.SetActive(active)
 }
 
 // SetMaxStep sets the maximum step value for the Base instance, which determines the allowable step height.
 func (t *Base) SetMaxStep(maxStep float64) {
-	t.maxStep = maxStep
+	t.solver.SetMaxStep(maxStep)
 }
 
 // IsVisible determines whether the Base instance is currently visible, returning true if it is visible.
@@ -176,252 +177,68 @@ func (t *Base) IsVisible() bool {
 	return true
 }
 
+// CanSleep reports whether this entity type is allowed to enter the sleeping state.
+func (t *Base) CanSleep() bool {
+	return t.solver.CanSleep()
+}
+
 // IsSleeping reports whether the entity's rigid body is currently asleep.
 func (t *Base) IsSleeping() bool {
-	return t.GetContainerVolume().GetEntity().IsSleeping()
+	return t.solver.IsSleeping()
 }
 
 // WakeUp wakes the entity from sleep so it participates in physics steps.
 func (t *Base) WakeUp() {
-	t.GetContainerVolume().GetEntity().WakeUp()
+	t.solver.WakeUp()
 }
 
 // EnterSleep puts the entity to sleep and clears any pending frame displacement.
 func (t *Base) EnterSleep() {
-	t.GetContainerVolume().GetEntity().SetSleeping(true)
-	t.cage.ZeroDisplacement()
-}
-
-// CanSleep reports whether this entity type is allowed to enter the sleeping state.
-func (t *Base) CanSleep() bool {
-	return t.kind != config.ThingPlayerDef
+	t.solver.EnterSleep()
 }
 
 // UpdateSleepState evaluates post-solver motion and returns whether this entity qualifies to sleep.
 func (t *Base) UpdateSleepState() bool {
-	px, py, pz := t.cage.GetPushOffset()
-	pushSq := px*px + py*py + pz*pz
-	return t.GetContainerVolume().GetEntity().UpdateSleepState(t.CanSleep(), pushSq)
+	return t.solver.UpdateSleepState()
 }
 
 // SetSolverIndex records this entity's active index in the current solver tick (-1 when inactive).
 func (t *Base) SetSolverIndex(idx int) {
-	t.cage.SetSolverIndex(idx)
+	t.solver.SetSolverIndex(idx)
 }
 
 // GetSolverIndex returns this entity's active index in the current solver tick (-1 when inactive).
 func (t *Base) GetSolverIndex() int {
-	return t.cage.GetSolverIndex()
+	return t.solver.GetSolverIndex()
 }
 
 // StagePrepare prepares the entity for staging by updating it and rebuilding the cage if the entity is moving.
 func (t *Base) StagePrepare(session uint64) {
 	entity := t.GetContainerVolume().GetEntity()
-	entity.ClearActiveContact()
-	entity.ClearPreSolve()
-	entity.Update()
 	t.angle = entity.GetYaw()
 	t.Compile(textures.GlobalTick())
-	t.cage.Rebuild(t.maxStep, session)
-}
 
-// resolveSlotPartner returns the canonical collision partner entity for slot resolution, or nil if skipped.
-func resolveSlotPartner(entity *rigid_body.Entity, slot *collisions.Entry) *rigid_body.Entity {
-	if slot.GetImpactMode() == collisions.ImpactStep {
-		return nil
-	}
-	if rCage := slot.GetRCage(); rCage != nil {
-		rParentEnt := rCage.GetEntity()
-		// Each active dynamic pair is solved once per solver pass by the canonical owner.
-		if entity.GetId() > rParentEnt.GetId() {
-			if rThing, ok := rCage.GetObject().(volumes.IThing); ok && rThing.IsActive() && rCage.HasEntryFor(slot.GetBucket().Opposite(), entity.GetId()) {
-				return nil
-			}
-		}
-		return rParentEnt
-	}
-	rFace := slot.GetRemoteFace()
-	rParent := rFace.GetParent().(*volumes.Volume)
-	return rParent.GetEntity()
+	t.solver.StagePrepare(session)
 }
 
 // StageWarmStart pre-applies persisted impulses on active contacts before PGS iterations begin.
 func (t *Base) StageWarmStart() {
-	slotsLen := t.cage.GetSlotsLen()
-	if slotsLen == 0 {
-		return
-	}
-
-	entity := t.GetContainerVolume().GetEntity()
-	for i := 0; i < slotsLen; i++ {
-		slot := t.cage.GetSlot(i)
-		rParentEnt := resolveSlotPartner(entity, slot)
-		if rParentEnt == nil {
-			continue
-		}
-		accNormal, accTx, accTy, accTz, _, _ := slot.GetSolverState()
-		if *accNormal <= 0.0 {
-			continue
-		}
-		nX, nY, nZ := slot.GetNormal()
-		pX, pY, pZ := slot.GetPoint()
-		entity.WarmStartImpact(rParentEnt, nX, nY, nZ, pX, pY, pZ, accNormal, accTx, accTy, accTz)
-	}
+	t.solver.StageWarmStart()
 }
 
 // StageResolve resolves collisions and interactions for the entity by applying impulse and friction adjustments.
 func (t *Base) StageResolve() {
-	slotsLen := t.cage.GetSlotsLen()
-	if slotsLen == 0 {
-		return
-	}
-
-	entity := t.GetContainerVolume().GetEntity()
-
-	for i := 0; i < slotsLen; i++ {
-		slot := t.cage.GetSlot(i)
-		rParentEnt := resolveSlotPartner(entity, slot)
-		if rParentEnt == nil {
-			continue
-		}
-		// Risoluzione Impulsi e Attrito (Fase Cinetica) con Proprietà Esplicite del Materiale di Contatto.
-		nX, nY, nZ := slot.GetNormal()
-		pX, pY, pZ := slot.GetPoint()
-		accNormal, accTx, accTy, accTz, restTarget, hasRestTarget := slot.GetSolverState()
-		entity.ResolveImpactAccumulated(rParentEnt, nX, nY, nZ, pX, pY, pZ, accNormal, accTx, accTy, accTz, restTarget, hasRestTarget)
-	}
+	t.solver.StageResolve()
 }
 
 // StageApply advances entity position by its frame displacement, applies step-ups, and dispatches collision callbacks.
 func (t *Base) StageApply() {
-	if location := t.cage.GetVolume(); location != nil {
-		t.location = location.(*volumes.Volume)
-	}
-	entity := t.GetContainerVolume().GetEntity()
-	// Spostiamo l'oggetto usando il vettore pre-urto. Questo porta AABB esattamente nel punto (tX, tY, tZ) dove la gabbia ha misurato la compenetrazione.
-	dx, dy, dz := t.cage.GetDisplacement()
-	entity.AddTo(dx, dy, dz)
-	t.cage.SetApplied()
-
-	var lastCollisionId uint64
-	hasCollisionId := false
-	stepZ := 0.0
-	for i := 0; i < t.cage.GetSlotsLen(); i++ {
-		slot := t.cage.GetSlot(i)
-		switch slot.GetImpactMode() {
-		case collisions.ImpactStep:
-			_, _, tz := t.cage.GetT()
-			_, _, rz := t.cage.GetRad()
-			_, _, pz := t.cage.GetPushOffset()
-			if cand := slot.GetMaxZ() - (tz - rz + pz + stepZ); cand > 0 {
-				stepZ += cand
-			}
-		case collisions.ImpactElastic:
-			rCage := slot.GetRCage()
-			rEnt := rCage.GetEntity()
-			rId := rEnt.GetId()
-			if !hasCollisionId || lastCollisionId != rId {
-				bestNX, bestNY, bestNZ := slot.GetNormal()
-				bestPX, bestPY, bestPZ := slot.GetPoint()
-				bestEnergy := entity.ComputeNormalKineticImpactAt(rEnt, bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-				for j := i + 1; j < t.cage.GetSlotsLen(); j++ {
-					s2 := t.cage.GetSlot(j)
-					if s2.GetImpactMode() != collisions.ImpactElastic || s2.GetRCage().GetEntity().GetId() != rId {
-						break
-					}
-					nx2, ny2, nz2 := s2.GetNormal()
-					px2, py2, pz2 := s2.GetPoint()
-					if candE := entity.ComputeNormalKineticImpactAt(rEnt, nx2, ny2, nz2, px2, py2, pz2); candE > bestEnergy {
-						bestEnergy = candE
-						bestNX, bestNY, bestNZ = nx2, ny2, nz2
-						bestPX, bestPY, bestPZ = px2, py2, pz2
-					}
-				}
-				entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-				t.onCollision(rCage.GetObject().(volumes.IThing), bestEnergy)
-				entity.ClearActiveContact()
-				lastCollisionId = rId
-				hasCollisionId = true
-			}
-		case collisions.ImpactInelastic:
-			rParent := slot.GetRemoteFace().GetParent().(*volumes.Volume)
-			if thing := rParent.GetThing(); thing != nil {
-				nX, nY, nZ := slot.GetNormal()
-				pX, pY, pZ := slot.GetPoint()
-				entity.SetActiveContact(nX, nY, nZ, pX, pY, pZ)
-				t.onCollision(thing, 0)
-				entity.ClearActiveContact()
-			}
-		}
-	}
-	if t.maxStep > 0 && stepZ > t.maxStep {
-		stepZ = t.maxStep
-	}
-	t.cage.SetPendingStepZ(stepZ)
+	t.solver.StageApply()
 }
 
 // StageResolvePosition performs one Gauss-Seidel positional push-out sweep across this entity's active contacts.
 func (t *Base) StageResolvePosition() {
-	slotsLen := t.cage.GetSlotsLen()
-	if slotsLen == 0 {
-		return
-	}
-	entity := t.GetContainerVolume().GetEntity()
-	_, _, targetZ := t.cage.GetT()
-	_, _, targetRadZ := t.cage.GetRad()
-	targetBaseZ := targetZ - targetRadZ
-
-	for i := 0; i < slotsLen; i++ {
-		slot := t.cage.GetSlot(i)
-		if slot.GetImpactMode() != collisions.ImpactElastic {
-			continue
-		}
-		nX, nY, nZ := slot.GetNormal()
-		rCage := slot.GetRCage()
-		sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
-		rPushX, rPushY, rPushZ := rCage.GetPushOffset()
-		alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
-		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ, sPushZ)
-		if pen > 0 {
-			otherMovable := slot.Penetrable(0) && !rCage.IsBlockedAlong(-nX, -nY, -nZ)
-			selfMovable := t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rCage.GetEntity().GetId()) && !t.cage.IsBlockedAlong(nX, nY, nZ)
-			entity.ResolveElasticPenetrationConstrained(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen, selfMovable, otherMovable)
-			if !otherMovable && selfMovable {
-				entity.ClampNormalVelocity(nX, nY, nZ)
-			} else if !selfMovable && otherMovable {
-				rCage.GetEntity().ClampNormalVelocity(-nX, -nY, -nZ)
-			}
-		}
-	}
-
-	// Resolve immutable static walls, floors, and ceilings after elastic pushes to prevent sinking into world geometry.
-	for i := 0; i < slotsLen; i++ {
-		slot := t.cage.GetSlot(i)
-		if slot.GetImpactMode() != collisions.ImpactInelastic {
-			continue
-		}
-		nX, nY, nZ := slot.GetNormal()
-		sPushX, sPushY, sPushZ := t.cage.GetPushOffset()
-		alreadyResolved := sPushX*nX + sPushY*nY + sPushZ*nZ
-		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ, sPushZ)
-		if pen > 0 {
-			entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
-		}
-	}
-}
-
-func clampUpwardPenetration(pen, alreadyResolved, nZ, maxZ, currentBaseZ, sPushZ float64) float64 {
-	pen -= alreadyResolved
-	if pen > 0 && sPushZ > 0.0 && nZ > 0.70 {
-		remZ := maxZ - currentBaseZ
-		if remZ <= 0.0 {
-			return 0.0
-		}
-		if maxPen := remZ / nZ; pen > maxPen {
-			return maxPen
-		}
-	}
-	return pen
+	t.solver.StageResolvePosition()
 }
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
@@ -511,6 +328,17 @@ func (t *Base) spawnBulletHole(x, y, z float64, target volumes.IThing) {
 	// Se il target è un muro, possiamo estrarre la normale per ruotare la decalcomania
 	// ma per ora posizioniamola semplicemente nel punto XYZ.
 	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
+}
+
+func (t *Base) onElasticCollision(other collisions.IObject, energy float64) {
+	z, ok := other.(volumes.IThing)
+	if ok {
+		t.onCollision(z, energy)
+	}
+}
+
+func (t *Base) onInelasticCollision(other collisions.IObject, energy float64) {
+	//TODO
 }
 
 /*

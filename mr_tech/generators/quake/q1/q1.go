@@ -158,8 +158,12 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 	lights := NewLights(entities)
 	volumes := NewVolumes(mIdx, volumesCount)
 
+	const difficulty = 1
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
+		if classname != "worldspawn" && classname != "info_player_start" && !ent.IsLevelAvailable(difficulty) {
+			continue
+		}
 		baseClass := classname
 		if z := strings.Split(classname, "_"); len(z) > 1 {
 			baseClass = z[0]

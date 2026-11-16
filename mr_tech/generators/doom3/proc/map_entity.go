@@ -153,21 +153,55 @@ func (e *MapEntity) GetAngle() float64 {
 	return 0.0
 }
 
-// IsDormant checks if the entity is dormant, hidden, or waiting for a trigger/teleport spawn event in Doom 3.
+func (e *MapEntity) isPropEnabled(key string) bool {
+	val, ok := e.GetProperty(key)
+	if !ok {
+		return false
+	}
+	v := strings.ToLower(strings.TrimSpace(val))
+	return v != "" && v != "0" && v != "false"
+}
+
+// IsDormant checks if the entity is dormant, hidden, or waiting for a trigger/teleport/cinematic/spawner event in Doom 3.
 func (e *MapEntity) IsDormant() bool {
-	if val, ok := e.GetProperty("teleport"); ok && val != "" && val != "0" {
+	if e.isPropEnabled("teleport") {
 		return true
 	}
 	if val, ok := e.GetProperty("hide"); ok && (val == "1" || val == "2" || strings.ToLower(val) == "true") {
 		return true
 	}
-	if val, ok := e.GetProperty("trigger"); ok && (val == "1" || strings.ToLower(val) == "true") {
+	if e.isPropEnabled("trigger") {
 		return true
 	}
 	if val, ok := e.GetProperty("bind"); ok && val != "" {
 		return true
 	}
+	if val, ok := e.GetProperty("trigger_anim"); ok && val != "" {
+		return true
+	}
+	if e.isPropEnabled("num_cinematics") {
+		return true
+	}
+	if e.isPropEnabled("spawner") {
+		return true
+	}
 	return false
+}
+
+// IsLevelAvailable determines whether the entity should spawn at the given difficulty level
+// (1-2: Easy, 3: Medium, 4: Hard, 5: Nightmare) using Doom 3's not_easy/not_medium/not_hard keys.
+func (e *MapEntity) IsLevelAvailable(level int) bool {
+	switch level {
+	case 1, 2:
+		return !e.isPropEnabled("not_easy")
+	case 3:
+		return !e.isPropEnabled("not_medium")
+	case 4:
+		return !e.isPropEnabled("not_hard")
+	case 5:
+		return !e.isPropEnabled("not_hard") && !e.isPropEnabled("not_nightmare")
+	}
+	return true
 }
 
 // GetLightKind determines whether the light entity is a spotlight, ambient, or diffuse point light.

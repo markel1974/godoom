@@ -115,8 +115,12 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 	volumes := NewVolumes(mIdx, volumesCount)
 	things := NewThings(q2.arc, q2.texManager, q2.palette)
 
+	const difficulty = 1
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
+		if classname != "worldspawn" && classname != "info_player_start" && !ent.IsLevelAvailable(difficulty) {
+			continue
+		}
 		parts := strings.Split(classname, "_")
 		nameSpace := parts[0]
 		//class := ""

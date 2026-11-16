@@ -48,32 +48,6 @@ func NewAttachedPart(things IThingHandler, owner vertices.IThing, location *volu
 	return d
 }
 
-// NewDetached initializes an autonomous 6-DoF rigid-body limb from vol at pos with the given orientation, velocities,
-// and optional self-collision exclusion group (0 when freely dismembered).
-func NewDetached(things IThingHandler, vol *volumes.Volume, location *volumes.Volume, id string, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) *Detached {
-	ent := vol.GetSolver().GetEntity()
-	cfg := config.NewConfigThing(id, pos, 0, config.ThingItemDef, ent.GetMass(), 1, 1, 0)
-	cfg.OnCollision = noopDetachedCollision
-	cfg.OnImpact = noopDetachedImpact
-
-	d := &Detached{
-		Base: NewBaseWithVertices(things, cfg, vertices.NewVerticesVolume(vol)),
-	}
-	if err := d.Prepare(d, location); err != nil {
-		panic(err)
-	}
-	d.SetMaxStep(0.0)
-	d.GetSolver().SetCollisionGroup(collisionGroup)
-	dEnt := d.GetEntity()
-	dEnt.SetKeepUpright(false)
-	dEnt.MoveCenterTo(pos.X, pos.Y, pos.Z)
-	dEnt.SetRotationQuaternion(qx, qy, qz, qw)
-	dEnt.SetV(vx, vy, vz)
-	dEnt.SetAngularVelocity(wx, wy, wz)
-	d.Compile(0)
-	return d
-}
-
 // GetOwner returns the owning parent IThing while this segment belongs to it, or nil once detached.
 func (t *Detached) GetOwner() vertices.IThing {
 	return t.owner
@@ -81,10 +55,7 @@ func (t *Detached) GetOwner() vertices.IThing {
 
 // IsPhysicsFree reports whether this segment simulates as an autonomous 6-DoF rigid body.
 func (t *Detached) IsPhysicsFree() bool {
-	if t.partVerts != nil {
-		return t.partVerts.IsPhysicsFree()
-	}
-	return true
+	return t.partVerts.IsPhysicsFree()
 }
 
 // IsSleeping returns false while attached/kinematic so contact queries against live limbs never try to wake an unstaged solver.
@@ -176,7 +147,7 @@ func (t *Detached) LaunchObject(throwableIndex int, onCollision config.Collision
 }
 
 // PostMessage is a no-op because detached limbs do not spawn a thinker goroutine.
-func (t *Detached) PostMessage(ec *volumes.ThingEvent) {}
+func (t *Detached) PostMessage(ec *vertices.ThingEvent) {}
 
 // StartLoop is a no-op because detached limbs do not run AI thinking.
 func (t *Detached) StartLoop() {}

@@ -102,8 +102,6 @@ type Vertices3DEntry struct {
 	frameCenters  []geometry.XYZ
 	frameIdxA     int
 	frameIdxB     int
-	lastRotA      *articulated_dynamics.TagAxis
-	lastRotB      *articulated_dynamics.TagAxis
 	rot           *articulated_dynamics.TagAxis
 	lastQx        float64
 	lastQy        float64
@@ -372,21 +370,58 @@ func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce f
 	}
 
 	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, gForce)
-	if v.volA != nil {
-		faces := v.volA.GetFaces()
-		minX, minY, minZ := faces.GetMin()
-		w, h, d := faces.GetSize()
-		cx, cy, cz := faces.GetCentroid()
-		ixx, ixy, ixz, iyy, iyz, izz := faces.GetInertia()
-		partSolver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
-	}
+	rebuildSolverFromVolume(partSolver, v.volA)
 	v.comp.solver = partSolver
 	v.comp.volume = v.volA
 	v.solver = partSolver
 	v.ent = partSolver.GetEntity()
 	v.lastVolA = v.volA
-	v.lastRotA = articulated_dynamics.NewTagAxisIdentity()
-	v.lastRotB = articulated_dynamics.NewTagAxisIdentity()
+}
+
+func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
+	if vol == nil || solver == nil {
+		return
+	}
+	faces := vol.GetFaces()
+	minX, minY, minZ := faces.GetMin()
+	w, h, d := faces.GetSize()
+	cx, cy, cz := faces.GetCentroid()
+	ixx, ixy, ixz, iyy, iyz, izz := faces.GetInertia()
+	solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+}
+
+func transformVolumeFaces(
+	srcVol *volumes.Volume,
+	dstFaces *volumes.Faces,
+	rot *articulated_dynamics.TagAxis,
+	isIdent bool,
+	ox, oy, oz float64,
+	minX, minY, minZ, maxX, maxY, maxZ float64,
+	trackBounds bool,
+) (float64, float64, float64, float64, float64, float64) {
+	count := srcVol.GetFaceCount()
+	noOffset := ox == 0 && oy == 0 && oz == 0
+	for j := 0; j < count; j++ {
+		src := srcVol.GetFace(j)
+		dst := dstFaces.At(j)
+		dst.SetMaterial(src.GetMaterial())
+		dst.SetU(src.GetU())
+		dst.SetV(src.GetV())
+		if isIdent && noOffset {
+			dst.CopyPoints(src)
+		} else {
+			rot.TransformPointsWithMatrix(dst.GetTri(), src.GetTri(), ox, oy, oz)
+		}
+		if trackBounds {
+			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+		}
+	}
+	for j := count; j < dstFaces.Len(); j++ {
+		if f := dstFaces.At(j); f != nil {
+			f.Zero()
+		}
+	}
+	return minX, minY, minZ, maxX, maxY, maxZ
 }
 
 // FrameCenterA returns the local geometric centering offset for the active A frame.
@@ -411,12 +446,7 @@ func (v *Vertices3DEntry) SyncSolverToCurrentFrame() {
 		return
 	}
 	v.comp.SetVolume(v.volA)
-	faces := v.volA.GetFaces()
-	minX, minY, minZ := faces.GetMin()
-	w, h, d := faces.GetSize()
-	cx, cy, cz := faces.GetCentroid()
-	ixx, ixy, ixz, iyy, iyz, izz := faces.GetInertia()
-	v.comp.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+	rebuildSolverFromVolume(v.comp.solver, v.volA)
 	v.lastVolA = v.volA
 }
 
@@ -426,54 +456,15 @@ func (v *Vertices3DEntry) CompileAttached(rotA, rotB *articulated_dynamics.TagAx
 	if v.volA == nil {
 		return
 	}
-	isIdentA := rotA.IsIdentity()
-	isIdentB := rotB.IsIdentity()
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-
-	countA := v.volA.GetFaceCount()
-	for j := 0; j < countA; j++ {
-		srcA := v.volA.GetFace(j)
-		dstA := v.facesA.At(j)
-		dstA.SetMaterial(srcA.GetMaterial())
-		dstA.SetU(srcA.GetU())
-		dstA.SetV(srcA.GetV())
-		if isIdentA {
-			dstA.CopyPoints(srcA)
-		} else {
-			rotA.TransformPointsWithMatrix(dstA.GetTri(), srcA.GetTri(), 0, 0, 0)
-		}
-		minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-	}
-	for j := countA; j < v.facesA.Len(); j++ {
-		if faceA := v.facesA.At(j); faceA != nil {
-			faceA.Zero()
-		}
-	}
+	minX, minY, minZ, maxX, maxY, maxZ = transformVolumeFaces(v.volA, v.facesA, rotA, rotA.IsIdentity(), 0, 0, 0, minX, minY, minZ, maxX, maxY, maxZ, true)
 
 	volB := v.volB
 	if volB == nil {
 		volB = v.volA
 	}
-	countB := volB.GetFaceCount()
-	for j := 0; j < countB; j++ {
-		srcB := volB.GetFace(j)
-		dstB := v.facesB.At(j)
-		dstB.SetMaterial(srcB.GetMaterial())
-		dstB.SetU(srcB.GetU())
-		dstB.SetV(srcB.GetV())
-		if isIdentB && dOffX == 0 && dOffY == 0 && dOffZ == 0 {
-			dstB.CopyPoints(srcB)
-		} else {
-			rotB.TransformPointsWithMatrix(dstB.GetTri(), srcB.GetTri(), dOffX, dOffY, dOffZ)
-		}
-		minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-	}
-	for j := countB; j < v.facesB.Len(); j++ {
-		if faceB := v.facesB.At(j); faceB != nil {
-			faceB.Zero()
-		}
-	}
+	minX, minY, minZ, maxX, maxY, maxZ = transformVolumeFaces(volB, v.facesB, rotB, rotB.IsIdentity(), dOffX, dOffY, dOffZ, minX, minY, minZ, maxX, maxY, maxZ, true)
 
 	if minX > maxX {
 		minX, minY, minZ = 0, 0, 0
@@ -500,25 +491,7 @@ func (v *Vertices3DEntry) CompileDetached() {
 		}
 		minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 		maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-		count := v.volA.GetFaceCount()
-		for j := 0; j < count; j++ {
-			src := v.volA.GetFace(j)
-			dst := v.facesA.At(j)
-			dst.SetMaterial(src.GetMaterial())
-			dst.SetU(src.GetU())
-			dst.SetV(src.GetV())
-			if isIdent {
-				dst.CopyPoints(src)
-			} else {
-				v.rot.TransformPointsWithMatrix(dst.GetTri(), src.GetTri(), 0, 0, 0)
-			}
-			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-		}
-		for j := count; j < v.facesA.Len(); j++ {
-			if faceA := v.facesA.At(j); faceA != nil {
-				faceA.Zero()
-			}
-		}
+		minX, minY, minZ, maxX, maxY, maxZ = transformVolumeFaces(v.volA, v.facesA, v.rot, isIdent, 0, 0, 0, minX, minY, minZ, maxX, maxY, maxZ, true)
 		if minX > maxX {
 			minX, minY, minZ = 0, 0, 0
 			maxX, maxY, maxZ = 0, 0, 0
@@ -532,45 +505,7 @@ func (v *Vertices3DEntry) CompileDetached() {
 
 // Compile updates the active animation frames and interpolation factor for the given tick.
 func (v *Vertices3DEntry) Compile(tick uint64) bool {
-	if v.singleFrame {
-		v.lerpT = 0.0
-	} else {
-		v.tick = tick + v.salt
-		animLength := v.endFrame - v.startFrame + 1
-		if animLength <= 0 {
-			animLength = 1
-		}
-		lerpT := 0.0
-		var relativeFrameA int
-		var relativeFrameB int
-		if v.clampAnim {
-			frameFloat := 0.0
-			if v.tick > v.startTick {
-				frameFloat = float64(v.tick-v.startTick) / v.groupSize
-			}
-			lastAnim := animLength - 1
-			if relativeFrameA = int(frameFloat); relativeFrameA >= lastAnim {
-				v.singleFrame = true
-				relativeFrameA = lastAnim
-				relativeFrameB = lastAnim
-				lerpT = 0.0 // Fermo sull'ultimo frame
-			} else {
-				lerpT = frameFloat - math.Floor(frameFloat)
-				if relativeFrameB = relativeFrameA + 1; relativeFrameB >= lastAnim {
-					relativeFrameB = lastAnim
-				}
-			}
-		} else {
-			// TickGrouped computes the floating-point frame index by dividing the tick by the group size.
-			frameFloat := float64(v.tick) / v.groupSize
-			lerpT = frameFloat - math.Floor(frameFloat)
-			relativeFrameA = int(frameFloat) % animLength
-			relativeFrameB = (int(frameFloat) + 1) % animLength
-		}
-		v.volA = v.volumes[v.startFrame+relativeFrameA]
-		v.volB = v.volumes[v.startFrame+relativeFrameB]
-		v.lerpT = lerpT
-	}
+	v.AdvanceAnimation(tick)
 
 	ent := v.comp.GetSolver().GetEntity()
 	q := ent.GetQRotation()
@@ -587,66 +522,11 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 
 		minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 		maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-
-		countA := v.volA.GetFaceCount()
-		for j := 0; j < countA; j++ {
-			srcA := v.volA.GetFace(j)
-			dstA := v.facesA.At(j)
-			dstA.SetMaterial(srcA.GetMaterial())
-			dstA.SetU(srcA.GetU())
-			dstA.SetV(srcA.GetV())
-			if isIdent {
-				dstA.CopyPoints(srcA)
-			} else {
-				v.rot.TransformPointsWithMatrix(dstA.GetTri(), srcA.GetTri(), 0, 0, 0)
-			}
-			minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-		}
-		for j := countA; j < v.facesA.Len(); j++ {
-			if faceA := v.facesA.At(j); faceA != nil {
-				faceA.Zero()
-			}
-		}
-
+		minX, minY, minZ, maxX, maxY, maxZ = transformVolumeFaces(v.volA, v.facesA, v.rot, isIdent, 0, 0, 0, minX, minY, minZ, maxX, maxY, maxZ, true)
 		if v.volB != v.volA {
-			countB := v.volB.GetFaceCount()
-			for j := 0; j < countB; j++ {
-				srcB := v.volB.GetFace(j)
-				dstB := v.facesB.At(j)
-				dstB.SetMaterial(srcB.GetMaterial())
-				dstB.SetU(srcB.GetU())
-				dstB.SetV(srcB.GetV())
-				if isIdent {
-					dstB.CopyPoints(srcB)
-				} else {
-					v.rot.TransformPointsWithMatrix(dstB.GetTri(), srcB.GetTri(), 0, 0, 0)
-				}
-				minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-			}
-			for j := countB; j < v.facesB.Len(); j++ {
-				if faceB := v.facesB.At(j); faceB != nil {
-					faceB.Zero()
-				}
-			}
+			minX, minY, minZ, maxX, maxY, maxZ = transformVolumeFaces(v.volB, v.facesB, v.rot, isIdent, 0, 0, 0, minX, minY, minZ, maxX, maxY, maxZ, true)
 		} else {
-			countB := countA
-			for j := 0; j < countB; j++ {
-				srcB := v.volA.GetFace(j)
-				dstB := v.facesB.At(j)
-				dstB.SetMaterial(srcB.GetMaterial())
-				dstB.SetU(srcB.GetU())
-				dstB.SetV(srcB.GetV())
-				if isIdent {
-					dstB.CopyPoints(srcB)
-				} else {
-					v.rot.TransformPointsWithMatrix(dstB.GetTri(), srcB.GetTri(), 0, 0, 0)
-				}
-			}
-			for j := countB; j < v.facesB.Len(); j++ {
-				if faceB := v.facesB.At(j); faceB != nil {
-					faceB.Zero()
-				}
-			}
+			_, _, _, _, _, _ = transformVolumeFaces(v.volA, v.facesB, v.rot, isIdent, 0, 0, 0, minX, minY, minZ, maxX, maxY, maxZ, false)
 		}
 
 		if minX > maxX {

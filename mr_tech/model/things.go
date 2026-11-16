@@ -36,7 +36,7 @@ type Things struct {
 	pendingStage      []vertices.IThing
 	pendingStageMu    sync.Mutex
 	stageEpoch        uint64
-	event             *volumes.ThingEvent
+	event             *vertices.ThingEvent
 	cfg               []*config.Thing
 	maxOverlapsWorld  int
 	maxOverlapsThings int
@@ -65,7 +65,7 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		config:            cfg,
 		volumes:           vols,
 		materials:         materials,
-		event:             volumes.NewThingEvent(0, solverJitter),
+		event:             vertices.NewThingEvent(0, solverJitter),
 		statics:           make([]vertices.IThing, 0, 16),
 		coordinator:       collisions.NewCoordinator(solverIterations, defaultLen),
 	}
@@ -266,19 +266,6 @@ func (th *Things) CreateThrowable(self vertices.IThing, throwableIndex int, onCo
 	th.hasPending = true
 }
 
-// CreateDetached wraps vol as an autonomous 6-DoF rigid-body Thing, queues it into the scene, and returns it.
-func (th *Things) CreateDetached(vol *volumes.Volume, location *volumes.Volume, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) vertices.IThing {
-	slot := th.pendingLen.Add(1) - 1
-	if slot >= int32(len(th.pending)) {
-		fmt.Println("max slot reached!")
-		return nil
-	}
-	detached := things.NewDetached(th, vol, location, utils.NextUUId(), pos, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, collisionGroup)
-	th.pending[slot] = detached
-	th.hasPending = true
-	return detached
-}
-
 // AddJoint registers an active bilateral PGS joint constraint with the coordinator.
 func (th *Things) AddJoint(joint *collisions.JointConstraint) {
 	th.coordinator.AddJoint(joint)
@@ -355,7 +342,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	// Apply Thinking
 	if th.thinkersLen > 0 {
-		th.event.SetStage(volumes.StageThinking)
+		th.event.SetStage(vertices.StageThinking)
 		th.event.SetCoords(pX, pY, pZ)
 		for x := 0; x < th.thinkersLen; x++ {
 			t2 := th.thinkers[x]

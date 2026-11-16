@@ -150,9 +150,9 @@ func (v *Vertices3D) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// QueryOverlaps queries face overlaps across all attached segment volumes.
+// QueryOverlaps queries face overlaps against the owner's local-space bounding Volume.
 func (v *Vertices3D) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
-	v.elements.vVolume.QueryOverlaps(object, callback)
+	v.elements.QueryOverlaps(object, callback)
 }
 
 // GetAABB returns the enclosing world-space AABB for the owner's locomotion entity.

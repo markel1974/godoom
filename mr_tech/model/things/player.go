@@ -107,7 +107,7 @@ func (pr *Player) LaunchObject(throwableIndex int, onCollision config.CollisionF
 }
 
 // PostMessage sends the provided ThingEvent to the Player's inbox channel for processing.
-func (pr *Player) PostMessage(ec *volumes.ThingEvent) {
+func (pr *Player) PostMessage(ec *vertices.ThingEvent) {
 	pr.inbox <- ec
 }
 
@@ -134,13 +134,13 @@ func (pr *Player) StartLoop() {
 			select {
 			case evt := <-pr.inbox:
 				switch evt.GetKind() {
-				case volumes.StageThinking:
+				case vertices.StageThinking:
 					pr.StageThinking(evt.GetCoords())
-				case volumes.StageCompute:
+				case vertices.StageCompute:
 					//p.StageCompute()
-				case volumes.StageResolve:
+				case vertices.StageResolve:
 					pr.StageResolve()
-				case volumes.StageApply:
+				case vertices.StageApply:
 					pr.StageApply()
 				}
 				evt.Done()

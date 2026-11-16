@@ -200,6 +200,7 @@ func (fc *Face) ClonePoints() [3]geometry.XYZ {
 	return fc.tri.Points
 }
 
+// GetPointsFlat returns the face triangle's three points as nine flat coordinate values.
 func (fc *Face) GetPointsFlat() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	return fc.tri.GetPointsFlat()
 }

@@ -62,7 +62,7 @@ func (t *Enemy) LaunchObject(throwableIndex int, onCollision config.CollisionFun
 }
 
 // PostMessage sends a ThingEvent instance to the inbox channel of Enemy for processing.
-func (t *Enemy) PostMessage(ec *volumes.ThingEvent) {
+func (t *Enemy) PostMessage(ec *vertices.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -73,13 +73,13 @@ func (t *Enemy) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case volumes.StageThinking:
+				case vertices.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case volumes.StageCompute:
+				case vertices.StageCompute:
 					//t.StageCompute()
-				case volumes.StageResolve:
+				case vertices.StageResolve:
 					t.StageResolve()
-				case volumes.StageApply:
+				case vertices.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

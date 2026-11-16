@@ -19,8 +19,6 @@ type IThingHandler interface {
 
 	CreateThrowable(t vertices.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
 
-	CreateDetached(vol *volumes.Volume, location *volumes.Volume, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) vertices.IThing
-
 	StagePart(part vertices.IThing)
 
 	AddJoint(joint *collisions.JointConstraint)
@@ -40,7 +38,7 @@ type Base struct {
 	acceleration   float64
 	jumpForce      float64
 	things         IThingHandler
-	inbox          chan *volumes.ThingEvent
+	inbox          chan *vertices.ThingEvent
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
 	maxStepFactor  float64
@@ -75,7 +73,7 @@ func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts vertices
 		acceleration:   cfg.Acceleration,
 		maxStepFactor:  cfg.MaxStepFactor,
 		things:         things,
-		inbox:          make(chan *volumes.ThingEvent, 16),
+		inbox:          make(chan *vertices.ThingEvent, 16),
 		done:           make(chan struct{}),
 		onImpact:       cfg.OnImpact,
 		onCollision:    cfg.OnCollision,

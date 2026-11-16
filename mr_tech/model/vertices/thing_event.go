@@ -1,4 +1,4 @@
-package volumes
+package vertices
 
 import "sync"
 

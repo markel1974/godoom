@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -13,41 +14,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-// VirtualVolume represents a virtual 3D volume used for physics locomotion of an articulated owner.
-type VirtualVolume struct {
-	solver   *collisions.Solver
-	elements *Vertices3DElements
-}
-
-// NewVirtualVolume creates a virtual volume using the provided vertex elements and rigid body solver.
-func NewVirtualVolume(elements *Vertices3DElements, solver *collisions.Solver) *VirtualVolume {
-	return &VirtualVolume{
-		elements: elements,
-		solver:   solver,
-	}
-}
-
-// Setup initializes the virtual volume's collision solver with object.
-func (v *VirtualVolume) Setup(object collisions.IObject) error {
-	return v.solver.Setup(object)
-}
-
-// GetSolver returns the collision solver associated with the virtual volume.
-func (v *VirtualVolume) GetSolver() *collisions.Solver {
-	return v.solver
-}
-
-// QueryOverlaps queries face overlaps across all active part volumes of Vertices3D.
-func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
-	for _, el := range v.elements.entries {
-		el.comp.QueryOverlaps(object, callback)
-	}
-}
-
-// Vertices3DElements manages per-part 3D entries, per-frame active volumes, and owner locomotion solver.
+// Vertices3DElements manages per-part 3D entries, per-frame active volumes, and the living owner's Volume collider.
 type Vertices3DElements struct {
 	entries    []*Vertices3DEntry
-	vVolume    *VirtualVolume
+	ownerVol   *volumes.Volume
 	volsA      []*volumes.Volume
 	volsB      []*volumes.Volume
 	lerpT      float64
@@ -55,9 +25,12 @@ type Vertices3DElements struct {
 	emptyFaces *volumes.Faces
 }
 
-// NewVertices3DElements builds centered per-part entries and the owner's locomotion VirtualVolume.
+// NewVertices3DElements builds centered per-part entries and a real Volume + Solver for owner locomotion.
 func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *Vertices3DElements {
+	ownerVol := volumes.NewVolumeDynamic(0, cfg.Id+"_owner", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 	v := &Vertices3DElements{
+		ownerVol:   ownerVol,
+		ent:        ownerVol.GetSolver().GetEntity(),
 		emptyFaces: volumes.NewFaces(0, false),
 	}
 
@@ -97,15 +70,17 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		}
 	}
 
-	solver := collisions.NewSolver(true, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
-	v.vVolume = NewVirtualVolume(v, solver)
-	v.ent = v.vVolume.GetSolver().GetEntity()
 	return v
 }
 
-// Setup binds the owner locomotion virtual volume solver to thing.
+// Setup binds the owner locomotion Volume solver to thing.
 func (v *Vertices3DElements) Setup(thing IThing) error {
-	return v.vVolume.Setup(thing)
+	return v.ownerVol.Setup(thing)
+}
+
+// QueryOverlaps queries face overlaps against the owner's local-space bounding Volume.
+func (v *Vertices3DElements) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+	v.ownerVol.QueryOverlaps(object, callback)
 }
 
 // Bind advances animation frames for entry i at tick and caches its active volumes and lerpT.
@@ -125,9 +100,9 @@ func (v *Vertices3DElements) Len() int {
 	return len(v.entries)
 }
 
-// GetSolver returns the collision solver associated with the virtual volume.
+// GetSolver returns the collision solver associated with the owner locomotion Volume.
 func (v *Vertices3DElements) GetSolver() *collisions.Solver {
-	return v.vVolume.GetSolver()
+	return v.ownerVol.GetSolver()
 }
 
 // GetEntry returns the vertices entry at index i, or nil if i is out of range.
@@ -138,9 +113,31 @@ func (v *Vertices3DElements) GetEntry(i int) *Vertices3DEntry {
 	return nil
 }
 
-// UpdateEntityBounds updates the owner locomotion entity dimensions from compiled model bounds.
+// UpdateEntityBounds rebuilds the owner locomotion box Volume and entity dimensions from compiled model bounds.
 func (v *Vertices3DElements) UpdateEntityBounds(minX, minY, minZ, maxX, maxY, maxZ float64) {
-	if minX <= maxX {
-		v.ent.SetSize(maxX-minX, maxY-minY, maxZ-minZ)
+	if minX > maxX {
+		return
 	}
+	v000 := geometry.XYZ{X: minX, Y: minY, Z: minZ}
+	v100 := geometry.XYZ{X: maxX, Y: minY, Z: minZ}
+	v110 := geometry.XYZ{X: maxX, Y: maxY, Z: minZ}
+	v010 := geometry.XYZ{X: minX, Y: maxY, Z: minZ}
+	v001 := geometry.XYZ{X: minX, Y: minY, Z: maxZ}
+	v101 := geometry.XYZ{X: maxX, Y: minY, Z: maxZ}
+	v111 := geometry.XYZ{X: maxX, Y: maxY, Z: maxZ}
+	v011 := geometry.XYZ{X: minX, Y: maxY, Z: maxZ}
+
+	v.ownerVol.ClearFaces()
+	addQuad := func(a, b, c, d geometry.XYZ) {
+		v.ownerVol.AddFace(volumes.NewFace([3]geometry.XYZ{a, b, c}, "", nil))
+		v.ownerVol.AddFace(volumes.NewFace([3]geometry.XYZ{a, c, d}, "", nil))
+	}
+	addQuad(v000, v010, v110, v100) // bottom
+	addQuad(v001, v101, v111, v011) // top
+	addQuad(v000, v100, v101, v001) // front
+	addQuad(v010, v011, v111, v110) // back
+	addQuad(v000, v001, v011, v010) // left
+	addQuad(v100, v110, v111, v101) // right
+	v.ownerVol.Rebuild()
+	v.ent.SetSize(maxX-minX, maxY-minY, maxZ-minZ)
 }

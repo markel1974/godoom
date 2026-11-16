@@ -33,7 +33,7 @@ type IVertices interface {
 
 	SetAction(idx int)
 
-	ApplyImpact(fx, fy, fz, px, py, pz float64)
+	ApplyImpact(fx, fy, fz, px, py, pz float64) // TODO CONCETTUALMENTE ERRATO
 
 	SetRagdollMode()
 }

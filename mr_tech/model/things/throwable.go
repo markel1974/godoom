@@ -65,7 +65,7 @@ func (t *Throwable) LaunchObject(throwableIndex int, onCollision config.Collisio
 }
 
 // PostMessage sends a ThingEvent to the Throwable's inbox channel for processing in the event loop.
-func (t *Throwable) PostMessage(ec *volumes.ThingEvent) {
+func (t *Throwable) PostMessage(ec *vertices.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -76,13 +76,13 @@ func (t *Throwable) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case volumes.StageThinking:
+				case vertices.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case volumes.StageCompute:
+				case vertices.StageCompute:
 					//t.StageCompute()
-				case volumes.StageResolve:
+				case vertices.StageResolve:
 					t.StageResolve()
-				case volumes.StageApply:
+				case vertices.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

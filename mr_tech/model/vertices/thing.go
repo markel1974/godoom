@@ -2,7 +2,6 @@ package vertices
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
@@ -52,5 +51,5 @@ type IThing interface {
 
 	StartLoop()
 
-	PostMessage(ec *volumes.ThingEvent)
+	PostMessage(ec *ThingEvent)
 }

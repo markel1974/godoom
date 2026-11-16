@@ -46,7 +46,7 @@ func (t *Item) LaunchObject(throwableIndex int, onCollision config.CollisionFunc
 }
 
 // PostMessage sends an ThingEvent instance to the Item's inbox channel for processing.
-func (t *Item) PostMessage(ec *volumes.ThingEvent) {
+func (t *Item) PostMessage(ec *vertices.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -57,13 +57,13 @@ func (t *Item) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case volumes.StageThinking:
+				case vertices.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case volumes.StageCompute:
+				case vertices.StageCompute:
 					//t.StageCompute()
-				case volumes.StageResolve:
+				case vertices.StageResolve:
 					t.StageResolve()
-				case volumes.StageApply:
+				case vertices.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

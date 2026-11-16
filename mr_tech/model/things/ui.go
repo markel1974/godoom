@@ -47,7 +47,7 @@ func (t *UI) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, 
 }
 
 // PostMessage ignores the provided thing event and performs no action.
-func (t *UI) PostMessage(_ *volumes.ThingEvent) {
+func (t *UI) PostMessage(_ *vertices.ThingEvent) {
 }
 
 // StartLoop starts the UI processing loop.

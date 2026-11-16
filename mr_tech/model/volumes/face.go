@@ -68,6 +68,27 @@ func (fc *Face) Get2() (float64, float64, float64) {
 	return fc.tri.GetPoint2()
 }
 
+// Set0 sets the coordinates of the first point in the face.
+func (fc *Face) Set0(x, y, z float64) {
+	fc.tri.Points[0].X = x
+	fc.tri.Points[0].Y = y
+	fc.tri.Points[0].Z = z
+}
+
+// Set1 updates the second point of the face to the given x, y, and z coordinates.
+func (fc *Face) Set1(x, y, z float64) {
+	fc.tri.Points[1].X = x
+	fc.tri.Points[1].Y = y
+	fc.tri.Points[1].Z = z
+}
+
+// Set2 updates the coordinates of the face's third vertex.
+func (fc *Face) Set2(x, y, z float64) {
+	fc.tri.Points[2].X = x
+	fc.tri.Points[2].Y = y
+	fc.tri.Points[2].Z = z
+}
+
 // Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.
 func (fc *Face) Translate(idx int, offX, offY, offZ float64) (float64, float64, float64) {
 	return fc.tri.Translate(idx, offX, offY, offZ)
@@ -85,11 +106,38 @@ func (fc *Face) SetUV(u0, v0, u1, v1, u2, v2 float64) {
 	fc.u[2], fc.v[2] = u2, v2
 }
 
+// SetU sets the U coordinates for the face vertices.
+func (fc *Face) SetU(u0, u1, u2 float64) {
+	fc.u[0] = u0
+	fc.u[1] = u1
+	fc.u[2] = u2
+}
+
+// SetV sets the face's V components to v0, v1, and v2.
+func (fc *Face) SetV(v0, v1, v2 float64) {
+	fc.v[0] = v0
+	fc.v[1] = v1
+	fc.v[2] = v2
+}
+
+func (fc *Face) GetUVFlat() (float64, float64, float64, float64, float64, float64) {
+	return fc.u[0], fc.u[1], fc.u[2], fc.v[0], fc.v[1], fc.v[2]
+}
+
 // GetUV retrieves the `u` and `v` coordinate arrays representing the UV mapping of the face.
 func (fc *Face) GetUV() ([3]float64, [3]float64) {
 	return fc.u, fc.v
 }
 
+func (fc *Face) GetU() (float64, float64, float64) {
+	return fc.u[0], fc.u[1], fc.u[2]
+}
+
+func (fc *Face) GetV() (float64, float64, float64) {
+	return fc.v[0], fc.v[1], fc.v[2]
+}
+
+/*
 // GetUV0 retrieves the UV texture coordinates (u, v) for the first vertex of the triangular face.
 func (fc *Face) GetUV0() (float64, float64) {
 	return fc.u[0], fc.v[0]
@@ -104,6 +152,8 @@ func (fc *Face) GetUV1() (float64, float64) {
 func (fc *Face) GetUV2() (float64, float64) {
 	return fc.u[2], fc.v[2]
 }
+
+*/
 
 // GetParent retrieves the parent Sector of the Face instance. Returns nil if no parent is set.
 func (fc *Face) GetParent() *collisions.Solver {
@@ -140,9 +190,18 @@ func (fc *Face) GetMaterial() *textures.Material {
 	return fc.material
 }
 
+// SetMaterial assigns the material used by the face.
+func (fc *Face) SetMaterial(mat *textures.Material) {
+	fc.material = mat
+}
+
 // ClonePoints returns a copy of the face's three triangle points.
 func (fc *Face) ClonePoints() [3]geometry.XYZ {
 	return fc.tri.Points
+}
+
+func (fc *Face) GetPointsFlat() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	return fc.tri.GetPointsFlat()
 }
 
 // GetPoint0 returns the X, Y, and Z coordinates of the first vertex of the triangle that defines the face.

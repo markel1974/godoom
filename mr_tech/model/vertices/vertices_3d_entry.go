@@ -1,4 +1,4 @@
-package volumes
+package vertices
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -18,12 +19,12 @@ import (
 
 // Vertices3DEntryComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
 type Vertices3DEntryComposed struct {
-	volume *Volume
+	volume *volumes.Volume
 	solver *collisions.Solver
 }
 
 // NewVertices3DEntryComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
-func NewVertices3DEntryComposed(volume *Volume) *Vertices3DEntryComposed {
+func NewVertices3DEntryComposed(volume *volumes.Volume) *Vertices3DEntryComposed {
 	return &Vertices3DEntryComposed{
 		solver: volume.GetSolver(),
 		volume: volume,
@@ -46,12 +47,12 @@ func (vm *Vertices3DEntryComposed) GetSolver() *collisions.Solver {
 }
 
 // GetFaces retrieves the collection of faces associated with the entity's current volume.
-func (vm *Vertices3DEntryComposed) GetFaces() *Faces {
+func (vm *Vertices3DEntryComposed) GetFaces() *volumes.Faces {
 	return vm.volume.GetFaces()
 }
 
 // SetVolume updates the current volume of the entity.
-func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *Volume) {
+func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *volumes.Volume) {
 	vm.volume = activeVolume
 }
 
@@ -80,7 +81,7 @@ type Vertices3DEntry struct {
 	cfg           *config.Thing
 	materials     *materials.Materials
 	comp          *Vertices3DEntryComposed
-	volumes       []*Volume
+	volumes       []*volumes.Volume
 	startFrame    int
 	endFrame      int
 	startTick     uint64
@@ -88,16 +89,16 @@ type Vertices3DEntry struct {
 	actions       []*VAction
 	clampAnim     bool
 	tagMap        map[string]int
-	volA          *Volume
-	volB          *Volume
+	volA          *volumes.Volume
+	volB          *volumes.Volume
 	lerpT         float64
 	singleFrame   bool
-	lastVolA      *Volume
+	lastVolA      *volumes.Volume
 	groupSize     float64
 	salt          uint64
 	tick          uint64
-	facesA        *Faces
-	facesB        *Faces
+	facesA        *volumes.Faces
+	facesB        *volumes.Faces
 	frameCenters  []geometry.XYZ
 	frameIdxA     int
 	frameIdxB     int
@@ -108,8 +109,8 @@ type Vertices3DEntry struct {
 	lastQy        float64
 	lastQz        float64
 	lastQw        float64
-	lastRotVolA   *Volume
-	lastRotVolB   *Volume
+	lastRotVolA   *volumes.Volume
+	lastRotVolB   *volumes.Volume
 	minX          float64
 	minY          float64
 	minZ          float64
@@ -161,10 +162,10 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 		}
 	}
 
-	v.volumes = make([]*Volume, len(model.Frames))
+	v.volumes = make([]*volumes.Volume, len(model.Frames))
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", v.cfg.Id, frameIdx)
-		volume := NewVolumeDynamic(frameIdx, baseId, "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
+		volume := volumes.NewVolumeDynamic(frameIdx, baseId, "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
@@ -172,7 +173,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 			if tri.Material != nil {
 				material = v.materials.GetMaterial(tri.Material)
 			}
-			face := NewFace(points, label, material)
+			face := volumes.NewFace(points, label, material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
 			volume.AddFace(face)
@@ -191,19 +192,18 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 			maxFaces = c
 		}
 	}
-	facesA := NewFaces(maxFaces, true)
-	facesB := NewFaces(maxFaces, true)
+	facesA := volumes.NewFaces(maxFaces, true)
+	facesB := volumes.NewFaces(maxFaces, true)
 	for j := 0; j < maxFaces; j++ {
 		var mat *textures.Material
 		var tu, tv [3]float64
 		if len(v.volumes) > 0 && v.volumes[0] != nil && j < v.volumes[0].GetFaceCount() {
 			src := v.volumes[0].GetFace(j)
-			mat = src.material
-			tu = src.u
-			tv = src.v
+			mat = src.GetMaterial()
+			tu, tv = src.GetUV()
 		}
-		facesA.Set(j, NewFaceEmpty(mat, tu, tv))
-		facesB.Set(j, NewFaceEmpty(mat, tu, tv))
+		facesA.Set(j, volumes.NewFaceEmpty(mat, tu, tv))
+		facesB.Set(j, volumes.NewFaceEmpty(mat, tu, tv))
 	}
 
 	v.groupSize = float64(model.GroupSize)
@@ -359,10 +359,12 @@ func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce f
 		if math.Abs(mcx) > 1e-6 || math.Abs(mcy) > 1e-6 || math.Abs(mcz) > 1e-6 {
 			for j := 0; j < faces.Len(); j++ {
 				f := faces.At(j)
-				p0, p1, p2 := f.tri.Points[0], f.tri.Points[1], f.tri.Points[2]
-				f.tri.Points[0] = geometry.XYZ{X: p0.X - mcx, Y: p0.Y - mcy, Z: p0.Z - mcz}
-				f.tri.Points[1] = geometry.XYZ{X: p1.X - mcx, Y: p1.Y - mcy, Z: p1.Z - mcz}
-				f.tri.Points[2] = geometry.XYZ{X: p2.X - mcx, Y: p2.Y - mcy, Z: p2.Z - mcz}
+				p0X, p0Y, p0Z := f.Get0()
+				p1X, p1Y, p1Z := f.Get1()
+				p2X, p2Y, p2Z := f.Get2()
+				f.Set0(p0X-mcx, p0Y-mcy, p0Z-mcz)
+				f.Set1(p1X-mcx, p1Y-mcy, p1Z-mcz)
+				f.Set2(p2X-mcx, p2Y-mcy, p2Z-mcz)
 				f.Rebuild()
 			}
 			vol.Rebuild()
@@ -433,13 +435,13 @@ func (v *Vertices3DEntry) CompileAttached(rotA, rotB *articulated_dynamics.TagAx
 	for j := 0; j < countA; j++ {
 		srcA := v.volA.GetFace(j)
 		dstA := v.facesA.At(j)
-		dstA.material = srcA.material
-		dstA.u = srcA.u
-		dstA.v = srcA.v
+		dstA.SetMaterial(srcA.GetMaterial())
+		dstA.SetU(srcA.GetU())
+		dstA.SetV(srcA.GetV())
 		if isIdentA {
 			dstA.CopyPoints(srcA)
 		} else {
-			rotA.TransformPointsWithMatrix(dstA.tri, srcA.tri, 0, 0, 0)
+			rotA.TransformPointsWithMatrix(dstA.GetTri(), srcA.GetTri(), 0, 0, 0)
 		}
 		minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 	}
@@ -457,13 +459,13 @@ func (v *Vertices3DEntry) CompileAttached(rotA, rotB *articulated_dynamics.TagAx
 	for j := 0; j < countB; j++ {
 		srcB := volB.GetFace(j)
 		dstB := v.facesB.At(j)
-		dstB.material = srcB.material
-		dstB.u = srcB.u
-		dstB.v = srcB.v
+		dstB.SetMaterial(srcB.GetMaterial())
+		dstB.SetU(srcB.GetU())
+		dstB.SetV(srcB.GetV())
 		if isIdentB && dOffX == 0 && dOffY == 0 && dOffZ == 0 {
 			dstB.CopyPoints(srcB)
 		} else {
-			rotB.TransformPointsWithMatrix(dstB.tri, srcB.tri, dOffX, dOffY, dOffZ)
+			rotB.TransformPointsWithMatrix(dstB.GetTri(), srcB.GetTri(), dOffX, dOffY, dOffZ)
 		}
 		minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 	}
@@ -502,13 +504,13 @@ func (v *Vertices3DEntry) CompileDetached() {
 		for j := 0; j < count; j++ {
 			src := v.volA.GetFace(j)
 			dst := v.facesA.At(j)
-			dst.material = src.material
-			dst.u = src.u
-			dst.v = src.v
+			dst.SetMaterial(src.GetMaterial())
+			dst.SetU(src.GetU())
+			dst.SetV(src.GetV())
 			if isIdent {
 				dst.CopyPoints(src)
 			} else {
-				v.rot.TransformPointsWithMatrix(dst.tri, src.tri, 0, 0, 0)
+				v.rot.TransformPointsWithMatrix(dst.GetTri(), src.GetTri(), 0, 0, 0)
 			}
 			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 		}
@@ -590,13 +592,13 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 		for j := 0; j < countA; j++ {
 			srcA := v.volA.GetFace(j)
 			dstA := v.facesA.At(j)
-			dstA.material = srcA.material
-			dstA.u = srcA.u
-			dstA.v = srcA.v
+			dstA.SetMaterial(srcA.GetMaterial())
+			dstA.SetU(srcA.GetU())
+			dstA.SetV(srcA.GetV())
 			if isIdent {
 				dstA.CopyPoints(srcA)
 			} else {
-				v.rot.TransformPointsWithMatrix(dstA.tri, srcA.tri, 0, 0, 0)
+				v.rot.TransformPointsWithMatrix(dstA.GetTri(), srcA.GetTri(), 0, 0, 0)
 			}
 			minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 		}
@@ -611,13 +613,13 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 			for j := 0; j < countB; j++ {
 				srcB := v.volB.GetFace(j)
 				dstB := v.facesB.At(j)
-				dstB.material = srcB.material
-				dstB.u = srcB.u
-				dstB.v = srcB.v
+				dstB.SetMaterial(srcB.GetMaterial())
+				dstB.SetU(srcB.GetU())
+				dstB.SetV(srcB.GetV())
 				if isIdent {
 					dstB.CopyPoints(srcB)
 				} else {
-					v.rot.TransformPointsWithMatrix(dstB.tri, srcB.tri, 0, 0, 0)
+					v.rot.TransformPointsWithMatrix(dstB.GetTri(), srcB.GetTri(), 0, 0, 0)
 				}
 				minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 			}
@@ -631,13 +633,13 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 			for j := 0; j < countB; j++ {
 				srcB := v.volA.GetFace(j)
 				dstB := v.facesB.At(j)
-				dstB.material = srcB.material
-				dstB.u = srcB.u
-				dstB.v = srcB.v
+				dstB.SetMaterial(srcB.GetMaterial())
+				dstB.SetU(srcB.GetU())
+				dstB.SetV(srcB.GetV())
 				if isIdent {
 					dstB.CopyPoints(srcB)
 				} else {
-					v.rot.TransformPointsWithMatrix(dstB.tri, srcB.tri, 0, 0, 0)
+					v.rot.TransformPointsWithMatrix(dstB.GetTri(), srcB.GetTri(), 0, 0, 0)
 				}
 			}
 			for j := countB; j < v.facesB.Len(); j++ {
@@ -671,12 +673,12 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 }
 
 // GetUIFaces returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
-func (v *Vertices3DEntry) GetUIFaces() (*Faces, *Faces, float64, float64) {
+func (v *Vertices3DEntry) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 
 // GetVolumes returns the current source and target volumes with the interpolation factor between them.
-func (v *Vertices3DEntry) GetVolumes() (*Volume, *Volume, float64) {
+func (v *Vertices3DEntry) GetVolumes() (*volumes.Volume, *volumes.Volume, float64) {
 	return v.volA, v.volB, v.lerpT
 }
 

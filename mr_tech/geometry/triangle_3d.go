@@ -32,6 +32,10 @@ func (tri *Triangle3D) PointInside2d(px, py float64) bool {
 	return !(hasNeg && hasPos)
 }
 
+func (tri *Triangle3D) GetPointsFlat() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
+	return tri.Points[0].X, tri.Points[0].Y, tri.Points[0].Z, tri.Points[1].X, tri.Points[1].Y, tri.Points[1].Z, tri.Points[2].X, tri.Points[2].Y, tri.Points[2].Z
+}
+
 // GetPoint0 returns the X, Y, and Z coordinates of the triangle's first point.
 func (tri *Triangle3D) GetPoint0() (float64, float64, float64) {
 	return tri.Points[0].X, tri.Points[0].Y, tri.Points[0].Z

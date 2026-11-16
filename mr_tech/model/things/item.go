@@ -3,6 +3,7 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -24,7 +25,7 @@ func NewItem(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *I
 }
 
 // IsEqual reports whether other is the same Item instance.
-func (t *Item) IsEqual(other volumes.IThing) bool {
+func (t *Item) IsEqual(other vertices.IThing) bool {
 	if v, ok := other.(*Item); ok && t == v {
 		return true
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/things"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -217,12 +218,11 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 			shininess := float32(mat.GetShininess())
 			detailScale := mat.GetDetailScale()
 			detailFactor := mat.GetDetailFactor()
-			p0X, p0Y, p0Z := face.GetPoint0()
-			p1X, p1Y, p1Z := face.GetPoint1()
-			p2X, p2Y, p2Z := face.GetPoint2()
-			u0, v0 := face.GetUV0()
-			u1, v1 := face.GetUV1()
-			u2, v2 := face.GetUV2()
+			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
+			//p0X, p0Y, p0Z := face.GetPoint0()
+			//p1X, p1Y, p1Z := face.GetPoint1()
+			//p2X, p2Y, p2Z := face.GetPoint2()
+			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
 			id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
 			id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
 			id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
@@ -254,14 +254,14 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//counter := 0
 	things.StagePrepare()
 
-	pushPassThing := func(thing volumes.IThing, faces *volumes.Faces, nextFaces *volumes.Faces, lp float64, renderMode float64) {
+	pushPassThing := func(thing vertices.IThing, faces *volumes.Faces, nextFaces *volumes.Faces, lp float64, renderMode float64) {
 		if !thing.IsVisible() {
 			return
 		}
 		//thing.SetVisible()
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
-		if renderMode == volumes.RenderModeModel3D {
+		if renderMode == vertices.RenderModeModel3D {
 			yaw = 0.0
 		}
 		tPosX, tPosY, zBot := thing.GetEntity().GetCenter()
@@ -302,12 +302,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			shininess := float32(mat.GetShininess())
 			detailScale := mat.GetDetailScale()
 			detailFactor := mat.GetDetailFactor()
-			p0X, p0Y, p0Z := face.GetPoint0()
-			p1X, p1Y, p1Z := face.GetPoint1()
-			p2X, p2Y, p2Z := face.GetPoint2()
-			u0, v0 := face.GetUV0()
-			u1, v1 := face.GetUV1()
-			u2, v2 := face.GetUV2()
+			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
+			//p0X, p0Y, p0Z := face.GetPoint0()
+			//p1X, p1Y, p1Z := face.GetPoint1()
+			//p2X, p2Y, p2Z := face.GetPoint2()
+			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
 			nf := nextFaces.At(fx)
 			np0X, np0Y, np0Z := nf.GetPoint0()
 			np1X, np1Y, np1Z := nf.GetPoint1()
@@ -326,7 +325,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	qOcclusion := func(object aabb.IObject) bool {
-		thing := object.(volumes.IThing)
+		thing := object.(vertices.IThing)
 
 		if !thing.IsVisible() {
 			return false
@@ -354,7 +353,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	qStatic := func(object aabb.IObject) bool {
-		thing := object.(volumes.IThing)
+		thing := object.(vertices.IThing)
 		thing.Compile(textures.GlobalTick())
 		faces, nextFaces, lp, renderMode := thing.GetUIFaces()
 		if faces.Len() > 0 {

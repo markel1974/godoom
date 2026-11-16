@@ -3,6 +3,7 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -25,7 +26,7 @@ func NewUI(things IThingHandler, cfg *config.Thing) *UI {
 }
 
 // IsEqual reports whether other is the same UI instance.
-func (t *UI) IsEqual(other volumes.IThing) bool {
+func (t *UI) IsEqual(other vertices.IThing) bool {
 	if v, ok := other.(*UI); ok && t == v {
 		return true
 	}
@@ -74,5 +75,5 @@ func (t *UI) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	t.GetEntity().MoveTo(0, 0, 0)
 	f1, f2, lp, _ := t.Base.GetUIFaces()
 	// Usiamo 1.1 (Spherical Billboard) in modo che lo shader originale lo processi correttamente
-	return f1, f2, lp, volumes.RenderModeInterface
+	return f1, f2, lp, vertices.RenderModeInterface
 }

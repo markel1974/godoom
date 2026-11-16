@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -43,7 +44,7 @@ func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.
 }
 
 // IsEqual reports whether other is the same Throwable instance.
-func (t *Throwable) IsEqual(other volumes.IThing) bool {
+func (t *Throwable) IsEqual(other vertices.IThing) bool {
 	if v, ok := other.(*Throwable); ok && t == v {
 		return true
 	}

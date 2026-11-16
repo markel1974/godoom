@@ -1,4 +1,4 @@
-package volumes
+package vertices
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -14,12 +15,12 @@ import (
 
 // VerticeMultiSpriteComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
 type VerticeMultiSpriteComposed struct {
-	volume *Volume
+	volume *volumes.Volume
 	solver *collisions.Solver
 }
 
 // NewVerticeMultiSpriteComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
-func NewVerticeMultiSpriteComposed(volume *Volume) *VerticeMultiSpriteComposed {
+func NewVerticeMultiSpriteComposed(volume *volumes.Volume) *VerticeMultiSpriteComposed {
 	return &VerticeMultiSpriteComposed{
 		solver: volume.GetSolver(),
 		volume: volume,
@@ -42,12 +43,12 @@ func (vm *VerticeMultiSpriteComposed) GetSolver() *collisions.Solver {
 }
 
 // GetFaces retrieves the collection of faces associated with the entity's current volume.
-func (vm *VerticeMultiSpriteComposed) GetFaces() *Faces {
+func (vm *VerticeMultiSpriteComposed) GetFaces() *volumes.Faces {
 	return vm.volume.GetFaces()
 }
 
 // SetVolume updates the current volume of the entity.
-func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
+func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *volumes.Volume) {
 	if activeVolume == vm.volume {
 		return
 	}
@@ -60,7 +61,7 @@ type VerticesMultiSprite struct {
 	ent           *rigid_body.Entity
 	cfg           *config.Thing
 	materials     *materials.Materials
-	volumes       []*Volume
+	volumes       []*volumes.Volume
 	comp          *VerticeMultiSpriteComposed
 	renderMode    float64
 	debug         bool
@@ -83,7 +84,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 		cfg:       cfg,
 		materials: materials,
 		solver:    nil,
-		volumes:   make([]*Volume, len(cfg.MultiSprite.Views)),
+		volumes:   make([]*volumes.Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
 		renderMode: RenderModeBillboard,
 		clampAnim:  make([]bool, len(cfg.MultiSprite.Views)),
@@ -114,7 +115,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", v.cfg.Id, viewIdx)
 		thingId := fmt.Sprintf("thing_%s_%d", v.cfg.Id, viewIdx)
-		volume := NewVolumeDynamic(viewIdx, baseId, thingId, v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
+		volume := volumes.NewVolumeDynamic(viewIdx, baseId, thingId, v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 		mat := v.materials.GetMaterial(view)
 		faces, err := v.createFaces(mat)
 		if err != nil {
@@ -200,7 +201,7 @@ func (v *VerticesMultiSprite) Compile(tick uint64) bool {
 }
 
 // GetUIFaces returns the current view volume faces twice, a zero value, and the active render mode.
-func (v *VerticesMultiSprite) GetUIFaces() (*Faces, *Faces, float64, float64) {
+func (v *VerticesMultiSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	f := v.comp.GetFaces()
 	return f, f, 0.0, v.renderMode
 }
@@ -254,7 +255,7 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 
 // createFaces builds render and physics faces from the material's head frame texture.
 // It returns an error when the material or texture is nil.
-func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face, error) {
+func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*volumes.Face, error) {
 	if material == nil {
 		return nil, fmt.Errorf("material is nil")
 	}
@@ -268,25 +269,25 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*Face,
 	zMin := -v.standingHalfH
 	zMax := -v.standingHalfH + height
 
-	var faces []*Face
+	var faces []*volumes.Face
 
 	// PIANO VISIVO (Render) Posizionato ESATTAMENTE ancorato a zMin/zMax con il materiale visibile.
 	// TL BL BR
 	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: zMax}, {X: -halfW, Y: 0.0, Z: zMin}, {X: halfW, Y: 0.0, Z: zMin}}
-	f0 := NewFace(t0, "", material)
+	f0 := volumes.NewFace(t0, "", material)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
 	faces = append(faces, f0)
 	// TL BR TR
 	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: zMax}, {X: halfW, Y: 0.0, Z: zMin}, {X: halfW, Y: 0.0, Z: zMax}}
-	f1 := NewFace(t1, "", material)
+	f1 := volumes.NewFace(t1, "", material)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
 	faces = append(faces, f1)
 
 	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
-		f0Phys := NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
-		f1Phys := NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
+		f0Phys := volumes.NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
+		f1Phys := volumes.NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
 		faces = append(faces, f0Phys, f1Phys)
 	}
 

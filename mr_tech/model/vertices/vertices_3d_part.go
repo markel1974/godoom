@@ -1,6 +1,7 @@
-package volumes
+package vertices
 
 import (
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -100,7 +101,7 @@ func (v *Vertices3DPart) QueryOverlaps(object aabb.IObject, callback func(object
 }
 
 // GetUIFaces returns this segment's render faces and interpolation weight.
-func (v *Vertices3DPart) GetUIFaces() (*Faces, *Faces, float64, float64) {
+func (v *Vertices3DPart) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	if v.physicsFree {
 		return v.entry.facesA, v.entry.facesA, 0.0, RenderModeModel3D
 	}

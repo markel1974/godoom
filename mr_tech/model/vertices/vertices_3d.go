@@ -1,4 +1,4 @@
-package volumes
+package vertices
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -579,7 +580,7 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 }
 
 // GetUIFaces returns empty faces on the owner because individual segments render through their own tree nodes.
-func (v *Vertices3D) GetUIFaces() (*Faces, *Faces, float64, float64) {
+func (v *Vertices3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, RenderModeModel3D
 }
 

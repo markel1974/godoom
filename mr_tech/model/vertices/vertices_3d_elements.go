@@ -1,4 +1,4 @@
-package volumes
+package vertices
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -47,17 +48,17 @@ func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object 
 type Vertices3DElements struct {
 	entries    []*Vertices3DEntry
 	vVolume    *VirtualVolume
-	volsA      []*Volume
-	volsB      []*Volume
+	volsA      []*volumes.Volume
+	volsB      []*volumes.Volume
 	lerpT      float64
 	ent        *rigid_body.Entity
-	emptyFaces *Faces
+	emptyFaces *volumes.Faces
 }
 
 // NewVertices3DElements builds centered per-part entries and the owner's locomotion VirtualVolume.
 func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *Vertices3DElements {
 	v := &Vertices3DElements{
-		emptyFaces: NewFaces(0, false),
+		emptyFaces: volumes.NewFaces(0, false),
 	}
 
 	numParts := len(cfg.Model3D.Parts)
@@ -65,8 +66,8 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		panic(fmt.Sprintf("no parts found in vertices_3d"))
 	}
 	v.entries = make([]*Vertices3DEntry, numParts)
-	v.volsA = make([]*Volume, numParts)
-	v.volsB = make([]*Volume, numParts)
+	v.volsA = make([]*volumes.Volume, numParts)
+	v.volsB = make([]*volumes.Volume, numParts)
 
 	salt := uint64(rand.Intn(512))
 	restitution := math.Max(cfg.Restitution, 0.20)

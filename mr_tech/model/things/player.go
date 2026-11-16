@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -83,7 +84,7 @@ func (pr *Player) IsVisible() bool {
 }
 
 // IsEqual reports whether other is the same Player instance.
-func (pr *Player) IsEqual(other volumes.IThing) bool {
+func (pr *Player) IsEqual(other vertices.IThing) bool {
 	if v, ok := other.(*Player); ok && pr == v {
 		return true
 	}

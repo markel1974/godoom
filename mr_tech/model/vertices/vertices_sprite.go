@@ -1,9 +1,10 @@
-package volumes
+package vertices
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -16,7 +17,7 @@ type VerticesSprite struct {
 	ent       *rigid_body.Entity
 	cfg       *config.Thing
 	materials *materials.Materials
-	volume    *Volume
+	volume    *volumes.Volume
 }
 
 // NewVerticesSprite creates a billboard-rendered vertex sprite for thing from cfg and optional sprite material.
@@ -45,7 +46,7 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 	halfX := w * 0.5
 	halfY := w * 0.5
 
-	v.volume = NewVolumeDynamic(0, "material", "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
+	v.volume = volumes.NewVolumeDynamic(0, "material", "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 
 	// Costruzione degli 8 vertici del Box (Bottom e Top)
 	halfD := d * 0.5
@@ -67,8 +68,8 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 		t0 := [3]geometry.XYZ{vA, vB, vC}
 		t1 := [3]geometry.XYZ{vA, vC, vD}
 
-		f0 := NewFace(t0, "", material)
-		f1 := NewFace(t1, "", material)
+		f0 := volumes.NewFace(t0, "", material)
+		f1 := volumes.NewFace(t1, "", material)
 
 		f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 		f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
@@ -138,7 +139,7 @@ func (v *VerticesSprite) Compile(tick uint64) bool {
 }
 
 // GetUIFaces returns the view volume faces for both face sets, zero offset, and the render mode.
-func (v *VerticesSprite) GetUIFaces() (*Faces, *Faces, float64, float64) {
+func (v *VerticesSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	f := v.volume.GetFaces()
 	return f, f, 0.0, RenderModeBillboard
 }

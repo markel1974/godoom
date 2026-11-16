@@ -1,8 +1,9 @@
-package volumes
+package vertices
 
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -12,10 +13,10 @@ import (
 // VerticesVolume wraps a single rigid Volume as an IVertices implementation,
 // rotating its cached UI faces only when the underlying Entity orientation changes.
 type VerticesVolume struct {
-	volume   *Volume
+	volume   *volumes.Volume
 	solver   *collisions.Solver
 	ent      *rigid_body.Entity
-	facesOut *Faces
+	facesOut *volumes.Faces
 	rot      *articulated_dynamics.TagAxis
 	compiled bool
 	lastQx   float64
@@ -31,13 +32,15 @@ type VerticesVolume struct {
 }
 
 // NewVerticesVolume creates an IVertices adapter backed directly by volume's geometry and solver.
-func NewVerticesVolume(volume *Volume) *VerticesVolume {
+func NewVerticesVolume(volume *volumes.Volume) *VerticesVolume {
 	srcFaces := volume.GetFaces()
 	n := srcFaces.Len()
-	facesOut := NewFaces(n, true)
+	facesOut := volumes.NewFaces(n, true)
 	for i := 0; i < n; i++ {
 		src := srcFaces.At(i)
-		facesOut.Set(i, NewFaceEmpty(src.material, src.u, src.v))
+		mat := src.GetMaterial()
+		u, v := src.GetUV()
+		facesOut.Set(i, volumes.NewFaceEmpty(mat, u, v))
 	}
 	return &VerticesVolume{
 		volume:   volume,
@@ -86,7 +89,7 @@ func (v *VerticesVolume) Compile(tick uint64) bool {
 			if isIdent {
 				dst.CopyPoints(src)
 			} else {
-				v.rot.TransformPointsWithMatrix(dst.tri, src.tri, 0, 0, 0)
+				v.rot.TransformPointsWithMatrix(dst.GetTri(), src.GetTri(), 0, 0, 0)
 			}
 			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 		}
@@ -125,7 +128,7 @@ func (v *VerticesVolume) QueryOverlaps(object aabb.IObject, callback func(object
 }
 
 // GetUIFaces returns the transformed face buffer for rendering in model-3D space.
-func (v *VerticesVolume) GetUIFaces() (*Faces, *Faces, float64, float64) {
+func (v *VerticesVolume) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.facesOut, v.facesOut, 0.0, RenderModeModel3D
 }
 

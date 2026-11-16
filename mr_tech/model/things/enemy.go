@@ -3,6 +3,7 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -33,7 +34,7 @@ func NewEnemy(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *
 }
 
 // IsEqual reports whether other is the same Enemy instance.
-func (t *Enemy) IsEqual(other volumes.IThing) bool {
+func (t *Enemy) IsEqual(other vertices.IThing) bool {
 	if v, ok := other.(*Enemy); ok && t == v {
 		return true
 	}

@@ -1,8 +1,9 @@
-package volumes
+package vertices
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
@@ -28,7 +29,7 @@ type IVertices interface {
 
 	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
-	GetUIFaces() (*Faces, *Faces, float64, float64)
+	GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64)
 
 	SetAction(idx int)
 

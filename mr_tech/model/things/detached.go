@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
@@ -13,9 +14,9 @@ import (
 // (tracking keyframe/tag poses kinematically) or free/ragdoll 6-DoF with an optional breakable JointConstraint.
 type Detached struct {
 	*Base
-	partVerts          *volumes.Vertices3DPart
-	owner              volumes.IThing
-	pendingImpactOwner volumes.IThing
+	partVerts          *vertices.Vertices3DPart
+	owner              vertices.IThing
+	pendingImpactOwner vertices.IThing
 	ragdollJoint       *collisions.JointConstraint
 	breakThreshold     float64
 	damage             float64
@@ -27,7 +28,7 @@ func noopDetachedImpact(other config.IThingConfig, id string, force, closestDist
 }
 
 // NewAttachedPart creates a tree-resident segment Thing bound to owner until detached or switched to ragdoll.
-func NewAttachedPart(things IThingHandler, owner volumes.IThing, location *volumes.Volume, id string, verts *volumes.Vertices3DPart) *Detached {
+func NewAttachedPart(things IThingHandler, owner vertices.IThing, location *volumes.Volume, id string, verts *vertices.Vertices3DPart) *Detached {
 	ent := verts.GetSolver().GetEntity()
 	cfg := config.NewConfigThing(id, geometry.XYZ{}, 0, config.ThingItemDef, ent.GetMass(), 1, 1, 0)
 	cfg.OnCollision = noopDetachedCollision
@@ -56,7 +57,7 @@ func NewDetached(things IThingHandler, vol *volumes.Volume, location *volumes.Vo
 	cfg.OnImpact = noopDetachedImpact
 
 	d := &Detached{
-		Base: NewBaseWithVertices(things, cfg, volumes.NewVerticesVolume(vol)),
+		Base: NewBaseWithVertices(things, cfg, vertices.NewVerticesVolume(vol)),
 	}
 	if err := d.Prepare(d, location); err != nil {
 		panic(err)
@@ -74,7 +75,7 @@ func NewDetached(things IThingHandler, vol *volumes.Volume, location *volumes.Vo
 }
 
 // GetOwner returns the owning parent IThing while this segment belongs to it, or nil once detached.
-func (t *Detached) GetOwner() volumes.IThing {
+func (t *Detached) GetOwner() vertices.IThing {
 	return t.owner
 }
 
@@ -149,7 +150,7 @@ func (t *Detached) Impact(other config.IThingConfig, id string, force, closestDi
 }
 
 // IsEqual reports whether other is the same Detached instance.
-func (t *Detached) IsEqual(other volumes.IThing) bool {
+func (t *Detached) IsEqual(other vertices.IThing) bool {
 	if v, ok := other.(*Detached); ok && t == v {
 		return true
 	}

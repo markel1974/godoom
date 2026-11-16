@@ -1,11 +1,10 @@
-package volumes
+package vertices
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
-
-type ICollisionCage any
 
 // IThing represents a general-purpose interface for entities with configuration, physics, and rendering properties.
 type IThing interface {
@@ -53,5 +52,5 @@ type IThing interface {
 
 	StartLoop()
 
-	PostMessage(ec *ThingEvent)
+	PostMessage(ec *volumes.ThingEvent)
 }

@@ -140,9 +140,14 @@ func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFu
 	v.Compile(v.compiledTick)
 }
 
-// GetParts returns the slice of per-segment IThings belonging to this model.
-func (v *Vertices3D) GetParts() []IThing {
-	return v.partThings
+// GetPartLen returns the number of instantiated segment part things.
+func (v *Vertices3D) GetPartLen() int {
+	return len(v.partThings)
+}
+
+// GetPartAt returns the segment thing stored at idx.
+func (v *Vertices3D) GetPartAt(idx int) IThing {
+	return v.partThings[idx]
 }
 
 // GetSolver returns the owner locomotion collision solver.
@@ -166,42 +171,41 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return ab
 }
 
-// ApplyImpact forwards an owner-level impact directly to the primary segment handler.
-func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-	if len(v.partViews) == 0 {
+// HandlePartImpact processes an impact event emerging on segment partIdx, forwarding physical knockback
+// to the living owner and propagating stress into the joint chain to trigger subtree detachment.
+func (v *Vertices3D) HandlePartImpact(partIdx int, force, dirX, dirY, dirZ float64) {
+	if force <= 1e-6 {
 		return
 	}
-	v.ApplyPartImpact(0, fx, fy, fz, px, py, pz)
-}
-
-// ApplyPartImpact handles a localized hit directly on segment partIdx identified by QueryRay in Things.tree,
-// applying physical impulse to the living owner and detaching any stressed joint into autonomous 6-DoF motion.
-func (v *Vertices3D) ApplyPartImpact(partIdx int, fx, fy, fz, px, py, pz float64) {
-	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
-	if fMag < 1e-6 {
-		return
+	dLen := math.Sqrt(dirX*dirX + dirY*dirY + dirZ*dirZ)
+	if dLen > 1e-6 {
+		dirX /= dLen
+		dirY /= dLen
+		dirZ /= dLen
+	} else {
+		dirX, dirY, dirZ = 1.0, 0.0, 0.0
 	}
-	dirX, dirY, dirZ := fx/fMag, fy/fMag, fz/fMag
 
 	numParts := len(v.partViews)
 	if partIdx < 0 || partIdx >= numParts {
-		v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, -1)
+		v.joints.RecordLastHit(dirX, dirY, dirZ, force, -1)
 		return
 	}
 
-	v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, partIdx)
+	v.joints.RecordLastHit(dirX, dirY, dirZ, force, partIdx)
 	if v.joints.IsRagdoll() || v.partViews[partIdx].IsPhysicsFree() {
 		return
 	}
 
-	// Deliver physical knockback to the living upright owner while attached.
-	v.ent.AddForceAtPoint(fx, fy, fz, px, py, pz)
+	// Deliver physical knockback at the impacted segment's world position while attached to the living owner.
+	px, py, pz := v.partViews[partIdx].ent.GetCenter()
+	v.ent.AddForceAtPoint(dirX*force, dirY*force, dirZ*force, px, py, pz)
 
 	if numParts <= 1 || !v.joints.CanDetachMore() {
 		return
 	}
 
-	normImpulse := math.Min(fMag/500000.0, 1.6)
+	normImpulse := math.Min(force/500000.0, 1.6)
 	if normImpulse < 0.45 {
 		normImpulse = 0.45
 	}
@@ -216,7 +220,7 @@ func (v *Vertices3D) ApplyPartImpact(partIdx int, fx, fy, fz, px, py, pz float64
 		if j.CanDetach() {
 			stress := 0.75 * normImpulse * attenuation
 			if j.AccumulateStress(stress) {
-				v.releaseSubtree(curr, dirX, dirY, dirZ, fMag)
+				v.releaseSubtree(curr, dirX, dirY, dirZ, force)
 				break
 			}
 		}

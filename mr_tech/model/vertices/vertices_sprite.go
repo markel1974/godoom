@@ -150,10 +150,6 @@ func (v *VerticesSprite) SetAction(idx int) {
 	return
 }
 
-// ApplyImpact applies an impact force vector at the given point to the vertices sprite.
-func (v *VerticesSprite) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-}
-
 // SetRagdollMode switches the vertices sprite to ragdoll behavior.
 func (v *VerticesSprite) SetRagdollMode() {
 }

@@ -33,20 +33,22 @@ type IVertices interface {
 
 	SetAction(idx int)
 
-	ApplyImpact(fx, fy, fz, px, py, pz float64) // TODO CONCETTUALMENTE ERRATO
-
 	SetRagdollMode()
 }
 
 // IPartOwner is implemented by articulated owners whose sub-parts live as independent nodes in Things.tree.
 type IPartOwner interface {
-	GetParts() []IThing
+	GetPartLen() int
+
+	GetPartAt(idx int) IThing
+
 	SyncAttachedParts()
 }
 
 // ISubPart is implemented by individual body-part Things owned by a parent IPartOwner until detached/ragdolled.
 type ISubPart interface {
 	GetOwner() IThing
+
 	IsPhysicsFree() bool
 }
 

@@ -10,16 +10,15 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
-// Detached represents one rigid-body segment in Things.tree: either initially attached to a living owner
-// (tracking keyframe/tag poses kinematically) or free/ragdoll 6-DoF with an optional breakable JointConstraint.
+// Detached represents one rigid-body segment in Things.tree: initially attached to a living owner
+// (tracking keyframe/tag poses kinematically) and transitioning in-place to free/ragdoll 6-DoF with an optional JointConstraint.
 type Detached struct {
 	*Base
-	partVerts          *vertices.Vertices3DPart
-	owner              vertices.IThing
-	pendingImpactOwner vertices.IThing
-	ragdollJoint       *collisions.JointConstraint
-	breakThreshold     float64
-	damage             float64
+	partVerts      *vertices.Vertices3DPart
+	owner          vertices.IThing
+	ragdollJoint   *collisions.JointConstraint
+	breakThreshold float64
+	damage         float64
 }
 
 func noopDetachedCollision(other config.IThingConfig, energy float64) {}
@@ -42,9 +41,9 @@ func NewAttachedPart(things IThingHandler, owner vertices.IThing, location *volu
 	if err := d.Prepare(d, location); err != nil {
 		panic(err)
 	}
-	// Preserve kinematic attached state initialized by Vertices3DPart.Setup after Base.Prepare resets angle/sleep.
 	d.SetMaxStep(0.0)
 	d.solver.SetElasticCollision(d.onPartElasticCollision)
+	d.solver.SetInelasticCollision(d.onPartInelasticCollision)
 	return d
 }
 
@@ -66,10 +65,24 @@ func (t *Detached) IsSleeping() bool {
 	return t.Base.IsSleeping()
 }
 
-// BindJoint associates a breakable ragdoll joint constraint with this limb so heavy hits can sever it.
+// BindJoint associates a breakable ragdoll joint constraint with this limb so impact events can sever it.
 func (t *Detached) BindJoint(jc *collisions.JointConstraint, breakThreshold float64) {
 	t.ragdollJoint = jc
 	t.breakThreshold = breakThreshold
+}
+
+func (t *Detached) applyRagdollStress(force float64) {
+	if t.ragdollJoint == nil || !t.ragdollJoint.IsActive() || t.breakThreshold <= 0 {
+		return
+	}
+	stress := math.Min(force/500000.0, 1.6)
+	if stress < 0.45 {
+		stress = 0.45
+	}
+	t.damage += stress * 0.90
+	if t.damage >= t.breakThreshold {
+		t.ragdollJoint.Break()
+	}
 }
 
 func (t *Detached) onPartElasticCollision(other collisions.IObject, energy float64) {
@@ -79,45 +92,47 @@ func (t *Detached) onPartElasticCollision(other collisions.IObject, energy float
 		}); ok {
 			b.onElasticCollision(other, energy)
 		}
+		if energy >= 200.0 {
+			sx, sy, sz := t.GetEntity().GetCenter()
+			dx, dy, dz := 1.0, 0.0, 0.0
+			if oThing, ok := other.(vertices.IThing); ok {
+				ox, oy, oz := oThing.GetEntity().GetCenter()
+				dx, dy, dz = sx-ox, sy-oy, sz-oz
+			}
+			t.partVerts.HandleImpactEvent(energy*1000.0, dx, dy, dz)
+			if t.IsPhysicsFree() {
+				t.owner = nil
+			}
+		}
+		return
+	}
+	if energy >= 400.0 {
+		t.applyRagdollStress(energy * 1000.0)
 	}
 }
 
-// ApplyImpact routes hits either to the owning living model (for knockback/dismemberment) or to this free/ragdoll limb.
-func (t *Detached) ApplyImpact(fx, fy, fz, px, py, pz float64) {
+func (t *Detached) onPartInelasticCollision(_ collisions.IObject, energy float64) {
+	if t.IsPhysicsFree() && energy >= 400.0 {
+		t.applyRagdollStress(energy * 1000.0)
+	}
+}
+
+// Impact receives emerging hitscan impact events on this segment and routes them into joint stress/detachment
+// (forwarding damage to the living owner while attached) or into breakable ragdoll joints once free.
+func (t *Detached) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 	if !t.IsPhysicsFree() {
 		prevOwner := t.owner
-		t.Base.ApplyImpact(fx, fy, fz, px, py, pz)
+		t.partVerts.HandleImpactEvent(force, dirX, dirY, dirZ)
 		if t.IsPhysicsFree() {
-			t.pendingImpactOwner = prevOwner
 			t.owner = nil
 		}
+		if prevOwner != nil {
+			prevOwner.Impact(other, id, force, closestDist, dirX, dirY, dirZ)
+		}
 		return
 	}
-	t.Base.ApplyImpact(fx, fy, fz, px, py, pz)
-	if t.ragdollJoint != nil && t.ragdollJoint.IsActive() && t.breakThreshold > 0 {
-		fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
-		stress := math.Min(fMag/500000.0, 1.6)
-		if stress < 0.45 {
-			stress = 0.45
-		}
-		t.damage += stress * 0.90
-		if t.damage >= t.breakThreshold {
-			t.ragdollJoint.Break()
-		}
-	}
-}
-
-// Impact delivers hit damage callbacks to the owning living model until this segment becomes detached.
-func (t *Detached) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
-	if t.pendingImpactOwner != nil {
-		owner := t.pendingImpactOwner
-		t.pendingImpactOwner = nil
-		owner.Impact(other, id, force, closestDist, dirX, dirY, dirZ)
-		return
-	}
-	if !t.IsPhysicsFree() && t.owner != nil {
-		t.owner.Impact(other, id, force, closestDist, dirX, dirY, dirZ)
-	}
+	t.GetEntity().WakeUp()
+	t.applyRagdollStress(force)
 }
 
 // IsEqual reports whether other is the same Detached instance.

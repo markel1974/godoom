@@ -113,13 +113,12 @@ func (v *Vertices3DPart) SetAction(idx int) {
 	v.entry.SetAction(idx)
 }
 
-// ApplyImpact either wakes the free rigid body or forwards localized hit stress to the owning model for joint breakage.
-func (v *Vertices3DPart) ApplyImpact(fx, fy, fz, px, py, pz float64) {
+// HandleImpactEvent forwards an emerging impact event on this attached segment to its owning model's joint chain.
+func (v *Vertices3DPart) HandleImpactEvent(force, dirX, dirY, dirZ float64) {
 	if v.physicsFree {
-		v.ent.WakeUp()
 		return
 	}
-	v.parent.ApplyPartImpact(v.partIdx, fx, fy, fz, px, py, pz)
+	v.parent.HandlePartImpact(v.partIdx, force, dirX, dirY, dirZ)
 }
 
 // SetRagdollMode is handled at the owning Vertices3D level.

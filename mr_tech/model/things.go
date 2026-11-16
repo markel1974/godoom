@@ -362,6 +362,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.pendingLen.Store(0)
 		th.hasPending = false
 	}
+
 	if len(th.pendingStage) > 0 {
 		for _, part := range th.pendingStage {
 			th.StageAdd(part)
@@ -374,17 +375,19 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	for _, s := range th.coordinator.Running() {
 		obj := s.GetCage().GetObject()
 		if owner, ok := obj.(vertices.IPartOwner); ok {
-			if parts := owner.GetParts(); len(parts) > 0 {
+			parts := owner.GetPartLen()
+			if parts > 0 {
 				owner.SyncAttachedParts()
-				for _, p := range parts {
-					if sub, ok := p.(vertices.ISubPart); ok && !sub.IsPhysicsFree() {
+				for x := 0; x < parts; x++ {
+					p := owner.GetPartAt(x)
+					if sub, sOk := p.(vertices.ISubPart); sOk && !sub.IsPhysicsFree() {
 						th.tree.UpdateObject(p)
 					}
 				}
 				continue
 			}
 		}
-		th.tree.UpdateObject(obj.(aabb.IObject))
+		th.tree.UpdateObject(obj)
 	}
 }
 
@@ -396,20 +399,22 @@ func (th *Things) AddStaticThing(ent vertices.IThing) {
 // addThing registers ent in entities and inserts either all articulated segment sub-things or ent itself into tree.
 func (th *Things) addThing(ent vertices.IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
-	var parts []vertices.IThing
-	if owner, ok := ent.(vertices.IPartOwner); ok {
-		parts = owner.GetParts()
+	var parts int
+	owner, ok := ent.(vertices.IPartOwner)
+	if ok {
+		parts = owner.GetPartLen()
 	}
-	needed := len(th.entities) + len(parts)
+	needed := len(th.entities) + parts
 	if needed > cap(th.pending) {
 		newCap := needed * 4
 		th.thinkers = make([]vertices.IThing, newCap)
 		th.pending = make([]vertices.IThing, newCap)
 		th.coordinator.EnsureCapacity(newCap)
 	}
-	if len(parts) > 0 {
+	if parts > 0 {
 		ent.Compile(0)
-		for _, p := range parts {
+		for x := 0; x < parts; x++ {
+			p := owner.GetPartAt(x)
 			th.entities[p.GetEntity().GetId()] = p
 			th.tree.InsertObject(p)
 		}
@@ -421,7 +426,7 @@ func (th *Things) addThing(ent vertices.IThing) {
 
 // removeThing removes an IThing instance from the spatial tree (when tree-resident) and the entities map.
 func (th *Things) removeThing(ent vertices.IThing) {
-	if owner, ok := ent.(vertices.IPartOwner); !ok || len(owner.GetParts()) == 0 {
+	if owner, ok := ent.(vertices.IPartOwner); !ok || owner.GetPartLen() == 0 {
 		th.tree.RemoveObject(ent)
 	}
 	delete(th.entities, ent.GetEntity().GetId())

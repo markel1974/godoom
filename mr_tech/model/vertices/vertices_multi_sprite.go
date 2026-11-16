@@ -232,10 +232,6 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 	}
 }
 
-// ApplyImpact is a no-op for multi-sprite views without articulated 3D sub-parts.
-func (v *VerticesMultiSprite) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-}
-
 // SetRagdollMode is a no-op for multi-sprite volumes without ragdoll state.
 func (v *VerticesMultiSprite) SetRagdollMode() {
 }

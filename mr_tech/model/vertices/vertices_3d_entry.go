@@ -562,10 +562,6 @@ func (v *Vertices3DEntry) GetVolumes() (*volumes.Volume, *volumes.Volume, float6
 	return v.volA, v.volB, v.lerpT
 }
 
-// ApplyImpact is a no-op for single-part 3D entries (handled by 6-DoF Entity dynamics).
-func (v *Vertices3DEntry) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-}
-
 // SetRagdollMode switches the vertices entry to ragdoll behavior.
 func (v *Vertices3DEntry) SetRagdollMode() {
 }

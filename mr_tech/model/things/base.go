@@ -245,10 +245,18 @@ func (t *Base) GetSolverIndex() int {
 	return t.solver.GetSolverIndex()
 }
 
-// GetParts returns the slice of tree-resident segment Things when the underlying IVertices owns articulated parts.
-func (t *Base) GetParts() []vertices.IThing {
+// GetPartLen returns the number of parts from the vertex owner, or 0 if parts are unsupported.
+func (t *Base) GetPartLen() int {
 	if owner, ok := t.IVertices.(vertices.IPartOwner); ok {
-		return owner.GetParts()
+		return owner.GetPartLen()
+	}
+	return 0
+}
+
+// GetPartAt returns the part at the given index, or nil if no part owner is available.
+func (t *Base) GetPartAt(idx int) vertices.IThing {
+	if owner, ok := t.IVertices.(vertices.IPartOwner); ok {
+		return owner.GetPartAt(idx)
 	}
 	return nil
 }
@@ -357,8 +365,7 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 		impactZ := pos.Z + (dirZ * closestDist)
 
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
-		closestThing.ApplyImpact(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
-		closestThing.Impact(self, id, force, closestDist, impactX, impactY, impactZ)
+		closestThing.Impact(self, id, force, closestDist, dirX, dirY, dirZ)
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 	}
 }

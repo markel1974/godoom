@@ -19,7 +19,7 @@ const (
 type IContainerVolume interface {
 	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
-	GetSolver() *collisions.Solver
+	//GetSolver() *collisions.Solver
 }
 
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.

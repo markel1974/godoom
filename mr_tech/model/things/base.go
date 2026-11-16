@@ -22,6 +22,8 @@ type IThingHandler interface {
 // Base represents the fundamental attributes and behaviors of an object in the system.
 type Base struct {
 	volumes.IVertices
+	solver         *collisions.Solver
+	ent            *rigid_body.Entity
 	id             string
 	kind           config.ThingType
 	angle          float64
@@ -34,7 +36,6 @@ type Base struct {
 	inbox          chan *volumes.ThingEvent
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
-	solver         *collisions.Solver
 	maxStepFactor  float64
 	done           chan struct{}
 }
@@ -52,7 +53,6 @@ func NewBase(things IThingHandler, cfg *config.Thing) *Base {
 	}
 	t := &Base{
 		IVertices:      volumes.CreateVertices(cfg, things.GetMaterials()),
-		solver:         nil,
 		id:             cfg.Id,
 		angle:          cfg.Angle,
 		kind:           cfg.Kind,
@@ -76,12 +76,12 @@ func (t *Base) Prepare(thing volumes.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
 	}
-	entity := t.GetContainerVolume().GetSolver().GetEntity()
+	t.solver = t.IVertices.GetSolver()
+	t.ent = t.solver.GetEntity()
 	maxStep := 0.0
 	if t.maxStepFactor > 0 {
-		maxStep = entity.GetDepth() * t.maxStepFactor
+		maxStep = t.ent.GetDepth() * t.maxStepFactor
 	}
-	t.solver = t.IVertices.GetSolver()
 	t.solver.SetElasticCollision(t.onElasticCollision)
 	t.solver.SetInelasticCollision(t.onInelasticCollision)
 	t.solver.SetPrepareHooks(t.beforePrepare, nil)
@@ -89,7 +89,7 @@ func (t *Base) Prepare(thing volumes.IThing, location *volumes.Volume) error {
 	t.solver.SetCanSleep(t.kind != config.ThingPlayerDef)
 	t.solver.SetMaxStep(maxStep)
 
-	entity.SetOnGround(false)
+	t.ent.SetOnGround(false)
 	t.SetAngle(t.angle)
 	return nil
 }
@@ -118,7 +118,7 @@ func (t *Base) GetAngle() float64 {
 // SetAngle updates the rotation angle of the Base instance and synchronizes the entity's orientation quaternion.
 func (t *Base) SetAngle(angle float64) {
 	t.angle = angle
-	t.GetContainerVolume().GetSolver().GetEntity().SetRotationAngleZ(angle)
+	t.ent.SetRotationAngleZ(angle)
 }
 
 // GetMaxStep returns the maximum step value associated with the Base instance.
@@ -138,8 +138,7 @@ func (t *Base) GetSpeed() float64 {
 
 // GetDistSq returns the squared distance from the light's position to the given 3D point.
 func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
-	entity := t.GetContainerVolume().GetSolver().GetEntity()
-	tx, ty, tz := entity.GetCenter()
+	tx, ty, tz := t.ent.GetCenter()
 	dx := tx - pX
 	dy := ty - pY
 	dz := tz - pZ
@@ -147,8 +146,9 @@ func (t *Base) GetDistSq(pX, pY, pZ float64) float64 {
 	return distSq
 }
 
+// GetEntity returns the rigid body entity associated with the base.
 func (t *Base) GetEntity() *rigid_body.Entity {
-	return t.GetContainerVolume().GetSolver().GetEntity()
+	return t.ent
 }
 
 // GetImpulse returns the
@@ -221,8 +221,9 @@ func (t *Base) GetSolver() *collisions.Solver {
 	return t.solver
 }
 
+// beforePrepare updates the base angle from its entity yaw and compiles textures for the current global tick.
 func (t *Base) beforePrepare() {
-	entity := t.GetContainerVolume().GetSolver().GetEntity()
+	entity := t.ent
 	t.angle = entity.GetYaw()
 	t.Compile(textures.GlobalTick())
 }
@@ -254,7 +255,7 @@ func (t *Base) StageResolvePosition() {
 
 // MoveTowards adjusts the entity's velocity towards a target speed in a specified direction using acceleration forces.
 func (t *Base) MoveTowards(dirX, dirY, speed, accelForce float64) {
-	entity := t.GetContainerVolume().GetSolver().GetEntity()
+	entity := t.ent
 	vx, vy, _ := entity.GetVelocity()
 	desiredVx := dirX * speed
 	desiredVy := dirY * speed
@@ -270,7 +271,7 @@ func (t *Base) GetBase() *Base {
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
 func (t *Base) Jump(self volumes.IThing, leapX float64, leapY float64, zFactor float64) bool {
-	entity := t.GetContainerVolume().GetSolver().GetEntity()
+	entity := t.ent
 	if !entity.IsOnGround() {
 		return false
 	}

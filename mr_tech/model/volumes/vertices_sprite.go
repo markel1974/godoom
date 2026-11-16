@@ -6,12 +6,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // VerticesSprite represents sprite data backed by a source volume and a view-specific volume.
 type VerticesSprite struct {
 	solver    *collisions.Solver
+	ent       *rigid_body.Entity
 	cfg       *config.Thing
 	materials *materials.Materials
 	volume    *Volume
@@ -21,6 +23,7 @@ type VerticesSprite struct {
 func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *VerticesSprite {
 	v := &VerticesSprite{
 		solver:    nil,
+		ent:       nil,
 		cfg:       cfg,
 		materials: materials,
 	}
@@ -95,11 +98,12 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 
 // Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
 func (v *VerticesSprite) Setup(thing IThing) error {
-	// Ora Rebuild itera su un volume 3D reale. minY e maxY non sono più 0.
-	v.solver = v.volume.GetSolver()
-	v.volume.Rebuild()
-	v.solver.GetEntity().LockUpright()
-	v.volume.SetThing(thing)
+	vol := v.volume
+	v.solver = vol.GetSolver()
+	v.ent = v.solver.GetEntity()
+	vol.Rebuild()
+	vol.SetThing(thing)
+	v.ent.LockUpright()
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
@@ -118,7 +122,7 @@ func (v *VerticesSprite) GetContainerVolume() IContainerVolume {
 
 // GetAABB returns the axis-aligned bounding box of the sprite's underlying entity.
 func (v *VerticesSprite) GetAABB() *aabb.AABB {
-	ent := v.solver.GetEntity()
+	ent := v.ent
 	cx, cy, cz := ent.GetCenter()
 	w, h, d := ent.GetSize()
 	hx, hy, hz := w*0.5, h*0.5, d*0.5

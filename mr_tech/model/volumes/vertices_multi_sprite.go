@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -56,6 +57,7 @@ func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *Volume) {
 // VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
 type VerticesMultiSprite struct {
 	solver        *collisions.Solver
+	ent           *rigid_body.Entity
 	cfg           *config.Thing
 	materials     *materials.Materials
 	volumes       []*Volume
@@ -153,6 +155,7 @@ func (v *VerticesMultiSprite) Setup(thing IThing) error {
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
+	v.ent = v.solver.GetEntity()
 	return nil
 }
 
@@ -163,7 +166,7 @@ func (v *VerticesMultiSprite) GetSolver() *collisions.Solver {
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
 func (v *VerticesMultiSprite) updateBounds() {
-	ent := v.comp.GetSolver().GetEntity()
+	ent := v.ent
 	w, _, d := ent.GetSize()
 	halfW := w * 0.5
 	v.minX = -halfW
@@ -181,7 +184,7 @@ func (v *VerticesMultiSprite) GetContainerVolume() IContainerVolume {
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
-	ent := v.comp.GetSolver().GetEntity()
+	ent := v.ent
 	cx, cy, cz := ent.GetCenter()
 	b := ent.GetAABB()
 	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
@@ -190,7 +193,7 @@ func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 
 // Compile updates the view volume to the current action volume and refreshes the enclosing AABB.
 func (v *VerticesMultiSprite) Compile(tick uint64) bool {
-	ent := v.comp.GetSolver().GetEntity()
+	ent := v.ent
 	v.updateBounds()
 	cx, cy, cz := ent.GetCenter()
 	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)

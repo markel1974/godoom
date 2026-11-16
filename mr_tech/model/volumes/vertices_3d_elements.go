@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // VirtualVolume represents a virtual 3D volume used for geometric or physics computations.
@@ -49,6 +50,7 @@ type Vertices3DElements struct {
 	volsA           []*Volume
 	volsB           []*Volume
 	lerpT           float64
+	ent             *rigid_body.Entity
 }
 
 // NewVertices3DElements creates an empty Vertices3DElements collection.
@@ -119,6 +121,7 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 
 	solver := collisions.NewSolver(cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 	v.vVolume = NewVirtualVolume(v, solver)
+	v.ent = v.vVolume.GetSolver().GetEntity()
 	return v
 }
 
@@ -243,5 +246,5 @@ func (v *Vertices3DElements) UpdateEntityBounds() {
 	w := maxX - minX
 	h := maxY - minY
 	d := maxZ - minZ
-	v.vVolume.GetSolver().GetEntity().SetSize(w, h, d)
+	v.ent.SetSize(w, h, d)
 }

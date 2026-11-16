@@ -9,11 +9,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and 11-DoF ragdoll/dismemberment physics state.
 type Vertices3D struct {
 	solver        *collisions.Solver
+	ent           *rigid_body.Entity
 	actions       *Vertices3DActions
 	currentAction int
 	links         *articulated_dynamics.Links
@@ -84,6 +86,7 @@ func (v *Vertices3D) Setup(thing IThing) error {
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
+	v.ent = v.solver.GetEntity()
 	return nil
 }
 
@@ -99,7 +102,7 @@ func (v *Vertices3D) GetContainerVolume() IContainerVolume {
 
 // GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
-	ent := v.elements.vVolume.GetSolver().GetEntity()
+	ent := v.ent
 	cx, cy, cz := ent.GetCenter()
 	b := ent.GetAABB()
 	if v.minX <= v.maxX {
@@ -113,7 +116,7 @@ func (v *Vertices3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
 	}
-	ent := v.elements.vVolume.GetSolver().GetEntity()
+	ent := v.ent
 	v.compiled = false
 	ent.LockUpright()
 	v.elements.Freeze()
@@ -156,7 +159,7 @@ func (v *Vertices3D) SetAction(idx int) {
 		}
 	}
 	if enteringRagdoll {
-		ent := v.elements.vVolume.GetSolver().GetEntity()
+		ent := v.ent
 		ent.LockUpright()
 		v.joints.ActivateRagdoll()
 	}
@@ -174,7 +177,6 @@ func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 // It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
 func (v *Vertices3D) Compile(tick uint64) bool {
 	ent := v.elements.vVolume.GetSolver().GetEntity()
-
 	cx, cy, cz := ent.GetCenter()
 	qx, qy, qz, qw := ent.GetQRotation().Get()
 	if v.compiled && v.compiledTick == tick && qx == v.compiledQX && qy == v.compiledQY && qz == v.compiledQZ && qw == v.compiledQW {

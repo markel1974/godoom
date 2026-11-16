@@ -12,6 +12,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -75,6 +76,7 @@ func NewVAction(name string, start int, end int) *VAction {
 // Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
 	solver        *collisions.Solver
+	ent           *rigid_body.Entity
 	cfg           *config.Thing
 	materials     *materials.Materials
 	comp          *Vertices3DEntryComposed
@@ -225,13 +227,14 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 
 // Setup assigns thing to all volumes and initializes the collision solver for it.
 func (v *Vertices3DEntry) Setup(thing IThing) error {
-	v.solver = v.comp.GetSolver()
 	for _, f := range v.volumes {
 		f.SetThing(thing)
 	}
+	v.solver = v.comp.GetSolver()
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
+	v.ent = v.comp.GetSolver().GetEntity()
 	return nil
 }
 
@@ -242,7 +245,7 @@ func (v *Vertices3DEntry) GetSolver() *collisions.Solver {
 
 // GetAABB returns the axis-aligned bounding box of the entry's entity.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
-	ent := v.comp.GetSolver().GetEntity()
+	ent := v.ent
 	b := ent.GetAABB()
 	if v.singleFrame {
 		qx, qy, qz, qw := ent.GetQRotation().Get()

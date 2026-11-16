@@ -35,6 +35,8 @@ type IFace interface {
 	Get2() (float64, float64, float64)
 
 	IsSolid() bool
+
+	IsSingleSided() bool
 }
 
 // ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
@@ -132,6 +134,9 @@ type Cage struct {
 	flatWallsLen        int
 	clampCorners        [16]IFace
 	clampCornersLen     int
+	passDX              float64
+	passDY              float64
+	passDZ              float64
 	pendingStepZ        float64
 	solverIdx           int
 	solver              *Solver
@@ -238,6 +243,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 		s.prevQX, s.prevQY, s.prevQZ, s.prevQW = qx, qy, qz, qw
 	}
 
+	s.passDX, s.passDY, s.passDZ = s.dX, s.dY, s.dZ
 	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
 	sx, sy, sz := s.sweptHalfExtents(lEnt)
@@ -855,6 +861,7 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	s.cX, s.cY, s.cZ = s.clampX+s.objOffX, s.clampY+s.objOffY, s.clampZ+s.objOffZ
 	s.tX, s.tY, s.tZ = curX+s.objOffX, curY+s.objOffY, curZ+s.objOffZ
 	s.dX, s.dY, s.dZ = s.tX-s.cX, s.tY-s.cY, s.tZ-s.cZ
+	s.passDX, s.passDY, s.passDZ = s.dX, s.dY, s.dZ
 	sx, sy, sz := s.sweptHalfExtents(ent)
 	minX := s.cX - sx + math.Min(0.0, s.dX)
 	maxX := s.cX + sx + math.Max(0.0, s.dX)
@@ -964,6 +971,7 @@ func (s *Cage) FlushStaticClamp(lAABB *aabb.AABB) bool {
 func (s *Cage) EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64) {
 	s.cX, s.cY, s.cZ = origCX, origCY, origCZ
 	s.dX, s.dY, s.dZ = origDX, origDY, origDZ
+	s.passDX, s.passDY, s.passDZ = origDX, origDY, origDZ
 	s.tX, s.tY, s.tZ = origTX, origTY, origTZ
 }
 
@@ -1073,13 +1081,23 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
 	rayEff := s.effectiveRadius(nX, nY, nZ)
 
+	flipped := false
 	var bucket BucketType
 	if solidWE || solidNS {
-		if distStart < 0 {
-			impDotOrig := s.dX*nX + s.dY*nY + s.dZ*nZ
-			if distStart <= -rayEff+satFilterEpsilon || (distStart <= -0.5*rayEff && impDotOrig > satFilterEpsilon) {
-				nX, nY, nZ = -nX, -nY, -nZ
-				distStart = -distStart
+		if distStart < -satFilterEpsilon {
+			if rFace.IsSingleSided() {
+				if distStart < -rayEff || !s.entity.KeepUpright() {
+					return out, false
+				}
+			} else {
+				impDotOrig := s.passDX*nX + s.passDY*nY + s.passDZ*nZ
+				if distStart <= -0.5*rayEff || impDotOrig > satFilterEpsilon {
+					nX, nY, nZ = -nX, -nY, -nZ
+					distStart = -distStart
+					flipped = true
+				} else if !s.entity.KeepUpright() {
+					return out, false
+				}
 			}
 		}
 		if solidWE {
@@ -1165,11 +1183,12 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	slopeAdjusted := false
 	if (solidWE || solidNS) && s.entity.KeepUpright() {
 		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
+		pressedCross := !tunneled && distStart >= -satFilterEpsilon && distTarget < 0.0
 		var cornerHit bool
 		var cxN, cyN, cPen, qxW, qyW float64
 		var valid bool
-		valid, cornerHit, cxN, cyN, cPen, qxW, qyW = s.refineKeepUprightWall(rFace, nX, nY, penetration, tunneled, distStart, distTarget)
-		if !valid {
+		valid, cornerHit, cxN, cyN, cPen, qxW, qyW = s.refineKeepUprightWall(rFace, nX, nY, penetration, tunneled, pressedCross, distStart, distTarget)
+		if !valid || (!cornerHit && !flipped && distStart < -satFilterEpsilon) {
 			return out, false
 		}
 		if cornerHit {
@@ -1190,7 +1209,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			out.cornerHit = true
 		}
 	} else if s.entity.KeepUpright() {
-		tunneled := distStart >= rayEff-satFilterEpsilon && distTarget < 0.0
+		tunneled := distStart >= -satFilterEpsilon && distTarget < 0.0
 		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW := s.refineKeepUprightSlope(rFace, bucket, nX, nY, nZ, penetration, tunneled)
 		if !valid {
 			return out, false
@@ -1300,7 +1319,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	}
 	minOverlap := axisOverlap + deltaPen
 
-	if !slopeAdjusted && penetration > minOverlap {
+	if !s.entity.KeepUpright() && !slopeAdjusted && penetration > minOverlap {
 		if spikeTipCap && distTarget >= -satFilterEpsilon {
 			penetration = minOverlap
 		} else if penetration > minOverlap+satFilterEpsilon {
@@ -1316,7 +1335,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 
 // refineKeepUprightWall clips a wall triangle to the upright body's Z slab and checks its scaled 2D footprint,
 // rejecting phantom infinite-plane hits outside the slab and computing smooth corner pushouts on edge/vertex hits.
-func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled bool, distStart, distTarget float64) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
+func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled, pressedCross bool, distStart, distTarget float64) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
 	clipPolyZSlab := func(in *[6][3]float64, count int, out *[6][3]float64, zBound float64, keepAbove bool) int {
 		outCount := 0
 		for i := 0; i < count; i++ {
@@ -1377,8 +1396,8 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	bestSq3D := qx3*qx3 + qy3*qy3 + qz3*qz3
 	if bestSq3D >= 1.0-1e-9 {
 		var rx, ry, rz, qxW, qyW float64
-		var checkGraze bool
-		if tunneled {
+		var checkGraze, resolvedPlane bool
+		if tunneled || pressedCross {
 			tauPlane := 0.5
 			if denom := distStart - distTarget; denom > 1e-12 {
 				tauPlane = distStart / denom
@@ -1397,15 +1416,18 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 				(bufA[2][0]-px)*invRX, (bufA[2][1]-py)*invRY, (bufA[2][2]-pz)*invRZ,
 			)
 			planeSq := qpx*qpx + qpy*qpy + qpz*qpz
-			if planeSq >= 1.0-1e-9 {
+			if planeSq < 1.0-1e-9 {
+				resolvedPlane = true
+				if planeSq > 1e-12 {
+					rx, ry, rz = qpx, qpy, qpz
+					qxW, qyW = px+qpx*s.eRadX, py+qpy*s.eRadY
+					checkGraze = true
+				}
+			} else if tunneled {
 				return false, false, 0, 0, 0, 0, 0
 			}
-			if planeSq > 1e-12 {
-				rx, ry, rz = qpx, qpy, qpz
-				qxW, qyW = px+qpx*s.eRadX, py+qpy*s.eRadY
-				checkGraze = true
-			}
-		} else {
+		}
+		if !resolvedPlane {
 			if s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
 				return false, false, 0, 0, 0, 0, 0
 			}
@@ -1415,7 +1437,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 				(bufA[1][0]-s.cX)*invRX, (bufA[1][1]-s.cY)*invRY, (bufA[1][2]-s.cZ)*invRZ,
 				(bufA[2][0]-s.cX)*invRX, (bufA[2][1]-s.cY)*invRY, (bufA[2][2]-s.cZ)*invRZ,
 			)
-			if segSq >= 1.0-1e-9 || startSq < 1.0-1e-9 {
+			if segSq >= 1.0-1e-9 || (startSq < 1.0-1e-9 && !(pressedCross && pierced)) {
 				return false, false, 0, 0, 0, 0, 0
 			}
 			if !pierced && segSq > 1e-12 {
@@ -1442,7 +1464,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		}
 		return true, false, 0, 0, 0, 0, 0
 	}
-	if !tunneled {
+	if !tunneled && !pressedCross {
 		if bestSq3D <= 1e-12 {
 			return true, false, 0, 0, 0, 0, 0
 		}

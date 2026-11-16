@@ -119,7 +119,6 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 			break
 		}
 	}
-	cage.CommitStaticClamp()
 }
 
 // QueryFrustum performs a spatial query using a frustum, invoking the callback for each intersected object in the tree.

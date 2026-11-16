@@ -12,17 +12,18 @@ import (
 
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
-	id       int
-	parent   *Volume
-	label    string
-	aabb     *aabb.AABB
-	tri      *geometry.Triangle3D
-	n        geometry.XYZ
-	nAbs     geometry.XYZ
-	material *textures.Material
-	u        [3]float64
-	v        [3]float64
-	lockUV   bool
+	id          int
+	parent      *Volume
+	label       string
+	aabb        *aabb.AABB
+	tri         *geometry.Triangle3D
+	n           geometry.XYZ
+	nAbs        geometry.XYZ
+	material    *textures.Material
+	u           [3]float64
+	v           [3]float64
+	lockUV      bool
+	singleSided bool
 }
 
 func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
@@ -189,6 +190,16 @@ func (fc *Face) TransformPoints(src *Face, originX, originY, originZ float64) {
 // CopyPoints copies the coordinates of all triangle points from src into fc.
 func (fc *Face) CopyPoints(src *Face) {
 	fc.tri.CopyPoints(src.tri)
+}
+
+// SetSingleSided marks whether collisions only block from the face's front normal side.
+func (fc *Face) SetSingleSided(singleSided bool) {
+	fc.singleSided = singleSided
+}
+
+// IsSingleSided reports whether collisions must ignore approaches behind the face plane.
+func (fc *Face) IsSingleSided() bool {
+	return fc.singleSided
 }
 
 func (fc *Face) IsSolid() bool {

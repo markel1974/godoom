@@ -245,6 +245,9 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 			}
 		}
 	}
+	for x := 0; x < c.runningLen; x++ {
+		c.running[x].cage.CommitStaticClamp()
+	}
 
 	c.updateIslandSleep()
 }

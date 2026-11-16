@@ -73,14 +73,29 @@ func (f *Faces) GetMax() (float64, float64, float64) {
 	return f.maxX, f.maxY, f.maxZ
 }
 
+// GetMinMax returns the cached minimum and maximum X, Y, and Z coordinates.
+func (f *Faces) GetMinMax() (float64, float64, float64, float64, float64, float64) {
+	return f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ
+}
+
 // GetSize returns the cached width, height, and depth of the faces' bounding box.
 func (f *Faces) GetSize() (float64, float64, float64) {
 	return f.w, f.h, f.d
 }
 
-// GetMinMax returns the cached minimum and maximum X, Y, and Z coordinates.
-func (f *Faces) GetMinMax() (float64, float64, float64, float64, float64, float64) {
-	return f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ
+// GetInertia returns the stored inertia tensor components for the faces.
+func (f *Faces) GetInertia() (ixx, ixy, ixz, iyy, iyz, izz float64) {
+	return f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz
+}
+
+// GetCentroid returns the cached centroid coordinates of the faces.
+func (f *Faces) GetCentroid() (float64, float64, float64) {
+	return f.cx, f.cy, f.cz
+}
+
+// Len returns the number of faces in the collection.
+func (f *Faces) Len() int {
+	return f.count
 }
 
 // Add appends a face to the collection, growing the internal storage when needed.
@@ -94,47 +109,14 @@ func (f *Faces) Add(face *Face) {
 	f.count++
 }
 
-// Len returns the number of faces in the collection.
-func (f *Faces) Len() int {
-	return f.count
-}
-
-// GetInertia returns the stored inertia tensor components for the faces.
-func (f *Faces) GetInertia() (ixx, ixy, ixz, iyy, iyz, izz float64) {
-	return f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz
-}
-
-// GetCentroid returns the cached centroid coordinates of the faces.
-func (f *Faces) GetCentroid() (float64, float64, float64) {
-	return f.cx, f.cy, f.cz
-}
-
 // ComputeMassProperties computes the centroid and unit-mass inertia tensor for the stored faces.
 // It returns zero values when there are no faces, no valid face, or the signed volume is zero.
 func (f *Faces) ComputeMassProperties() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
 	if f.count == 0 {
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
-
-	var cx, cy, cz float64
-	var ixx, ixy, ixz float64
-	var iyy, iyz, izz float64
-
 	// Use a vertex as reference to improve numerical stability.
-	var refX, refY, refZ float64
-	found := false
-
-	for i := 0; i < f.count; i++ {
-		if face := f.container[i]; face != nil {
-			refX, refY, refZ = face.GetPoint0()
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return 0, 0, 0, 0, 0, 0, 0, 0, 0
-	}
+	refX, refY, refZ := f.container[0].GetPoint0()
 	var volume6 float64
 	// First moments.
 	var mx, my, mz float64
@@ -143,15 +125,12 @@ func (f *Faces) ComputeMassProperties() (float64, float64, float64, float64, flo
 	var syy, syz, szz float64
 	for i := 0; i < f.count; i++ {
 		face := f.container[i]
-		if face == nil {
-			continue
-		}
 		volume6, mx, my, mz, sxx, sxy, sxz, syy, syz, szz = rigid_body.CompileMassAccumulate(refX, refY, refZ, face, volume6, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
 	}
 	if volume6 == 0 {
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0
 	}
-	cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz = rigid_body.CompileMassFinalize(volume6, refX, refY, refZ, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
+	cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz := rigid_body.CompileMassFinalize(volume6, refX, refY, refZ, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
 	return cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz
 }
 

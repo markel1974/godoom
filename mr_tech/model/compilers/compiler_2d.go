@@ -30,13 +30,17 @@ func materialSize(mat *textures.Material) (float64, float64, bool) {
 }
 
 // BuildQuad constructs two triangular faces that form a quad, applies UV mapping, and adds them to the specified 3D volume.
-func buildQuad(v *volumes.Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material, align *config.UVAlign, t1, t2 float64) {
+func buildQuad(v *volumes.Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, tag string, material *textures.Material, align *config.UVAlign, t1, t2 float64, singleSided bool) {
 	v0 := geometry.XYZ{X: s.X, Y: s.Y, Z: zBS}
 	v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE}
 	v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE}
 	v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS}
 	face1 := volumes.NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
 	face2 := volumes.NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
+	if singleSided {
+		face1.SetSingleSided(true)
+		face2.SetSingleSided(true)
+	}
 	if align != nil {
 		if w, h, ok := materialSize(material); ok {
 			uStart, uEnd, vBS, vBE, vTS, vTE := align.ComputeVertical(w, h, t1, t2, s, e, zBS, zBE, zTS, zTE)
@@ -415,7 +419,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 				}
 				s2 := geometry.XY{X: s.X, Y: s.Y}
 				e2 := geometry.XY{X: e.X, Y: e.Y}
-				buildQuad(vol3d, s2, e2, curFS, curFE, curCS, curCE, seg.GetTag(), matMiddle, align, t1, t2)
+				buildQuad(vol3d, s2, e2, curFS, curFE, curCS, curCE, seg.GetTag(), matMiddle, align, t1, t2, true)
 				continue
 			}
 
@@ -454,20 +458,20 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 				subT1 := t1Lower
 				subT2 := t1Lower + t*(t2Lower-t1Lower)
 				if zHighS1 > zLowS1 || zHighE1 > zLowE1 {
-					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, midXY, zLowS1, zLowE1, zHighS1, zHighE1, tagLower, matLower, alignLower, subT1, subT2)
+					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, midXY, zLowS1, zLowE1, zHighS1, zHighE1, tagLower, matLower, alignLower, subT1, subT2, true)
 				}
 
 				zLowS2, zHighS2 := midZ, midZ
 				zLowE2, zHighE2 := curFE, max(curFE, neiFE)
 				if zHighS2 > zLowS2 || zHighE2 > zLowE2 {
-					buildQuad(vol3d, midXY, geometry.XY{X: e.X, Y: e.Y}, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower, alignLower, subT2, t2Lower)
+					buildQuad(vol3d, midXY, geometry.XY{X: e.X, Y: e.Y}, zLowS2, zLowE2, zHighS2, zHighE2, tagLower, matLower, alignLower, subT2, t2Lower, true)
 				}
 				//fmt.Printf("LOWER INTERSECTION: t=%f midXY=(%f,%f) midZ=%f\n", t, midXY.X, midXY.Y, midZ)
 			} else {
 				zLowS, zHighS := curFS, max(curFS, neiFS)
 				zLowE, zHighE := curFE, max(curFE, neiFE)
 				if zHighS > zLowS || zHighE > zLowE {
-					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zLowS, zLowE, zHighS, zHighE, tagLower, matLower, alignLower, t1Lower, t2Lower)
+					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zLowS, zLowE, zHighS, zHighE, tagLower, matLower, alignLower, t1Lower, t2Lower, true)
 				}
 			}
 
@@ -490,7 +494,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 				subT1 := t1Upper
 				subT2 := t1Upper + t*(t2Upper-t1Upper)
 				if zBotS1 < zTopS1 || zBotE1 < zTopE1 {
-					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper, alignUpper, subT1, subT2)
+					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, midXY, zBotS1, zBotE1, zTopS1, zTopE1, tagUpper, matUpper, alignUpper, subT1, subT2, true)
 				}
 
 				zTopS2, zBotS2 := midZ, midZ
@@ -501,7 +505,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 					zTopE2 = min(zTopE2, limE)
 				}
 				if zBotS2 < zTopS2 || zBotE2 < zTopE2 {
-					buildQuad(vol3d, midXY, geometry.XY{X: e.X, Y: e.Y}, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper, alignUpper, subT2, t2Upper)
+					buildQuad(vol3d, midXY, geometry.XY{X: e.X, Y: e.Y}, zBotS2, zBotE2, zTopS2, zTopE2, tagUpper, matUpper, alignUpper, subT2, t2Upper, true)
 				}
 			} else {
 				zTopS, zBotS := curCS, min(curCS, neiCS)
@@ -511,7 +515,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 					zTopE = min(zTopE, limE)
 				}
 				if zBotS < zTopS || zBotE < zTopE {
-					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper, alignUpper, t1Upper, t2Upper)
+					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, zBotS, zBotE, zTopS, zTopE, tagUpper, matUpper, alignUpper, t1Upper, t2Upper, true)
 				}
 			}
 
@@ -527,7 +531,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 					midTopE = min(midTopE, limE)
 				}
 				if midTopS > midBotS || midTopE > midBotE {
-					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, midBotS, midBotE, midTopS, midTopE, seg.GetTag()+"_middle", matMiddle, align, t1, t2)
+					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, midBotS, midBotE, midTopS, midTopE, seg.GetTag()+"_middle", matMiddle, align, t1, t2, false)
 				}
 			}
 		}
@@ -555,7 +559,7 @@ func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncov
 			vol3d.SetLight(light)
 		}
 
-		buildQuad(vol3d, su.GetStart(), su.GetEnd(), su.GetZBS(), su.GetZBE(), su.GetZTS(), su.GetZTE(), su.GetTag(), su.GetMat(), su.GetAlign(), 0.0, 1.0)
+		buildQuad(vol3d, su.GetStart(), su.GetEnd(), su.GetZBS(), su.GetZBE(), su.GetZTS(), su.GetZTE(), su.GetTag(), su.GetMat(), su.GetAlign(), 0.0, 1.0, false)
 
 		vol3d.Rebuild()
 		vols = append(vols, vol3d)

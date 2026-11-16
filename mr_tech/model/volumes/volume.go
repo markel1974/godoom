@@ -1,8 +1,6 @@
 package volumes
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -20,7 +18,6 @@ type Volume struct {
 	light      *lights.Light
 	solver     *collisions.Solver
 	aabb       *aabb.AABB
-	facesTree  *aabb.Tree
 	object     any
 	vertexTags []*articulated_dynamics.TagAxis
 	marker     int
@@ -36,7 +33,6 @@ func NewVolume(modelId int, id string, tag string, mass, restitution, friction f
 		tag:        tag,
 		faces:      NewFaces(128, false),
 		solver:     collisions.NewSolver(mass, restitution, friction, restCombine, frictionCombine, gForce),
-		facesTree:  aabb.NewTree(64, 0.0),
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
@@ -56,22 +52,10 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.
 func (v *Volume) Rebuild() bool {
-	v.facesTree.Clear()
-
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-	for x := 0; x < v.faces.Len(); x++ {
-		face := v.faces.container[x]
-		face.Rebuild()
-		v.facesTree.InsertObject(face)
-		minX, minY, minZ, maxX, maxY, maxZ = face.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-	}
-	w := maxX - minX
-	h := maxY - minY
-	d := maxZ - minZ
-
 	v.faces.Rebuild()
 
+	minX, minY, minZ := v.faces.GetMin()
+	w, h, d := v.faces.GetSize()
 	cx, cy, cz := v.faces.GetCentroid()
 	ixx, ixy, ixz, iyy, iyz, izz := v.faces.GetInertia()
 	v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
@@ -88,7 +72,7 @@ func (v *Volume) Rebuild() bool {
 
 // GetFacesTree returns the spatial tree containing the volume's faces.
 func (v *Volume) GetFacesTree() *aabb.Tree {
-	return v.facesTree
+	return v.faces.GetTree()
 }
 
 // IsDirty reports whether the volume has been marked dirty.
@@ -238,12 +222,12 @@ func (v *Volume) GetCentroid() (float64, float64, float64) {
 
 // QueryOverlaps searches the volume's face tree for objects whose AABB overlaps the given object's AABB.
 func (v *Volume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
-	v.facesTree.QueryOverlaps(object, callback)
+	v.faces.GetTree().QueryOverlaps(object, callback)
 }
 
 // QueryPoint calls callback for each face whose bounding box contains the given 3D point.
 func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IObject) bool) {
-	v.facesTree.QueryPoint3d(px, py, pz, callback)
+	v.faces.GetTree().QueryPoint3d(px, py, pz, callback)
 }
 
 /*

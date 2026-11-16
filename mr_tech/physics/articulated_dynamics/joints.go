@@ -2,12 +2,9 @@ package articulated_dynamics
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
 // DetachFunc handles spawning an autonomous rigid-body solver when a joint detaches.
@@ -38,8 +35,6 @@ type Joints struct {
 	originsB []geometry.XYZ
 	numParts int
 
-	solver     *collisions.Solver
-	ent        *rigid_body.Entity
 	detachQuat *aabb.Quaternion
 	onDetach   DetachFunc
 }
@@ -58,10 +53,8 @@ func (v *Joints) SetOnDetach(fn DetachFunc) {
 	v.onDetach = fn
 }
 
-// Setup initializes joint state, rotations, origins, and per-part motion constraints from elements and links.
-func (v *Joints) Setup(solver *collisions.Solver, configJoints []*Joint, links *Links) error {
-	v.solver = solver
-	v.ent = v.solver.GetEntity()
+// Setup initializes joint state, rotations, origins, and per-part motion constraints from configJoints and links.
+func (v *Joints) Setup(configJoints []*Joint, links *Links) error {
 	v.numParts = len(configJoints)
 	v.links = links
 	v.rotationsA = make([]*TagAxis, v.numParts)
@@ -172,8 +165,8 @@ func (v *Joints) CompileNormal(i int, pIdx int, tagAxisA, tagAxisB *TagAxis) {
 	}
 }
 
-// detachPart marks a detachable joint as detached, freezes its subtree frames, and emits a rigid-body handoff event.
-func (v *Joints) detachPart(idx int, dirX, dirY, dirZ, fMag float64) {
+// DetachPart marks a detachable joint as detached, freezes its subtree frames, and emits a rigid-body handoff event.
+func (v *Joints) DetachPart(idx int, dirX, dirY, dirZ, fMag, pvx, pvy, pvz float64) {
 	if idx <= 0 || idx >= len(v.data) || v.dismemberedCount >= 3 {
 		return
 	}
@@ -193,7 +186,6 @@ func (v *Joints) detachPart(idx int, dirX, dirY, dirZ, fMag float64) {
 			v.data[i].elem.FreezeCurrentFrame()
 		}
 	}
-	pvx, pvy, pvz := v.ent.GetVelocity()
 	vx += pvx
 	vy += pvy
 	vz += pvz
@@ -203,6 +195,25 @@ func (v *Joints) detachPart(idx int, dirX, dirY, dirZ, fMag float64) {
 	if v.onDetach != nil {
 		v.onDetach(idx, orX, orY, orZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz)
 	}
+}
+
+// RecordLastHit stores the normalized hit vector, magnitude, and matched part index for ragdoll collapse handoff.
+func (v *Joints) RecordLastHit(dirX, dirY, dirZ, fMag float64, hitPart int) {
+	v.lastHitForce = fMag
+	v.lastHitDirX, v.lastHitDirY, v.lastHitDirZ = dirX, dirY, dirZ
+	if hitPart >= 0 {
+		v.lastHitPart = hitPart
+	}
+}
+
+// MarkActive activates live joint spring stepping after an articulated angular impulse.
+func (v *Joints) MarkActive() {
+	v.hasActiveDynamics = true
+}
+
+// CanDetachMore reports whether the dismembered limb cap has not yet been reached.
+func (v *Joints) CanDetachMore() bool {
+	return v.dismemberedCount < 3
 }
 
 // IsPartDetached reports whether the part at i or any valid ancestor is marked detached.
@@ -221,7 +232,7 @@ func (v *Joints) IsPartDetached(i int) bool {
 }
 
 // ActivateRagdoll switches the articulated system into multi-body ragdoll mode and optionally detaches a fatally damaged extremity.
-func (v *Joints) ActivateRagdoll() {
+func (v *Joints) ActivateRagdoll(pvx, pvy, pvz float64) {
 	v.isRagdoll = true
 	v.hasActiveDynamics = false
 
@@ -233,8 +244,8 @@ func (v *Joints) ActivateRagdoll() {
 	// If the killing blow hit a detachable extremity with sufficient accumulated stress, sever it on death.
 	if v.dismemberedCount < 3 && v.lastHitPart > 0 && v.lastHitPart < len(v.data) {
 		hj := v.data[v.lastHitPart]
-		if hj.canDetach && !hj.detached && hj.damage >= hj.detachThreshold*0.45 {
-			v.detachPart(v.lastHitPart, dx, dy, dz, v.lastHitForce)
+		if hj.IsCriticallyDamaged() {
+			v.DetachPart(v.lastHitPart, dx, dy, dz, v.lastHitForce, pvx, pvy, pvz)
 		}
 	}
 }
@@ -272,140 +283,6 @@ func (v *Joints) StepJoints(tick uint64) {
 		}
 	}
 	v.hasActiveDynamics = anyActive
-}
-
-// ApplyImpact applies an external force at a point, updating ragdoll motion, joint impulses, and detachment damage.
-func (v *Joints) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-	if v.numParts == 0 {
-		return
-	}
-	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
-	if fMag < 1e-6 {
-		return
-	}
-	dirX, dirY, dirZ := fx/fMag, fy/fMag, fz/fMag
-
-	v.lastHitForce = fMag
-	v.lastHitDirX, v.lastHitDirY, v.lastHitDirZ = dirX, dirY, dirZ
-	if v.isRagdoll || v.numParts <= 1 {
-		return
-	}
-	v.hasActiveDynamics = true
-
-	// Normalize force magnitude to angular joint impulse (calibrated to weaponForce = 500,000)
-	normImpulse := math.Min(fMag/500000.0, 1.6)
-	if normImpulse < 0.45 {
-		normImpulse = 0.45
-	}
-
-	cx, cy, cz := v.ent.GetCenter()
-	relPx, relPy, relPz := px-cx, py-cy, pz-cz
-
-	// Locate the closest non-detached articulated part to the impact ray/point
-	bestPart := -1
-	bestScore := math.MaxFloat64
-
-	for i := 0; i < v.numParts; i++ {
-		if i > 0 && v.IsPartDetached(i) {
-			continue
-		}
-		j := v.data[i]
-		lcX, lcY, lcZ := v.rotationsA[i].RotatePoint(j.localCenterX, j.localCenterY, j.localCenterZ)
-		partCx := v.originsA[i].X + lcX
-		partCy := v.originsA[i].Y + lcY
-		partCz := v.originsA[i].Z + lcZ
-
-		vx := partCx - relPx
-		vy := partCy - relPy
-		vz := partCz - relPz
-
-		// Decompose vector from ray entry point to part center into longitudinal (along ray) and perpendicular components
-		along := vx*dirX + vy*dirY + vz*dirZ
-		perpX := vx - along*dirX
-		perpY := vy - along*dirY
-		perpZ := vz - along*dirZ
-		perpDist := math.Sqrt(perpX*perpX + perpY*perpY + perpZ*perpZ)
-		rad := math.Max(j.partRadius, 6.0)
-
-		score := (perpDist / rad) + math.Abs(along)/(rad*3.5)
-		// Favor articulated child limbs over root part 0 when the ray passes near the child limb
-		if i > 0 && perpDist <= rad*1.8 {
-			score *= 0.60
-		}
-		if score < bestScore {
-			bestScore = score
-			bestPart = i
-		}
-	}
-
-	if bestPart < 0 {
-		return
-	}
-
-	// If root part 0 was matched, also excite its primary torso child if present
-	targetPart := bestPart
-	if targetPart == 0 {
-		for i := 1; i < len(v.links.data); i++ {
-			if v.links.data[i].parent == 0 && !v.data[i].detached {
-				targetPart = i
-				break
-			}
-		}
-	}
-
-	v.lastHitPart = targetPart
-
-	// Propagate joint torque up the kinematic chain (hit limb -> parent -> grandparent)
-	curr := targetPart
-	attenuation := 1.0
-	for depth := 0; depth < 3 && curr > 0 && curr < len(v.data); depth++ {
-		j := v.data[curr]
-		if j.detached {
-			break
-		}
-		pivX, pivY, pivZ := v.originsA[curr].X, v.originsA[curr].Y, v.originsA[curr].Z
-		lcX, lcY, lcZ := v.rotationsA[curr].RotatePoint(j.localCenterX, j.localCenterY, j.localCenterZ)
-
-		// Blend impact lever arm with limb center-of-mass lever arm so direct hits always bend the joint backward
-		rx := 0.45*(relPx-pivX) + 0.55*lcX
-		ry := 0.45*(relPy-pivY) + 0.55*lcY
-		rz := 0.45*(relPz-pivZ) + 0.55*lcZ
-		rLen := math.Sqrt(rx*rx + ry*ry + rz*rz)
-		if rLen < 1e-4 {
-			rx, ry, rz = 0, 0, j.partRadius
-			rLen = j.partRadius
-		}
-
-		// Unit torque direction τ = (r / ||r||) × dir
-		tx := (ry*dirZ - rz*dirY) / rLen
-		ty := (rz*dirX - rx*dirZ) / rLen
-		tz := (rx*dirY - ry*dirX) / rLen
-		if tx*tx+ty*ty+tz*tz < 0.04 {
-			// Fallback orthogonal bend axis when shot is purely radial along the bone
-			tx, ty, tz = -dirY, dirX, 0.30
-		}
-
-		// Transform torque into the joint's local coordinate system
-		ltx, lty, ltz := v.rotationsA[curr].RotatePointInverse(tx, ty, tz)
-		kick := 9.5 * normImpulse * attenuation
-
-		const maxJointVel = 14.0
-		j.velX = math.Max(-maxJointVel, math.Min(maxJointVel, j.velX+ltx*kick*j.dofScaleX))
-		j.velY = math.Max(-maxJointVel, math.Min(maxJointVel, j.velY+lty*kick*j.dofScaleY))
-		j.velZ = math.Max(-maxJointVel, math.Min(maxJointVel, j.velZ+ltz*kick*j.dofScaleZ))
-
-		if j.canDetach && v.dismemberedCount < 3 {
-			stress := 0.75 * normImpulse * attenuation
-			j.damage += stress
-			if j.damage >= j.detachThreshold {
-				v.detachPart(curr, dirX, dirY, dirZ, fMag)
-				break
-			}
-		}
-
-		curr = v.links.data[curr].parent
-		attenuation *= 0.60
-	}
 }
 
 // Restore resets the joint origins and rotations at i using q.

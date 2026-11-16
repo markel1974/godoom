@@ -80,6 +80,38 @@ func (j *Joint) GetDetachThreshold() float64 {
 	return j.detachThreshold
 }
 
+// LocalCenter returns the part's local geometric center relative to this joint's origin.
+func (j *Joint) LocalCenter() (float64, float64, float64) {
+	return j.localCenterX, j.localCenterY, j.localCenterZ
+}
+
+// PartRadius returns the bounding radius estimate for this joint's attached part.
+func (j *Joint) PartRadius() float64 {
+	return j.partRadius
+}
+
+// AddAngularKick adds a local-frame angular velocity impulse scaled by per-axis DOF limits.
+func (j *Joint) AddAngularKick(ltx, lty, ltz float64) {
+	const maxJointVel = 14.0
+	j.velX = math.Max(-maxJointVel, math.Min(maxJointVel, j.velX+ltx*j.dofScaleX))
+	j.velY = math.Max(-maxJointVel, math.Min(maxJointVel, j.velY+lty*j.dofScaleY))
+	j.velZ = math.Max(-maxJointVel, math.Min(maxJointVel, j.velZ+ltz*j.dofScaleZ))
+}
+
+// AccumulateStress adds impact stress to this joint and reports whether it reaches its detach threshold.
+func (j *Joint) AccumulateStress(stress float64) bool {
+	if !j.canDetach || j.detached {
+		return false
+	}
+	j.damage += stress
+	return j.damage >= j.detachThreshold
+}
+
+// IsCriticallyDamaged reports whether this detachable joint accumulated enough pre-mortem stress to sever on ragdoll transition.
+func (j *Joint) IsCriticallyDamaged() bool {
+	return j.canDetach && !j.detached && j.damage >= j.detachThreshold*0.45
+}
+
 // Detach marks the joint as detached and computes initial linear and angular launch velocities for rigid-body handoff.
 func (j *Joint) Detach(dirX, dirY, dirZ, fMag, sideSign float64) (vx, vy, vz, wx, wy, wz float64) {
 	j.detached = true

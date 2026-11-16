@@ -57,7 +57,7 @@ func NewJointsConfig() *JointsConfig {
 	limbs.Stiffness = 40.0
 	limbs.Damping = 5.5
 	//j.canDetach = true
-	limbs.CanDetach = true //false
+	limbs.CanDetach = false
 	limbs.DetachThreshold = 1.05
 	limbs.Tags = []string{"lloarm", "rloarm", "lhand", "rhand", "lloleg", "rloleg", "lfoot", "rfoot"}
 
@@ -81,7 +81,7 @@ func NewJointsConfig() *JointsConfig {
 	j.Stiffness = 46.0
 	j.Damping = 6.2
 	//j.canDetach = true
-	j.CanDetach = true //false
+	j.CanDetach = false
 	j.DetachThreshold = 1.30
 
 	js := &JointsConfig{

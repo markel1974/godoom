@@ -97,7 +97,7 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 	if cErr != nil {
 		panic(cErr)
 	}
-	if err := v.joints.Setup(v.elements.vVolume.solver, configJoints, v.links); err != nil {
+	if err := v.joints.Setup(configJoints, v.links); err != nil {
 		panic(err)
 	}
 	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
@@ -177,17 +177,17 @@ func (v *Vertices3D) SetRagdollMode() {
 	v.compiled = false
 	v.Compile(v.compiledTick)
 
+	ent := v.ent
+	bodyCx, bodyCy, bodyCz := ent.GetCenter()
+	pvx, pvy, pvz := ent.GetVelocity()
+
 	v.elements.Freeze()
-	v.joints.ActivateRagdoll()
+	v.joints.ActivateRagdoll(pvx, pvy, pvz)
 
 	numParts := v.elements.Len()
 	if numParts == 0 {
 		return
 	}
-
-	ent := v.ent
-	bodyCx, bodyCy, bodyCz := ent.GetCenter()
-	pvx, pvy, pvz := ent.GetVelocity()
 	hitDx, hitDy, hitDz, hitMag, hitPart := v.joints.LastHitImpulse()
 	if hitDx*hitDx+hitDy*hitDy+hitDz*hitDz < 1e-6 {
 		ax0, ay0, _ := ent.GetAxes0()
@@ -372,11 +372,132 @@ func (v *Vertices3D) SetAction(idx int) {
 }
 
 // ApplyImpact routes a localized 3D impact force (fx, fy, fz) at world point (px, py, pz)
-// to the closest articulated part, exciting the 5+ joint DoFs along the kinematic chain, jolting ragdoll bodies,
-// and triggering dismemberment on critical or post-mortem hits.
+// to the closest articulated part, exciting joint spring flinch along the kinematic chain
+// and triggering dismemberment into an autonomous rigid Volume when stress exceeds threshold.
 func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 	v.compiled = false
-	v.joints.ApplyImpact(fx, fy, fz, px, py, pz)
+	numParts := v.elements.Len()
+	if numParts == 0 {
+		return
+	}
+	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
+	if fMag < 1e-6 {
+		return
+	}
+	dirX, dirY, dirZ := fx/fMag, fy/fMag, fz/fMag
+
+	if v.joints.IsRagdoll() || numParts <= 1 {
+		v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, -1)
+		return
+	}
+
+	normImpulse := math.Min(fMag/500000.0, 1.6)
+	if normImpulse < 0.45 {
+		normImpulse = 0.45
+	}
+
+	cx, cy, cz := v.ent.GetCenter()
+	relPx, relPy, relPz := px-cx, py-cy, pz-cz
+
+	bestPart := -1
+	bestScore := math.MaxFloat64
+
+	for i := 0; i < numParts; i++ {
+		if i > 0 && v.joints.IsPartDetached(i) {
+			continue
+		}
+		j := v.joints.GetJoint(i)
+		lcX, lcY, lcZ := j.LocalCenter()
+		rotA := v.joints.GetRotationA(i)
+		rcX, rcY, rcZ := rotA.RotatePoint(lcX, lcY, lcZ)
+		ox, oy, oz := v.joints.GetOriginsA(i)
+		partCx := ox + rcX
+		partCy := oy + rcY
+		partCz := oz + rcZ
+
+		dx := partCx - relPx
+		dy := partCy - relPy
+		dz := partCz - relPz
+
+		along := dx*dirX + dy*dirY + dz*dirZ
+		perpX := dx - along*dirX
+		perpY := dy - along*dirY
+		perpZ := dz - along*dirZ
+		perpDist := math.Sqrt(perpX*perpX + perpY*perpY + perpZ*perpZ)
+		rad := math.Max(j.PartRadius(), 6.0)
+
+		score := (perpDist / rad) + math.Abs(along)/(rad*3.5)
+		if i > 0 && perpDist <= rad*1.8 {
+			score *= 0.60
+		}
+		if score < bestScore {
+			bestScore = score
+			bestPart = i
+		}
+	}
+
+	if bestPart < 0 {
+		v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, -1)
+		return
+	}
+
+	targetPart := bestPart
+	if targetPart == 0 {
+		for i := 1; i < numParts; i++ {
+			if v.links.GetParent(i) == 0 && !v.joints.IsDetached(i) {
+				targetPart = i
+				break
+			}
+		}
+	}
+
+	v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, targetPart)
+	v.joints.MarkActive()
+
+	pvx, pvy, pvz := v.ent.GetVelocity()
+	curr := targetPart
+	attenuation := 1.0
+	for depth := 0; depth < 3 && curr > 0 && curr < numParts; depth++ {
+		j := v.joints.GetJoint(curr)
+		if v.joints.IsDetached(curr) {
+			break
+		}
+		pivX, pivY, pivZ := v.joints.GetOriginsA(curr)
+		lcX, lcY, lcZ := j.LocalCenter()
+		rotA := v.joints.GetRotationA(curr)
+		rcX, rcY, rcZ := rotA.RotatePoint(lcX, lcY, lcZ)
+
+		rx := 0.45*(relPx-pivX) + 0.55*rcX
+		ry := 0.45*(relPy-pivY) + 0.55*rcY
+		rz := 0.45*(relPz-pivZ) + 0.55*rcZ
+		rLen := math.Sqrt(rx*rx + ry*ry + rz*rz)
+		if rLen < 1e-4 {
+			rx, ry, rz = 0, 0, j.PartRadius()
+			rLen = rz
+		}
+
+		tx := (ry*dirZ - rz*dirY) / rLen
+		ty := (rz*dirX - rx*dirZ) / rLen
+		tz := (rx*dirY - ry*dirX) / rLen
+		if tx*tx+ty*ty+tz*tz < 0.04 {
+			tx, ty, tz = -dirY, dirX, 0.30
+		}
+
+		ltx, lty, ltz := rotA.RotatePointInverse(tx, ty, tz)
+		kick := 9.5 * normImpulse * attenuation
+		j.AddAngularKick(ltx*kick, lty*kick, ltz*kick)
+
+		if v.joints.CanDetachMore() {
+			stress := 0.75 * normImpulse * attenuation
+			if j.AccumulateStress(stress) {
+				v.joints.DetachPart(curr, dirX, dirY, dirZ, fMag, pvx, pvy, pvz)
+				break
+			}
+		}
+
+		curr = v.links.GetParent(curr)
+		attenuation *= 0.60
+	}
 }
 
 // Compile updates all model parts for the tick and writes transformed frame data into render buffers.

@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
+	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -37,14 +38,18 @@ type BuilderVolume struct {
 	//frustumLightRear  *metrics.Frustum
 	//lightFrontFrustum *aabb.Frustum
 	//lightRearFrustum  *aabb.Frustum
-	lightBB *aabb.BoundingBox
+	lightBB  *aabb.BoundingBox
+	playerId uint64
+	player   *things.Player
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
-func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *BuilderVolume {
+func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, player *things.Player) *BuilderVolume {
 	bv := &BuilderVolume{
 		ctx:              ctx,
 		tex:              tex,
+		player:           player,
+		playerId:         player.GetEntity().GetId(),
 		fv:               NewFrameVertices(ctx, 1048576),
 		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
 		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
@@ -75,6 +80,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration) *
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
 	bv.modes[bv.dcLiquid.GetBlendMode()] = bv.dcLiquid
+
 	return bv
 }
 
@@ -319,16 +325,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		}
 	}
 
-	player := things.GetPlayer()
-	var playerID uint64
-	hasPlayer := player != nil
-	if hasPlayer {
-		playerID = player.GetEntity().GetId()
-	}
-
 	qOcclusion := func(object aabb.IObject) bool {
 		thing := object.(volumes.IThing)
-		isPlayer := hasPlayer && thing.GetEntity().GetId() == playerID
+
 		if !thing.IsVisible() {
 			return false
 		}
@@ -345,7 +344,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false
 		}
 
-		if !isPlayer {
+		if isPlayer := thing.GetEntity().GetId() == w.playerId; !isPlayer {
 			things.StageAdd(thing)
 		}
 
@@ -364,9 +363,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		return false
 	}
 
-	if hasPlayer {
-		things.StageAdd(player)
-	}
+	things.StageAdd(w.player)
+
 	things.QueryStatic(qStatic) //UI Objects
 	things.QueryFrustum(frustumFront, qOcclusion)
 

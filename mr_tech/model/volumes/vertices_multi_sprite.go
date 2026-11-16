@@ -149,13 +149,12 @@ func (v *VerticesMultiSprite) Setup(thing IThing) error {
 		}
 	}
 
-	v.updateBounds()
-	v.Compile(0)
 	v.solver = v.comp.GetSolver()
 	if err := v.solver.Setup(thing); err != nil {
 		return err
 	}
 	v.ent = v.solver.GetEntity()
+	v.Compile(0)
 	return nil
 }
 
@@ -206,7 +205,7 @@ func (v *VerticesMultiSprite) GetUIFaces() (*Faces, *Faces, float64, float64) {
 	return f, f, 0.0, v.renderMode
 }
 
-// VerticesSetAction switches to the action volume at idx and restarts its face material animations.
+// SetAction switches to the action volume at idx and restarts its face material animations.
 func (v *VerticesMultiSprite) SetAction(idx int) {
 	if idx < 0 {
 		return

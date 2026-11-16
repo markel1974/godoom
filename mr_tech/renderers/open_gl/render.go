@@ -119,7 +119,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	cal := w.engine.GetCalibration()
 	w.tex = NewTextures(w.ctx)
 	w.player.SetPitchOptions(-1.5, 1.5, 0.01)
-	w.builder = NewBuilderVolume(w.ctx, w.tex, cal)
+	w.builder = NewBuilderVolume(w.ctx, w.tex, cal, w.player)
 	w.dcOpaque = w.builder.GetDrawCommandsOpaque()
 
 	w.dcAdditive = w.builder.GetDrawCommandsAdditive()

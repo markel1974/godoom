@@ -743,6 +743,8 @@ func (s *Cage) GetVolume() IObject { return s.volume }
 // GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.[cite: 6]
 func (s *Cage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }
 
+func (s *Cage) GetRadZ() float64 { return s.eRadZ }
+
 // GetC returns the center coordinates (cX, cY, cZ) of the Cage.[cite: 6]
 func (s *Cage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
 
@@ -751,6 +753,8 @@ func (s *Cage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY
 
 // GetT retrieves the current transformed coordinates (tX, tY, tZ) of the Cage.[cite: 6]
 func (s *Cage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
+
+func (s *Cage) GetTZ() float64 { return s.tZ }
 
 // BucketCount returns the number of entries in the specified bucket.[cite: 6]
 func (s *Cage) BucketCount(t BucketType) int { return s.buckets[t].Count() }

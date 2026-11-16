@@ -194,6 +194,13 @@ func (e *Entity) ComputeNormalKineticImpactAt(otherEntity *Entity, nx, ny, nz, p
 	return e.Cinematic.ComputeNormalKineticImpact(otherEntity.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz)
 }
 
+// ComputeStaticNormalKineticImpactAt computes physical impact energy (Joules, 50 units/m) between this entity
+// and a fixed static surface along contact normal (nx, ny, nz) at world contact point (px, py, pz).
+func (e *Entity) ComputeStaticNormalKineticImpactAt(nx, ny, nz, px, py, pz float64) float64 {
+	cx1, cy1, cz1 := e.getCenterOfMass()
+	return e.Cinematic.ComputeStaticNormalKineticImpact(nx, ny, nz, cx1, cy1, cz1, px, py, pz)
+}
+
 // ComputeKineticImpact calculates the physical kinetic impact energy (Joules, 50 units/m) between this entity and another.
 // When called inside a collision callback with an active contact, it evaluates pre-solve closing normal speed at the contact point.
 // It returns 0 if either entity has non-positive mass.

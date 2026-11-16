@@ -116,26 +116,6 @@ func (t *Solver) StagePrepare(session uint64) {
 	t.cage.Rebuild(t.maxStep, session)
 }
 
-// resolveSlotPartner returns the remote entity for a contact slot, or nil when the slot should not be solved.
-func (t *Solver) resolveSlotPartner(slot *Entry) *rigid_body.Entity {
-	if slot.GetImpactMode() == ImpactStep {
-		return nil
-	}
-	if rCage := slot.GetRCage(); rCage != nil {
-		rParentEnt := rCage.GetEntity()
-		// Each active dynamic pair is solved once per solver pass by the canonical owner.
-		if t.entity.GetId() > rParentEnt.GetId() {
-			if rCage.GetSolverIndex() >= 0 && rCage.HasEntryFor(slot.GetBucket().Opposite(), t.entity.GetId()) {
-				return nil
-			}
-		}
-		return rParentEnt
-	}
-	rFace := slot.GetRemoteFace()
-	rParent := rFace.GetParent()
-	return rParent.GetEntity()
-}
-
 // StageWarmStart reapplies cached contact impulses for valid collision slots to improve solver convergence.
 func (t *Solver) StageWarmStart() {
 	slotsLen := t.cage.GetSlotsLen()
@@ -192,15 +172,15 @@ func (t *Solver) StageApply() {
 	t.entity.AddTo(dx, dy, dz)
 	t.cage.SetApplied()
 
-	var lastCollisionId uint64
-	hasCollisionId := false
+	var lastElasticId, lastInelasticId uint64
+	hasElasticId, hasInelasticId := false, false
 	stepZ := 0.0
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
 		switch slot.GetImpactMode() {
 		case ImpactStep:
-			_, _, tz := t.cage.GetT()
-			_, _, rz := t.cage.GetRad()
+			tz := t.cage.GetTZ()
+			rz := t.cage.GetRadZ()
 			_, _, pz := t.cage.GetPushOffset()
 			if cand := slot.GetMaxZ() - (tz - rz + pz + stepZ); cand > 0 {
 				stepZ += cand
@@ -209,38 +189,26 @@ func (t *Solver) StageApply() {
 			rCage := slot.GetRCage()
 			rEnt := rCage.GetEntity()
 			rId := rEnt.GetId()
-			if !hasCollisionId || lastCollisionId != rId {
-				bestNX, bestNY, bestNZ := slot.GetNormal()
-				bestPX, bestPY, bestPZ := slot.GetPoint()
-				bestEnergy := t.entity.ComputeNormalKineticImpactAt(rEnt, bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-				for j := i + 1; j < t.cage.GetSlotsLen(); j++ {
-					s2 := t.cage.GetSlot(j)
-					if s2.GetImpactMode() != ImpactElastic || s2.GetRCage().GetEntity().GetId() != rId {
-						break
-					}
-					nx2, ny2, nz2 := s2.GetNormal()
-					px2, py2, pz2 := s2.GetPoint()
-					if candE := t.entity.ComputeNormalKineticImpactAt(rEnt, nx2, ny2, nz2, px2, py2, pz2); candE > bestEnergy {
-						bestEnergy = candE
-						bestNX, bestNY, bestNZ = nx2, ny2, nz2
-						bestPX, bestPY, bestPZ = px2, py2, pz2
-					}
-				}
+			if !hasElasticId || lastElasticId != rId {
+				bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestElasticImpact(i, rId, rEnt)
 				t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
 				t.onElasticCollision(rCage.GetObject(), bestEnergy)
 				t.entity.ClearActiveContact()
-				lastCollisionId = rId
-				hasCollisionId = true
+				lastElasticId = rId
+				hasElasticId = true
 			}
 		case ImpactInelastic:
 			rParent := slot.GetRemoteFace().GetParent()
 			if rParent != nil {
-				nX, nY, nZ := slot.GetNormal()
-				pX, pY, pZ := slot.GetPoint()
-				t.entity.SetActiveContact(nX, nY, nZ, pX, pY, pZ)
-				//TODO BESTENERY!
-				t.onInelasticCollision(rParent, 0)
-				t.entity.ClearActiveContact()
+				rId := rParent.GetEntity().GetId()
+				if !hasInelasticId || lastInelasticId != rId {
+					bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestInelasticImpact(i, rId)
+					t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
+					t.onInelasticCollision(rParent, bestEnergy)
+					t.entity.ClearActiveContact()
+					lastInelasticId = rId
+					hasInelasticId = true
+				}
 			}
 		}
 	}
@@ -257,10 +225,7 @@ func (t *Solver) StageResolvePosition() {
 	if slotsLen == 0 {
 		return
 	}
-	_, _, targetZ := t.cage.GetT()
-	_, _, targetRadZ := t.cage.GetRad()
-	targetBaseZ := targetZ - targetRadZ
-
+	targetBaseZ := t.cage.GetTZ() - t.cage.GetRadZ()
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
 		if slot.GetImpactMode() != ImpactElastic {
@@ -298,6 +263,76 @@ func (t *Solver) StageResolvePosition() {
 			t.entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
 		}
 	}
+}
+
+// bestElasticImpact finds the elastic contact with the highest normal kinetic impact for the remote entity.
+// It scans consecutive matching slots starting at start and returns the best normal, point, and energy.
+func (t *Solver) bestElasticImpact(start int, rId uint64, rEnt *rigid_body.Entity) (bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy float64) {
+	first := t.cage.GetSlot(start)
+	bestNX, bestNY, bestNZ = first.GetNormal()
+	bestPX, bestPY, bestPZ = first.GetPoint()
+	bestEnergy = t.entity.ComputeNormalKineticImpactAt(rEnt, bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
+	for j := start + 1; j < t.cage.GetSlotsLen(); j++ {
+		s2 := t.cage.GetSlot(j)
+		if s2.GetImpactMode() != ImpactElastic || s2.GetRCage().GetEntity().GetId() != rId {
+			break
+		}
+		nx2, ny2, nz2 := s2.GetNormal()
+		px2, py2, pz2 := s2.GetPoint()
+		if candE := t.entity.ComputeNormalKineticImpactAt(rEnt, nx2, ny2, nz2, px2, py2, pz2); candE > bestEnergy {
+			bestEnergy = candE
+			bestNX, bestNY, bestNZ = nx2, ny2, nz2
+			bestPX, bestPY, bestPZ = px2, py2, pz2
+		}
+	}
+	return bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy
+}
+
+// bestInelasticImpact returns the inelastic contact with the greatest static normal kinetic impact.
+// It scans consecutive slots from start for the same remote entity and stops at the first nonmatching slot.
+func (t *Solver) bestInelasticImpact(start int, rId uint64) (bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy float64) {
+	first := t.cage.GetSlot(start)
+	bestNX, bestNY, bestNZ = first.GetNormal()
+	bestPX, bestPY, bestPZ = first.GetPoint()
+	bestEnergy = t.entity.ComputeStaticNormalKineticImpactAt(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
+	for j := start + 1; j < t.cage.GetSlotsLen(); j++ {
+		s2 := t.cage.GetSlot(j)
+		if s2.GetImpactMode() != ImpactInelastic {
+			break
+		}
+		p2 := s2.GetRemoteFace().GetParent()
+		if p2 == nil || p2.GetEntity().GetId() != rId {
+			break
+		}
+		nx2, ny2, nz2 := s2.GetNormal()
+		px2, py2, pz2 := s2.GetPoint()
+		if candE := t.entity.ComputeStaticNormalKineticImpactAt(nx2, ny2, nz2, px2, py2, pz2); candE > bestEnergy {
+			bestEnergy = candE
+			bestNX, bestNY, bestNZ = nx2, ny2, nz2
+			bestPX, bestPY, bestPZ = px2, py2, pz2
+		}
+	}
+	return bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy
+}
+
+// resolveSlotPartner returns the remote entity for a contact slot, or nil when the slot should not be solved.
+func (t *Solver) resolveSlotPartner(slot *Entry) *rigid_body.Entity {
+	if slot.GetImpactMode() == ImpactStep {
+		return nil
+	}
+	if rCage := slot.GetRCage(); rCage != nil {
+		rParentEnt := rCage.GetEntity()
+		// Each active dynamic pair is solved once per solver pass by the canonical owner.
+		if t.entity.GetId() > rParentEnt.GetId() {
+			if rCage.GetSolverIndex() >= 0 && rCage.HasEntryFor(slot.GetBucket().Opposite(), t.entity.GetId()) {
+				return nil
+			}
+		}
+		return rParentEnt
+	}
+	rFace := slot.GetRemoteFace()
+	rParent := rFace.GetParent()
+	return rParent.GetEntity()
 }
 
 // clampUpwardPenetration subtracts resolved penetration and limits upward correction to remaining vertical space.

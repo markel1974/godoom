@@ -1310,52 +1310,64 @@ func (e *Cinematic) impactVelocities() (float64, float64, float64, float64, floa
 	return e.vx, e.vy, e.vz, e.wx, e.wy, e.wz
 }
 
+func normalizeImpactNormal(nx, ny, nz float64) (float64, float64, float64, bool) {
+	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
+	if nLen <= 0.0 {
+		return 0.0, 0.0, 0.0, false
+	}
+	return nx / nLen, ny / nLen, nz / nLen, true
+}
+
+func (e *Cinematic) impactPointContribution(cx, cy, cz, px, py, pz, nx, ny, nz float64) (vpx, vpy, vpz, massInv float64) {
+	vx, vy, vz, wx, wy, wz := e.impactVelocities()
+	rx, ry, rz := px-cx, py-cy, pz-cz
+	vpx = vx + (wy*rz - wz*ry)
+	vpy = vy + (wz*rx - wx*rz)
+	vpz = vz + (wx*ry - wy*rx)
+	massInv = e.invMass
+	if !e.keepUpright {
+		_, _, _, rot := e.rotationalMass(rx, ry, rz, nx, ny, nz)
+		massInv += rot
+	}
+	return vpx, vpy, vpz, massInv
+}
+
+func normalImpactEnergy(vClose, effMassInv float64) float64 {
+	if vClose <= 0.0 || effMassInv <= 0.0 {
+		return 0.0
+	}
+	return 0.5 * (vClose * vClose / effMassInv) * invWorldUnitsSq
+}
+
 // ComputeNormalKineticImpact computes physical impact energy (Joules, 50 units/m) from pre-solve
 // closing normal velocity at the contact point (px, py, pz) along normal (nx, ny, nz).
 func (e *Cinematic) ComputeNormalKineticImpact(other *Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz float64) float64 {
 	if other == nil || e.mass <= 0.0 || other.mass <= 0.0 {
 		return 0.0
 	}
-	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
-	if nLen <= 0.0 {
+	nx, ny, nz, ok := normalizeImpactNormal(nx, ny, nz)
+	if !ok {
 		return 0.0
 	}
-	nx /= nLen
-	ny /= nLen
-	nz /= nLen
-
-	v1x, v1y, v1z, w1x, w1y, w1z := e.impactVelocities()
-	v2x, v2y, v2z, w2x, w2y, w2z := other.impactVelocities()
-
-	r1x, r1y, r1z := px-cx1, py-cy1, pz-cz1
-	r2x, r2y, r2z := px-cx2, py-cy2, pz-cz2
-
-	vp1x := v1x + (w1y*r1z - w1z*r1y)
-	vp1y := v1y + (w1z*r1x - w1x*r1z)
-	vp1z := v1z + (w1x*r1y - w1y*r1x)
-
-	vp2x := v2x + (w2y*r2z - w2z*r2y)
-	vp2y := v2y + (w2z*r2x - w2x*r2z)
-	vp2z := v2z + (w2x*r2y - w2y*r2x)
-
+	vp1x, vp1y, vp1z, invM1 := e.impactPointContribution(cx1, cy1, cz1, px, py, pz, nx, ny, nz)
+	vp2x, vp2y, vp2z, invM2 := other.impactPointContribution(cx2, cy2, cz2, px, py, pz, nx, ny, nz)
 	vClose := -((vp1x-vp2x)*nx + (vp1y-vp2y)*ny + (vp1z-vp2z)*nz)
-	if vClose <= 0.0 {
-		return 0.0
-	}
+	return normalImpactEnergy(vClose, invM1+invM2)
+}
 
-	effMassInv := e.invMass + other.invMass
-	if !e.keepUpright {
-		_, _, _, rot1 := e.rotationalMass(r1x, r1y, r1z, nx, ny, nz)
-		effMassInv += rot1
-	}
-	if !other.keepUpright {
-		_, _, _, rot2 := other.rotationalMass(r2x, r2y, r2z, nx, ny, nz)
-		effMassInv += rot2
-	}
-	if effMassInv <= 0.0 {
+// ComputeStaticNormalKineticImpact computes physical impact energy (Joules, 50 units/m) from pre-solve
+// closing normal velocity against an immovable static surface at contact point (px, py, pz) along normal (nx, ny, nz).
+func (e *Cinematic) ComputeStaticNormalKineticImpact(nx, ny, nz, cx1, cy1, cz1, px, py, pz float64) float64 {
+	if e.mass <= 0.0 {
 		return 0.0
 	}
-	return 0.5 * (vClose * vClose / effMassInv) * invWorldUnitsSq
+	nx, ny, nz, ok := normalizeImpactNormal(nx, ny, nz)
+	if !ok {
+		return 0.0
+	}
+	vp1x, vp1y, vp1z, invM1 := e.impactPointContribution(cx1, cy1, cz1, px, py, pz, nx, ny, nz)
+	vClose := -(vp1x*nx + vp1y*ny + vp1z*nz)
+	return normalImpactEnergy(vClose, invM1)
 }
 
 // addClampedAngular adds a scaled angular impulse and clamps tilt and yaw velocities to their limits.

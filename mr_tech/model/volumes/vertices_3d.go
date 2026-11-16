@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
@@ -13,78 +12,65 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-// DetachVolumeFunc is invoked when a skeletal subtree breaks off as an autonomous centered Volume.
-type DetachVolumeFunc func(vol *Volume, x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64)
+// PartSpawnFunc constructs an IThing wrapping one segment's IVertices so all parts live in Things.tree from creation.
+type PartSpawnFunc func(partVerts IVertices, collisionGroup uint64) IThing
 
-// RagdollPartSpawnFunc spawns one articulated rigid-body ragdoll part in Things and returns it.
-type RagdollPartSpawnFunc func(vol *Volume, x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) IThing
+// PartReleaseFunc notifies the world Thing manager when an attached segment transitions to autonomous physics mid-tick.
+type PartReleaseFunc func(part IThing)
 
 // RagdollJointAddFunc registers a bilateral PGS joint constraint with optional breakability on the child limb.
 type RagdollJointAddFunc func(joint *collisions.JointConstraint, childThing IThing, canDetach bool, breakThreshold float64)
 
-// IDetachableVertices is optionally implemented by IVertices types that spawn detached rigid Volumes.
-type IDetachableVertices interface {
-	SetOnDetach(fn DetachVolumeFunc)
+// IPartedVertices is optionally implemented by composite models whose segments live as autonomous IThings in Things.tree.
+type IPartedVertices interface {
+	SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc)
 }
 
-// IRagdollVertices is optionally implemented by multi-part IVertices types that transition into
-// multi-body PGS ragdolls backed by one Volume and Solver per limb.
-type IRagdollVertices interface {
-	SetOnRagdoll(spawnPart RagdollPartSpawnFunc, addJoint RagdollJointAddFunc)
-}
-
-// Vertices3D represents a composite animated 3D model with linked parts, volumes, faces, and articulated physics state.
+// Vertices3D represents a composite animated 3D model whose linked segments each have a Volume, Solver, and node in Things.tree.
 type Vertices3D struct {
-	id              string
-	mass            float64
-	restitution     float64
-	friction        float64
-	restCombine     int
-	frictionCombine int
-	gForce          float64
-	solver          *collisions.Solver
-	ent             *rigid_body.Entity
-	actions         *Vertices3DActions
-	currentAction   int
-	links           *articulated_dynamics.Links
-	elements        *Vertices3DElements
-	joints          *articulated_dynamics.Joints
-	onDetach        DetachVolumeFunc
-	onSpawnRagdoll  RagdollPartSpawnFunc
-	onAddJoint      RagdollJointAddFunc
-	ragdollRootVol  *Volume
-	ragdollRootRot  *articulated_dynamics.TagAxis
-	minX            float64
-	minY            float64
-	minZ            float64
-	maxX            float64
-	maxY            float64
-	maxZ            float64
-	compiled        bool
-	compiledTick    uint64
-	compiledQX      float64
-	compiledQY      float64
-	compiledQZ      float64
-	compiledQW      float64
+	id            string
+	mass          float64
+	owner         IThing
+	solver        *collisions.Solver
+	ent           *rigid_body.Entity
+	actions       *Vertices3DActions
+	currentAction int
+	links         *articulated_dynamics.Links
+	elements      *Vertices3DElements
+	joints        *articulated_dynamics.Joints
+	partViews     []*Vertices3DPart
+	partThings    []IThing
+	partScratchQ  *aabb.Quaternion
+	onPartRelease PartReleaseFunc
+	onAddJoint    RagdollJointAddFunc
+	minX          float64
+	minY          float64
+	minZ          float64
+	maxX          float64
+	maxY          float64
+	maxZ          float64
+	compiled      bool
+	compiledTick  uint64
+	compiledQX    float64
+	compiledQY    float64
+	compiledQZ    float64
+	compiledQW    float64
+	compiledCX    float64
+	compiledCY    float64
+	compiledCZ    float64
 }
 
-// NewVertices3D creates a Vertices3D instance from a thing configuration and its materials.
-// It validates model parts, links, action maps, and initializes face and transform buffers.
+// NewVertices3D creates a Vertices3D model from cfg and materials, centering each segment frame on its geometric center.
 func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
-		id:              cfg.Id,
-		mass:            cfg.Mass,
-		restitution:     cfg.Restitution,
-		friction:        cfg.Friction,
-		restCombine:     cfg.RestitutionCombine,
-		frictionCombine: cfg.FrictionCombine,
-		gForce:          cfg.GForce,
-		solver:          nil,
-		links:           articulated_dynamics.NewLinks(),
-		joints:          articulated_dynamics.NewJoints(),
-		elements:        NewVertices3DElements(cfg, materials),
-		actions:         NewVertices3DActions(),
-		currentAction:   -1,
+		id:            cfg.Id,
+		mass:          cfg.Mass,
+		links:         articulated_dynamics.NewLinks(),
+		joints:        articulated_dynamics.NewJoints(),
+		elements:      NewVertices3DElements(cfg, materials),
+		actions:       NewVertices3DActions(),
+		currentAction: -1,
+		partScratchQ:  aabb.NewQuaternionIdentity(),
 	}
 	configLinks, cErr := v.createConfigLinks(cfg.Model3D)
 	if cErr != nil {
@@ -104,6 +90,13 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 		panic(err)
 	}
 
+	numParts := v.elements.Len()
+	v.partViews = make([]*Vertices3DPart, numParts)
+	for i := 0; i < numParts; i++ {
+		v.partViews[i] = NewVertices3DPart(v, v.elements.GetEntry(i), i, 0)
+	}
+
+	v.ent = v.elements.GetSolver().GetEntity()
 	v.Compile(0)
 	if v.minZ <= v.maxZ {
 		if baseZ := -(v.minZ + v.maxZ) * 0.5; math.Abs(baseZ) > 1e-6 {
@@ -113,50 +106,55 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 		}
 	}
 
-	v.elements.UpdateEntityBounds()
+	v.elements.UpdateEntityBounds(v.minX, v.minY, v.minZ, v.maxX, v.maxY, v.maxZ)
 	return v
 }
 
-// Setup initializes model elements, links, joints, and actions, compiles bounds, and returns any setup error.
+// Setup binds the owner locomotion virtual volume to thing.
 func (v *Vertices3D) Setup(thing IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}
-	if err := v.elements.vVolume.Setup(thing); err != nil {
-		return err
-	}
+	v.owner = thing
 	v.solver = v.elements.GetSolver()
 	v.ent = v.solver.GetEntity()
-	v.joints.SetOnDetach(v.handlePartDetached)
+	v.solver.SetCollisionGroup(v.ent.GetId())
 	return nil
 }
 
-// SetOnDetach registers the callback invoked when a limb detaches into a rigid Volume.
-func (v *Vertices3D) SetOnDetach(fn DetachVolumeFunc) {
-	v.onDetach = fn
-}
-
-// SetOnRagdoll registers callbacks used to spawn per-limb dynamic Volumes and register PGS JointConstraints.
-func (v *Vertices3D) SetOnRagdoll(spawnPart RagdollPartSpawnFunc, addJoint RagdollJointAddFunc) {
-	v.onSpawnRagdoll = spawnPart
+// SetupParts instantiates a standalone IThing for each segment so all segments reside in Things.tree from creation.
+func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc) {
+	v.onPartRelease = onRelease
 	v.onAddJoint = addJoint
+	numParts := len(v.partViews)
+	v.partThings = make([]IThing, numParts)
+	groupID := v.ent.GetId()
+	for i, pv := range v.partViews {
+		pv.groupID = groupID
+		if spawnPart != nil {
+			v.partThings[i] = spawnPart(pv, groupID)
+		}
+	}
+	v.compiled = false
+	v.Compile(v.compiledTick)
 }
 
-// GetSolver returns the collision solver associated with the model.
+// GetParts returns the slice of per-segment IThings belonging to this model.
+func (v *Vertices3D) GetParts() []IThing {
+	return v.partThings
+}
+
+// GetSolver returns the owner locomotion collision solver.
 func (v *Vertices3D) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
+// QueryOverlaps queries face overlaps across all attached segment volumes.
 func (v *Vertices3D) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
-	if v.ragdollRootVol != nil {
-		v.ragdollRootVol.QueryOverlaps(object, callback)
-		return
-	}
 	v.elements.vVolume.QueryOverlaps(object, callback)
 }
 
-// GetAABB returns the bounding box of the associated entity, or nil if no entity is available.
+// GetAABB returns the enclosing world-space AABB for the owner's locomotion entity.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
 	ent := v.ent
 	ab := ent.GetAABB()
@@ -167,32 +165,163 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return ab
 }
 
-// SetRagdollMode freezes the model, decouples parts into individual centered Volumes and Solvers,
-// and links parent/child pairs with bilateral PGS JointConstraints in the Coordinator.
+// ApplyImpact forwards an owner-level impact directly to the primary segment handler.
+func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
+	if len(v.partViews) == 0 {
+		return
+	}
+	v.ApplyPartImpact(0, fx, fy, fz, px, py, pz)
+}
+
+// ApplyPartImpact handles a localized hit directly on segment partIdx identified by QueryRay in Things.tree,
+// applying physical impulse to the living owner and detaching any stressed joint into autonomous 6-DoF motion.
+func (v *Vertices3D) ApplyPartImpact(partIdx int, fx, fy, fz, px, py, pz float64) {
+	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
+	if fMag < 1e-6 {
+		return
+	}
+	dirX, dirY, dirZ := fx/fMag, fy/fMag, fz/fMag
+
+	numParts := len(v.partViews)
+	if partIdx < 0 || partIdx >= numParts {
+		v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, -1)
+		return
+	}
+
+	v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, partIdx)
+	if v.joints.IsRagdoll() || v.partViews[partIdx].IsPhysicsFree() {
+		return
+	}
+
+	// Deliver physical knockback to the living upright owner while attached.
+	v.ent.AddForceAtPoint(fx, fy, fz, px, py, pz)
+
+	if numParts <= 1 || !v.joints.CanDetachMore() {
+		return
+	}
+
+	normImpulse := math.Min(fMag/500000.0, 1.6)
+	if normImpulse < 0.45 {
+		normImpulse = 0.45
+	}
+
+	curr := partIdx
+	attenuation := 1.0
+	for depth := 0; depth < 3 && curr > 0 && curr < numParts; depth++ {
+		if v.joints.IsDetached(curr) || v.partViews[curr].IsPhysicsFree() {
+			break
+		}
+		j := v.joints.GetJoint(curr)
+		if j.CanDetach() {
+			stress := 0.75 * normImpulse * attenuation
+			if j.AccumulateStress(stress) {
+				v.releaseSubtree(curr, dirX, dirY, dirZ, fMag)
+				break
+			}
+		}
+		curr = v.links.GetParent(curr)
+		attenuation *= 0.60
+	}
+}
+
+// releaseSubtree detaches partIdx and its attached descendants directly in-place inside Things.tree,
+// adding internal PGS JointConstraints if multiple segments detach together.
+func (v *Vertices3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag float64) {
+	v.compiled = false
+	v.Compile(v.compiledTick)
+
+	numParts := len(v.partViews)
+	inSubtree := make([]bool, numParts)
+	eoLen := v.links.ExecutionOrderLen()
+	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
+		i := v.links.ExecutionOrderAt(eoIdx)
+		if i == partIdx {
+			inSubtree[i] = !v.partViews[i].IsPhysicsFree()
+		} else if pIdx := v.links.GetParent(i); pIdx >= 0 && inSubtree[pIdx] && !v.joints.IsDetached(i) && !v.partViews[i].IsPhysicsFree() {
+			inSubtree[i] = true
+		}
+	}
+
+	pvx, pvy, pvz := v.ent.GetVelocity()
+	j := v.joints.GetJoint(partIdx)
+	sideSign := 1.0
+	if partIdx&1 == 1 {
+		sideSign = -1.0
+	}
+	v.joints.DetachPart(partIdx, dirX, dirY, dirZ, fMag, pvx, pvy, pvz)
+	vx, vy, vz, wx, wy, wz := j.Detach(dirX, dirY, dirZ, fMag, sideSign)
+	vx += pvx
+	vy += pvy
+	vz += pvz
+
+	subtreeCount := 0
+	for i := 0; i < numParts; i++ {
+		if inSubtree[i] {
+			subtreeCount++
+		}
+	}
+	var subGroupID uint64
+	if subtreeCount > 1 && v.partThings[partIdx] != nil {
+		subGroupID = v.partThings[partIdx].GetEntity().GetId()
+	}
+
+	for i := 0; i < numParts; i++ {
+		if !inSubtree[i] {
+			continue
+		}
+		v.partViews[i].ReleasePhysics(subGroupID, vx, vy, vz, wx, wy, wz)
+		if v.onPartRelease != nil && v.partThings[i] != nil {
+			v.onPartRelease(v.partThings[i])
+		}
+	}
+
+	if subtreeCount > 1 && v.onAddJoint != nil {
+		for i := 0; i < numParts; i++ {
+			if !inSubtree[i] || i == partIdx {
+				continue
+			}
+			pIdx := v.links.GetParent(i)
+			if pIdx < 0 || !inSubtree[pIdx] {
+				continue
+			}
+			jc := v.buildJointConstraint(pIdx, i)
+			jCfg := v.joints.GetJoint(i)
+			v.onAddJoint(jc, v.partThings[i], jCfg.CanDetach(), jCfg.GetDetachThreshold())
+		}
+	}
+}
+
+// SetRagdollMode transitions all remaining attached segments in-place to 6-DoF rigid-body ragdoll physics
+// connected by bilateral PGS JointConstraints and disables the owner's single locomotion collider.
 func (v *Vertices3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
 	}
-	// Ensure part volumes and joint world transforms are compiled before freezing.
 	v.compiled = false
 	v.Compile(v.compiledTick)
 
-	ent := v.ent
-	bodyCx, bodyCy, bodyCz := ent.GetCenter()
-	pvx, pvy, pvz := ent.GetVelocity()
-
-	v.elements.Freeze()
-	v.joints.ActivateRagdoll(pvx, pvy, pvz)
-
-	numParts := v.elements.Len()
+	numParts := len(v.partViews)
 	if numParts == 0 {
 		return
 	}
+
+	ent := v.ent
+	pvx, pvy, pvz := ent.GetVelocity()
 	hitDx, hitDy, hitDz, hitMag, hitPart := v.joints.LastHitImpulse()
 	if hitDx*hitDx+hitDy*hitDy+hitDz*hitDz < 1e-6 {
 		ax0, ay0, _ := ent.GetAxes0()
 		hitDx, hitDy, hitDz = ax0, ay0, 0
 	}
+
+	// If the killing blow left a detachable extremity critically stressed, sever it before linking ragdoll joints.
+	if v.joints.CanDetachMore() && hitPart > 0 && hitPart < numParts && !v.partViews[hitPart].IsPhysicsFree() {
+		if hj := v.joints.GetJoint(hitPart); hj.IsCriticallyDamaged() {
+			v.releaseSubtree(hitPart, hitDx, hitDy, hitDz, hitMag)
+		}
+	}
+
+	v.joints.ActivateRagdoll(pvx, pvy, pvz)
+
 	hitKick := 35.0
 	fallSpin := 3.5
 	if hitMag > 0 {
@@ -202,52 +331,12 @@ func (v *Vertices3D) SetRagdollMode() {
 	}
 	groupID := ent.GetId()
 
-	partSolvers := make([]*collisions.Solver, numParts)
-	partThings := make([]IThing, numParts)
-	partSrcVols := make([]*Volume, numParts)
-	partMCs := make([]geometry.XYZ, numParts)
-	partQuats := make([]*aabb.Quaternion, numParts)
-
+	inRagdoll := make([]bool, numParts)
 	for i := 0; i < numParts; i++ {
-		if i > 0 && v.joints.IsPartDetached(i) {
-			v.elements.ClearPart(i)
+		if v.partViews[i].IsPhysicsFree() {
 			continue
 		}
-		entry := v.elements.GetEntry(i)
-		srcVol := v.elements.volsA[i]
-		if srcVol == nil && len(entry.volumes) > 0 {
-			srcVol = entry.volumes[0]
-		}
-		partSrcVols[i] = srcVol
-
-		qPart := aabb.NewQuaternionIdentity()
-		v.joints.GetRotationA(i).ToQuaternion(qPart)
-		partQuats[i] = qPart
-
-		restitution := math.Max(v.restitution, 0.20)
-		friction := math.Max(v.friction, 0.55)
-		gForce := v.gForce
-		if gForce <= 0 {
-			gForce = 9.8 * 50.0
-		}
-		partMass := v.mass
-		if i > 0 {
-			partMass = math.Max(v.mass*0.25, 10.0)
-		}
-
-		// Build centered rigid Volume (root allocates no extra Cage since v.solver runs root physics).
-		cVol, mcx, mcy, mcz := v.buildCenteredSinglePartVolume(i, srcVol, i > 0, partMass, restitution, friction, gForce)
-		partMCs[i] = geometry.XYZ{X: mcx, Y: mcy, Z: mcz}
-		cVol.Rebuild()
-
-		origX, origY, origZ := v.joints.GetOriginsA(i)
-		rot := v.joints.GetRotationA(i)
-		rcx, rcy, rcz := rot.RotatePoint(mcx, mcy, mcz)
-		worldX := bodyCx + origX + rcx
-		worldY := bodyCy + origY + rcy
-		worldZ := bodyCz + origZ + rcz
-		qx, qy, qz, qw := qPart.Get()
-
+		inRagdoll[i] = true
 		vx, vy, vz := pvx, pvy, pvz
 		var wx, wy, wz float64
 		if i == 0 || i == hitPart {
@@ -257,90 +346,71 @@ func (v *Vertices3D) SetRagdollMode() {
 			wx = -hitDy * fallSpin
 			wy = hitDx * fallSpin
 		}
-
-		if i == 0 {
-			v.ragdollRootVol = cVol
-			v.ragdollRootRot = articulated_dynamics.NewTagAxisIdentity()
-			v.elements.lerpT = 0.0
-
-			faces := cVol.GetFaces()
-			minX, minY, minZ := faces.GetMin()
-			w, h, d := faces.GetSize()
-			cx, cy, cz := faces.GetCentroid()
-			ixx, ixy, ixz, iyy, iyz, izz := faces.GetInertia()
-			v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
-			v.solver.SetMaxStep(0.0)
-			v.solver.SetCollisionGroup(groupID)
-			ent.SetKeepUpright(false)
-			ent.MoveCenterTo(worldX, worldY, worldZ)
-			ent.SetRotationQuaternion(qx, qy, qz, qw)
-			ent.SetV(vx, vy, vz)
-			ent.SetAngularVelocity(wx, wy, wz)
-			partSolvers[0] = v.solver
-		} else {
-			v.elements.ClearPart(i)
-			if v.onSpawnRagdoll != nil {
-				childThing := v.onSpawnRagdoll(cVol, worldX, worldY, worldZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, groupID)
-				partThings[i] = childThing
-				if childThing != nil {
-					partSolvers[i] = childThing.GetSolver()
-				}
-			}
+		v.partViews[i].ReleasePhysics(groupID, vx, vy, vz, wx, wy, wz)
+		if v.onPartRelease != nil && v.partThings[i] != nil {
+			v.onPartRelease(v.partThings[i])
 		}
 	}
 
 	if v.onAddJoint != nil {
 		for i := 1; i < numParts; i++ {
-			if partSolvers[i] == nil {
+			if !inRagdoll[i] {
 				continue
 			}
 			pIdx := v.links.GetParent(i)
-			if pIdx < 0 || partSolvers[pIdx] == nil {
+			if pIdx < 0 || !inRagdoll[pIdx] {
 				continue
 			}
-
-			var ax, ay, az float64
-			restQ := aabb.NewQuaternionIdentity()
-			parentVol := partSrcVols[pIdx]
-			tagIdx := v.links.GetTagIndex(i)
-			if tagIdx >= 0 && parentVol != nil {
-				if tagAxis := parentVol.GetVertexTag(tagIdx); tagAxis != nil {
-					tx, ty, tz := tagAxis.GetOrigin()
-					ax = tx - partMCs[pIdx].X
-					ay = ty - partMCs[pIdx].Y
-					az = tz - partMCs[pIdx].Z
-					tagAxis.ToQuaternion(restQ)
-				}
-			}
-			bx := -partMCs[i].X
-			by := -partMCs[i].Y
-			bz := -partMCs[i].Z
-
+			jc := v.buildJointConstraint(pIdx, i)
 			jCfg := v.joints.GetJoint(i)
-			jc := collisions.NewJointConstraint(
-				partSolvers[pIdx], partSolvers[i],
-				ax, ay, az, bx, by, bz,
-				restQ,
-				jCfg.GetMaxAngleRagdoll(),
-				jCfg.GetDamping(),
-			)
-			v.onAddJoint(jc, partThings[i], jCfg.CanDetach(), jCfg.GetDetachThreshold())
+			v.onAddJoint(jc, v.partThings[i], jCfg.CanDetach(), jCfg.GetDetachThreshold())
 		}
 	}
 
-	v.compiled = false
-	v.Compile(v.compiledTick)
+	if v.solver != nil {
+		v.solver.SetActive(false)
+	}
 }
 
-// SetAction selects action idx and propagates mapped sub-actions to parts in execution order.
+func (v *Vertices3D) buildJointConstraint(pIdx, i int) *collisions.JointConstraint {
+	pEntry := v.elements.GetEntry(pIdx)
+	cEntry := v.elements.GetEntry(i)
+	mcP := pEntry.FrameCenterA()
+	mcC := cEntry.FrameCenterA()
+
+	var ax, ay, az float64
+	restQ := aabb.NewQuaternionIdentity()
+	parentVol := v.elements.volsA[pIdx]
+	if parentVol == nil && len(pEntry.volumes) > 0 {
+		parentVol = pEntry.volumes[0]
+	}
+	tagIdx := v.links.GetTagIndex(i)
+	if tagIdx >= 0 && parentVol != nil {
+		if tagAxis := parentVol.GetVertexTag(tagIdx); tagAxis != nil {
+			tx, ty, tz := tagAxis.GetOrigin()
+			ax = tx - mcP.X
+			ay = ty - mcP.Y
+			az = tz - mcP.Z
+			tagAxis.ToQuaternion(restQ)
+		}
+	}
+	bx := -mcC.X
+	by := -mcC.Y
+	bz := -mcC.Z
+
+	jCfg := v.joints.GetJoint(i)
+	return collisions.NewJointConstraint(
+		v.partViews[pIdx].GetSolver(), v.partViews[i].GetSolver(),
+		ax, ay, az, bx, by, bz,
+		restQ,
+		jCfg.GetMaxAngleRagdoll(),
+		jCfg.GetDamping(),
+	)
+}
+
+// SetAction selects action idx and propagates mapped sub-actions to still-attached parts in execution order.
 func (v *Vertices3D) SetAction(idx int) {
-	if idx < 0 {
-		return
-	}
-	if v.currentAction == idx {
-		return
-	}
-	if v.joints.IsRagdoll() {
+	if idx < 0 || v.currentAction == idx || v.joints.IsRagdoll() {
 		return
 	}
 	v.currentAction = idx
@@ -350,10 +420,7 @@ func (v *Vertices3D) SetAction(idx int) {
 	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
 		i := v.links.ExecutionOrderAt(eoIdx)
 		el := v.elements.GetEntry(i)
-		if el == nil {
-			continue
-		}
-		if i > 0 && v.joints.IsPartDetached(i) {
+		if el == nil || v.partViews[i].IsPhysicsFree() {
 			continue
 		}
 		if targetAction, ok := v.actions.Get(i, idx); ok {
@@ -371,189 +438,48 @@ func (v *Vertices3D) SetAction(idx int) {
 	}
 }
 
-// ApplyImpact routes a localized 3D impact force (fx, fy, fz) at world point (px, py, pz)
-// to the closest articulated part, exciting joint spring flinch along the kinematic chain
-// and triggering dismemberment into an autonomous rigid Volume when stress exceeds threshold.
-func (v *Vertices3D) ApplyImpact(fx, fy, fz, px, py, pz float64) {
-	v.compiled = false
-	numParts := v.elements.Len()
-	if numParts == 0 {
+// SyncAttachedParts refreshes positions and AABBs of all attached segments after owner locomotion.
+func (v *Vertices3D) SyncAttachedParts() {
+	if v.joints.IsRagdoll() || v.ent == nil {
 		return
 	}
-	fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
-	if fMag < 1e-6 {
-		return
-	}
-	dirX, dirY, dirZ := fx/fMag, fy/fMag, fz/fMag
-
-	if v.joints.IsRagdoll() || numParts <= 1 {
-		v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, -1)
-		return
-	}
-
-	normImpulse := math.Min(fMag/500000.0, 1.6)
-	if normImpulse < 0.45 {
-		normImpulse = 0.45
-	}
-
 	cx, cy, cz := v.ent.GetCenter()
-	relPx, relPy, relPz := px-cx, py-cy, pz-cz
-
-	bestPart := -1
-	bestScore := math.MaxFloat64
-
+	qx, qy, qz, qw := v.ent.GetQRotation().Get()
+	if qx != v.compiledQX || qy != v.compiledQY || qz != v.compiledQZ || qw != v.compiledQW {
+		v.compiled = false
+		v.Compile(v.compiledTick)
+		return
+	}
+	v.compiledCX, v.compiledCY, v.compiledCZ = cx, cy, cz
+	numParts := len(v.partViews)
 	for i := 0; i < numParts; i++ {
-		if i > 0 && v.joints.IsPartDetached(i) {
+		pv := v.partViews[i]
+		if pv.IsPhysicsFree() {
 			continue
 		}
-		j := v.joints.GetJoint(i)
-		lcX, lcY, lcZ := j.LocalCenter()
+		entry := v.elements.GetEntry(i)
+		mcA := entry.FrameCenterA()
 		rotA := v.joints.GetRotationA(i)
-		rcX, rcY, rcZ := rotA.RotatePoint(lcX, lcY, lcZ)
-		ox, oy, oz := v.joints.GetOriginsA(i)
-		partCx := ox + rcX
-		partCy := oy + rcY
-		partCz := oz + rcZ
-
-		dx := partCx - relPx
-		dy := partCy - relPy
-		dz := partCz - relPz
-
-		along := dx*dirX + dy*dirY + dz*dirZ
-		perpX := dx - along*dirX
-		perpY := dy - along*dirY
-		perpZ := dz - along*dirZ
-		perpDist := math.Sqrt(perpX*perpX + perpY*perpY + perpZ*perpZ)
-		rad := math.Max(j.PartRadius(), 6.0)
-
-		score := (perpDist / rad) + math.Abs(along)/(rad*3.5)
-		if i > 0 && perpDist <= rad*1.8 {
-			score *= 0.60
-		}
-		if score < bestScore {
-			bestScore = score
-			bestPart = i
-		}
-	}
-
-	if bestPart < 0 {
-		v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, -1)
-		return
-	}
-
-	targetPart := bestPart
-	if targetPart == 0 {
-		for i := 1; i < numParts; i++ {
-			if v.links.GetParent(i) == 0 && !v.joints.IsDetached(i) {
-				targetPart = i
-				break
-			}
-		}
-	}
-
-	v.joints.RecordLastHit(dirX, dirY, dirZ, fMag, targetPart)
-	v.joints.MarkActive()
-
-	pvx, pvy, pvz := v.ent.GetVelocity()
-	curr := targetPart
-	attenuation := 1.0
-	for depth := 0; depth < 3 && curr > 0 && curr < numParts; depth++ {
-		j := v.joints.GetJoint(curr)
-		if v.joints.IsDetached(curr) {
-			break
-		}
-		pivX, pivY, pivZ := v.joints.GetOriginsA(curr)
-		lcX, lcY, lcZ := j.LocalCenter()
-		rotA := v.joints.GetRotationA(curr)
-		rcX, rcY, rcZ := rotA.RotatePoint(lcX, lcY, lcZ)
-
-		rx := 0.45*(relPx-pivX) + 0.55*rcX
-		ry := 0.45*(relPy-pivY) + 0.55*rcY
-		rz := 0.45*(relPz-pivZ) + 0.55*rcZ
-		rLen := math.Sqrt(rx*rx + ry*ry + rz*rz)
-		if rLen < 1e-4 {
-			rx, ry, rz = 0, 0, j.PartRadius()
-			rLen = rz
-		}
-
-		tx := (ry*dirZ - rz*dirY) / rLen
-		ty := (rz*dirX - rx*dirZ) / rLen
-		tz := (rx*dirY - ry*dirX) / rLen
-		if tx*tx+ty*ty+tz*tz < 0.04 {
-			tx, ty, tz = -dirY, dirX, 0.30
-		}
-
-		ltx, lty, ltz := rotA.RotatePointInverse(tx, ty, tz)
-		kick := 9.5 * normImpulse * attenuation
-		j.AddAngularKick(ltx*kick, lty*kick, ltz*kick)
-
-		if v.joints.CanDetachMore() {
-			stress := 0.75 * normImpulse * attenuation
-			if j.AccumulateStress(stress) {
-				v.joints.DetachPart(curr, dirX, dirY, dirZ, fMag, pvx, pvy, pvz)
-				break
-			}
-		}
-
-		curr = v.links.GetParent(curr)
-		attenuation *= 0.60
+		rcAx, rcAy, rcAz := rotA.RotatePoint(mcA.X, mcA.Y, mcA.Z)
+		origAX, origAY, origAZ := v.joints.GetOriginsA(i)
+		pv.ent.MoveCenterTo(cx+origAX+rcAx, cy+origAY+rcAy, cz+origAZ+rcAz)
+		pv.GetAABB()
 	}
 }
 
-// Compile updates all model parts for the tick and writes transformed frame data into render buffers.
-// It resolves parent tag links, integrates 11-DoF joint articulations and dismembered limbs, and clears stale faces.
+// Compile updates hierarchical animation frames and syncs every still-attached segment's render faces and tree AABB.
 func (v *Vertices3D) Compile(tick uint64) bool {
-	ent := v.elements.vVolume.GetSolver().GetEntity()
+	if v.joints.IsRagdoll() {
+		return false
+	}
+	ent := v.ent
 	cx, cy, cz := ent.GetCenter()
 	qx, qy, qz, qw := ent.GetQRotation().Get()
 
-	if v.ragdollRootVol != nil {
-		if v.compiled && qx == v.compiledQX && qy == v.compiledQY && qz == v.compiledQZ && qw == v.compiledQW {
-			if v.minX <= v.maxX {
-				ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
-			}
-			return false
-		}
-		v.compiled = true
-		v.compiledTick = tick
-		v.compiledQX, v.compiledQY, v.compiledQZ, v.compiledQW = qx, qy, qz, qw
-
-		isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
-		if !isIdent {
-			v.ragdollRootRot.SetFromQuaternion(ent.GetQRotation())
-		}
-		minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-		maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-		srcFaces := v.ragdollRootVol.GetFaces()
-		offset := v.elements.partFaceOffsets[0]
-		count := srcFaces.Len()
-		if limit := v.elements.partFaceCounts[0]; limit < count {
-			count = limit
-		}
-		for j := 0; j < count; j++ {
-			src := srcFaces.At(j)
-			dst := v.elements.facesA.At(offset + j)
-			dst.material = src.material
-			dst.u = src.u
-			dst.v = src.v
-			if isIdent {
-				dst.CopyPoints(src)
-			} else {
-				v.ragdollRootRot.TransformPointsWithMatrix(dst.tri, src.tri, 0, 0, 0)
-			}
-			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-		}
-		if minX > maxX {
-			minX, minY, minZ = 0, 0, 0
-			maxX, maxY, maxZ = 0, 0, 0
-		}
-		v.minX, v.minY, v.minZ = minX, minY, minZ
-		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
-		ent.GetAABB().Rebuild(cx+minX, cy+minY, cz+minZ, cx+maxX, cy+maxY, cz+maxZ)
-		return false
-	}
-
 	if v.compiled && v.compiledTick == tick && qx == v.compiledQX && qy == v.compiledQY && qz == v.compiledQZ && qw == v.compiledQW {
+		if cx != v.compiledCX || cy != v.compiledCY || cz != v.compiledCZ {
+			v.SyncAttachedParts()
+		}
 		if v.minX <= v.maxX {
 			ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 		}
@@ -562,8 +488,7 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 	v.compiled = true
 	v.compiledTick = tick
 	v.compiledQX, v.compiledQY, v.compiledQZ, v.compiledQW = qx, qy, qz, qw
-
-	v.joints.StepJoints(tick)
+	v.compiledCX, v.compiledCY, v.compiledCZ = cx, cy, cz
 
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
@@ -571,9 +496,8 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 	eoLen := v.links.ExecutionOrderLen()
 	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
 		i := v.links.ExecutionOrderAt(eoIdx)
-
-		if i > 0 && v.joints.IsPartDetached(i) {
-			v.elements.ClearPart(i)
+		pv := v.partViews[i]
+		if pv.IsPhysicsFree() {
 			continue
 		}
 
@@ -600,28 +524,47 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 			}
 		}
 
+		entry := v.elements.GetEntry(i)
 		origAX, origAY, origAZ := v.joints.GetOriginsA(i)
 		origBX, origBY, origBZ := v.joints.GetOriginsB(i)
 		rotA := v.joints.GetRotationA(i)
 		rotB := v.joints.GetRotationB(i)
 
-		pMinX, pMinY, pMinZ, pMaxX, pMaxY, pMaxZ := v.elements.Compile(i, origAX, origAY, origAZ, origBX, origBY, origBZ, rotA, rotB)
-		if pMinX < minX {
+		mcA := entry.FrameCenterA()
+		mcB := entry.FrameCenterB()
+		rcAx, rcAy, rcAz := rotA.RotatePoint(mcA.X, mcA.Y, mcA.Z)
+		rcBx, rcBy, rcBz := rotB.RotatePoint(mcB.X, mcB.Y, mcB.Z)
+		dOffX := (origBX - origAX) + (rcBx - rcAx)
+		dOffY := (origBY - origAY) + (rcBy - rcAy)
+		dOffZ := (origBZ - origAZ) + (rcBz - rcAz)
+
+		entry.CompileAttached(rotA, rotB, dOffX, dOffY, dOffZ)
+
+		relX := origAX + rcAx
+		relY := origAY + rcAy
+		relZ := origAZ + rcAz
+		rotA.ToQuaternion(v.partScratchQ)
+		pqx, pqy, pqz, pqw := v.partScratchQ.Get()
+		pv.ent.MoveCenterTo(cx+relX, cy+relY, cz+relZ)
+		pv.ent.SetRotationQuaternion(pqx, pqy, pqz, pqw)
+		pv.GetAABB()
+
+		if pMinX := relX + entry.minX; pMinX < minX {
 			minX = pMinX
 		}
-		if pMinY < minY {
+		if pMinY := relY + entry.minY; pMinY < minY {
 			minY = pMinY
 		}
-		if pMinZ < minZ {
+		if pMinZ := relZ + entry.minZ; pMinZ < minZ {
 			minZ = pMinZ
 		}
-		if pMaxX > maxX {
+		if pMaxX := relX + entry.maxX; pMaxX > maxX {
 			maxX = pMaxX
 		}
-		if pMaxY > maxY {
+		if pMaxY := relY + entry.maxY; pMaxY > maxY {
 			maxY = pMaxY
 		}
-		if pMaxZ > maxZ {
+		if pMaxZ := relZ + entry.maxZ; pMaxZ > maxZ {
 			maxZ = pMaxZ
 		}
 	}
@@ -635,9 +578,9 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 	return false
 }
 
-// GetUIFaces returns the current face sets, interpolation factor, and render mode.
+// GetUIFaces returns empty faces on the owner because individual segments render through their own tree nodes.
 func (v *Vertices3D) GetUIFaces() (*Faces, *Faces, float64, float64) {
-	return v.elements.facesA, v.elements.facesB, v.elements.lerpT, RenderModeModel3D
+	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, RenderModeModel3D
 }
 
 func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*articulated_dynamics.Joint, error) {
@@ -648,8 +591,7 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3
 		if element == nil {
 			return nil, fmt.Errorf("entry %d is nil", i)
 		}
-		// TODO FROM CONFIG default partRadius
-		j := articulated_dynamics.NewJoint2(element, 8.0)
+		j := articulated_dynamics.NewJoint2(8.0)
 		joints[i] = j
 
 		if vol := element.volumes[0]; vol != nil {
@@ -664,19 +606,13 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3
 			}
 		}
 		if i == 0 || v.links.GetParent(i) < 0 {
-			j.SetDofScale(0, 0, 0)
-			j.SetMaxAngleAlive(0)
 			j.SetMaxAngleRagdoll(0)
-			j.SetStiffness(80.0)
 			j.SetDamping(10.0)
 			j.SetCanDetach(false)
 		} else {
 			tag := v.links.GetTag(i)
 			z := cfg.Joints.Get(tag)
-			j.SetDofScale(z.DofScale.X, z.DofScale.Y, z.DofScale.Z)
-			j.SetMaxAngleAlive(z.MaxAngleAlive)
 			j.SetMaxAngleRagdoll(z.MaxAngleRagdoll)
-			j.SetStiffness(z.Stiffness)
 			j.SetDamping(z.Damping)
 			j.SetDetachThreshold(z.DetachThreshold)
 			j.SetCanDetach(z.CanDetach)
@@ -685,8 +621,6 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3
 	return joints, nil
 }
 
-// createConfigLinks creates and initializes physics.Link objects for each part in the given config.Model3D structure.
-// Returns the created links or an error if initialization fails.
 func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dynamics.Link, error) {
 	numParts := len(cfg.Parts)
 	links := make([]*articulated_dynamics.Link, numParts)
@@ -725,197 +659,4 @@ func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dyna
 		}
 	}
 	return links, nil
-}
-
-// handlePartDetached packages the frozen subtree rooted at partIdx into an autonomous,
-// origin-centered dynamic Volume and hands it off to v.onDetach for 6-DoF rigid-body simulation.
-func (v *Vertices3D) handlePartDetached(partIdx int, origX, origY, origZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64) {
-	numParts := v.elements.Len()
-	inSubtree := make([]bool, numParts)
-	localOrigins := make([]geometry.XYZ, numParts)
-	localRots := make([]*articulated_dynamics.TagAxis, numParts)
-	partVols := make([]*Volume, numParts)
-
-	eoLen := v.links.ExecutionOrderLen()
-	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
-		i := v.links.ExecutionOrderAt(eoIdx)
-		if i == partIdx {
-			inSubtree[i] = true
-			localRots[i] = articulated_dynamics.NewTagAxisIdentity()
-		} else if pIdx := v.links.GetParent(i); pIdx >= 0 && inSubtree[pIdx] && !v.joints.IsDetached(i) {
-			inSubtree[i] = true
-			localRots[i] = articulated_dynamics.NewTagAxisIdentity()
-			parentVol := partVols[pIdx]
-			tagIdx := v.links.GetTagIndex(i)
-			if tagIdx >= 0 && parentVol != nil {
-				if tagAxis := parentVol.GetVertexTag(tagIdx); tagAxis != nil {
-					rx, ry, rz := localRots[pIdx].RotatePointByTag(tagAxis)
-					localOrigins[i] = geometry.XYZ{
-						X: localOrigins[pIdx].X + rx,
-						Y: localOrigins[pIdx].Y + ry,
-						Z: localOrigins[pIdx].Z + rz,
-					}
-					localRots[pIdx].MultiplyMatrix(tagAxis, localRots[i])
-				} else {
-					localOrigins[i] = localOrigins[pIdx]
-					localRots[i].Copy(localRots[pIdx])
-				}
-			} else {
-				localOrigins[i] = localOrigins[pIdx]
-				localRots[i].Copy(localRots[pIdx])
-			}
-		} else {
-			continue
-		}
-
-		v.elements.ClearPart(i)
-		entry := v.elements.GetEntry(i)
-		srcVol := entry.volA
-		if srcVol == nil && len(entry.volumes) > 0 {
-			srcVol = entry.volumes[0]
-		}
-		partVols[i] = srcVol
-	}
-
-	v.compiled = false
-	if v.onDetach == nil {
-		return
-	}
-
-	scratch := geometry.NewTriangle3D([3]geometry.XYZ{})
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-
-	for i := 0; i < numParts; i++ {
-		if !inSubtree[i] || partVols[i] == nil {
-			continue
-		}
-		ox, oy, oz := localOrigins[i].X, localOrigins[i].Y, localOrigins[i].Z
-		rot := localRots[i]
-		srcFaces := partVols[i].GetFaces()
-		for fIdx := 0; fIdx < srcFaces.Len(); fIdx++ {
-			src := srcFaces.At(fIdx)
-			rot.TransformPointsWithMatrix(scratch, src.tri, ox, oy, oz)
-			for p := 0; p < 3; p++ {
-				pt := scratch.Points[p]
-				if pt.X < minX {
-					minX = pt.X
-				}
-				if pt.X > maxX {
-					maxX = pt.X
-				}
-				if pt.Y < minY {
-					minY = pt.Y
-				}
-				if pt.Y > maxY {
-					maxY = pt.Y
-				}
-				if pt.Z < minZ {
-					minZ = pt.Z
-				}
-				if pt.Z > maxZ {
-					maxZ = pt.Z
-				}
-			}
-		}
-	}
-
-	if minX > maxX {
-		return
-	}
-
-	mcx := (minX + maxX) * 0.5
-	mcy := (minY + maxY) * 0.5
-	mcz := (minZ + maxZ) * 0.5
-
-	mass := math.Max(v.mass*0.20, 5.0)
-	restitution := math.Max(v.restitution, 0.30)
-	friction := math.Max(v.friction, 0.45)
-	gForce := v.gForce
-	if gForce <= 0 {
-		gForce = 9.8 * 50.0
-	}
-
-	volId := fmt.Sprintf("%s_part_%d", v.id, partIdx)
-	detachedVol := NewVolumeDynamic(partIdx, volId, "thing", mass, restitution, friction, v.restCombine, v.frictionCombine, gForce)
-
-	for i := 0; i < numParts; i++ {
-		if !inSubtree[i] || partVols[i] == nil {
-			continue
-		}
-		ox, oy, oz := localOrigins[i].X-mcx, localOrigins[i].Y-mcy, localOrigins[i].Z-mcz
-		rot := localRots[i]
-		srcFaces := partVols[i].GetFaces()
-		for fIdx := 0; fIdx < srcFaces.Len(); fIdx++ {
-			src := srcFaces.At(fIdx)
-			rot.TransformPointsWithMatrix(scratch, src.tri, ox, oy, oz)
-			fc := NewFace(scratch.Points, src.label, src.material)
-			fc.u = src.u
-			fc.v = src.v
-			fc.lockUV = src.lockUV
-			detachedVol.AddFace(fc)
-		}
-	}
-
-	partAxis := articulated_dynamics.NewTagAxisIdentity()
-	var partQ aabb.Quaternion
-	partQ.Set(qx, qy, qz, qw)
-	partAxis.SetFromQuaternion(&partQ)
-	rcx, rcy, rcz := partAxis.RotatePoint(mcx, mcy, mcz)
-
-	bodyCx, bodyCy, bodyCz := v.ent.GetCenter()
-	worldX := bodyCx + origX + rcx
-	worldY := bodyCy + origY + rcy
-	worldZ := bodyCz + origZ + rcz
-
-	// Tangential linear boost at center of mass: v_cm = v_pivot + omega x r_cm.
-	vx += wy*rcz - wz*rcy
-	vy += wz*rcx - wx*rcz
-	vz += wx*rcy - wy*rcx
-
-	v.onDetach(detachedVol, worldX, worldY, worldZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz)
-}
-
-func (v *Vertices3D) buildCenteredSinglePartVolume(
-	partIdx int,
-	srcVol *Volume,
-	dynamic bool,
-	mass, restitution, friction, gForce float64,
-) (*Volume, float64, float64, float64) {
-	volId := fmt.Sprintf("%s_ragdoll_%d", v.id, partIdx)
-	cVol := newVolume(dynamic, partIdx, volId, "thing", mass, restitution, friction, v.restCombine, v.frictionCombine, gForce)
-	if srcVol == nil || srcVol.GetFaces().Len() == 0 {
-		return cVol, 0, 0, 0
-	}
-
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-	srcFaces := srcVol.GetFaces()
-	for fIdx := 0; fIdx < srcFaces.Len(); fIdx++ {
-		src := srcFaces.At(fIdx)
-		minX, minY, minZ, maxX, maxY, maxZ = src.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-	}
-	if minX > maxX {
-		return cVol, 0, 0, 0
-	}
-
-	mcx := (minX + maxX) * 0.5
-	mcy := (minY + maxY) * 0.5
-	mcz := (minZ + maxZ) * 0.5
-
-	scratch := geometry.NewTriangle3D([3]geometry.XYZ{})
-	for fIdx := 0; fIdx < srcFaces.Len(); fIdx++ {
-		src := srcFaces.At(fIdx)
-		for p := 0; p < 3; p++ {
-			scratch.Points[p].X = src.tri.Points[p].X - mcx
-			scratch.Points[p].Y = src.tri.Points[p].Y - mcy
-			scratch.Points[p].Z = src.tri.Points[p].Z - mcz
-		}
-		fc := NewFace(scratch.Points, src.label, src.material)
-		fc.u = src.u
-		fc.v = src.v
-		fc.lockUV = src.lockUV
-		cVol.AddFace(fc)
-	}
-	return cVol, mcx, mcy, mcz
 }

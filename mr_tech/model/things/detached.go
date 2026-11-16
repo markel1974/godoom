@@ -9,20 +9,45 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
+// Detached represents one rigid-body segment in Things.tree: either initially attached to a living owner
+// (tracking keyframe/tag poses kinematically) or free/ragdoll 6-DoF with an optional breakable JointConstraint.
+type Detached struct {
+	*Base
+	partVerts          *volumes.Vertices3DPart
+	owner              volumes.IThing
+	pendingImpactOwner volumes.IThing
+	ragdollJoint       *collisions.JointConstraint
+	breakThreshold     float64
+	damage             float64
+}
+
 func noopDetachedCollision(other config.IThingConfig, energy float64) {}
 
 func noopDetachedImpact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 }
 
-// Detached represents an autonomous or ragdoll-linked 3D body part simulated as a 6-DoF rigid body.
-type Detached struct {
-	*Base
-	ragdollJoint   *collisions.JointConstraint
-	breakThreshold float64
-	damage         float64
+// NewAttachedPart creates a tree-resident segment Thing bound to owner until detached or switched to ragdoll.
+func NewAttachedPart(things IThingHandler, owner volumes.IThing, location *volumes.Volume, id string, verts *volumes.Vertices3DPart) *Detached {
+	ent := verts.GetSolver().GetEntity()
+	cfg := config.NewConfigThing(id, geometry.XYZ{}, 0, config.ThingItemDef, ent.GetMass(), 1, 1, 0)
+	cfg.OnCollision = noopDetachedCollision
+	cfg.OnImpact = noopDetachedImpact
+
+	d := &Detached{
+		Base:      NewBaseWithVertices(things, cfg, verts),
+		partVerts: verts,
+		owner:     owner,
+	}
+	if err := d.Prepare(d, location); err != nil {
+		panic(err)
+	}
+	// Preserve kinematic attached state initialized by Vertices3DPart.Setup after Base.Prepare resets angle/sleep.
+	d.SetMaxStep(0.0)
+	d.solver.SetElasticCollision(d.onPartElasticCollision)
+	return d
 }
 
-// NewDetached initializes a 6-DoF rigid-body limb from vol at pos with the given orientation, velocities,
+// NewDetached initializes an autonomous 6-DoF rigid-body limb from vol at pos with the given orientation, velocities,
 // and optional self-collision exclusion group (0 when freely dismembered).
 func NewDetached(things IThingHandler, vol *volumes.Volume, location *volumes.Volume, id string, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) *Detached {
 	ent := vol.GetSolver().GetEntity()
@@ -48,14 +73,54 @@ func NewDetached(things IThingHandler, vol *volumes.Volume, location *volumes.Vo
 	return d
 }
 
+// GetOwner returns the owning parent IThing while this segment belongs to it, or nil once detached.
+func (t *Detached) GetOwner() volumes.IThing {
+	return t.owner
+}
+
+// IsPhysicsFree reports whether this segment simulates as an autonomous 6-DoF rigid body.
+func (t *Detached) IsPhysicsFree() bool {
+	if t.partVerts != nil {
+		return t.partVerts.IsPhysicsFree()
+	}
+	return true
+}
+
+// IsSleeping returns false while attached/kinematic so contact queries against live limbs never try to wake an unstaged solver.
+func (t *Detached) IsSleeping() bool {
+	if !t.IsPhysicsFree() {
+		return false
+	}
+	return t.Base.IsSleeping()
+}
+
 // BindJoint associates a breakable ragdoll joint constraint with this limb so heavy hits can sever it.
 func (t *Detached) BindJoint(jc *collisions.JointConstraint, breakThreshold float64) {
 	t.ragdollJoint = jc
 	t.breakThreshold = breakThreshold
 }
 
-// ApplyImpact wakes the limb and breaks its attached ragdoll joint if accumulated hit stress exceeds threshold.
+func (t *Detached) onPartElasticCollision(other collisions.IObject, energy float64) {
+	if !t.IsPhysicsFree() && t.owner != nil {
+		if b, ok := t.owner.(interface {
+			onElasticCollision(other collisions.IObject, energy float64)
+		}); ok {
+			b.onElasticCollision(other, energy)
+		}
+	}
+}
+
+// ApplyImpact routes hits either to the owning living model (for knockback/dismemberment) or to this free/ragdoll limb.
 func (t *Detached) ApplyImpact(fx, fy, fz, px, py, pz float64) {
+	if !t.IsPhysicsFree() {
+		prevOwner := t.owner
+		t.Base.ApplyImpact(fx, fy, fz, px, py, pz)
+		if t.IsPhysicsFree() {
+			t.pendingImpactOwner = prevOwner
+			t.owner = nil
+		}
+		return
+	}
 	t.Base.ApplyImpact(fx, fy, fz, px, py, pz)
 	if t.ragdollJoint != nil && t.ragdollJoint.IsActive() && t.breakThreshold > 0 {
 		fMag := math.Sqrt(fx*fx + fy*fy + fz*fz)
@@ -67,6 +132,19 @@ func (t *Detached) ApplyImpact(fx, fy, fz, px, py, pz float64) {
 		if t.damage >= t.breakThreshold {
 			t.ragdollJoint.Break()
 		}
+	}
+}
+
+// Impact delivers hit damage callbacks to the owning living model until this segment becomes detached.
+func (t *Detached) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
+	if t.pendingImpactOwner != nil {
+		owner := t.pendingImpactOwner
+		t.pendingImpactOwner = nil
+		owner.Impact(other, id, force, closestDist, dirX, dirY, dirZ)
+		return
+	}
+	if !t.IsPhysicsFree() && t.owner != nil {
+		t.owner.Impact(other, id, force, closestDist, dirX, dirY, dirZ)
 	}
 }
 

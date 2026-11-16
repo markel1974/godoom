@@ -98,6 +98,11 @@ type Vertices3DEntry struct {
 	tick          uint64
 	facesA        *Faces
 	facesB        *Faces
+	frameCenters  []geometry.XYZ
+	frameIdxA     int
+	frameIdxB     int
+	lastRotA      *articulated_dynamics.TagAxis
+	lastRotB      *articulated_dynamics.TagAxis
 	rot           *articulated_dynamics.TagAxis
 	lastQx        float64
 	lastQy        float64
@@ -280,12 +285,247 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 	v.clampAnim = action.Clamp
 	v.singleFrame = v.startFrame == v.endFrame
 	if v.startFrame >= 0 && v.startFrame < len(v.volumes) {
+		v.frameIdxA = v.startFrame
+		v.frameIdxB = v.startFrame
 		v.volA = v.volumes[v.startFrame]
 		v.volB = v.volumes[v.startFrame]
 		v.lerpT = 0.0
 		v.comp.SetVolume(v.volA)
-		v.lastVolA = v.volA
+		if v.frameCenters == nil {
+			v.lastVolA = v.volA
+		}
 	}
+}
+
+// AdvanceAnimation updates volA, volB, and lerpT for tick without transforming render faces or entity AABB.
+func (v *Vertices3DEntry) AdvanceAnimation(tick uint64) {
+	if v.singleFrame {
+		v.lerpT = 0.0
+		return
+	}
+	v.tick = tick + v.salt
+	animLength := v.endFrame - v.startFrame + 1
+	if animLength <= 0 {
+		animLength = 1
+	}
+	lerpT := 0.0
+	var relativeFrameA int
+	var relativeFrameB int
+	if v.clampAnim {
+		frameFloat := 0.0
+		if v.tick > v.startTick {
+			frameFloat = float64(v.tick-v.startTick) / v.groupSize
+		}
+		lastAnim := animLength - 1
+		if relativeFrameA = int(frameFloat); relativeFrameA >= lastAnim {
+			v.singleFrame = true
+			relativeFrameA = lastAnim
+			relativeFrameB = lastAnim
+			lerpT = 0.0
+		} else {
+			lerpT = frameFloat - math.Floor(frameFloat)
+			if relativeFrameB = relativeFrameA + 1; relativeFrameB >= lastAnim {
+				relativeFrameB = lastAnim
+			}
+		}
+	} else {
+		frameFloat := float64(v.tick) / v.groupSize
+		lerpT = frameFloat - math.Floor(frameFloat)
+		relativeFrameA = int(frameFloat) % animLength
+		relativeFrameB = (int(frameFloat) + 1) % animLength
+	}
+	v.frameIdxA = v.startFrame + relativeFrameA
+	v.frameIdxB = v.startFrame + relativeFrameB
+	v.volA = v.volumes[v.frameIdxA]
+	v.volB = v.volumes[v.frameIdxB]
+	v.lerpT = lerpT
+}
+
+// CenterFrames shifts every frame volume of this entry around its own geometric bounding center
+// and rebuilds volume face trees and part solver geometry so each part is 6-DoF ready from creation.
+func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce float64) {
+	v.frameCenters = make([]geometry.XYZ, len(v.volumes))
+	for fIdx, vol := range v.volumes {
+		if vol == nil {
+			continue
+		}
+		faces := vol.GetFaces()
+		minX, minY, minZ := faces.GetMin()
+		maxX, maxY, maxZ := faces.GetMax()
+		mcx := (minX + maxX) * 0.5
+		mcy := (minY + maxY) * 0.5
+		mcz := (minZ + maxZ) * 0.5
+		v.frameCenters[fIdx] = geometry.XYZ{X: mcx, Y: mcy, Z: mcz}
+		if math.Abs(mcx) > 1e-6 || math.Abs(mcy) > 1e-6 || math.Abs(mcz) > 1e-6 {
+			for j := 0; j < faces.Len(); j++ {
+				f := faces.At(j)
+				p0, p1, p2 := f.tri.Points[0], f.tri.Points[1], f.tri.Points[2]
+				f.tri.Points[0] = geometry.XYZ{X: p0.X - mcx, Y: p0.Y - mcy, Z: p0.Z - mcz}
+				f.tri.Points[1] = geometry.XYZ{X: p1.X - mcx, Y: p1.Y - mcy, Z: p1.Z - mcz}
+				f.tri.Points[2] = geometry.XYZ{X: p2.X - mcx, Y: p2.Y - mcy, Z: p2.Z - mcz}
+				f.Rebuild()
+			}
+			vol.Rebuild()
+		}
+	}
+
+	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, gForce)
+	if v.volA != nil {
+		faces := v.volA.GetFaces()
+		minX, minY, minZ := faces.GetMin()
+		w, h, d := faces.GetSize()
+		cx, cy, cz := faces.GetCentroid()
+		ixx, ixy, ixz, iyy, iyz, izz := faces.GetInertia()
+		partSolver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+	}
+	v.comp.solver = partSolver
+	v.comp.volume = v.volA
+	v.solver = partSolver
+	v.ent = partSolver.GetEntity()
+	v.lastVolA = v.volA
+	v.lastRotA = articulated_dynamics.NewTagAxisIdentity()
+	v.lastRotB = articulated_dynamics.NewTagAxisIdentity()
+}
+
+// FrameCenterA returns the local geometric centering offset for the active A frame.
+func (v *Vertices3DEntry) FrameCenterA() geometry.XYZ {
+	if v.frameIdxA >= 0 && v.frameIdxA < len(v.frameCenters) {
+		return v.frameCenters[v.frameIdxA]
+	}
+	return geometry.XYZ{}
+}
+
+// FrameCenterB returns the local geometric centering offset for the active B frame.
+func (v *Vertices3DEntry) FrameCenterB() geometry.XYZ {
+	if v.frameIdxB >= 0 && v.frameIdxB < len(v.frameCenters) {
+		return v.frameCenters[v.frameIdxB]
+	}
+	return geometry.XYZ{}
+}
+
+// SyncSolverToCurrentFrame synchronizes the entry's active collision volume and solver bounds/inertia with volA.
+func (v *Vertices3DEntry) SyncSolverToCurrentFrame() {
+	if v.volA == nil || v.lastVolA == v.volA {
+		return
+	}
+	v.comp.SetVolume(v.volA)
+	faces := v.volA.GetFaces()
+	minX, minY, minZ := faces.GetMin()
+	w, h, d := faces.GetSize()
+	cx, cy, cz := faces.GetCentroid()
+	ixx, ixy, ixz, iyy, iyz, izz := faces.GetInertia()
+	v.comp.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+	v.lastVolA = v.volA
+}
+
+// CompileAttached transforms centered facesA/facesB for attached hierarchy rendering and updates local bounds.
+func (v *Vertices3DEntry) CompileAttached(rotA, rotB *articulated_dynamics.TagAxis, dOffX, dOffY, dOffZ float64) {
+	v.SyncSolverToCurrentFrame()
+	if v.volA == nil {
+		return
+	}
+	isIdentA := rotA.IsIdentity()
+	isIdentB := rotB.IsIdentity()
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+
+	countA := v.volA.GetFaceCount()
+	for j := 0; j < countA; j++ {
+		srcA := v.volA.GetFace(j)
+		dstA := v.facesA.At(j)
+		dstA.material = srcA.material
+		dstA.u = srcA.u
+		dstA.v = srcA.v
+		if isIdentA {
+			dstA.CopyPoints(srcA)
+		} else {
+			rotA.TransformPointsWithMatrix(dstA.tri, srcA.tri, 0, 0, 0)
+		}
+		minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+	}
+	for j := countA; j < v.facesA.Len(); j++ {
+		if faceA := v.facesA.At(j); faceA != nil {
+			faceA.Zero()
+		}
+	}
+
+	volB := v.volB
+	if volB == nil {
+		volB = v.volA
+	}
+	countB := volB.GetFaceCount()
+	for j := 0; j < countB; j++ {
+		srcB := volB.GetFace(j)
+		dstB := v.facesB.At(j)
+		dstB.material = srcB.material
+		dstB.u = srcB.u
+		dstB.v = srcB.v
+		if isIdentB && dOffX == 0 && dOffY == 0 && dOffZ == 0 {
+			dstB.CopyPoints(srcB)
+		} else {
+			rotB.TransformPointsWithMatrix(dstB.tri, srcB.tri, dOffX, dOffY, dOffZ)
+		}
+		minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+	}
+	for j := countB; j < v.facesB.Len(); j++ {
+		if faceB := v.facesB.At(j); faceB != nil {
+			faceB.Zero()
+		}
+	}
+
+	if minX > maxX {
+		minX, minY, minZ = 0, 0, 0
+		maxX, maxY, maxZ = 0, 0, 0
+	}
+	v.minX, v.minY, v.minZ = minX, minY, minZ
+	v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
+}
+
+// CompileDetached rotates the frozen centered volA into facesA using the part entity's 6-DoF quaternion.
+func (v *Vertices3DEntry) CompileDetached() {
+	if v.volA == nil || v.ent == nil {
+		return
+	}
+	ent := v.ent
+	q := ent.GetQRotation()
+	qx, qy, qz, qw := q.Get()
+	if v.lastRotVolA != v.volA || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
+		v.lastRotVolA = v.volA
+		v.lastQx, v.lastQy, v.lastQz, v.lastQw = qx, qy, qz, qw
+		isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
+		if !isIdent {
+			v.rot.SetFromQuaternion(q)
+		}
+		minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+		maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+		count := v.volA.GetFaceCount()
+		for j := 0; j < count; j++ {
+			src := v.volA.GetFace(j)
+			dst := v.facesA.At(j)
+			dst.material = src.material
+			dst.u = src.u
+			dst.v = src.v
+			if isIdent {
+				dst.CopyPoints(src)
+			} else {
+				v.rot.TransformPointsWithMatrix(dst.tri, src.tri, 0, 0, 0)
+			}
+			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+		}
+		for j := count; j < v.facesA.Len(); j++ {
+			if faceA := v.facesA.At(j); faceA != nil {
+				faceA.Zero()
+			}
+		}
+		if minX > maxX {
+			minX, minY, minZ = 0, 0, 0
+			maxX, maxY, maxZ = 0, 0, 0
+		}
+		v.minX, v.minY, v.minZ = minX, minY, minZ
+		v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
+	}
+	cx, cy, cz := ent.GetCenter()
+	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 }
 
 // Compile updates the active animation frames and interpolation factor for the given tick.

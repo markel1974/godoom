@@ -22,6 +22,7 @@ type Solver struct {
 	location             IObject
 	isActive             bool
 	canSleep             bool
+	stagedEpoch          uint64
 	onElasticCollision   CollisionT
 	onInelasticCollision CollisionT
 	beforePrepare        HookT
@@ -213,6 +214,15 @@ func (t *Solver) SetSolverIndex(idx int) {
 // GetSolverIndex returns this solver's active index in the current solver tick, or -1 when inactive.
 func (t *Solver) GetSolverIndex() int {
 	return t.cage.GetSolverIndex()
+}
+
+// TryMarkStaged marks this solver for epoch and returns true only on the first call per epoch.
+func (t *Solver) TryMarkStaged(epoch uint64) bool {
+	if t.stagedEpoch == epoch {
+		return false
+	}
+	t.stagedEpoch = epoch
+	return true
 }
 
 // StagePrepare resets transient contact state, updates the entity, and rebuilds its cage for the session.

@@ -37,6 +37,18 @@ type IVertices interface {
 	SetRagdollMode()
 }
 
+// IPartOwner is implemented by articulated owners whose sub-parts live as independent nodes in Things.tree.
+type IPartOwner interface {
+	GetParts() []IThing
+	SyncAttachedParts()
+}
+
+// ISubPart is implemented by individual body-part Things owned by a parent IPartOwner until detached/ragdolled.
+type ISubPart interface {
+	GetOwner() IThing
+	IsPhysicsFree() bool
+}
+
 // CreateVertices returns an implementation of IVertices based on the provided Thing configuration and material.
 func CreateVertices(cfg *config.Thing, materials *materials.Materials) IVertices {
 	var out IVertices

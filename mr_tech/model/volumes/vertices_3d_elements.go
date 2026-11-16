@@ -8,18 +8,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-// VirtualVolume represents a virtual 3D volume used for geometric or physics computations.
+// VirtualVolume represents a virtual 3D volume used for physics locomotion of an articulated owner.
 type VirtualVolume struct {
 	solver   *collisions.Solver
 	elements *Vertices3DElements
 }
 
-// NewVirtualVolume creates a virtual volume using the provided vertex elements and rigid body entity.
+// NewVirtualVolume creates a virtual volume using the provided vertex elements and rigid body solver.
 func NewVirtualVolume(elements *Vertices3DElements, solver *collisions.Solver) *VirtualVolume {
 	return &VirtualVolume{
 		elements: elements,
@@ -37,44 +36,45 @@ func (v *VirtualVolume) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// QueryOverlaps interroga i volumi attivi di tutte le parti che compongono Vertices3D
+// QueryOverlaps queries face overlaps across all active part volumes of Vertices3D.
 func (v *VirtualVolume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	for _, el := range v.elements.entries {
 		el.comp.QueryOverlaps(object, callback)
 	}
 }
 
-// Vertices3DElements stores face, volume, and physics state for managing 3D vertex element entries.
+// Vertices3DElements manages per-part 3D entries, per-frame active volumes, and owner locomotion solver.
 type Vertices3DElements struct {
-	facesA          *Faces
-	facesB          *Faces
-	partFaceOffsets []int
-	partFaceCounts  []int
-	entries         []*Vertices3DEntry
-	vVolume         *VirtualVolume
-	volsA           []*Volume
-	volsB           []*Volume
-	lerpT           float64
-	ent             *rigid_body.Entity
+	entries    []*Vertices3DEntry
+	vVolume    *VirtualVolume
+	volsA      []*Volume
+	volsB      []*Volume
+	lerpT      float64
+	ent        *rigid_body.Entity
+	emptyFaces *Faces
 }
 
-// NewVertices3DElements creates an empty Vertices3DElements collection.
+// NewVertices3DElements builds centered per-part entries and the owner's locomotion VirtualVolume.
 func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *Vertices3DElements {
-	v := &Vertices3DElements{}
+	v := &Vertices3DElements{
+		emptyFaces: NewFaces(0, false),
+	}
 
 	numParts := len(cfg.Model3D.Parts)
 	if numParts == 0 {
 		panic(fmt.Sprintf("no parts found in vertices_3d"))
 	}
 	v.entries = make([]*Vertices3DEntry, numParts)
-	v.partFaceOffsets = make([]int, numParts)
-	v.partFaceCounts = make([]int, numParts)
 	v.volsA = make([]*Volume, numParts)
 	v.volsB = make([]*Volume, numParts)
 
-	totalFaces := 0
-
 	salt := uint64(rand.Intn(512))
+	restitution := math.Max(cfg.Restitution, 0.20)
+	friction := math.Max(cfg.Friction, 0.55)
+	gForce := cfg.GForce
+	if gForce <= 0 {
+		gForce = 9.8 * 50.0
+	}
 
 	for i, part := range cfg.Model3D.Parts {
 		if part == nil {
@@ -85,42 +85,14 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		c.Model3D = nil
 		entry := NewVertices3DEntry(c, materials)
 		entry.salt = salt
+		partMass := cfg.Mass
+		if i > 0 {
+			partMass = math.Max(cfg.Mass*0.25, 10.0)
+		}
+		entry.CenterFrames(partMass, restitution, friction, gForce)
 		v.entries[i] = entry
-		if len(entry.volumes) == 0 {
+		if len(entry.volumes) == 0 || entry.volumes[0] == nil {
 			panic(fmt.Sprintf("empty volumes found in vertices_3d"))
-		}
-		vol := entry.volumes[0]
-		if vol == nil {
-			panic(fmt.Sprintf("nil volumes[0] found in vertices_3d"))
-		}
-		count := vol.GetFaceCount()
-		v.partFaceOffsets[i] = totalFaces
-		v.partFaceCounts[i] = count
-		totalFaces += count
-	}
-
-	v.facesA = NewFaces(totalFaces, true)
-	v.facesB = NewFaces(totalFaces, true)
-
-	// Initialize face buffers using partFaceOffsets to decouple buffer layout from execution order
-	for i, el := range v.entries {
-		if el == nil {
-			panic(fmt.Sprintf("nil element found in vertices_3d"))
-		}
-		if len(el.volumes) == 0 {
-			panic(fmt.Sprintf("nil volumes found in vertices_3d"))
-		}
-		if el.volumes[0] == nil {
-			panic(fmt.Sprintf("nil volumes[0] found in vertices_3d"))
-		}
-		target := el.volumes[0]
-		count := target.GetFaceCount()
-		offset := v.partFaceOffsets[i]
-		for j := 0; j < count; j++ {
-			src := target.GetFace(j)
-			idx := offset + j
-			v.facesA.Set(idx, NewFaceEmpty(src.material, src.u, src.v))
-			v.facesB.Set(idx, NewFaceEmpty(src.material, src.u, src.v))
 		}
 	}
 
@@ -130,106 +102,21 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 	return v
 }
 
-// Setup initializes 3D vertex elements, face buffers, view volume, and entity from the given configuration.
+// Setup binds the owner locomotion virtual volume solver to thing.
 func (v *Vertices3DElements) Setup(thing IThing) error {
-	for _, entry := range v.entries {
-		if err := entry.Setup(thing); err != nil {
-			return fmt.Errorf("failed to setup vertices_3d entry: %w", err)
-		}
-	}
-	return nil
+	return v.vVolume.Setup(thing)
 }
 
-// Bind compiles element i for tick, caches its volumes, and records the first element's interpolation factor.
+// Bind advances animation frames for entry i at tick and caches its active volumes and lerpT.
 func (v *Vertices3DElements) Bind(i int, tick uint64) {
 	element := v.entries[i]
-	_ = element.Compile(tick)
+	element.AdvanceAnimation(tick)
 	volA, volB, lerpT := element.GetVolumes()
 	if i == 0 {
 		v.lerpT = lerpT
 	}
 	v.volsA[i] = volA
 	v.volsB[i] = volB
-}
-
-// Compile transforms frame faces for part i into the A and B buffers and clears unused face slots.
-func (v *Vertices3DElements) Compile(i int, origAX, origAY, origAZ, origBX, origBY, origBZ float64, rotA, rotB *articulated_dynamics.TagAxis) (float64, float64, float64, float64, float64, float64) {
-	volA := v.volsA[i]
-	volB := v.volsB[i]
-
-	isIdentA := rotA.IsIdentity()
-	isIdentB := rotB.IsIdentity()
-
-	offset := v.partFaceOffsets[i]
-	partCount := v.partFaceCounts[i]
-
-	countA := volA.GetFaceCount()
-	countB := volB.GetFaceCount()
-
-	count := countA
-	if countB < count {
-		count = countB
-	}
-	if partCount < count {
-		count = partCount
-	}
-
-	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
-	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
-
-	for j := 0; j < count; j++ {
-		srcA := volA.GetFace(j)
-		dstA := v.facesA.At(offset + j)
-		if isIdentA {
-			if origAX == 0 && origAY == 0 && origAZ == 0 {
-				dstA.CopyPoints(srcA)
-			} else {
-				dstA.TransformPoints(srcA, origAX, origAY, origAZ)
-			}
-		} else {
-			rotA.TransformPointsWithMatrix(dstA.tri, srcA.tri, origAX, origAY, origAZ)
-		}
-		minX, minY, minZ, maxX, maxY, maxZ = dstA.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-
-		srcB := volB.GetFace(j)
-		dstB := v.facesB.At(offset + j)
-		if isIdentB {
-			if origBX == 0 && origBY == 0 && origBZ == 0 {
-				dstB.CopyPoints(srcB)
-			} else {
-				dstB.TransformPoints(srcB, origBX, origBY, origBZ)
-			}
-		} else {
-			rotB.TransformPointsWithMatrix(dstB.tri, srcB.tri, origBX, origBY, origBZ)
-		}
-		minX, minY, minZ, maxX, maxY, maxZ = dstB.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
-	}
-
-	// Zero out any leftover faces in this part's buffer slot to avoid displaying stale frame data
-	for j := count; j < partCount; j++ {
-		if faceA := v.facesA.At(offset + j); faceA != nil {
-			faceA.Zero()
-		}
-		if faceB := v.facesB.At(offset + j); faceB != nil {
-			faceB.Zero()
-		}
-	}
-
-	return minX, minY, minZ, maxX, maxY, maxZ
-}
-
-// ClearPart zeroes all face slots belonging to part i in both A and B render buffers.
-func (v *Vertices3DElements) ClearPart(i int) {
-	offset := v.partFaceOffsets[i]
-	partCount := v.partFaceCounts[i]
-	for j := 0; j < partCount; j++ {
-		if faceA := v.facesA.At(offset + j); faceA != nil {
-			faceA.Zero()
-		}
-		if faceB := v.facesB.At(offset + j); faceB != nil {
-			faceB.Zero()
-		}
-	}
 }
 
 // Len returns the number of 3D vertex elements.
@@ -250,20 +137,9 @@ func (v *Vertices3DElements) GetEntry(i int) *Vertices3DEntry {
 	return nil
 }
 
-// Freeze locks all non-nil 3D elements on their current animation frame.
-func (v *Vertices3DElements) Freeze() {
-	for _, el := range v.entries {
-		if el != nil {
-			el.FreezeCurrentFrame()
-		}
+// UpdateEntityBounds updates the owner locomotion entity dimensions from compiled model bounds.
+func (v *Vertices3DElements) UpdateEntityBounds(minX, minY, minZ, maxX, maxY, maxZ float64) {
+	if minX <= maxX {
+		v.ent.SetSize(maxX-minX, maxY-minY, maxZ-minZ)
 	}
-}
-
-// UpdateEntityBounds sets the entity size from current face bounds when all dimensions are positive.
-func (v *Vertices3DElements) UpdateEntityBounds() {
-	minX, minY, minZ, maxX, maxY, maxZ := v.facesA.GetMinMax()
-	w := maxX - minX
-	h := maxY - minY
-	d := maxZ - minZ
-	v.ent.SetSize(w, h, d)
 }

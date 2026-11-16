@@ -1,7 +1,6 @@
 package collisions
 
-// Coordinator orchestrates per-tick collision detection, PGS velocity/position iterations,
-// connected-island wake propagation, and island sleeping over active *Solver instances.
+// Coordinator manages solver lifecycles, wake queues, islands, and joint constraints during simulation.
 type Coordinator struct {
 	solverIterations int
 	session          uint64
@@ -20,7 +19,7 @@ type Coordinator struct {
 	wakeRunningFn    func(neighbor *Solver)
 }
 
-// NewCoordinator creates a Coordinator preallocated for initialCap solvers and solverIterations PGS sweeps.
+// NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
 func NewCoordinator(solverIterations, initialCap int) *Coordinator {
 	if solverIterations <= 0 {
 		solverIterations = 10
@@ -43,7 +42,7 @@ func NewCoordinator(solverIterations, initialCap int) *Coordinator {
 	return c
 }
 
-// AddJoint registers an active bilateral joint constraint with the coordinator.
+// AddJoint registers a joint constraint with the coordinator, ignoring nil constraints.
 func (c *Coordinator) AddJoint(j *JointConstraint) {
 	if j == nil {
 		return
@@ -56,7 +55,7 @@ func (c *Coordinator) AddJoint(j *JointConstraint) {
 	c.jointsLen++
 }
 
-// EnsureCapacity grows internal working buffers to hold at least minCap solvers without per-frame allocations.
+// EnsureCapacity grows coordinator buffers to hold at least minCap solvers while preserving existing entries.
 func (c *Coordinator) EnsureCapacity(minCap int) {
 	if minCap <= cap(c.running) {
 		return
@@ -85,12 +84,12 @@ func (c *Coordinator) EnsureCapacity(minCap int) {
 	c.jointSupported = newJointSup
 }
 
-// Reset clears the staged solver list for the next frame.
+// Reset clears the staged solver list.
 func (c *Coordinator) Reset() {
 	c.stagedLen = 0
 }
 
-// Stage adds s to the current frame's staged solvers.
+// Stage adds s to the staged solver list, growing storage when needed.
 func (c *Coordinator) Stage(s *Solver) {
 	if c.stagedLen >= len(c.staged) {
 		c.EnsureCapacity(c.stagedLen + 1)
@@ -99,30 +98,33 @@ func (c *Coordinator) Stage(s *Solver) {
 	c.stagedLen++
 }
 
-// StagedLen returns the number of currently staged solvers.
+// StagedLen returns the number of solvers currently staged.
 func (c *Coordinator) StagedLen() int {
 	return c.stagedLen
 }
 
-// Running returns the slice of active solvers simulated in the most recent Step.
+// Running returns the currently active solvers.
 func (c *Coordinator) Running() []*Solver {
 	return c.running[:c.runningLen]
 }
 
-// Removables returns solvers marked inactive during the most recent Step.
+// Removables returns the current solvers marked for removal.
 func (c *Coordinator) Removables() []*Solver {
 	return c.removables[:c.removablesLen]
 }
 
-// ClearRemovables resets the pending removable solver list after the caller handles removals.
+// ClearRemovables clears the tracked removable solvers list.
 func (c *Coordinator) ClearRemovables() {
 	c.removablesLen = 0
 }
 
+// wakeRunningIsland wakes the island containing neighbor and keeps it in the running set.
 func (c *Coordinator) wakeRunningIsland(neighbor *Solver) {
 	c.wakeIsland(neighbor, true)
 }
 
+// wakeIsland wakes root and sleeping active solvers connected through contacts or joints.
+// If addToRunning is true, it prepares woken solvers and appends them to the running set.
 func (c *Coordinator) wakeIsland(root *Solver, addToRunning bool) {
 	qLen := 0
 	if root.IsSleeping() {
@@ -185,6 +187,7 @@ func (c *Coordinator) wakeIsland(root *Solver, addToRunning bool) {
 	}
 }
 
+// findIsland returns the root island index for x, compressing parent links along the path.
 func (c *Coordinator) findIsland(x int) int {
 	for c.islandParent[x] != x {
 		c.islandParent[x] = c.islandParent[c.islandParent[x]]
@@ -193,9 +196,7 @@ func (c *Coordinator) findIsland(x int) int {
 	return x
 }
 
-// Step runs one complete physics simulation tick across all staged solvers.
-// queryContacts gathers static and dynamic contacts for cage and may invoke wake for newly contacted sleeping neighbors;
-// clampStatic resolves a cage against static world geometry during step-ups and positional relaxation.
+// Step advances the coordinator one solver tick, updating contacts, constraints, static clamps, and sleep state.
 func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), clampStatic func(cage *Cage)) {
 	c.session++
 	c.runningLen = 0
@@ -351,6 +352,7 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 	c.updateIslandSleep()
 }
 
+// updateIslandSleep updates connected solver islands and puts fully inactive islands to sleep.
 func (c *Coordinator) updateIslandSleep() {
 	for x := 0; x < c.runningLen; x++ {
 		c.islandParent[x] = x

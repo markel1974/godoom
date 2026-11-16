@@ -1,63 +1,27 @@
 package articulated_dynamics
 
-import (
-	"math"
+import "math"
 
-	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-)
-
-type IElement interface {
-	FreezeCurrentFrame()
-}
-
-// Joint defines a 3D vertex joint with angular motion, damping, damage, and detachment state.
+// Joint defines a 3D skeletal joint specification with ragdoll limits, damping, stress, and detachment state.
 type Joint struct {
-	elem            IElement
 	localCenterX    float64
 	localCenterY    float64
 	localCenterZ    float64
 	partRadius      float64
-	dofScaleX       float64
-	dofScaleY       float64
-	dofScaleZ       float64
-	maxAngleAlive   float64
 	maxAngleRagdoll float64
-	stiffness       float64
 	damping         float64
 	canDetach       bool
 	detachThreshold float64
 
-	angX          float64
-	angY          float64
-	angZ          float64
-	velX          float64
-	velY          float64
-	velZ          float64
-	damage        float64
-	hasDeflection bool
-	detached      bool
-
-	quat      *aabb.Quaternion
-	axis      *TagAxis
-	combinedA *TagAxis
-	combinedB *TagAxis
+	damage   float64
+	detached bool
 }
 
-// NewJoint2 creates a Joint with identity orientation quaternions and axes.
-func NewJoint2(elem IElement, partRadius float64) *Joint {
-	j := &Joint{
-		elem:      elem,
-		quat:      aabb.NewQuaternionIdentity(),
-		axis:      NewTagAxisIdentity(),
-		combinedA: NewTagAxisIdentity(),
-		combinedB: NewTagAxisIdentity(),
+// NewJoint2 creates a Joint specification with default geometric radius.
+func NewJoint2(partRadius float64) *Joint {
+	return &Joint{
+		partRadius: partRadius,
 	}
-	j.quat.SetIdentity()
-	j.axis.Reset()
-	j.combinedA.Reset()
-	j.combinedB.Reset()
-	j.partRadius = partRadius
-	return j
 }
 
 // GetMaxAngleRagdoll returns the cone-limit half-angle (radians) used by ragdoll PGS joints.
@@ -90,14 +54,6 @@ func (j *Joint) PartRadius() float64 {
 	return j.partRadius
 }
 
-// AddAngularKick adds a local-frame angular velocity impulse scaled by per-axis DOF limits.
-func (j *Joint) AddAngularKick(ltx, lty, ltz float64) {
-	const maxJointVel = 14.0
-	j.velX = math.Max(-maxJointVel, math.Min(maxJointVel, j.velX+ltx*j.dofScaleX))
-	j.velY = math.Max(-maxJointVel, math.Min(maxJointVel, j.velY+lty*j.dofScaleY))
-	j.velZ = math.Max(-maxJointVel, math.Min(maxJointVel, j.velZ+ltz*j.dofScaleZ))
-}
-
 // AccumulateStress adds impact stress to this joint and reports whether it reaches its detach threshold.
 func (j *Joint) AccumulateStress(stress float64) bool {
 	if !j.canDetach || j.detached {
@@ -125,66 +81,7 @@ func (j *Joint) Detach(dirX, dirY, dirZ, fMag, sideSign float64) (vx, vy, vz, wx
 	return vx, vy, vz, wx, wy, wz
 }
 
-// Connect advances the live hit-flinch spring-damper state and cone limits, returning true while motion remains active.
-func (j *Joint) Connect(dt float64) bool {
-	if j.damage > 0 {
-		j.damage = math.Max(0.0, j.damage-0.10*dt)
-	}
-	ks := j.stiffness
-	kd := j.damping
-	maxAng := j.maxAngleAlive
-	active := false
-
-	alphaX := -ks*j.angX - kd*j.velX
-	alphaY := -ks*j.angY - kd*j.velY
-	alphaZ := -ks*j.angZ - kd*j.velZ
-
-	j.velX += alphaX * dt
-	j.velY += alphaY * dt
-	j.velZ += alphaZ * dt
-
-	j.angX += j.velX * dt
-	j.angY += j.velY * dt
-	j.angZ += j.velZ * dt
-
-	angMagSq := j.angX*j.angX + j.angY*j.angY + j.angZ*j.angZ
-	if maxAng > 0.0 && angMagSq > maxAng*maxAng {
-		angMag := math.Sqrt(angMagSq)
-		nx, ny, nz := j.angX/angMag, j.angY/angMag, j.angZ/angMag
-		j.angX, j.angY, j.angZ = nx*maxAng, ny*maxAng, nz*maxAng
-		angMagSq = maxAng * maxAng
-		vDotN := j.velX*nx + j.velY*ny + j.velZ*nz
-		if vDotN > 0.0 {
-			j.velX -= 1.30 * vDotN * nx
-			j.velY -= 1.30 * vDotN * ny
-			j.velZ -= 1.30 * vDotN * nz
-		}
-	}
-
-	velMagSq := j.velX*j.velX + j.velY*j.velY + j.velZ*j.velZ
-	if angMagSq > 1e-6 || velMagSq > 1e-5 {
-		active = true
-	}
-
-	if angMagSq > 1e-6 {
-		angMag := math.Sqrt(angMagSq)
-		j.quat.SetAxisAngle(j.angX/angMag, j.angY/angMag, j.angZ/angMag, angMag)
-		j.axis.SetFromQuaternion(j.quat)
-		j.hasDeflection = true
-	} else {
-		j.axis.Reset()
-		j.hasDeflection = false
-	}
-
-	if !active {
-		j.angX, j.angY, j.angZ = 0, 0, 0
-		j.velX, j.velY, j.velZ = 0, 0, 0
-	}
-
-	return active
-}
-
-// SetLocalCenter sets the local center coordinates of the joint based on the provided bounding box dimensions.
+// SetLocalCenter sets the local center coordinates and radius estimate from local bounds.
 func (j *Joint) SetLocalCenter(minX, minY, minZ, maxX, maxY, maxZ float64) {
 	j.localCenterX = (minX + maxX) * 0.5
 	j.localCenterY = (minY + maxY) * 0.5
@@ -194,26 +91,9 @@ func (j *Joint) SetLocalCenter(minX, minY, minZ, maxX, maxY, maxZ float64) {
 	j.partRadius = math.Max(4.0, math.Min(48.0, r))
 }
 
-// SetDofScale sets the scaling factors for the degrees of freedom (DOF) along the x, y, and z axes of the joint.
-func (j *Joint) SetDofScale(x, y, z float64) {
-	j.dofScaleX = x
-	j.dofScaleY = y
-	j.dofScaleZ = z
-}
-
-// SetMaxAngleAlive sets the maximum angular limit (in radians) for the joint in its active, non-detached state.
-func (j *Joint) SetMaxAngleAlive(f float64) {
-	j.maxAngleAlive = f
-}
-
 // SetMaxAngleRagdoll sets the maximum angular limit (in radians) for the joint in its ragdoll state.
 func (j *Joint) SetMaxAngleRagdoll(f float64) {
 	j.maxAngleRagdoll = f
-}
-
-// SetStiffness sets the stiffness value for the joint's spring dynamics.
-func (j *Joint) SetStiffness(f float64) {
-	j.stiffness = f
 }
 
 // SetDamping sets the damping coefficient of the joint, controlling the rate at which motion is resisted.

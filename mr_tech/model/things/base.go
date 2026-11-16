@@ -20,6 +20,8 @@ type IThingHandler interface {
 
 	CreateDetached(vol *volumes.Volume, location *volumes.Volume, pos geometry.XYZ, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) volumes.IThing
 
+	StagePart(part volumes.IThing)
+
 	AddJoint(joint *collisions.JointConstraint)
 }
 
@@ -85,15 +87,14 @@ func (t *Base) Prepare(thing volumes.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
 	}
-	if det, ok := t.IVertices.(volumes.IDetachableVertices); ok {
-		det.SetOnDetach(func(vol *volumes.Volume, x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64) {
-			t.things.CreateDetached(vol, t.GetLocation(), geometry.XYZ{X: x, Y: y, Z: z}, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, 0)
-		})
-	}
-	if rag, ok := t.IVertices.(volumes.IRagdollVertices); ok {
-		rag.SetOnRagdoll(
-			func(vol *volumes.Volume, x, y, z, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz float64, collisionGroup uint64) volumes.IThing {
-				return t.things.CreateDetached(vol, t.GetLocation(), geometry.XYZ{X: x, Y: y, Z: z}, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, collisionGroup)
+	if pv, ok := t.IVertices.(volumes.IPartedVertices); ok {
+		pv.SetupParts(
+			func(partVerts volumes.IVertices, collisionGroup uint64) volumes.IThing {
+				pv3d := partVerts.(*volumes.Vertices3DPart)
+				return NewAttachedPart(t.things, thing, location, t.id+"_part", pv3d)
+			},
+			func(part volumes.IThing) {
+				t.things.StagePart(part)
 			},
 			func(joint *collisions.JointConstraint, childThing volumes.IThing, canDetach bool, breakThreshold float64) {
 				t.things.AddJoint(joint)
@@ -245,6 +246,21 @@ func (t *Base) GetSolverIndex() int {
 	return t.solver.GetSolverIndex()
 }
 
+// GetParts returns the slice of tree-resident segment Things when the underlying IVertices owns articulated parts.
+func (t *Base) GetParts() []volumes.IThing {
+	if owner, ok := t.IVertices.(volumes.IPartOwner); ok {
+		return owner.GetParts()
+	}
+	return nil
+}
+
+// SyncAttachedParts synchronizes all still-attached segment poses and tree bounds after owner locomotion.
+func (t *Base) SyncAttachedParts() {
+	if owner, ok := t.IVertices.(volumes.IPartOwner); ok {
+		owner.SyncAttachedParts()
+	}
+}
+
 // GetSolver returns the collisions.Solver managing this thing's physics simulation.
 func (t *Base) GetSolver() *collisions.Solver {
 	return t.solver
@@ -320,6 +336,11 @@ func (t *Base) FireHitscan(self volumes.IThing, id string, pos geometry.XYZ, for
 		}
 		if self.IsEqual(other) {
 			return maxDistance, false
+		}
+		if sub, ok := other.(volumes.ISubPart); ok && !sub.IsPhysicsFree() {
+			if owner := sub.GetOwner(); owner != nil && self.IsEqual(owner) {
+				return maxDistance, false
+			}
 		}
 		//if object == sender {
 		//	return maxDistance, false

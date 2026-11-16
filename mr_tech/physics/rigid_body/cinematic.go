@@ -149,6 +149,7 @@ type Cinematic struct {
 	isTilted             bool
 	keepUpright          bool
 	uprightLocked        bool
+	kinematic            bool
 	groundYawDamping     float64
 	groundTiltDamping    float64
 	lowEnergyTiltDamping float64
@@ -492,6 +493,16 @@ func (e *Cinematic) IsTilted() bool {
 	return e.isTilted
 }
 
+// SetKinematic toggles kinematic mode where the body acts as a zero-invMass moving collider without accumulating external forces.
+func (e *Cinematic) SetKinematic(kinematic bool) {
+	e.kinematic = kinematic
+}
+
+// IsKinematic reports whether this body is driven kinematically.
+func (e *Cinematic) IsKinematic() bool {
+	return e.kinematic
+}
+
 // SetOnGround sets the entity's ground state and adjusts vertical velocity when grounded flat.
 func (e *Cinematic) SetOnGround(onGround bool) {
 	e.onGround = onGround
@@ -618,6 +629,9 @@ func (e *Cinematic) IsMoving() bool {
 
 // AddForce applies a force to the object by modifying its acceleration components (ax, ay, az) using the force and inverse mass.
 func (e *Cinematic) AddForce(fx, fy, fz float64) {
+	if e.kinematic || e.invMass == 0.0 {
+		return
+	}
 	if fx != 0.0 || fy != 0.0 || fz != 0.0 {
 		e.WakeUp()
 	}
@@ -628,7 +642,7 @@ func (e *Cinematic) AddForce(fx, fy, fz float64) {
 
 // AddForceAtPoint applies a world-space force at a point and accumulates the resulting force and torque.
 func (e *Cinematic) AddForceAtPoint(fx, fy, fz float64, px, py, pz float64, cx, cy, cz float64) {
-	if e.invMass == 0.0 {
+	if e.kinematic || e.invMass == 0.0 {
 		return
 	}
 	if fx != 0.0 || fy != 0.0 || fz != 0.0 {
@@ -947,6 +961,12 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 func (e *Cinematic) effectiveContactInvMasses(e2 *Cinematic, nz float64) (float64, float64) {
 	invMass1 := e.invMass
 	invMass2 := e2.invMass
+	if e.kinematic {
+		invMass1 = 0.0
+	}
+	if e2.kinematic {
+		invMass2 = 0.0
+	}
 	if e2.onGround && nz > floorNormalThreshold {
 		invMass2 = 0.0
 	} else if e.onGround && nz < -floorNormalThreshold {

@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -31,6 +32,9 @@ type Things struct {
 	thinkersLen       int
 	pendingLen        atomic.Int32
 	hasPending        bool
+	pendingStage      []volumes.IThing
+	pendingStageMu    sync.Mutex
+	stageEpoch        uint64
 	event             *volumes.ThingEvent
 	cfg               []*config.Thing
 	maxOverlapsWorld  int
@@ -54,6 +58,7 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		entities:          make(map[uint64]volumes.IThing),
 		thinkers:          make([]volumes.IThing, defaultLen),
 		pending:           make([]volumes.IThing, defaultLen),
+		pendingStage:      make([]volumes.IThing, 0, 64),
 		thinkersLen:       0,
 		hasPending:        false,
 		config:            cfg,
@@ -278,14 +283,41 @@ func (th *Things) AddJoint(joint *collisions.JointConstraint) {
 	th.coordinator.AddJoint(joint)
 }
 
+// StagePart queues a newly released 6-DoF segment for immediate staging in the current physics tick.
+func (th *Things) StagePart(part volumes.IThing) {
+	if part == nil {
+		return
+	}
+	th.pendingStageMu.Lock()
+	th.pendingStage = append(th.pendingStage, part)
+	th.pendingStageMu.Unlock()
+}
+
 // StagePrepare resets staging state before collecting ready things and thinkers.
 func (th *Things) StagePrepare() {
 	th.coordinator.Reset()
 	th.thinkersLen = 0
+	th.stageEpoch++
 }
 
-// StageAdd queues t2 as ready and tracks it as a thinker when it supports thinking.
+// StageAdd queues t2 as ready (or routes attached sub-parts to their owning Thing) and avoids duplicate per-tick staging.
 func (th *Things) StageAdd(t2 volumes.IThing) {
+	if sub, ok := t2.(volumes.ISubPart); ok && !sub.IsPhysicsFree() {
+		if owner := sub.GetOwner(); owner != nil {
+			th.stageOne(owner)
+		}
+		return
+	}
+	th.stageOne(t2)
+}
+
+func (th *Things) stageOne(t2 volumes.IThing) {
+	if t2 == nil || !t2.IsActive() {
+		return
+	}
+	if !t2.GetSolver().TryMarkStaged(th.stageEpoch) {
+		return
+	}
 	th.coordinator.Stage(t2.GetSolver())
 	if t2.HasThinking() {
 		th.thinkers[th.thinkersLen] = t2
@@ -332,7 +364,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.event.Wait()
 	}
 
-	// Flush and stage any ragdoll/detached/throwable bodies spawned during Thinking so joints start synchronized on tick 0.
+	// Flush and stage any throwables or newly released ragdoll/detached parts from Thinking on tick 0.
 	if th.hasPending {
 		for x := 0; x < int(th.pendingLen.Load()); x++ {
 			item := th.pending[x]
@@ -342,11 +374,29 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.pendingLen.Store(0)
 		th.hasPending = false
 	}
+	if len(th.pendingStage) > 0 {
+		for _, part := range th.pendingStage {
+			th.StageAdd(part)
+		}
+		th.pendingStage = th.pendingStage[:0]
+	}
 
 	th.coordinator.Step(th.queryContactsFn, th.clampStaticFn)
 
 	for _, s := range th.coordinator.Running() {
-		th.tree.UpdateObject(s.GetCage().GetObject().(aabb.IObject))
+		obj := s.GetCage().GetObject()
+		if owner, ok := obj.(volumes.IPartOwner); ok {
+			if parts := owner.GetParts(); len(parts) > 0 {
+				owner.SyncAttachedParts()
+				for _, p := range parts {
+					if sub, ok := p.(volumes.ISubPart); ok && !sub.IsPhysicsFree() {
+						th.tree.UpdateObject(p)
+					}
+				}
+				continue
+			}
+		}
+		th.tree.UpdateObject(obj.(aabb.IObject))
 	}
 }
 
@@ -355,21 +405,36 @@ func (th *Things) AddStaticThing(ent volumes.IThing) {
 	th.statics = append(th.statics, ent)
 }
 
-// addThing adds a new IThing to the entity collection, assigns it a unique identifier, and updates related structures.
+// addThing registers ent in entities and inserts either all articulated segment sub-things or ent itself into tree.
 func (th *Things) addThing(ent volumes.IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
-	if len(th.entities) > cap(th.pending) {
-		newCap := len(th.entities) * 4
+	var parts []volumes.IThing
+	if owner, ok := ent.(volumes.IPartOwner); ok {
+		parts = owner.GetParts()
+	}
+	needed := len(th.entities) + len(parts)
+	if needed > cap(th.pending) {
+		newCap := needed * 4
 		th.thinkers = make([]volumes.IThing, newCap)
 		th.pending = make([]volumes.IThing, newCap)
 		th.coordinator.EnsureCapacity(newCap)
 	}
-	th.tree.InsertObject(ent)
+	if len(parts) > 0 {
+		ent.Compile(0)
+		for _, p := range parts {
+			th.entities[p.GetEntity().GetId()] = p
+			th.tree.InsertObject(p)
+		}
+	} else {
+		th.tree.InsertObject(ent)
+	}
 	ent.StartLoop()
 }
 
-// removeThing removes an IThing instance from the spatial tree and the entities map.
+// removeThing removes an IThing instance from the spatial tree (when tree-resident) and the entities map.
 func (th *Things) removeThing(ent volumes.IThing) {
-	th.tree.RemoveObject(ent)
+	if owner, ok := ent.(volumes.IPartOwner); !ok || len(owner.GetParts()) == 0 {
+		th.tree.RemoveObject(ent)
+	}
 	delete(th.entities, ent.GetEntity().GetId())
 }

@@ -77,7 +77,6 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 
 // Setup initializes model elements, links, joints, and actions, compiles bounds, and returns any setup error.
 func (v *Vertices3D) Setup(thing IThing) error {
-
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}

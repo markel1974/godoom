@@ -302,6 +302,7 @@ func (t *Solver) StageApply() {
 					if t.onInelasticCollision != nil {
 						t.onInelasticCollision(rParent, bestEnergy)
 					}
+					t.entity.ClearActiveContact()
 					lastInelasticId = rId
 					hasInelasticId = true
 				}

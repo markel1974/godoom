@@ -307,8 +307,8 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 	return f.count - initialCount, nil
 }
 
-// splitFace suddivide una faccia in modo conforme rispetto ai lati marcati.
-// Bit 0: AB, bit 1: BC, bit 2: CA.
+// splitFace subdivides a triangular face along masked edges using supplied midpoints and interpolated UVs.
+// Edge mask bits select AB, BC, and CA; a zero mask returns the original face.
 func (fc *Face) splitFace(mask uint8, mab, mbc, mca geometry.XYZ) []*Face {
 	if mask == 0 {
 		return []*Face{fc}

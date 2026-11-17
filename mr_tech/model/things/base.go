@@ -375,7 +375,7 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 	var closestFace *volumes.Face
 	var closestVol *volumes.Volume
 
-	const wallDeform = true
+	const wallDeform = false
 
 	if wallDeform {
 		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo

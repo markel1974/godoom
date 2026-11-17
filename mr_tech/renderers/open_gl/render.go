@@ -247,7 +247,8 @@ func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
 		w.tex.BindBuckets()
 		// Resolve MSAA color & depth buffers so liquid refracts the clean opaque background
 		// without feedback-loop darkening from previous frame's water.
-		w.post.ResolveMSAA(fbW, fbH)
+		// The brightness channel is consumed only by bloom (resolved later in post.Prepare).
+		w.post.ResolveMSAA(fbW, fbH, shaders.ResolveColor|shaders.ResolveDepth)
 		w.liquid.Render(w.dcLiquid.Render)
 	}
 	// MAIN ADDITIVE

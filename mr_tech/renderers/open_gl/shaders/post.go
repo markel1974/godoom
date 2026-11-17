@@ -54,8 +54,10 @@ type Post struct {
 	bloomIntensity float32
 	bloomBlur      int32
 
-	handler *Handler
-	bloom   *Bloom
+	handler        *Handler
+	bloom          *Bloom
+	attachments    []uint32
+	attachmentsPtr *uint32
 
 	w int32
 	h int32
@@ -63,7 +65,11 @@ type Post struct {
 
 // NewPost creates and returns a pointer to a new Post instance with default rendering configuration values.
 func NewPost() *Post {
-	return &Post{}
+	p := &Post{
+		attachments: []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1},
+	}
+	p.attachmentsPtr = &p.attachments[0]
+	return p
 }
 
 // Setup initializes the Post instance by assigning the rendering context from the provided Handler.
@@ -143,8 +149,9 @@ func (s *Post) Prepare() {
 	if fbW != s.w || fbH != s.h {
 		s.allocate(fbW, fbH)
 	}
-	// Physically resolve the multisampled FBO before 2D filters
-	s.ResolveMSAA(fbW, fbH)
+	// Physically resolve the multisampled FBO before 2D filters.
+	// Depth is consumed only by the liquid pass (resolved earlier), so skip it here.
+	s.ResolveMSAA(fbW, fbH, ResolveColor|ResolveBright)
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
@@ -173,28 +180,54 @@ func (s *Post) Render(winW, winH int32) {
 	s.ctx.Enable(api.DEPTH_TEST)
 }
 
-// ResolveMSAA resolves a multisample antialiasing (MSAA) framebuffer to a standard framebuffer for post-processing.
-func (s *Post) ResolveMSAA(fbw, fbh int32) {
+// ResolveMask selects which MSAA attachments ResolveMSAA must blit to the resolve FBO.
+type ResolveMask uint8
+
+const (
+	// ResolveColor resolves COLOR_ATTACHMENT0 (scene color, used by liquid refraction and final post).
+	ResolveColor ResolveMask = 1 << iota
+	// ResolveBright resolves COLOR_ATTACHMENT1 (brightness channel, used only by bloom).
+	ResolveBright
+	// ResolveDepth resolves the depth attachment (used only by liquid depth fog).
+	ResolveDepth
+)
+
+// postDrawAttachments is the MRT layout of the MSAA FBO (kept global to avoid per-frame allocations).
+var postDrawAttachments = [2]uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
+
+// ResolveMSAA resolves the requested attachments of the multisample (MSAA) framebuffer
+// to the standard framebuffer used for sampling. Resolving only what is actually consumed
+// matters: every MSAA blit forces a render pass break (expensive on GL-over-Metal drivers),
+// and the depth resolve is the most expensive one.
+func (s *Post) ResolveMSAA(fbw, fbh int32, mask ResolveMask) {
+	if mask == 0 {
+		return
+	}
 	s.ctx.BindFramebuffer(api.READ_FRAMEBUFFER, s.msaaFbo)
 	s.ctx.BindFramebuffer(api.DRAW_FRAMEBUFFER, s.fbo)
 
 	// Blit Albedo Base
-	s.ctx.ReadBuffer(api.COLOR_ATTACHMENT0)
-	s.ctx.DrawBuffer(api.COLOR_ATTACHMENT0)
-	s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.COLOR_BUFFER_BIT, api.NEAREST)
+	if mask&ResolveColor != 0 {
+		s.ctx.ReadBuffer(api.COLOR_ATTACHMENT0)
+		s.ctx.DrawBuffer(api.COLOR_ATTACHMENT0)
+		s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.COLOR_BUFFER_BIT, api.NEAREST)
+	}
 
 	// Blit Canale Bloom/Brightness
-	s.ctx.ReadBuffer(api.COLOR_ATTACHMENT1)
-	s.ctx.DrawBuffer(api.COLOR_ATTACHMENT1)
-	s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.COLOR_BUFFER_BIT, api.NEAREST)
+	if mask&ResolveBright != 0 {
+		s.ctx.ReadBuffer(api.COLOR_ATTACHMENT1)
+		s.ctx.DrawBuffer(api.COLOR_ATTACHMENT1)
+		s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.COLOR_BUFFER_BIT, api.NEAREST)
+	}
 
 	// Blit Depth
-	s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.DEPTH_BUFFER_BIT, api.NEAREST)
+	if mask&ResolveDepth != 0 {
+		s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.DEPTH_BUFFER_BIT, api.NEAREST)
+	}
 
 	// Restore FBO state for subsequent frames
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.msaaFbo)
-	attachments := []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
-	s.ctx.DrawBuffers(2, &attachments[0])
+	s.ctx.DrawBuffers(2, &postDrawAttachments[0])
 	s.ctx.ReadBuffer(api.COLOR_ATTACHMENT0)
 }
 
@@ -230,8 +263,7 @@ func (s *Post) allocate(width, height int32) {
 	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.RGBA16F, s.w, s.h)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.RENDERBUFFER, s.rboBrightMSAA)
 
-	attachments := []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
-	s.ctx.DrawBuffers(2, &attachments[0])
+	s.ctx.DrawBuffers(2, s.attachmentsPtr)
 
 	s.ctx.GenRenderbuffers(1, &s.rboDepthMSAA)
 	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepthMSAA)
@@ -267,7 +299,7 @@ func (s *Post) allocate(width, height int32) {
 	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
 	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.TEXTURE_2D, s.texDepthBuffer, 0)
 
-	s.ctx.DrawBuffers(2, &attachments[0])
+	s.ctx.DrawBuffers(2, s.attachmentsPtr)
 
 	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
 		panic("post Resolve FBO not complete: " + strconv.Itoa(int(v)))

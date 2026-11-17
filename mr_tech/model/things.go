@@ -75,6 +75,7 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 
 // Setup initializes the necessary configurations or resources required for the Things object to function properly.
 func (th *Things) Setup() error {
+	th.resolveTeleportTargets()
 	for _, ct := range th.cfg {
 		if ct == nil {
 			continue
@@ -215,6 +216,42 @@ func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
+// QueryVolume returns the volume containing (x, y, z), or nil if none is found.
+func (th *Things) QueryVolume(x, y, z float64) *volumes.Volume {
+	vol, _ := th.volumes.QueryPoint(x, y, z)
+	return vol
+}
+
+// resolveTeleportTargets resolves TeleportSpec.Target references (matching another Thing's TargetName or Id)
+// into concrete Destination coordinates and TargetAngle when Destination is unset.
+func (th *Things) resolveTeleportTargets() {
+	targets := make(map[string]*config.Thing)
+	for _, ct := range th.cfg {
+		if ct == nil {
+			continue
+		}
+		if ct.Id != "" {
+			targets[ct.Id] = ct
+		}
+		if ct.Teleport != nil && ct.Teleport.TargetName != "" {
+			targets[ct.Teleport.TargetName] = ct
+		}
+	}
+	for _, ct := range th.cfg {
+		if ct == nil || ct.Kind != config.ThingTeleportDef || ct.Teleport == nil || ct.Teleport.Target == "" {
+			continue
+		}
+		if dest, ok := targets[ct.Teleport.Target]; ok {
+			if ct.Teleport.Destination == (geometry.XYZ{}) {
+				ct.Teleport.Destination = dest.Position
+				if !ct.Teleport.PreserveAngle && ct.Teleport.TargetAngle == 0 {
+					ct.Teleport.TargetAngle = dest.Angle
+				}
+			}
+		}
+	}
+}
+
 // Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
 func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThing {
 	const disableEnemies = false
@@ -235,6 +272,8 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 		thing = things.NewKey(th, ct, volume)
 	case config.ThingDoorDef:
 		thing = things.NewDoor(th, ct, volume)
+	case config.ThingTeleportDef:
+		thing = things.NewTeleport(th, ct, volume)
 	case config.ThingInterfaceDef:
 		thing = things.NewUI(th, ct)
 	case config.ThingItemDef:

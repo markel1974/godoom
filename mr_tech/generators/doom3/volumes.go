@@ -114,6 +114,13 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 			if ent.IsDormant() {
 				continue
 			}
+			// Dynamic doors, lifts/elevators, and trigger volumes are instantiated as Things instead of static world geometry.
+			if ec, _ := ent.GetProperty("classname"); ec == "func_door" ||
+				ec == "func_plat" ||
+				ec == "func_elevator" ||
+				strings.HasPrefix(ec, "trigger_") {
+				continue
+			}
 		}
 
 		for _, surface := range model.Surfaces {

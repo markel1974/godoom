@@ -159,6 +159,7 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 	volumes := NewVolumes(mIdx, volumesCount)
 
 	const difficulty = 1
+	teleportDests := lumps.CollectTeleportDestinations(entities)
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
 		if classname != "worldspawn" && classname != "info_player_start" && !ent.IsLevelAvailable(difficulty) {
@@ -174,8 +175,8 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 			pos = lumps.CreateXYZ(x, y, z)
 		}
 		if modelProp, _ := ent.GetProperty("model"); strings.HasPrefix(modelProp, "*") {
-			if classname == "func_door" {
-				modelIdx, _ := strconv.Atoi(modelProp[1:])
+			modelIdx, _ := strconv.Atoi(modelProp[1:])
+			if strings.HasPrefix(classname, "func_door") || strings.HasPrefix(classname, "func_plat") {
 				rawFaces, err := q1.GetRawFaces(modelIdx)
 				if err != nil {
 					fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
@@ -187,6 +188,18 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 					continue
 				}
 				root.Things = append(root.Things, cThing)
+			} else if classname == "trigger_teleport" {
+				rawFaces, err := q1.GetRawFaces(modelIdx)
+				if err != nil {
+					continue
+				}
+				var pts []geometry.XYZ
+				for _, rf := range rawFaces {
+					pts = append(pts, rf.Points...)
+				}
+				if tpThing := lumps.BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
+					root.Things = append(root.Things, tpThing)
+				}
 			}
 			continue
 		}

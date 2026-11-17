@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -116,6 +117,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 	things := NewThings(q2.arc, q2.texManager, q2.palette)
 
 	const difficulty = 1
+	teleportDests := lumps.CollectTeleportDestinations(entities)
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
 		if classname != "worldspawn" && classname != "info_player_start" && !ent.IsLevelAvailable(difficulty) {
@@ -138,11 +140,33 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 			pos = lumps.CreateXYZ(x, y, z)
 		}
 
-		// TODO: Currently we are ignoring sub-models (*1, *2, etc.) like func_door or func_plat.
-		// Before focusing on "accessories", let's ensure that worldspawn (the base map)
-		// is rendered correctly. When ready, we will remove this continue
-		// and instantiate bmodels using GetModels() from IBSPReader.
 		if modelProp, _ := ent.GetProperty("model"); strings.HasPrefix(modelProp, "*") {
+			modelIdx, _ := strconv.Atoi(modelProp[1:])
+			if strings.HasPrefix(classname, "func_door") || strings.HasPrefix(classname, "func_plat") {
+				rawFaces, err := q2.GetRawFaces(modelIdx)
+				if err != nil {
+					fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
+					continue
+				}
+				cThing, err := things.CreateInternalBModel(rawFaces, pos, ent)
+				if err != nil {
+					fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)
+					continue
+				}
+				root.Things = append(root.Things, cThing)
+			} else if classname == "trigger_teleport" {
+				rawFaces, err := q2.GetRawFaces(modelIdx)
+				if err != nil {
+					continue
+				}
+				var pts []geometry.XYZ
+				for _, rf := range rawFaces {
+					pts = append(pts, rf.Points...)
+				}
+				if tpThing := lumps.BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
+					root.Things = append(root.Things, tpThing)
+				}
+			}
 			continue
 		}
 

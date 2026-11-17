@@ -64,10 +64,10 @@ var _availableModes = []ModeDef{
 		},
 	},
 	{
-		Name: "doom",
-		Zip:  false,
-		//Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD" + "||" + "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "NIGHT.WAD",
-		Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD",
+		Name:   "doom",
+		Zip:    false,
+		Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD" + "||" + "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "NIGHT.WAD",
+		//Target: "resources" + string(os.PathSeparator) + "wad" + string(os.PathSeparator) + "DOOM.WAD",
 		Builder: func(res common.IResources, target string, level int) (*config.Root, error) {
 			wb := wad.NewBuilder()
 			return wb.Build(res, target, level)

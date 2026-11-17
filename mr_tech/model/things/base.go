@@ -24,6 +24,8 @@ type IThingHandler interface {
 	StageRemove(thing vertices.IThing)
 
 	AddJoint(joint *collisions.JointConstraint)
+
+	QueryVolume(x, y, z float64) *volumes.Volume
 }
 
 // Base represents the fundamental attributes and behaviors of an object in the system.

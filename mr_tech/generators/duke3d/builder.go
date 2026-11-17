@@ -142,8 +142,10 @@ func (b *Builder) Build(res common.IResources, target string, levelNumber int) (
 	pY := -float64(level.Header.PosY) * b.scaleXY // flip Y to Cartesian up
 	player := NewPlayer(pX, pY, ToDegrees(level.Header.Ang))
 
+	things := append(world.GetDynamicThings(), buildDukeTeleports(level, world)...)
+
 	scaleFactor := geometry.XYZ{X: 1.0, Y: 1.0, Z: 1.0}
-	cr := config.NewConfigRoot(cal, cSectors, player.Build(), nil, scaleFactor, tex)
+	cr := config.NewConfigRoot(cal, cSectors, player.Build(), things, scaleFactor, tex)
 	cr.Vertices = gVertices
 	cr.Volumes = volumes
 	cr.Lights = lights

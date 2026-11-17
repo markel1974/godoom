@@ -11,11 +11,17 @@ import (
 
 // World represents a 3D game world, managing level data, textures, scaling factors, and axis inversion for rendering.
 type World struct {
-	level        *lumps.Level
-	textures     *lumps.Textures
-	scaleSectorH float64
-	scaleXY      float64
-	flipY        bool
+	level         *lumps.Level
+	textures      *lumps.Textures
+	scaleSectorH  float64
+	scaleXY       float64
+	flipY         bool
+	dynamicThings []*config.Thing
+}
+
+// GetDynamicThings returns dynamic door and lift Things generated during World.Build.
+func (w *World) GetDynamicThings() []*config.Thing {
+	return w.dynamicThings
 }
 
 // NewWorld initializes and returns a new World instance with the provided level and textures for rendering and configuration.
@@ -101,6 +107,41 @@ func (w *World) Build() ([]*config.Sector, geometry.Polygon, []*config.Volume, [
 
 		floorY := w.computeHeight(sec.FloorZ)
 		ceilY := w.computeHeight(sec.CeilingZ)
+
+		switch sec.LoTag {
+		case 20, 25, 26: // Build ceiling/sliding doors
+			if lowCeil, _, hasAdj := w.findLowestAdjacentHeights(&sec); hasAdj && ceilY <= floorY && lowCeil > floorY {
+				doorSpec := &config.DoorSpec{
+					OpenOffset:  geometry.XYZ{Z: lowCeil - floorY},
+					Speed:       120.0,
+					WaitSeconds: 4.0,
+					Activation:  config.DoorActivateTouch,
+				}
+				if sec.HiTag > 0 {
+					doorSpec.TargetName = fmt.Sprintf("duke_tag_%d", sec.HiTag)
+				}
+				if doorThing := w.buildDukeDoorThing(fmt.Sprintf("duke_door_%d", secIdx), &sec, floorY, lowCeil, sec.CeilingPicNum, sec.CeilingPicNum, doorSpec); doorThing != nil {
+					w.dynamicThings = append(w.dynamicThings, doorThing)
+				}
+				ceilY = lowCeil
+			}
+		case 16, 17, 18, 19: // Build elevators / lifts
+			if _, lowFloor, hasAdj := w.findLowestAdjacentHeights(&sec); hasAdj && floorY > lowFloor {
+				liftSpec := &config.DoorSpec{
+					OpenOffset:  geometry.XYZ{Z: -(floorY - lowFloor)},
+					Speed:       120.0,
+					WaitSeconds: 3.0,
+					Activation:  config.DoorActivateTouch,
+				}
+				if sec.HiTag > 0 {
+					liftSpec.TargetName = fmt.Sprintf("duke_tag_%d", sec.HiTag)
+				}
+				if liftThing := w.buildDukeDoorThing(fmt.Sprintf("duke_lift_%d", secIdx), &sec, lowFloor, floorY, sec.FloorPicNum, sec.FloorPicNum, liftSpec); liftThing != nil {
+					w.dynamicThings = append(w.dynamicThings, liftThing)
+				}
+				floorY = lowFloor
+			}
+		}
 
 		lightKind, intensity, falloff := w.computeLight(&sec, ceilY, floorY)
 

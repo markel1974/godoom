@@ -164,6 +164,12 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	playerAngle := 0.0
 	monsters := 0
 
+	procModels := make(map[string]*proc.Model, len(procFile.Models))
+	for _, model := range procFile.Models {
+		procModels[model.Name] = model
+	}
+	teleportDests := collectDoom3TeleportDestinations(entities)
+
 	thingsManager := NewThings(arc, materials, defs, texManager, imgLoader)
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
@@ -191,8 +197,14 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 				}
 				root.Lights = append(root.Lights, light)
 			}
-		case "func": //IMPLEMENT
-		case "trigger": //IMPLEMENT
+		case "func":
+			if doorThing, ok := buildDoom3DoorOrLift(ent, procModels, materials, arc, thingsManager); ok {
+				root.Things = append(root.Things, doorThing)
+			}
+		case "trigger":
+			if tpThing := buildDoom3Teleport(ent, procModels, teleportDests); tpThing != nil {
+				root.Things = append(root.Things, tpThing)
+			}
 		case "speaker": //IMPLEMENT
 		case "sound": //IMPLEMENT
 		case "item":

@@ -29,6 +29,7 @@ const (
 	ThingDoorDef
 	ThingPlatformDef
 	ThingButtonDef
+	ThingTeleportDef
 )
 
 // DoorActivation defines how a door can be triggered by an actor.
@@ -59,6 +60,18 @@ type KeySpec struct {
 	Target string `json:"target,omitempty"`
 }
 
+// TeleportSpec defines destination coordinates, orientation, and linking metadata for a ThingTeleportDef.
+type TeleportSpec struct {
+	Destination   geometry.XYZ `json:"destination"`
+	TargetAngle   float64      `json:"targetAngle,omitempty"`
+	PreserveAngle bool         `json:"preserveAngle,omitempty"`
+	ResetVelocity bool         `json:"resetVelocity,omitempty"`
+	Cooldown      float64      `json:"cooldown,omitempty"`
+	TargetName    string       `json:"targetName,omitempty"`
+	Target        string       `json:"target,omitempty"`
+	PlayerOnly    bool         `json:"playerOnly,omitempty"`
+}
+
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
 	Id                 string        `json:"id"`
@@ -86,6 +99,7 @@ type Thing struct {
 	MaxStepFactor      float64       `json:"maxStep"`
 	Door               *DoorSpec     `json:"door,omitempty"`
 	Key                *KeySpec      `json:"key,omitempty"`
+	Teleport           *TeleportSpec `json:"teleport,omitempty"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc
@@ -126,6 +140,9 @@ func (t *Thing) Scale(scale geometry.XYZ) {
 	if t.Door != nil {
 		t.Door.OpenOffset.Scale(scale)
 	}
+	if t.Teleport != nil {
+		t.Teleport.Destination.Scale(scale)
+	}
 }
 
 // Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
@@ -139,6 +156,11 @@ func (t *Thing) Clone() *Thing {
 	if t.Key != nil {
 		k := *t.Key
 		keyCopy = &k
+	}
+	var teleportCopy *TeleportSpec
+	if t.Teleport != nil {
+		tp := *t.Teleport
+		teleportCopy = &tp
 	}
 	return &Thing{
 		Id:          t.Id,
@@ -161,6 +183,7 @@ func (t *Thing) Clone() *Thing {
 		Sprite:       t.Sprite,
 		Door:         doorCopy,
 		Key:          keyCopy,
+		Teleport:     teleportCopy,
 		OnBind:       t.OnBind,
 		OnThinking:   t.OnThinking,
 		OnCollision:  t.OnCollision,

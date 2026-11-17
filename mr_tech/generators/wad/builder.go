@@ -122,7 +122,10 @@ func (bld *Builder) Build(fs common.IResources, inFile string, levelNumber int) 
 	}
 
 	sectorsEdges := bld.createSectorsEdges(level, vertexes)
+	sectorSpecials := bld.analyzeSectorSpecials(level, sectorsEdges)
+
 	var sectors []*config.Sector
+	var dynamicThings []*config.Thing
 	for secIdx, edges := range sectorsEdges {
 		if edges == nil {
 			continue
@@ -133,7 +136,47 @@ func (bld *Builder) Build(fs common.IResources, inFile string, levelNumber int) 
 		floorPic := lSector.FloorPic
 		floorY := float64(lSector.FloorHeight)
 		ceilY := float64(lSector.CeilingHeight)
-		if openAllDoors {
+		if spec, ok := sectorSpecials[secIdx]; ok {
+			if spec.isDoor {
+				ceilY = spec.targetCeil
+				if doorThing := bld.buildSectorDoorThing(
+					fmt.Sprintf("wad_door_%d", secIdx),
+					edges,
+					floorY,
+					spec.targetCeil,
+					spec.doorTex,
+					ceilPic,
+					spec.doorSpec,
+					texHandler,
+				); doorThing != nil {
+					dynamicThings = append(dynamicThings, doorThing)
+				}
+			} else if spec.isLift {
+				floorY = spec.lowestFloor
+				liftHeight := float64(lSector.FloorHeight) - spec.lowestFloor
+				liftSpec := &config.DoorSpec{
+					OpenOffset:  geometry.XYZ{Z: -liftHeight},
+					Speed:       spec.liftSpeed,
+					WaitSeconds: 3.0,
+					Activation:  config.DoorActivateTouch,
+				}
+				if lSector.Tag > 0 {
+					liftSpec.TargetName = fmt.Sprintf("wad_tag_%d", lSector.Tag)
+				}
+				if liftThing := bld.buildSectorDoorThing(
+					fmt.Sprintf("wad_lift_%d", secIdx),
+					edges,
+					spec.lowestFloor,
+					float64(lSector.FloorHeight),
+					"",
+					floorPic,
+					liftSpec,
+					texHandler,
+				); liftThing != nil {
+					dynamicThings = append(dynamicThings, liftThing)
+				}
+			}
+		} else if openAllDoors {
 			ceilY = bld.calculateOpenDoorCeil(level, uint16(secIdx), lSector, edges)
 		}
 		sectorId := strconv.Itoa(secIdx)
@@ -147,13 +190,16 @@ func (bld *Builder) Build(fs common.IResources, inFile string, levelNumber int) 
 	}
 
 	var things []*config.Thing
+	things = append(things, dynamicThings...)
+	things = append(things, bld.buildWadTeleports(level, sectorsEdges, vertexes)...)
 	for i, lThing := range level.Things {
 		kind := lThing.GetType()
 		if kind == lumps.ThingTypePlayer1Start ||
 			kind == lumps.ThingTypePlayer2Start ||
 			kind == lumps.ThingTypePlayer3Start ||
 			kind == lumps.ThingTypePlayer4Start ||
-			kind == lumps.ThingTypeDeathmatchStart {
+			kind == lumps.ThingTypeDeathmatchStart ||
+			kind == lumps.ThingTypeTeleportLanding {
 			continue
 		}
 		if !lThing.IsLevelAvailable(difficulty) {
@@ -310,6 +356,16 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 		cfgThing.WakeupDistance = 400
 		_ = common.NewEnemy(cfgThing, animations)
 	} else {
+		if cfgThing.Kind == config.ThingKeyDef {
+			switch t.GetType() {
+			case 5, 40:
+				cfgThing.Key = &config.KeySpec{KeyId: "blue"}
+			case 6, 39:
+				cfgThing.Key = &config.KeySpec{KeyId: "yellow"}
+			case 13, 38:
+				cfgThing.Key = &config.KeySpec{KeyId: "red"}
+			}
+		}
 		cfgThing.GForce = GForce
 		_ = common.NewItem(cfgThing)
 	}

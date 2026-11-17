@@ -156,6 +156,65 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 	return thingCfg, nil
 }
 
+// CreateInternalBModel generates a Thing (door or plat) from Q3 BSP inline model face data.
+func (t *Things) CreateInternalBModel(rawFaces []*lumps.RawFace3, position geometry.XYZ, ent *lumps.Entity) (*config.Thing, error) {
+	classname, _ := ent.GetProperty("classname")
+	var allTriangles []config.Model3DEntryTriangle
+	for _, bspFace := range rawFaces {
+		texName := bspFace.TexName
+		animKind := config.MaterialKindSolid
+		if bspFace.Info.IsSky() {
+			animKind = config.MaterialKindSky
+		}
+		specificMaterial := config.NewConfigMaterial("bmodel", []string{texName}, animKind)
+		specificMaterial.Name = texName
+		t.shaders.MaterialBind(strings.ToLower(texName), specificMaterial)
+
+		rawTriangles := lumps.TriangulateConvex3d(bspFace.Points)
+		for _, rawTri := range rawTriangles {
+			tri := config.NewModel3DEntryTriangle(specificMaterial)
+			for k := 0; k < 3; k++ {
+				pos := rawTri[k]
+				u, v := float32(0.0), float32(0.0)
+				for idx, pt := range bspFace.Points {
+					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+						if len(bspFace.UVs) > idx {
+							u = float32(bspFace.UVs[idx][0])
+							v = float32(bspFace.UVs[idx][1])
+						}
+						break
+					}
+				}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
+			}
+			allTriangles = append(allTriangles, tri)
+		}
+	}
+	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
+	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
+	center, size := model3d.CenterWithBounds([]string{"default"})
+	worldPos := geometry.XYZ{
+		X: position.X + center.X,
+		Y: position.Y + center.Y,
+		Z: position.Z + center.Z,
+	}
+	thingCfg := t.doCreate(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+
+	const heavyMass = 1000.0
+	if strings.HasPrefix(classname, "func_door") {
+		thingCfg.Kind = config.ThingDoorDef
+		thingCfg.Mass = heavyMass
+		thingCfg.GForce = 0.0
+		thingCfg.Door = lumps.BuildDoorSpec(ent, size)
+	} else if strings.HasPrefix(classname, "func_plat") {
+		thingCfg.Kind = config.ThingDoorDef
+		thingCfg.Mass = heavyMass
+		thingCfg.GForce = 0.0
+		thingCfg.Door = lumps.BuildPlatSpec(ent, size)
+	}
+	return thingCfg, nil
+}
+
 // createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
 func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
 	if cModel != nil {

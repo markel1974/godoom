@@ -3,14 +3,13 @@ package q1
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
-	textures "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -195,8 +194,10 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 		thingCfg.GForce = 0.0
 		thingCfg.Door = buildQ1DoorSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_plat") {
-		thingCfg.Kind = config.ThingPlatformDef
+		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
+		thingCfg.GForce = 0.0
+		thingCfg.Door = lumps.BuildPlatSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_train") {
 		thingCfg.Kind = config.ThingPlatformDef
 		thingCfg.Mass = heavyMass
@@ -208,74 +209,7 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 }
 
 func buildQ1DoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
-	const (
-		q1DoorStartOpen = 1
-		q1DoorGoldKey   = 8
-		q1DoorSilverKey = 16
-	)
-
-	var dirX, dirY, dirZ float64
-	angle := 0.0
-	if rawAngle, ok := ent.GetProperty("angle"); ok {
-		if parsed, okParse := lumps.ParseFloat(rawAngle); okParse {
-			angle = parsed
-		}
-	}
-	switch angle {
-	case -1:
-		dirZ = 1.0
-	case -2:
-		dirZ = -1.0
-	default:
-		dirX, dirY, dirZ = lumps.CalcAngleDirectionZUP(angle)
-	}
-
-	lip := 8.0
-	if rawLip, ok := ent.GetProperty("lip"); ok {
-		if parsed, okParse := lumps.ParseFloat(rawLip); okParse {
-			lip = parsed
-		}
-	}
-	travel := math.Abs(dirX)*size.X + math.Abs(dirY)*size.Y + math.Abs(dirZ)*size.Z - lip
-	if travel <= 0 {
-		travel = math.Max(size.X, math.Max(size.Y, size.Z))
-	}
-
-	speed := 100.0
-	if rawSpeed, ok := ent.GetProperty("speed"); ok {
-		if parsed, okParse := lumps.ParseFloat(rawSpeed); okParse && parsed > 0 {
-			speed = parsed
-		}
-	}
-
-	waitSeconds := 3.0
-	if rawWait, ok := ent.GetProperty("wait"); ok {
-		if parsed, okParse := lumps.ParseFloat(rawWait); okParse {
-			waitSeconds = parsed
-		}
-	}
-
-	spawnflags := ent.GetSpawnFlags()
-	requiredKey := ""
-	if spawnflags&q1DoorGoldKey != 0 {
-		requiredKey = "gold"
-	} else if spawnflags&q1DoorSilverKey != 0 {
-		requiredKey = "silver"
-	}
-
-	targetName, _ := ent.GetProperty("targetname")
-	target, _ := ent.GetProperty("target")
-
-	return &config.DoorSpec{
-		RequiredKey: requiredKey,
-		OpenOffset:  geometry.XYZ{X: dirX * travel, Y: dirY * travel, Z: dirZ * travel},
-		Speed:       speed,
-		WaitSeconds: waitSeconds,
-		StartOpen:   spawnflags&q1DoorStartOpen != 0,
-		TargetName:  targetName,
-		Target:      target,
-		Activation:  config.DoorActivateTouch,
-	}
+	return lumps.BuildDoorSpec(ent, size)
 }
 
 // CreateThingBSP loads a BSP file, processes its geometry, and creates a Thing with the specified position and classname.

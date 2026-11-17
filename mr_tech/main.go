@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
@@ -16,6 +17,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/script"
 	"github.com/markel1974/godoom/mr_tech/generators/wad"
 	"github.com/markel1974/godoom/mr_tech/generators/wolfstein"
+	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -146,21 +148,27 @@ func main() {
 	var fps int
 	var enableShadows int
 	var enableShadowLights int
+	var msaaSamples int
+	var renderScale float64
+	var enableVSync int
 
-	var helpModes string
+	var helpModes strings.Builder
 	for idx, v := range _availableModes {
-		helpModes += fmt.Sprintf("[%d = %s]", idx, v.Name)
+		helpModes.WriteString(fmt.Sprintf("[%d = %s]", idx, v.Name))
 	}
 
 	flag.BoolVar(&showHelp, "h", false, "show this help")
 	flag.BoolVar(&showVersion, "v", false, "show version")
-	flag.IntVar(&mode, "m", 2, helpModes)
+	flag.IntVar(&mode, "m", 2, helpModes.String())
 	flag.IntVar(&level, "l", 1, "level number")
 	flag.IntVar(&fps, "fps", 120, "fps")
 	flag.IntVar(&width, "width", 640, "width")
 	flag.IntVar(&height, "height", 480, "height")
 	flag.IntVar(&enableShadows, "shadows", 1, "enable shadows")
 	flag.IntVar(&enableShadowLights, "shadowLights", 1, "enable shadows lights")
+	flag.IntVar(&msaaSamples, "msaa", model.DefaultMSAASamples, "MSAA samples for the 3D scene [0 = off, 2, 4, 8]")
+	flag.Float64Var(&renderScale, "scale", 1.0, "internal 3D render resolution scale (e.g. 0.5, 0.75, 1.0)")
+	flag.IntVar(&enableVSync, "vsync", 1, "enable vsync [0 = off, 1 = on]")
 
 	flag.Parse()
 
@@ -176,6 +184,16 @@ func main() {
 
 	if mode < 0 || mode >= len(_availableModes) {
 		fmt.Println("Invalid mode")
+		return
+	}
+
+	if !model.IsValidMSAASamples(msaaSamples) {
+		fmt.Println("Invalid msaa value (allowed: 0, 2, 4, 8)")
+		return
+	}
+
+	if renderScale <= 0 || renderScale > 2.0 {
+		fmt.Println("Invalid scale value (allowed: (0, 2.0])")
 		return
 	}
 
@@ -207,8 +225,10 @@ func main() {
 	cal := en.GetCalibration()
 	cal.EnableShadows = IntToBool(enableShadows)
 	cal.EnableShadowLights = IntToBool(enableShadowLights)
+	cal.MSAASamples = msaaSamples
+	cal.RenderScale = renderScale
 
-	ctx := app.GetContext(cfg.Player)
+	ctx := app.GetContext(cfg.Player, IntToBool(enableVSync))
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)

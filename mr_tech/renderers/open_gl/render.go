@@ -85,6 +85,7 @@ type RenderOpenGL struct {
 	hwOcc      *OcclusionHW
 
 	gpuProfiler *shaders.GpuProfiler
+	renderScale float64
 }
 
 // NewRender initializes a new OpenGL rendering instance with the given context and dimensions.
@@ -137,6 +138,10 @@ func (w *RenderOpenGL) RenderPrepare() error {
 		return err
 	}
 	w.gpuProfiler = w.handler.GetProfiler()
+	w.renderScale = cal.RenderScale
+	if w.renderScale <= 0 {
+		w.renderScale = 1.0
+	}
 	//w.dcOpaque.SetProfiler(w.gpuProfiler)
 	w.mapMetrics = w.handler.GetMapMetrics()
 	w.flashlightMetrics = w.handler.GetFlashlightMetrics()
@@ -187,7 +192,14 @@ func (w *RenderOpenGL) RenderAdvance() {
 
 // RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
 func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
-	fbW, fbH := int32(fbW1), int32(fbH1)
+	fbW := int32(float64(fbW1) * w.renderScale)
+	fbH := int32(float64(fbH1) * w.renderScale)
+	if fbW < 1 {
+		fbW = 1
+	}
+	if fbH < 1 {
+		fbH = 1
+	}
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
 	vert, vertSize, vertCount, indices, indexSize, indicesCount := w.builder.GetVertices()

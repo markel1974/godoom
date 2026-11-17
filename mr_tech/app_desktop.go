@@ -45,8 +45,8 @@ func (a *App) Setup(useZip bool, path string, width, height, fps int) error {
 }
 
 // GetContext creates and returns a new graphics context with the specified width, height, and frames per second (fps).
-func (a *App) GetContext(player *config.Player) api.IContext {
-	return desktop.NewContext(a.width, a.height, a.fps, player)
+func (a *App) GetContext(player *config.Player, vsync bool) api.IContext {
+	return desktop.NewContext(a.width, a.height, a.fps, player, vsync)
 }
 
 // WaitExit waits for the application to exit. On desktop platforms, no action is required as render.Start blocks execution.

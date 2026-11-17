@@ -70,8 +70,8 @@ func (a *App) GetPath() string {
 }
 
 // GetContext returns a new instance of api.IContext configured with the app's width, height, and frames per second (fps).
-func (a *App) GetContext(player *config.Player) api.IContext {
-	return web.NewContext(a.width, a.height, a.fps, player)
+func (a *App) GetContext(player *config.Player, vsync bool) api.IContext {
+	return web.NewContext(a.width, a.height, a.fps, player, vsync)
 }
 
 // GetResources returns the Resources instance associated with the App.

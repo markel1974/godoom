@@ -17,11 +17,11 @@ type Context struct {
 }
 
 // NewContext creates and returns a new instance of Context.
-func NewContext(width int, height int, fps int, player *config.Player) *Context {
+func NewContext(width int, height int, fps int, player *config.Player, vsync bool) *Context {
 	bounds := R(0, 0, float64(width), float64(height))
 	cfg := WindowConfig{
 		Bounds:             bounds,
-		VSync:              true,
+		VSync:              vsync,
 		Undecorated:        false,
 		Smooth:             false,
 		Resizable:          true,

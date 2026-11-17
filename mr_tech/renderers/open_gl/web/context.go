@@ -143,12 +143,12 @@ type Context struct {
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
-func NewContext(width int, height int, fps int, player *config.Player) *Context {
+func NewContext(width int, height int, fps int, player *config.Player, vsync bool) *Context {
 	cfg := WindowConfig{
 		Width:  width,
 		Height: height,
 		Fps:    fps,
-		VSync:  true,
+		VSync:  vsync,
 	}
 	ctx := &Context{
 		cfg:      cfg,

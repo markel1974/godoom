@@ -24,6 +24,8 @@ type Calibration struct {
 	AoFactor           float64
 	EnableShadowLights bool
 	EnableShadows      bool
+	MSAASamples        int
+	RenderScale        float64
 	PrjScale           float64
 	PrjScaleLights     float64
 	volumes            *Volumes
@@ -45,9 +47,23 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		BeamRatio:          cfg.BeamRatio,
 		VolSteps:           cfg.VolSteps,
 		AoFactor:           cfg.AoFactor,
+		MSAASamples:        DefaultMSAASamples,
+		RenderScale:        1.0,
 		volumes:            volumes,
 	}
 	return c
+}
+
+// DefaultMSAASamples is the default number of MSAA samples used by the 3D scene framebuffer.
+const DefaultMSAASamples = 4
+
+// IsValidMSAASamples reports whether n is a supported MSAA sample count (0 disables MSAA).
+func IsValidMSAASamples(n int) bool {
+	switch n {
+	case 0, 2, 4, 8:
+		return true
+	}
+	return false
 }
 
 // Setup initializes the calibration's parameters based on the dimensions and position of the root volume if Auto is enabled.

@@ -61,6 +61,9 @@ type Post struct {
 
 	w int32
 	h int32
+
+	// samples is the MSAA sample count of the scene FBO (0 = MSAA disabled).
+	samples int32
 }
 
 // NewPost creates and returns a pointer to a new Post instance with default rendering configuration values.
@@ -82,6 +85,10 @@ func (s *Post) Setup(h *Handler) error {
 	s.saturation = h.GetSaturation()
 	s.bloomIntensity = h.GetBloomIntensity()
 	s.bloomBlur = h.GetBloomBlur()
+	s.samples = int32(h.GetCalibration().MSAASamples)
+	if s.samples < 0 {
+		s.samples = 0
+	}
 	return nil
 }
 
@@ -249,25 +256,25 @@ func (s *Post) allocate(width, height int32) {
 		s.ctx.DeleteTextures(1, &s.texDepthBuffer)
 	}
 
-	// --- 1. MSAA FBO (Target Principale 4x Anti-Aliasing) ---
+	// --- 1. Scene FBO (MSAA when samples > 0, single-sampled otherwise) ---
 	s.ctx.GenFramebuffers(1, &s.msaaFbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.msaaFbo)
 
 	s.ctx.GenRenderbuffers(1, &s.rboColorMSAA)
 	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboColorMSAA)
-	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.RGBA16F, s.w, s.h)
+	s.renderbufferStorage(api.RGBA16F)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.RENDERBUFFER, s.rboColorMSAA)
 
 	s.ctx.GenRenderbuffers(1, &s.rboBrightMSAA)
 	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboBrightMSAA)
-	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.RGBA16F, s.w, s.h)
+	s.renderbufferStorage(api.RGBA16F)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.RENDERBUFFER, s.rboBrightMSAA)
 
 	s.ctx.DrawBuffers(2, s.attachmentsPtr)
 
 	s.ctx.GenRenderbuffers(1, &s.rboDepthMSAA)
 	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepthMSAA)
-	s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, 4, api.DEPTH_COMPONENT24, s.w, s.h)
+	s.renderbufferStorage(api.DEPTH_COMPONENT24)
 	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepthMSAA)
 
 	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
@@ -306,6 +313,20 @@ func (s *Post) allocate(width, height int32) {
 	}
 
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+}
+
+// renderbufferStorage allocates storage for the currently bound renderbuffer, multisampled only when MSAA is enabled.
+func (s *Post) renderbufferStorage(internalFormat uint32) {
+	if s.samples > 0 {
+		s.ctx.RenderbufferStorageMultisample(api.RENDERBUFFER, s.samples, internalFormat, s.w, s.h)
+		return
+	}
+	s.ctx.RenderbufferStorage(api.RENDERBUFFER, internalFormat, s.w, s.h)
+}
+
+// GetSamples returns the MSAA sample count of the scene framebuffer (0 = MSAA disabled).
+func (s *Post) GetSamples() int32 {
+	return s.samples
 }
 
 // GetColorBuffer returns the resolved color texture ID

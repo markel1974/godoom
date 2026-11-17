@@ -50,7 +50,7 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 		return nil, false
 	}
 	classname, _ := ent.GetProperty("classname")
-	if classname != "func_door" && classname != "func_plat" && classname != "func_elevator" {
+	if classname != "func_door" && classname != "func_door_rotating" && classname != "func_plat" && classname != "func_elevator" {
 		return nil, false
 	}
 
@@ -67,10 +67,8 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 
 	if pModel != nil {
 		cModel = bakeProcModel(pModel, ent, materials, arc)
-	} else if strings.HasSuffix(strings.ToLower(modelProp), ".lwo") && thingsManager != nil {
-		if loaded, err := thingsManager.loadModel(modelProp); err == nil {
-			cModel = loaded
-		}
+	} else if strings.HasSuffix(strings.ToLower(modelProp), ".lwo") && arc != nil {
+		cModel = bakeLWOModel(modelProp, ent, materials, arc)
 	}
 	if cModel == nil || len(cModel.Frames) == 0 || len(cModel.Frames[0].Triangles) == 0 {
 		return nil, false
@@ -78,15 +76,6 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 
 	center, size := cModel.CenterWithBounds([]string{"default"})
 	worldPos := center
-	if pModel == nil {
-		if origin, err := ent.GetOrigin(); err == nil {
-			worldPos = geometry.XYZ{
-				X: origin.X + center.X,
-				Y: origin.Y + center.Y,
-				Z: origin.Z + center.Z,
-			}
-		}
-	}
 
 	id := nameProp
 	if id == "" {
@@ -99,12 +88,91 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 	thingCfg.Model3DEntry = cModel
 	_ = common.NewItem(thingCfg)
 
-	if classname == "func_door" {
+	if classname == "func_door" || classname == "func_door_rotating" {
 		thingCfg.Door = buildDoorSpec(ent, size)
 	} else {
 		thingCfg.Door = buildLiftSpec(ent, size)
 	}
 	return thingCfg, true
+}
+
+// bakeLWOModel converts an external Doom 3 .lwo model into a world-transformed Model3DEntry.
+func bakeLWOModel(modelPath string, ent *proc.MapEntity, materials *proc.Materials, arc proc.IPkArchive) *config.Model3DEntry {
+	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(modelPath, "\\", "/")))
+	lf, err := arc.Open(cleanPath)
+	if err != nil {
+		return nil
+	}
+	lwd := proc.NewLWO()
+	if err := lwd.Parse(lf); err != nil || len(lwd.Points) == 0 || len(lwd.Polygons) == 0 {
+		return nil
+	}
+
+	tagMaterials := make([]*config.Material, len(lwd.Tags))
+	for ti, tagName := range lwd.Tags {
+		texNameLC := strings.ToLower(tagName)
+		if materials != nil {
+			if matDef := materials.Resolve(tagName); matDef != nil {
+				if guiMat, _ := ResolveGUIMaterial(arc, materials, matDef, ent); guiMat != nil {
+					tagMaterials[ti] = guiMat
+				} else {
+					tagMaterials[ti] = ResolveConfigMaterial(matDef)
+				}
+			}
+		}
+		if tagMaterials[ti] == nil {
+			kind := ToMaterial(texNameLC)
+			tagMaterials[ti] = config.NewConfigMaterial("lwo.part", []string{texNameLC}, kind)
+			ConfigureMaterial(tagMaterials[ti], texNameLC, nil)
+		}
+	}
+
+	var allTriangles []config.Model3DEntryTriangle
+	for polyIdx, poly := range lwd.Polygons {
+		if len(poly) < 3 {
+			continue
+		}
+		var mat *config.Material
+		if tagIdx, ok := lwd.PolyTags[polyIdx]; ok && tagIdx >= 0 && tagIdx < len(tagMaterials) {
+			mat = tagMaterials[tagIdx]
+		}
+		if mat == nil && len(tagMaterials) > 0 {
+			mat = tagMaterials[0]
+		}
+
+		getVertex := func(vi int) (geometry.XYZ, float32, float32) {
+			var p geometry.XYZ
+			if vi >= 0 && vi < len(lwd.Points) {
+				p = ent.TransformPoint(lwd.Points[vi])
+			}
+			var u, v float32
+			if uv, ok := lwd.VMadUVs[proc.UVKey{Poly: polyIdx, Vert: vi}]; ok {
+				u, v = uv[0], uv[1]
+			} else if uv, ok = lwd.VMapUVs[vi]; ok {
+				u, v = uv[0], uv[1]
+			}
+			return p, u, v
+		}
+
+		p0, u0, v0 := getVertex(poly[0])
+		for k := 1; k < len(poly)-1; k++ {
+			p1, u1, v1 := getVertex(poly[k])
+			p2, u2, v2 := getVertex(poly[k+1])
+
+			tri := config.NewModel3DEntryTriangle(mat)
+			tri.Vertices[0] = config.Model3DEntryVertex{Pos: p0, U: u0, V: v0}
+			tri.Vertices[1] = config.Model3DEntryVertex{Pos: p2, U: u2, V: v2}
+			tri.Vertices[2] = config.Model3DEntryVertex{Pos: p1, U: u1, V: v1}
+			allTriangles = append(allTriangles, tri)
+		}
+	}
+
+	if len(allTriangles) == 0 {
+		return nil
+	}
+	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
+	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
+	return model3d
 }
 
 // bakeProcModel converts an inline Doom 3 .proc submodel into a world-transformed Model3DEntry.
@@ -157,19 +225,64 @@ func bakeProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Mater
 
 func buildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	var dirX, dirY, dirZ float64
-	moveDir := 0.0
+	hasDir := false
 	if raw, ok := ent.GetProperty("movedir"); ok {
-		if v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64); err == nil {
-			moveDir = v
+		rawTrim := strings.TrimSpace(raw)
+		fields := strings.Fields(rawTrim)
+		if len(fields) == 3 {
+			vx, errX := strconv.ParseFloat(fields[0], 64)
+			vy, errY := strconv.ParseFloat(fields[1], 64)
+			vz, errZ := strconv.ParseFloat(fields[2], 64)
+			if errX == nil && errY == nil && errZ == nil {
+				v := ent.TransformVector(geometry.XYZ{X: vx, Y: vy, Z: vz})
+				vLen := math.Sqrt(v.X*v.X + v.Y*v.Y + v.Z*v.Z)
+				if vLen > 1e-6 {
+					dirX = v.X / vLen
+					dirY = v.Y / vLen
+					dirZ = v.Z / vLen
+					hasDir = true
+				}
+			}
+		} else if v, err := strconv.ParseFloat(rawTrim, 64); err == nil {
+			switch v {
+			case -1:
+				dirZ = 1.0
+				hasDir = true
+			case -2:
+				dirZ = -1.0
+				hasDir = true
+			default:
+				rad := v * math.Pi / 180.0
+				dirX = math.Cos(rad)
+				dirY = math.Sin(rad)
+				hasDir = true
+			}
 		}
 	}
-	switch moveDir {
-	case -1:
-		dirZ = 1.0
-	case -2:
-		dirZ = -1.0
-	default:
-		rad := moveDir * math.Pi / 180.0
+
+	if !hasDir {
+		if rawAngle, ok := ent.GetProperty("angle"); ok {
+			if v, err := strconv.ParseFloat(strings.TrimSpace(rawAngle), 64); err == nil {
+				switch v {
+				case -1:
+					dirZ = 1.0
+					hasDir = true
+				case -2:
+					dirZ = -1.0
+					hasDir = true
+				default:
+					rad := v * math.Pi / 180.0
+					dirX = math.Cos(rad)
+					dirY = math.Sin(rad)
+					hasDir = true
+				}
+			}
+		}
+	}
+
+	if !hasDir {
+		ang := ent.GetAngle()
+		rad := ang * math.Pi / 180.0
 		dirX = math.Cos(rad)
 		dirY = math.Sin(rad)
 	}

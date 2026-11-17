@@ -124,7 +124,7 @@ func (e *MapEntity) GetLightRadius() float64 {
 	return maxR
 }
 
-// GetAngle parses and returns the yaw angle from the "angle" property.
+// GetAngle parses and returns the yaw angle from the "angle", "angles", or "rotation" property.
 func (e *MapEntity) GetAngle() float64 {
 	val, ok := e.GetProperty("angle")
 	if ok {
@@ -133,14 +133,23 @@ func (e *MapEntity) GetAngle() float64 {
 		}
 	}
 
+	if anglesStr, ok := e.GetProperty("angles"); ok {
+		parts := strings.Fields(anglesStr)
+		if len(parts) >= 2 {
+			if yaw, err := strconv.ParseFloat(parts[1], 64); err == nil {
+				return yaw
+			}
+		}
+	}
+
 	// In Doom 3, entities often use a 3x3 rotation matrix "m00 m01 m02 m10 m11 m12 m20 m21 m22"
 	if rot, ok := e.GetProperty("rotation"); ok {
 		parts := strings.Fields(rot)
 		if len(parts) >= 4 {
 			m00, err1 := strconv.ParseFloat(parts[0], 64)
-			m10, err2 := strconv.ParseFloat(parts[3], 64)
+			m01, err2 := strconv.ParseFloat(parts[1], 64)
 			if err1 == nil && err2 == nil {
-				rad := math.Atan2(m10, m00)
+				rad := math.Atan2(m01, m00)
 				deg := rad * 180.0 / math.Pi
 				if deg < 0 {
 					deg += 360.0
@@ -267,7 +276,12 @@ func (e *MapEntity) GetSpotlightParams() (geometry.XYZ, float64, float64) {
 // TransformPoint transforms a local coordinate point into world space using the entity's rotation and origin.
 func (e *MapEntity) TransformPoint(p geometry.XYZ) geometry.XYZ {
 	origin, _ := e.GetOrigin()
+	rot := e.TransformVector(p)
+	return geometry.XYZ{X: origin.X + rot.X, Y: origin.Y + rot.Y, Z: origin.Z + rot.Z}
+}
 
+// TransformVector rotates a direction/offset vector using the entity's rotation, angles, or angle properties without translation.
+func (e *MapEntity) TransformVector(p geometry.XYZ) geometry.XYZ {
 	if rotStr, ok := e.GetProperty("rotation"); ok {
 		parts := strings.Fields(rotStr)
 		if len(parts) == 9 {
@@ -284,7 +298,39 @@ func (e *MapEntity) TransformPoint(p geometry.XYZ) geometry.XYZ {
 				rx := p.X*r0 + p.Y*r3 + p.Z*r6
 				ry := p.X*r1 + p.Y*r4 + p.Z*r7
 				rz := p.X*r2 + p.Y*r5 + p.Z*r8
-				return geometry.XYZ{X: origin.X + rx, Y: origin.Y + ry, Z: origin.Z + rz}
+				return geometry.XYZ{X: rx, Y: ry, Z: rz}
+			}
+		}
+	}
+
+	if anglesStr, ok := e.GetProperty("angles"); ok {
+		parts := strings.Fields(anglesStr)
+		if len(parts) >= 3 {
+			pitch, errP := strconv.ParseFloat(parts[0], 64)
+			yaw, errY := strconv.ParseFloat(parts[1], 64)
+			roll, errR := strconv.ParseFloat(parts[2], 64)
+			if errP == nil && errY == nil && errR == nil {
+				radYaw := yaw * math.Pi / 180.0
+				radPitch := pitch * math.Pi / 180.0
+				radRoll := roll * math.Pi / 180.0
+				sy, cy := math.Sin(radYaw), math.Cos(radYaw)
+				sp, cp := math.Sin(radPitch), math.Cos(radPitch)
+				sr, cr := math.Sin(radRoll), math.Cos(radRoll)
+
+				m00 := cp * cy
+				m01 := cp * sy
+				m02 := -sp
+				m10 := sr*sp*cy - cr*sy
+				m11 := sr*sp*sy + cr*cy
+				m12 := sr * cp
+				m20 := cr*sp*cy + sr*sy
+				m21 := cr*sp*sy - sr*cy
+				m22 := cr * cp
+
+				rx := p.X*m00 + p.Y*m10 + p.Z*m20
+				ry := p.X*m01 + p.Y*m11 + p.Z*m21
+				rz := p.X*m02 + p.Y*m12 + p.Z*m22
+				return geometry.XYZ{X: rx, Y: ry, Z: rz}
 			}
 		}
 	}
@@ -296,9 +342,9 @@ func (e *MapEntity) TransformPoint(p geometry.XYZ) geometry.XYZ {
 			sinA := math.Sin(rad)
 			rx := p.X*cosA - p.Y*sinA
 			ry := p.X*sinA + p.Y*cosA
-			return geometry.XYZ{X: origin.X + rx, Y: origin.Y + ry, Z: origin.Z + p.Z}
+			return geometry.XYZ{X: rx, Y: ry, Z: p.Z}
 		}
 	}
 
-	return geometry.XYZ{X: origin.X + p.X, Y: origin.Y + p.Y, Z: origin.Z + p.Z}
+	return p
 }

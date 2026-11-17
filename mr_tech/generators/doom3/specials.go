@@ -11,14 +11,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-type doom3TeleportDest struct {
+type TeleportDest struct {
 	pos   geometry.XYZ
 	angle float64
 }
 
-// collectDoom3TeleportDestinations indexes teleport destination entities by their Doom 3 entity "name".
-func collectDoom3TeleportDestinations(entities []*proc.MapEntity) map[string]doom3TeleportDest {
-	dests := make(map[string]doom3TeleportDest)
+// collectTeleportDestinations indexes teleport destination entities by their Doom 3 entity "name".
+func collectTeleportDestinations(entities []*proc.MapEntity) map[string]*TeleportDest {
+	destinations := make(map[string]*TeleportDest)
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
 		if classname != "info_player_teleport" &&
@@ -35,17 +35,17 @@ func collectDoom3TeleportDestinations(entities []*proc.MapEntity) map[string]doo
 		if err != nil {
 			continue
 		}
-		dests[name] = doom3TeleportDest{
+		destinations[name] = &TeleportDest{
 			pos:   origin,
 			angle: ent.GetAngle(),
 		}
 	}
-	return dests
+	return destinations
 }
 
-// buildDoom3DoorOrLift converts a Doom 3 func_door, func_plat, or func_elevator entity (using either
+// buildDoorOrLift converts a Doom 3 func_door, func_plat, or func_elevator entity (using either
 // an inline .proc submodel or an external .lwo model) into a dynamic ThingDoorDef.
-func buildDoom3DoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, materials *proc.Materials, arc *proc.Pk4, thingsManager *Things) (*config.Thing, bool) {
+func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, materials *proc.Materials, arc *proc.Pk4, thingsManager *Things) (*config.Thing, bool) {
 	if ent.IsDormant() {
 		return nil, false
 	}
@@ -66,7 +66,7 @@ func buildDoom3DoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model
 	}
 
 	if pModel != nil {
-		cModel = bakeDoom3ProcModel(pModel, ent, materials, arc)
+		cModel = bakeProcModel(pModel, ent, materials, arc)
 	} else if strings.HasSuffix(strings.ToLower(modelProp), ".lwo") && thingsManager != nil {
 		if loaded, err := thingsManager.loadModel(modelProp); err == nil {
 			cModel = loaded
@@ -100,15 +100,15 @@ func buildDoom3DoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model
 	_ = common.NewItem(thingCfg)
 
 	if classname == "func_door" {
-		thingCfg.Door = buildDoom3DoorSpec(ent, size)
+		thingCfg.Door = buildDoorSpec(ent, size)
 	} else {
-		thingCfg.Door = buildDoom3LiftSpec(ent, size)
+		thingCfg.Door = buildLiftSpec(ent, size)
 	}
 	return thingCfg, true
 }
 
-// bakeDoom3ProcModel converts an inline Doom 3 .proc submodel into a world-transformed Model3DEntry.
-func bakeDoom3ProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Materials, arc *proc.Pk4) *config.Model3DEntry {
+// bakeProcModel converts an inline Doom 3 .proc submodel into a world-transformed Model3DEntry.
+func bakeProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Materials, arc *proc.Pk4) *config.Model3DEntry {
 	var allTriangles []config.Model3DEntryTriangle
 	for _, surface := range model.Surfaces {
 		matName := surface.Material
@@ -155,21 +155,21 @@ func bakeDoom3ProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.
 	return model3d
 }
 
-func buildDoom3DoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
+func buildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	var dirX, dirY, dirZ float64
-	movedir := 0.0
+	moveDir := 0.0
 	if raw, ok := ent.GetProperty("movedir"); ok {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64); err == nil {
-			movedir = v
+			moveDir = v
 		}
 	}
-	switch movedir {
+	switch moveDir {
 	case -1:
 		dirZ = 1.0
 	case -2:
 		dirZ = -1.0
 	default:
-		rad := movedir * math.Pi / 180.0
+		rad := moveDir * math.Pi / 180.0
 		dirX = math.Cos(rad)
 		dirY = math.Sin(rad)
 	}
@@ -226,7 +226,7 @@ func buildDoom3DoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec
 	}
 }
 
-func buildDoom3LiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
+func buildLiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	lip := 8.0
 	if raw, ok := ent.GetProperty("lip"); ok {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64); err == nil {
@@ -242,24 +242,20 @@ func buildDoom3LiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec
 	if travel <= 0 {
 		travel = size.Z
 	}
-
 	speed := 150.0
 	if raw, ok := ent.GetProperty("speed"); ok {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64); err == nil && v > 0 {
 			speed = v
 		}
 	}
-
 	waitSeconds := 3.0
 	if raw, ok := ent.GetProperty("wait"); ok {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64); err == nil {
 			waitSeconds = v
 		}
 	}
-
 	targetName, _ := ent.GetProperty("name")
 	target, _ := ent.GetProperty("target")
-
 	return &config.DoorSpec{
 		OpenOffset:  geometry.XYZ{Z: -travel},
 		Speed:       speed,
@@ -270,12 +266,8 @@ func buildDoom3LiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec
 	}
 }
 
-// buildDoom3Teleport creates a ThingTeleportDef from a trigger_teleport (or trigger targeting a teleport dest).
-func buildDoom3Teleport(
-	ent *proc.MapEntity,
-	procModels map[string]*proc.Model,
-	dests map[string]doom3TeleportDest,
-) *config.Thing {
+// buildTeleport creates a ThingTeleportDef from a trigger_teleport (or trigger targeting a teleport dest).
+func buildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, destinations map[string]*TeleportDest) *config.Thing {
 	if ent.IsDormant() {
 		return nil
 	}
@@ -284,7 +276,7 @@ func buildDoom3Teleport(
 	if !ok || strings.TrimSpace(target) == "" {
 		return nil
 	}
-	dest, ok := dests[target]
+	dest, ok := destinations[target]
 	if !ok {
 		return nil
 	}

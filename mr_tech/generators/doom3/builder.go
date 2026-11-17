@@ -168,7 +168,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	for _, model := range procFile.Models {
 		procModels[model.Name] = model
 	}
-	teleportDests := collectDoom3TeleportDestinations(entities)
+	teleportDests := collectTeleportDestinations(entities)
 
 	thingsManager := NewThings(arc, materials, defs, texManager, imgLoader)
 	for _, ent := range entities {
@@ -198,11 +198,11 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 				root.Lights = append(root.Lights, light)
 			}
 		case "func":
-			if doorThing, ok := buildDoom3DoorOrLift(ent, procModels, materials, arc, thingsManager); ok {
+			if doorThing, ok := buildDoorOrLift(ent, procModels, materials, arc, thingsManager); ok {
 				root.Things = append(root.Things, doorThing)
 			}
 		case "trigger":
-			if tpThing := buildDoom3Teleport(ent, procModels, teleportDests); tpThing != nil {
+			if tpThing := buildTeleportSpec(ent, procModels, teleportDests); tpThing != nil {
 				root.Things = append(root.Things, tpThing)
 			}
 		case "speaker": //IMPLEMENT

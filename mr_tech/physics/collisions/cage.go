@@ -1132,6 +1132,31 @@ func (s *Cage) ConsumePendingStepZ() float64 {
 	return v
 }
 
+// ApplySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
+// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
+func (s *Cage) ApplySafeStepUp(stepZ float64, clampStatic func(*Cage)) {
+	ent := s.GetEntity()
+	preX, preY, preZ := ent.GetCenter()
+	preVX, preVY, preVZ := ent.GetVelocity()
+	origCX, origCY, origCZ, origHasFloor := s.GetStaticClampState()
+
+	s.RestoreStaticClampState(preX, preY, preZ, origHasFloor)
+	ent.AddTo(0, 0, stepZ)
+	clampStatic(s)
+	postX, postY, postZ := ent.GetCenter()
+
+	dzAfter := postZ - preZ
+	dXY := math.Hypot(postX-preX, postY-preY)
+	if dzAfter < stepZ-0.25 || dXY > 2.0 {
+		ent.AddTo(preX-postX, preY-postY, preZ-postZ)
+		ent.SetV(preVX, preVY, preVZ)
+		s.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
+		return
+	}
+	ent.SetV(preVX, preVY, preVZ)
+	s.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
+}
+
 // GetStaticClampState returns the current static clamp baseline coordinates and floor flag.
 func (s *Cage) GetStaticClampState() (float64, float64, float64, bool) {
 	return s.clampX, s.clampY, s.clampZ, s.hasFloor

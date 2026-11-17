@@ -43,8 +43,6 @@ type Things struct {
 	maxOverlapsWorld  int
 	maxOverlapsThings int
 	coordinator       *collisions.Coordinator
-	queryContactsFn   func(cage *collisions.Cage, wake func(*collisions.Solver))
-	clampStaticFn     func(cage *collisions.Cage)
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -69,12 +67,9 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		materials:         materials,
 		event:             vertices.NewThingEvent(0, solverJitter),
 		statics:           make([]vertices.IThing, 0, 16),
-		coordinator:       collisions.NewCoordinator(solverIterations, defaultLen),
 	}
-	e.queryContactsFn = e.querySolverContacts
-	e.clampStaticFn = vols.ClampStaticCage
+	e.coordinator = collisions.NewCoordinator(solverIterations, defaultLen, e.querySolverContacts, vols.ClampStaticCage)
 	e.pendingLen.Store(0)
-
 	return e
 }
 
@@ -371,7 +366,7 @@ func (th *Things) StageCommit() {
 // applySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
 // ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
 func (th *Things) applySafeStepUp(cage *collisions.Cage, stepZ float64) {
-	collisions.ApplySafeStepUp(cage, stepZ, th.volumes.ClampStaticCage)
+	cage.ApplySafeStepUp(stepZ, th.volumes.ClampStaticCage)
 }
 
 // Compute updates the state of all managed entities by computing their active state and processing collisions.
@@ -417,7 +412,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.pendingStage = th.pendingStage[:0]
 	}
 
-	th.coordinator.Step(th.queryContactsFn, th.clampStaticFn)
+	th.coordinator.Step()
 	th.flushPendingRemovals()
 
 	if runningLen := th.coordinator.RunningLen(); runningLen > 0 {

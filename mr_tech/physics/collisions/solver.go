@@ -2,7 +2,6 @@ package collisions
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
@@ -252,31 +251,6 @@ func (t *Solver) StagePrepare(session uint64) {
 	t.afterPrepare()
 }
 
-// ApplySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
-// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
-func ApplySafeStepUp(cage *Cage, stepZ float64, clampStatic func(*Cage)) {
-	ent := cage.GetEntity()
-	preX, preY, preZ := ent.GetCenter()
-	preVX, preVY, preVZ := ent.GetVelocity()
-	origCX, origCY, origCZ, origHasFloor := cage.GetStaticClampState()
-
-	cage.RestoreStaticClampState(preX, preY, preZ, origHasFloor)
-	ent.AddTo(0, 0, stepZ)
-	clampStatic(cage)
-	postX, postY, postZ := ent.GetCenter()
-
-	dzAfter := postZ - preZ
-	dXY := math.Hypot(postX-preX, postY-preY)
-	if dzAfter < stepZ-0.25 || dXY > 2.0 {
-		ent.AddTo(preX-postX, preY-postY, preZ-postZ)
-		ent.SetV(preVX, preVY, preVZ)
-		cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
-		return
-	}
-	ent.SetV(preVX, preVY, preVZ)
-	cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
-}
-
 // StageWarmStart reapplies cached contact impulses for valid collision slots to improve solver convergence.
 func (t *Solver) StageWarmStart() {
 	slotsLen := t.cage.GetSlotsLen()
@@ -284,7 +258,6 @@ func (t *Solver) StageWarmStart() {
 		return
 	}
 
-	//entity := t.GetContainerVolume().GetEntity()
 	for i := 0; i < slotsLen; i++ {
 		slot := t.cage.GetSlot(i)
 		rParentEnt := t.resolveSlotPartner(slot)

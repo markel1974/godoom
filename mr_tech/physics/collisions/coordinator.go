@@ -1,5 +1,9 @@
 package collisions
 
+type QueryContactsFn func(cage *Cage, wake func(*Solver))
+
+type ClampStaticFn func(cage *Cage)
+
 // Coordinator manages solver lifecycles, wake queues, islands, and joint constraints during simulation.
 type Coordinator struct {
 	solverIterations int
@@ -17,10 +21,12 @@ type Coordinator struct {
 	joints           []*JointConstraint
 	jointsLen        int
 	wakeRunningFn    func(neighbor *Solver)
+	queryContactsFn  QueryContactsFn
+	clampStaticFn    ClampStaticFn
 }
 
 // NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
-func NewCoordinator(solverIterations, initialCap int) *Coordinator {
+func NewCoordinator(solverIterations, initialCap int, queryContactsFn QueryContactsFn, clampStaticFn ClampStaticFn) *Coordinator {
 	if solverIterations <= 0 {
 		solverIterations = 10
 	}
@@ -37,6 +43,8 @@ func NewCoordinator(solverIterations, initialCap int) *Coordinator {
 		islandSleep:      make([]bool, initialCap),
 		jointSupported:   make([]bool, initialCap),
 		joints:           make([]*JointConstraint, 0, initialCap),
+		queryContactsFn:  queryContactsFn,
+		clampStaticFn:    clampStaticFn,
 	}
 	c.wakeRunningFn = c.wakeRunningIsland
 	return c
@@ -205,7 +213,7 @@ func (c *Coordinator) findIsland(x int) int {
 }
 
 // Step advances the coordinator one solver tick, updating contacts, constraints, static clamps, and sleep state.
-func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), clampStatic func(cage *Cage)) {
+func (c *Coordinator) Step() {
 	c.session++
 	c.runningLen = 0
 
@@ -250,7 +258,7 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 	}
 
 	for cursor := 0; cursor < c.runningLen; cursor++ {
-		queryContacts(c.running[cursor].cage, c.wakeRunningFn)
+		c.queryContactsFn(c.running[cursor].cage, c.wakeRunningFn)
 	}
 
 	// Compact broken or inactive joints once per step before solving.
@@ -328,7 +336,7 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 		s := c.running[x]
 		s.StageApply()
 		if stepZ := s.cage.ConsumePendingStepZ(); stepZ > 0 {
-			ApplySafeStepUp(s.cage, stepZ, clampStatic)
+			s.cage.ApplySafeStepUp(stepZ, c.clampStaticFn)
 		}
 	}
 
@@ -353,7 +361,7 @@ func (c *Coordinator) Step(queryContacts func(cage *Cage, wake func(*Solver)), c
 		for x := 0; x < c.runningLen; x++ {
 			cage := c.running[x].cage
 			if cage.NeedsStaticClamp() {
-				clampStatic(cage)
+				c.clampStaticFn(cage)
 			}
 		}
 	}

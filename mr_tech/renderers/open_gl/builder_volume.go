@@ -149,8 +149,6 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
 func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) {
-	//w.occBuffer.Clear()
-
 	w.visibleVol.Reset(vols.Len(), pX, pY, pZ)
 
 	// Raccolta dal DBVH (Broad-Phase)
@@ -185,7 +183,6 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		faces := vol.GetFaces()
 		startIdx := fv.GetIndicesLen()
 		//added := false
-		//var added int
 		for x := 0; x < faces.Len(); x++ {
 			face := faces.At(x)
 			mat := face.GetMaterial()
@@ -239,7 +236,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		//}
 	}
 
-	//fmt.Println("Volumes:", volumes.Len(), counter, volumes.Len()-counter)
+	//fmt.Println("Volumes:", vols.Len(), counter, vols.Len()-counter)
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
@@ -247,10 +244,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//counter := 0
 	things.StagePrepare()
 
-	pushPassThing := func(thing vertices.IThing, faces *volumes.Faces, nextFaces *volumes.Faces, lp float64, renderMode float64) {
-		if !thing.IsVisible() {
-			return
-		}
+	pushPassThing := func(thing vertices.IThing) {
+		thing.Compile(textures.GlobalTick())
+		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 		//thing.SetVisible()
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
@@ -264,8 +260,8 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		var currentTargetDc *DrawCommands
 		batchStart := w.fv.GetIndicesLen()
 
-		for fx := 0; fx < faces.Len(); fx++ {
-			face := faces.At(fx)
+		for fx := 0; fx < pFaces.Len(); fx++ {
+			face := pFaces.At(fx)
 			mat := face.GetMaterial()
 			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 				continue
@@ -293,7 +289,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
 			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
 			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-			nf := nextFaces.At(fx)
+			nf := pNextFaces.At(fx)
 			np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z := nf.GetPointsFlat()
 
 			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
@@ -310,40 +306,29 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	qOcclusion := func(object aabb.IObject) bool {
 		thing := object.(vertices.IThing)
-
 		if !thing.IsVisible() {
 			return false
 		}
-		if isPlayer := thing.GetEntity().GetId() == w.playerId; !isPlayer {
+		entId := thing.GetEntity().GetId()
+		if w.playerId != entId {
 			things.StageAdd(thing)
 		}
 		if thing.GetKind() != config.ThingDoorDef {
-			occState := w.occlusion.GetState(thing.GetEntity().GetId())
+			ab := thing.GetAABB()
+			occState := w.occlusion.GetState(entId)
 			if occState != nil && !occState.IsVisible {
-				w.occlusion.Add(thing.GetAABB(), occState) // Schedulalo per controllarlo al prossimo frame
-				return false                               // CULLATO! Non generiamo i vertici
+				w.occlusion.Add(ab, occState) // Schedulalo per controllarlo al prossimo frame
+				return false                  // CULLATO! Non generiamo i vertici
 			}
-			w.occlusion.Add(thing.GetAABB(), occState) // Lo vediamo, aggiungiamolo ai test GPU
+			w.occlusion.Add(ab, occState) // Lo vediamo, aggiungiamolo ai test GPU
 		}
-		thing.Compile(textures.GlobalTick())
-		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
-		if pFaces.Len() == 0 {
-			// Anche se non ha facce, teniamo vivo occlusion test
-			return false
-		}
-
-		pushPassThing(thing, pFaces, pNextFaces, lp, renderMode)
+		pushPassThing(thing)
 		//counter++
 		return false
 	}
 
 	qStatic := func(object aabb.IObject) bool {
-		thing := object.(vertices.IThing)
-		thing.Compile(textures.GlobalTick())
-		faces, nextFaces, lp, renderMode := thing.GetUIFaces()
-		if faces.Len() > 0 {
-			pushPassThing(thing, faces, nextFaces, lp, renderMode)
-		}
+		pushPassThing(object.(vertices.IThing))
 		return false
 	}
 

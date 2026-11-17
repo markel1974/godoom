@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -34,9 +33,9 @@ type Things struct {
 	pendingLen        atomic.Int32
 	hasPending        bool
 	pendingStage      []vertices.IThing
-	pendingStageMu    sync.Mutex
+	pendingStageLen   int
 	pendingRemove     []vertices.IThing
-	pendingRemoveMu   sync.Mutex
+	pendingRemoveLen  int
 	stageEpoch        uint64
 	event             *vertices.ThingEvent
 	cfg               []*config.Thing
@@ -59,7 +58,8 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		entities:          make(map[uint64]vertices.IThing),
 		thinkers:          make([]vertices.IThing, defaultLen),
 		pending:           make([]vertices.IThing, defaultLen),
-		pendingStage:      make([]vertices.IThing, 0, 64),
+		pendingStage:      make([]vertices.IThing, 128),
+		pendingRemove:     make([]vertices.IThing, 128),
 		thinkersLen:       0,
 		hasPending:        false,
 		config:            cfg,
@@ -292,9 +292,13 @@ func (th *Things) StagePart(part vertices.IThing) {
 	if part == nil {
 		return
 	}
-	th.pendingStageMu.Lock()
-	th.pendingStage = append(th.pendingStage, part)
-	th.pendingStageMu.Unlock()
+	if th.pendingStageLen >= len(th.pendingStage) {
+		n := make([]vertices.IThing, len(th.pendingStage)*2)
+		copy(n, th.pendingStage)
+		th.pendingStage = n
+	}
+	th.pendingStage[th.pendingStageLen] = part
+	th.pendingStageLen++
 }
 
 // StageRemove queues a deactivated Thing for safe removal from Things.tree and Things.entities.
@@ -302,21 +306,22 @@ func (th *Things) StageRemove(thing vertices.IThing) {
 	if thing == nil {
 		return
 	}
-	th.pendingRemoveMu.Lock()
-	th.pendingRemove = append(th.pendingRemove, thing)
-	th.pendingRemoveMu.Unlock()
+	if th.pendingRemoveLen >= len(th.pendingRemove) {
+		n := make([]vertices.IThing, len(th.pendingRemove)*2)
+		copy(n, th.pendingRemove)
+		th.pendingRemove = n
+	}
+	th.pendingRemove[th.pendingRemoveLen] = thing
+	th.pendingRemoveLen++
 }
 
 func (th *Things) flushPendingRemovals() {
-	th.pendingRemoveMu.Lock()
-	if len(th.pendingRemove) > 0 {
-		for _, item := range th.pendingRemove {
-			th.removeThing(item)
+	if th.pendingRemoveLen > 0 {
+		for x := 0; x < th.pendingRemoveLen; x++ {
+			th.removeThing(th.pendingRemove[x])
 		}
-		th.pendingRemove = th.pendingRemove[:0]
+		th.pendingRemoveLen = 0
 	}
-	th.pendingRemoveMu.Unlock()
-
 	if removablesLen := th.coordinator.RemovablesLen(); removablesLen > 0 {
 		for x := 0; x < removablesLen; x++ {
 			s := th.coordinator.RemovablesAt(x)
@@ -396,7 +401,8 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	// Flush and stage any throwables or newly released ragdoll/detached parts from Thinking on tick 0.
 	if th.hasPending {
-		for x := 0; x < int(th.pendingLen.Load()); x++ {
+		pLen := int(th.pendingLen.Load())
+		for x := 0; x < pLen; x++ {
 			item := th.pending[x]
 			th.addThing(item)
 			th.StageAdd(item)
@@ -405,11 +411,11 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.hasPending = false
 	}
 
-	if len(th.pendingStage) > 0 {
-		for _, part := range th.pendingStage {
-			th.StageAdd(part)
+	if th.pendingStageLen > 0 {
+		for x := 0; x < th.pendingStageLen; x++ {
+			th.StageAdd(th.pendingStage[x])
 		}
-		th.pendingStage = th.pendingStage[:0]
+		th.pendingStageLen = 0
 	}
 
 	th.coordinator.Step()

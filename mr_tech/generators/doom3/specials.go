@@ -61,7 +61,7 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 	var pModel *proc.Model
 	if m, ok := procModels[modelProp]; ok {
 		pModel = m
-	} else if m, ok := procModels[nameProp]; ok {
+	} else if m, ok = procModels[nameProp]; ok {
 		pModel = m
 	}
 

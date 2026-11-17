@@ -151,6 +151,7 @@ func main() {
 	var msaaSamples int
 	var renderScale float64
 	var enableVSync int
+	var enableFXAA int
 
 	var helpModes strings.Builder
 	for idx, v := range _availableModes {
@@ -169,6 +170,7 @@ func main() {
 	flag.IntVar(&msaaSamples, "msaa", model.DefaultMSAASamples, "MSAA samples for the 3D scene [0 = off, 2, 4, 8]")
 	flag.Float64Var(&renderScale, "scale", 1.0, "internal 3D render resolution scale (e.g. 0.5, 0.75, 1.0)")
 	flag.IntVar(&enableVSync, "vsync", 1, "enable vsync [0 = off, 1 = on]")
+	flag.IntVar(&enableFXAA, "fxaa", 1, "enable FXAA post-process antialiasing [0 = off, 1 = on]")
 
 	flag.Parse()
 
@@ -227,6 +229,7 @@ func main() {
 	cal.EnableShadowLights = IntToBool(enableShadowLights)
 	cal.MSAASamples = msaaSamples
 	cal.RenderScale = renderScale
+	cal.EnableFXAA = IntToBool(enableFXAA)
 
 	ctx := app.GetContext(cfg.Player, IntToBool(enableVSync))
 	render := open_gl.NewRender(ctx)

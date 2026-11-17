@@ -26,6 +26,7 @@ type Calibration struct {
 	EnableShadows      bool
 	MSAASamples        int
 	RenderScale        float64
+	EnableFXAA         bool
 	PrjScale           float64
 	PrjScaleLights     float64
 	volumes            *Volumes
@@ -55,7 +56,7 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 }
 
 // DefaultMSAASamples is the default number of MSAA samples used by the 3D scene framebuffer.
-const DefaultMSAASamples = 4
+const DefaultMSAASamples = 0
 
 // IsValidMSAASamples reports whether n is a supported MSAA sample count (0 disables MSAA).
 func IsValidMSAASamples(n int) bool {

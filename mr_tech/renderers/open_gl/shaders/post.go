@@ -64,6 +64,14 @@ type Post struct {
 
 	// samples is the MSAA sample count of the scene FBO (0 = MSAA disabled).
 	samples int32
+
+	// Optional FXAA pass (runs on tone-mapped LDR buffer before presenting to FBO 0).
+	fxaaEnabled  bool
+	fxaaPrg      uint32
+	fxaaTexLoc   int32
+	fxaaTexelLoc int32
+	ldrFbo       uint32
+	texLdrBuffer uint32
 }
 
 // NewPost creates and returns a pointer to a new Post instance with default rendering configuration values.
@@ -85,10 +93,12 @@ func (s *Post) Setup(h *Handler) error {
 	s.saturation = h.GetSaturation()
 	s.bloomIntensity = h.GetBloomIntensity()
 	s.bloomBlur = h.GetBloomBlur()
-	s.samples = int32(h.GetCalibration().MSAASamples)
+	cal := h.GetCalibration()
+	s.samples = int32(cal.MSAASamples)
 	if s.samples < 0 {
 		s.samples = 0
 	}
+	s.fxaaEnabled = cal.EnableFXAA
 	return nil
 }
 
@@ -96,6 +106,11 @@ func (s *Post) Setup(h *Handler) error {
 func (s *Post) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 	s.ctx.Uniform1i(s.table[PostLocHDRBuffer], 0)
+
+	if s.fxaaEnabled {
+		s.ctx.UseProgram(s.fxaaPrg)
+		s.ctx.Uniform1i(s.fxaaTexLoc, 0)
+	}
 
 	s.ctx.GenVertexArrays(1, &s.vao)
 	s.ctx.BindVertexArray(s.vao)
@@ -142,6 +157,40 @@ func (s *Post) Compile(a IAssets) error {
 			return fmt.Errorf("invalid uniform location in post: %d", idx)
 		}
 	}
+
+	if s.fxaaEnabled {
+		if err := s.compileFXAA(a, vertId); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// compileFXAA compiles and links the FXAA post-process shader program.
+func (s *Post) compileFXAA(a IAssets, vertId string) error {
+	const fxaaFragId = "fxaa.frag"
+	vSrc, fSrc, err := a.ReadMulti(vertId, fxaaFragId)
+	if err != nil {
+		return err
+	}
+	vSh, err := ShaderCompile(s.ctx, vertId, string(vSrc), api.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fSh, err := ShaderCompile(s.ctx, fxaaFragId, string(fSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		s.ctx.DeleteShader(vSh)
+		return err
+	}
+	s.fxaaPrg, err = ShaderCreateProgram(s.ctx, "fxaa", vSh, fSh)
+	if err != nil {
+		return err
+	}
+	s.fxaaTexLoc = s.ctx.GetUniformLocation(s.fxaaPrg, s.ctx.Str("u_screenTex\x00"))
+	s.fxaaTexelLoc = s.ctx.GetUniformLocation(s.fxaaPrg, s.ctx.Str("u_texelSize\x00"))
+	if s.fxaaTexLoc < 0 || s.fxaaTexelLoc < 0 {
+		return fmt.Errorf("invalid uniform location in fxaa: tex=%d texel=%d", s.fxaaTexLoc, s.fxaaTexelLoc)
+	}
 	return nil
 }
 
@@ -162,11 +211,18 @@ func (s *Post) Prepare() {
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
+// When FXAA is enabled, tone-mapping writes to an intermediate LDR texture and FXAA presents to the default framebuffer.
 func (s *Post) Render(winW, winH int32) {
 	bloomTex := s.bloom.GetBloomTexture()
-	s.ctx.Viewport(0, 0, winW, winH)
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 	s.ctx.Disable(api.DEPTH_TEST)
+
+	if s.fxaaEnabled && s.ldrFbo != 0 {
+		s.ctx.Viewport(0, 0, s.w, s.h)
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.ldrFbo)
+	} else {
+		s.ctx.Viewport(0, 0, winW, winH)
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+	}
 
 	s.ctx.UseProgram(s.prg)
 	s.ctx.Uniform1f(s.table[PostLocExposure], s.exposure)
@@ -183,6 +239,16 @@ func (s *Post) Render(winW, winH int32) {
 
 	s.ctx.BindVertexArray(s.vao)
 	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
+
+	if s.fxaaEnabled && s.ldrFbo != 0 {
+		s.ctx.Viewport(0, 0, winW, winH)
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+		s.ctx.UseProgram(s.fxaaPrg)
+		s.ctx.Uniform2f(s.fxaaTexelLoc, 1.0/float32(s.w), 1.0/float32(s.h))
+		s.ctx.ActiveTexture(api.TEXTURE0)
+		s.ctx.BindTexture(api.TEXTURE_2D, s.texLdrBuffer)
+		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
+	}
 
 	s.ctx.Enable(api.DEPTH_TEST)
 }
@@ -255,6 +321,12 @@ func (s *Post) allocate(width, height int32) {
 		s.ctx.DeleteTextures(1, &s.texBrightBuffer)
 		s.ctx.DeleteTextures(1, &s.texDepthBuffer)
 	}
+	if s.ldrFbo != 0 {
+		s.ctx.DeleteFramebuffers(1, &s.ldrFbo)
+		s.ctx.DeleteTextures(1, &s.texLdrBuffer)
+		s.ldrFbo = 0
+		s.texLdrBuffer = 0
+	}
 
 	// --- 1. Scene FBO (MSAA when samples > 0, single-sampled otherwise) ---
 	s.ctx.GenFramebuffers(1, &s.msaaFbo)
@@ -312,7 +384,30 @@ func (s *Post) allocate(width, height int32) {
 		panic("post Resolve FBO not complete: " + strconv.Itoa(int(v)))
 	}
 
+	if s.fxaaEnabled {
+		s.allocateLDR()
+	}
+
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+}
+
+// allocateLDR allocates the RGBA8 intermediate framebuffer used as input to the FXAA pass.
+func (s *Post) allocateLDR() {
+	s.ctx.GenFramebuffers(1, &s.ldrFbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.ldrFbo)
+
+	s.ctx.GenTextures(1, &s.texLdrBuffer)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.texLdrBuffer)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA8, s.w, s.h, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.texLdrBuffer, 0)
+
+	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+		panic("post LDR FBO not complete: " + strconv.Itoa(int(v)))
+	}
 }
 
 // renderbufferStorage allocates storage for the currently bound renderbuffer, multisampled only when MSAA is enabled.

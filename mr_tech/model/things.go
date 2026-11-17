@@ -322,8 +322,9 @@ func (th *Things) flushPendingRemovals() {
 	}
 	th.pendingRemoveMu.Unlock()
 
-	if removables := th.coordinator.Removables(); len(removables) > 0 {
-		for _, s := range removables {
+	if removablesLen := th.coordinator.RemovablesLen(); removablesLen > 0 {
+		for x := 0; x < removablesLen; x++ {
+			s := th.coordinator.RemovablesAt(x)
 			th.removeThing(s.GetCage().GetObject().(vertices.IThing))
 		}
 		th.coordinator.ClearRemovables()
@@ -419,22 +420,25 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	th.coordinator.Step(th.queryContactsFn, th.clampStaticFn)
 	th.flushPendingRemovals()
 
-	for _, s := range th.coordinator.Running() {
-		obj := s.GetCage().GetObject()
-		if owner, ok := obj.(vertices.IPartOwner); ok {
-			parts := owner.GetPartLen()
-			if parts > 0 {
-				owner.SyncAttachedParts()
-				for x := 0; x < parts; x++ {
-					p := owner.GetPartAt(x)
-					if sub, sOk := p.(vertices.ISubPart); sOk && !sub.IsPhysicsFree() {
-						th.tree.UpdateObject(p)
+	if runningLen := th.coordinator.RunningLen(); runningLen > 0 {
+		for rIdx := 0; rIdx < runningLen; rIdx++ {
+			s := th.coordinator.RunningAt(rIdx)
+			obj := s.GetCage().GetObject()
+			if owner, ok := obj.(vertices.IPartOwner); ok {
+				parts := owner.GetPartLen()
+				if parts > 0 {
+					owner.SyncAttachedParts()
+					for x := 0; x < parts; x++ {
+						p := owner.GetPartAt(x)
+						if sub, sOk := p.(vertices.ISubPart); sOk && !sub.IsPhysicsFree() {
+							th.tree.UpdateObject(p)
+						}
 					}
+					continue
 				}
-				continue
 			}
+			th.tree.UpdateObject(obj)
 		}
-		th.tree.UpdateObject(obj)
 	}
 }
 

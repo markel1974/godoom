@@ -103,14 +103,22 @@ func (c *Coordinator) StagedLen() int {
 	return c.stagedLen
 }
 
-// Running returns the currently active solvers.
-func (c *Coordinator) Running() []*Solver {
-	return c.running[:c.runningLen]
+func (c *Coordinator) RunningLen() int {
+	return c.runningLen
 }
 
-// Removables returns the current solvers marked for removal.
-func (c *Coordinator) Removables() []*Solver {
-	return c.removables[:c.removablesLen]
+func (c *Coordinator) RunningAt(idx int) *Solver {
+	return c.running[idx]
+}
+
+// RemovablesLen returns the current solvers marked for removal.
+func (c *Coordinator) RemovablesLen() int {
+	return c.removablesLen
+}
+
+// RemovablesAt returns the current solvers marked for removal.
+func (c *Coordinator) RemovablesAt(idx int) *Solver {
+	return c.removables[idx]
 }
 
 // ClearRemovables clears the tracked removable solvers list.

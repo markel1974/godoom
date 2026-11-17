@@ -49,6 +49,18 @@ func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Fa
 	return out
 }
 
+// NewFaceSubdivided returns a new face for tri, preserving metadata and applying UV coordinates when UVs are locked.
+func (fc *Face) NewFaceSubdivided(tri [3]geometry.XYZ, uvU, uvV [3]float64) *Face {
+	out := NewFace(tri, fc.label, fc.material)
+	out.parent = fc.parent
+	out.singleSided = fc.singleSided
+	out.lockUV = fc.lockUV
+	if fc.lockUV {
+		out.SetUV(uvU[0], uvV[0], uvU[1], uvV[1], uvU[2], uvV[2])
+	}
+	return out
+}
+
 // GetTri returns the three vertices that define the face triangle.
 func (fc *Face) GetTri() *geometry.Triangle3D {
 	return fc.tri
@@ -485,77 +497,97 @@ func (fc *Face) GetMinMax(minX, minY, minZ, maxX, maxY, maxZ float64) (float64, 
 	return fc.tri.MinMaxExpands(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
-// Deform applies a local plastic deformation to the face vertices around an impact point.
-// impact: the 3D coordinates where the impact occurred.
-// impulse: the displacement vector to apply at the center of the impact.
-// radius: the influence radius of the deformation falloff.
-// Returns true if at least one vertex of the face was affected and displaced.
+// Deform applies an impulse near impact within radius, rebuilds the face, and reports whether it changed.
 func (fc *Face) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	if radius <= 0 || !fc.IsDeformable() {
+	if radius <= 0 || math.IsNaN(radius) || math.IsInf(radius, 0) ||
+		!fc.IsDeformable() {
+		return false
+	}
+	if impulse.X == 0 && impulse.Y == 0 && impulse.Z == 0 {
 		return false
 	}
 	rSq := radius * radius
 	deformed := false
-
+	// Local vertex deformation using smoothstep falloff.
 	for i := 0; i < geometry.Triangle3DPoints; i++ {
-		dx := fc.tri.Points[i].X - impact.X
-		dy := fc.tri.Points[i].Y - impact.Y
-		dz := fc.tri.Points[i].Z - impact.Z
+		p := &fc.tri.Points[i]
+		dx := p.X - impact.X
+		dy := p.Y - impact.Y
+		dz := p.Z - impact.Z
 		distSq := dx*dx + dy*dy + dz*dz
 		if distSq >= rSq {
 			continue
 		}
 		dist := math.Sqrt(distSq)
-		// Smoothstep cubic falloff: 1 at impact center, 0 at boundary
-		t := 1.0 - (dist / radius)
+		t := 1.0 - dist/radius
 		factor := t * t * (3.0 - 2.0*t)
-
-		fc.tri.Points[i].X += impulse.X * factor
-		fc.tri.Points[i].Y += impulse.Y * factor
-		fc.tri.Points[i].Z += impulse.Z * factor
+		fc.displaceVertex(i, impulse, factor)
 		deformed = true
 	}
-
-	// Se nessun vertice ricade nel raggio locale ma l'impatto cade sulla faccia (es. grandi poligoni monolitici):
+	// Fallback for large triangles whose vertices are outside
+	// the influence radius but whose surface contains the impact.
 	if !deformed {
 		w0, w1, w2, inside := fc.Barycentric(impact)
 		if inside {
-			// Dislocazione pesata con le coordinate baricentriche (quadratica per concentrare la deformazione)
-			fc.tri.Points[0].X += impulse.X * w0 * w0
-			fc.tri.Points[0].Y += impulse.Y * w0 * w0
-			fc.tri.Points[0].Z += impulse.Z * w0 * w0
-
-			fc.tri.Points[1].X += impulse.X * w1 * w1
-			fc.tri.Points[1].Y += impulse.Y * w1 * w1
-			fc.tri.Points[1].Z += impulse.Z * w1 * w1
-
-			fc.tri.Points[2].X += impulse.X * w2 * w2
-			fc.tri.Points[2].Y += impulse.Y * w2 * w2
-			fc.tri.Points[2].Z += impulse.Z * w2 * w2
-			deformed = true
+			weights := [3]float64{w0 * w0, w1 * w1, w2 * w2}
+			for i, weight := range weights {
+				if weight <= 0 {
+					continue
+				}
+				fc.displaceVertex(i, impulse, weight)
+				deformed = true
+			}
 		}
 	}
 
-	if deformed {
-		fc.Rebuild()
-		if fc.parent != nil {
-			fc.parent.SetDirty(true)
-		}
+	if !deformed {
+		return false
 	}
 
-	return deformed
+	fc.Rebuild()
+
+	if fc.parent != nil {
+		fc.parent.SetDirty(true)
+	}
+
+	return true
 }
 
-// DeformDent produces an indentation into the face along its negative normal.
-// impact: 3D point of contact on the face.
-// depth: magnitude of the penetration into the surface.
-// radius: influence radius around the impact point.
-// Returns true if at least one vertex of the face was displaced.
+// displaceVertex moves the vertex at index by impulse scaled by factor.
+func (fc *Face) displaceVertex(index int, impulse geometry.XYZ, factor float64) {
+	p := &fc.tri.Points[index]
+
+	p.X += impulse.X * factor
+	p.Y += impulse.Y * factor
+	p.Z += impulse.Z * factor
+}
+
+// DeformDent applies an inward dent at impact along the face normal with the given depth and radius.
+// DeformDent reports whether the face was deformed.
 func (fc *Face) DeformDent(impact geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{
-		X: -fc.n.X * depth,
-		Y: -fc.n.Y * depth,
-		Z: -fc.n.Z * depth,
-	}
+	impulse := geometry.XYZ{X: -fc.n.X * depth, Y: -fc.n.Y * depth, Z: -fc.n.Z * depth}
 	return fc.Deform(impact, impulse, radius)
+}
+
+func (fc *Face) NearPoint(p geometry.XYZ, radius float64) bool {
+	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
+	maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
+	minX, minY, minZ, maxX, maxY, maxZ = fc.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
+	dx, dy, dz := 0.0, 0.0, 0.0
+	if p.X < minX {
+		dx = minX - p.X
+	} else if p.X > maxX {
+		dx = p.X - maxX
+	}
+	if p.Y < minY {
+		dy = minY - p.Y
+	} else if p.Y > maxY {
+		dy = p.Y - maxY
+	}
+	if p.Z < minZ {
+		dz = minZ - p.Z
+	} else if p.Z > maxZ {
+		dz = p.Z - maxZ
+	}
+	return dx*dx+dy*dy+dz*dz <= radius*radius
 }

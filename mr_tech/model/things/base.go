@@ -375,7 +375,7 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 	var closestFace *volumes.Face
 	var closestVol *volumes.Volume
 
-	const wallDeform = false
+	const wallDeform = true
 
 	if wallDeform {
 		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
@@ -416,25 +416,26 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 		impactX := pos.X + (dirX * closestDist)
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
-		impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
+		//
 
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDist, dirX, dirY, dirZ)
 
-		// Deformiamo anche il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
-		dentDepth := 2.5
-		dentRadius := 8.0
-		if force > 0 {
-			dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
-			dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
-		}
-		impulse := geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
-		closestThing.Deform(impactPoint, impulse, dentRadius)
+		// TODO Deformiamo anche il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
+		/*
+			impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
+				dentDepth := 2.5
+				dentRadius := 8.0
+				if force > 0 {
+					dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
+					dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
+				}
+				impulse := geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
+				closestThing.Deform(impactPoint, impulse, dentRadius)
+		*/
 
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
-	}
-
-	if closestFace != nil {
+	} else if closestFace != nil {
 		// Impatto contro un muro/volume: applichiamo la deformazione plastica
 		impactX := pos.X + (dirX * closestDist)
 		impactY := pos.Y + (dirY * closestDist)
@@ -448,7 +449,7 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 		}
 		if closestVol != nil {
 			normX, normY, normZ := closestFace.GetNormal()
-			normal := geometry.XYZ{X: normX, Y: normY, Z: normZ}
+			normal := geometry.XYZ{X: -normX, Y: -normY, Z: -normZ}
 			closestVol.DeformDent(impactPoint, normal, dentDepth, dentRadius)
 		} else {
 			closestFace.DeformDent(impactPoint, dentDepth, dentRadius)
@@ -497,20 +498,12 @@ func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64)
 	}
 	// Per modelli 3D e mesh di Thing, le coordinate dei vertici sono locali rispetto al centro entità
 	cx, cy, cz := t.ent.GetCenter()
-	localImpact := geometry.XYZ{
-		X: impact.X - cx,
-		Y: impact.Y - cy,
-		Z: impact.Z - cz,
-	}
+	localImpact := geometry.XYZ{X: impact.X - cx, Y: impact.Y - cy, Z: impact.Z - cz}
 	return t.IVertices.Deform(localImpact, impulse, radius)
 }
 
 // DeformDent produces an indentation on the thing's vertices around a world-space impact point.
 func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{
-		X: -normal.X * depth,
-		Y: -normal.Y * depth,
-		Z: -normal.Z * depth,
-	}
+	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	return t.Deform(impact, impulse, radius)
 }

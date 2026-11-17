@@ -406,15 +406,7 @@ func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
 	solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
 }
 
-func transformVolumeFaces(
-	srcVol *volumes.Volume,
-	dstFaces *volumes.Faces,
-	rot *articulated_dynamics.TagAxis,
-	isIdent bool,
-	ox, oy, oz float64,
-	minX, minY, minZ, maxX, maxY, maxZ float64,
-	trackBounds bool,
-) (float64, float64, float64, float64, float64, float64) {
+func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *articulated_dynamics.TagAxis, isIdent bool, ox, oy, oz float64, minX, minY, minZ, maxX, maxY, maxZ float64, trackBounds bool) (float64, float64, float64, float64, float64, float64) {
 	count := srcVol.GetFaceCount()
 	noOffset := ox == 0 && oy == 0 && oz == 0
 	for j := 0; j < count; j++ {

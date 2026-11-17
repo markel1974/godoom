@@ -224,27 +224,24 @@ func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IObjec
 }
 
 // Deform applies a local plastic deformation to all volume faces within radius of impact.
+
 func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	deformed := false
-	for i := 0; i < v.faces.Len(); i++ {
-		face := v.faces.At(i)
-		if face.Deform(impact, impulse, radius) {
-			deformed = true
-		}
+	if radius <= 0 {
+		return false
 	}
-	if deformed {
-		v.Rebuild()
+	if !v.faces.Deform(impact, impulse, radius) {
+		return false
 	}
-	return deformed
+	// Una sola ricostruzione al termine dell'intera deformazione.
+	v.Rebuild()
+	v.SetDirty(true)
+
+	return true
 }
 
 // DeformDent creates an indentation on the volume faces along the specified normal vector.
 func (v *Volume) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{
-		X: -normal.X * depth,
-		Y: -normal.Y * depth,
-		Z: -normal.Z * depth,
-	}
+	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	status := v.Deform(impact, impulse, radius)
 	if status {
 		v.dirty = true

@@ -1,6 +1,8 @@
 package collisions
 
-type QueryContactsFn func(cage *Cage, wake func(*Solver))
+type WakeRunningFn func(neighbor *Solver)
+
+type QueryContactsFn func(cage *Cage, wake WakeRunningFn)
 
 type ClampStaticFn func(cage *Cage)
 
@@ -20,9 +22,9 @@ type Coordinator struct {
 	jointSupported   []bool
 	joints           []*JointConstraint
 	jointsLen        int
-	wakeRunningFn    func(neighbor *Solver)
-	queryContactsFn  QueryContactsFn
-	clampStaticFn    ClampStaticFn
+	//wakeRunningFn    WakeRunningFn
+	queryContactsFn QueryContactsFn
+	clampStaticFn   ClampStaticFn
 }
 
 // NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
@@ -46,7 +48,7 @@ func NewCoordinator(solverIterations, initialCap int, queryContactsFn QueryConta
 		queryContactsFn:  queryContactsFn,
 		clampStaticFn:    clampStaticFn,
 	}
-	c.wakeRunningFn = c.wakeRunningIsland
+	//c.wakeRunningFn = c.wakeRunningIsland
 	return c
 }
 
@@ -258,7 +260,7 @@ func (c *Coordinator) Step() {
 	}
 
 	for cursor := 0; cursor < c.runningLen; cursor++ {
-		c.queryContactsFn(c.running[cursor].cage, c.wakeRunningFn)
+		c.queryContactsFn(c.running[cursor].cage, c.wakeRunningIsland)
 	}
 
 	// Compact broken or inactive joints once per step before solving.

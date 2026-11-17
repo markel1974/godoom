@@ -115,14 +115,14 @@ func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 	th.queryCollisionCage(lCage, maxOverlaps, nil)
 }
 
-func (th *Things) querySolverContacts(cage *collisions.Cage, wake func(*collisions.Solver)) {
+func (th *Things) querySolverContacts(cage *collisions.Cage, wake collisions.WakeRunningFn) {
 	if s := cage.GetSolver(); s == nil || !s.IgnoresStatic() {
 		th.volumes.QueryCollisionCage(cage, th.maxOverlapsWorld)
 	}
 	th.queryCollisionCage(cage, th.maxOverlapsThings, wake)
 }
 
-func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wake func(*collisions.Solver)) {
+func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wake collisions.WakeRunningFn) {
 	lThing := lCage.GetObject().(vertices.IThing)
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
 		rThing := object.(vertices.IThing)

@@ -311,3 +311,11 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*volum
 
 	return faces, nil
 }
+
+func (v *VerticesMultiSprite) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	return false
+}
+
+func (v *VerticesMultiSprite) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	return false
+}

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -589,6 +590,25 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 // GetUIFaces returns empty faces on the owner because individual segments render through their own tree nodes.
 func (v *Vertices3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, RenderModeModel3D
+}
+
+func (v *Vertices3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	deformed := false
+	for _, part := range v.partViews {
+		if part != nil && part.Deform(impact, impulse, radius) {
+			deformed = true
+		}
+	}
+	return deformed
+}
+
+func (v *Vertices3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	impulse := geometry.XYZ{
+		X: -normal.X * depth,
+		Y: -normal.Y * depth,
+		Z: -normal.Z * depth,
+	}
+	return v.Deform(impact, impulse, radius)
 }
 
 func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*articulated_dynamics.Joint, error) {

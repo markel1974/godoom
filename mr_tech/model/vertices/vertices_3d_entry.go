@@ -56,6 +56,22 @@ func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *volumes.Volume) {
 	vm.volume = activeVolume
 }
 
+func (vm *Vertices3DEntryComposed) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	if vm.volume != nil {
+		return vm.volume.Deform(impact, impulse, radius)
+	}
+	return false
+}
+
+func (vm *Vertices3DEntryComposed) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	impulse := geometry.XYZ{
+		X: -normal.X * depth,
+		Y: -normal.Y * depth,
+		Z: -normal.Z * depth,
+	}
+	return vm.Deform(impact, impulse, radius)
+}
+
 // VAction defines a named animation action with frame bounds and optional clamping behavior.
 type VAction struct {
 	Name  string
@@ -599,4 +615,33 @@ func (v *Vertices3DEntry) GetTagIndex(name string) int {
 // v3dCleanString normalizes s by trimming surrounding whitespace and converting it to lowercase.
 func v3dCleanString(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
+}
+
+// Deform applies plastic deformation to the active model frame volumes and faces around an impact point.
+func (v *Vertices3DEntry) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	deformed := false
+	if v.facesA != nil {
+		for i := 0; i < v.facesA.Len(); i++ {
+			f := v.facesA.At(i)
+			if f != nil && f.Deform(impact, impulse, radius) {
+				deformed = true
+			}
+		}
+	}
+	if v.volA != nil {
+		if v.volA.Deform(impact, impulse, radius) {
+			deformed = true
+		}
+	}
+	return deformed
+}
+
+// DeformDent produces an indentation on the 3D model frame faces along the specified normal vector.
+func (v *Vertices3DEntry) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	impulse := geometry.XYZ{
+		X: -normal.X * depth,
+		Y: -normal.Y * depth,
+		Z: -normal.Z * depth,
+	}
+	return v.Deform(impact, impulse, radius)
 }

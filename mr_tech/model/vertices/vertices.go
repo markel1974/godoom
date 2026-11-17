@@ -2,6 +2,7 @@ package vertices
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -34,6 +35,10 @@ type IVertices interface {
 	SetAction(idx int)
 
 	SetRagdollMode()
+
+	Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool
+
+	DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool
 }
 
 // IPartOwner is implemented by articulated owners whose sub-parts live as independent nodes in Things.tree.

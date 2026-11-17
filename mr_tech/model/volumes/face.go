@@ -30,6 +30,7 @@ func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 	out := &Face{
 		material: material,
 		tri:      geometry.NewTriangle3D([3]geometry.XYZ{}),
+		aabb:     aabb.NewAABB(),
 		u:        u,
 		v:        v,
 	}
@@ -225,6 +226,66 @@ func (fc *Face) PointInside2d(px, py float64) bool {
 	return fc.tri.PointInside2d(px, py)
 }
 
+// IntersectRay calculates the intersection distance of a ray with the triangle face (Möller–Trumbore).
+// Returns (distance, true) if the ray hits within maxDist.
+func (fc *Face) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, bool) {
+	const eps = 1e-7
+	p0 := fc.tri.Points[0]
+	p1 := fc.tri.Points[1]
+	p2 := fc.tri.Points[2]
+
+	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+
+	// h = dir x e2
+	hx := dirY*e2z - dirZ*e2y
+	hy := dirZ*e2x - dirX*e2z
+	hz := dirX*e2y - dirY*e2x
+
+	// a = e1 . h
+	a := e1x*hx + e1y*hy + e1z*hz
+	if fc.singleSided {
+		if a < eps {
+			return 0, false
+		}
+	} else {
+		if math.Abs(a) < eps {
+			return 0, false
+		}
+	}
+
+	f := 1.0 / a
+	// s = origin - p0
+	sx := oX - p0.X
+	sy := oY - p0.Y
+	sz := oZ - p0.Z
+
+	// u = f * (s . h)
+	u := f * (sx*hx + sy*hy + sz*hz)
+	if u < 0.0 || u > 1.0 {
+		return 0, false
+	}
+
+	// q = s x e1
+	qx := sy*e1z - sz*e1y
+	qy := sz*e1x - sx*e1z
+	qz := sx*e1y - sy*e1x
+
+	// v = f * (dir . q)
+	v := f * (dirX*qx + dirY*qy + dirZ*qz)
+	if v < 0.0 || (u+v) > 1.0 {
+		return 0, false
+	}
+
+	// t = f * (e2 . q)
+	t := f * (e2x*qx + e2y*qy + e2z*qz)
+	if t > eps && t <= maxDist {
+		return t, true
+	}
+
+	return 0, false
+}
+
 // Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
 func (fc *Face) Rebuild() {
 	fc.computeAABB()
@@ -272,6 +333,68 @@ func (fc *Face) IsSolid() bool {
 		return false
 	}
 	return true
+}
+
+// IsDeformable reports whether the face material allows plastic deformation from impacts.
+func (fc *Face) IsDeformable() bool {
+	if !fc.IsSolid() {
+		return false
+	}
+	mat := fc.GetMaterial()
+	if mat == nil {
+		return true
+	}
+	kind := config.MaterialKind(mat.GetKind())
+	if kind == config.MaterialKindSky || kind == config.MaterialKindWater ||
+		kind == config.MaterialKindSea || kind == config.MaterialKindLava ||
+		kind == config.MaterialKindSlime || kind == config.MaterialKindBlood ||
+		kind == config.MaterialKindFog {
+		return false
+	}
+	if mat.HasSurfaceParm("nodeform") || mat.HasSurfaceParm("nodamage") {
+		return false
+	}
+	return true
+}
+
+// Barycentric computes the 3D barycentric coordinates of point p relative to the face triangle.
+// Returns (w0, w1, w2, inside) where w0+w1+w2=1 and inside is true if p is on or near the triangle surface.
+func (fc *Face) Barycentric(p geometry.XYZ) (float64, float64, float64, bool) {
+	a := fc.tri.Points[0]
+	b := fc.tri.Points[1]
+	c := fc.tri.Points[2]
+
+	v0x, v0y, v0z := b.X-a.X, b.Y-a.Y, b.Z-a.Z
+	v1x, v1y, v1z := c.X-a.X, c.Y-a.Y, c.Z-a.Z
+	v2x, v2y, v2z := p.X-a.X, p.Y-a.Y, p.Z-a.Z
+
+	d00 := v0x*v0x + v0y*v0y + v0z*v0z
+	d01 := v0x*v1x + v0y*v1y + v0z*v1z
+	d11 := v1x*v1x + v1y*v1y + v1z*v1z
+	d20 := v2x*v0x + v2y*v0y + v2z*v0z
+	d21 := v2x*v1x + v2y*v1y + v2z*v1z
+
+	denom := d00*d11 - d01*d01
+	if math.Abs(denom) < 1e-12 {
+		return 0, 0, 0, false
+	}
+
+	v := (d11*d20 - d01*d21) / denom
+	w := (d00*d21 - d01*d20) / denom
+	u := 1.0 - v - w
+
+	const eps = -0.05
+	inside := u >= eps && v >= eps && w >= eps
+	w0 := math.Max(0, u)
+	w1 := math.Max(0, v)
+	w2 := math.Max(0, w)
+	sum := w0 + w1 + w2
+	if sum > 0 {
+		w0 /= sum
+		w1 /= sum
+		w2 /= sum
+	}
+	return w0, w1, w2, inside
 }
 
 // computeNormal calculates and assigns the n vector (geometry.XYZ) for the Face based on its points and geometry.
@@ -360,4 +483,79 @@ func (fc *Face) SumPoints(cx, cy, cz float64, count int) (float64, float64, floa
 // GetMinMax returns the bounds expanded to include all vertices of the face.
 func (fc *Face) GetMinMax(minX, minY, minZ, maxX, maxY, maxZ float64) (float64, float64, float64, float64, float64, float64) {
 	return fc.tri.MinMaxExpands(minX, minY, minZ, maxX, maxY, maxZ)
+}
+
+// Deform applies a local plastic deformation to the face vertices around an impact point.
+// impact: the 3D coordinates where the impact occurred.
+// impulse: the displacement vector to apply at the center of the impact.
+// radius: the influence radius of the deformation falloff.
+// Returns true if at least one vertex of the face was affected and displaced.
+func (fc *Face) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	if radius <= 0 || !fc.IsDeformable() {
+		return false
+	}
+	rSq := radius * radius
+	deformed := false
+
+	for i := 0; i < geometry.Triangle3DPoints; i++ {
+		dx := fc.tri.Points[i].X - impact.X
+		dy := fc.tri.Points[i].Y - impact.Y
+		dz := fc.tri.Points[i].Z - impact.Z
+		distSq := dx*dx + dy*dy + dz*dz
+		if distSq >= rSq {
+			continue
+		}
+		dist := math.Sqrt(distSq)
+		// Smoothstep cubic falloff: 1 at impact center, 0 at boundary
+		t := 1.0 - (dist / radius)
+		factor := t * t * (3.0 - 2.0*t)
+
+		fc.tri.Points[i].X += impulse.X * factor
+		fc.tri.Points[i].Y += impulse.Y * factor
+		fc.tri.Points[i].Z += impulse.Z * factor
+		deformed = true
+	}
+
+	// Se nessun vertice ricade nel raggio locale ma l'impatto cade sulla faccia (es. grandi poligoni monolitici):
+	if !deformed {
+		w0, w1, w2, inside := fc.Barycentric(impact)
+		if inside {
+			// Dislocazione pesata con le coordinate baricentriche (quadratica per concentrare la deformazione)
+			fc.tri.Points[0].X += impulse.X * w0 * w0
+			fc.tri.Points[0].Y += impulse.Y * w0 * w0
+			fc.tri.Points[0].Z += impulse.Z * w0 * w0
+
+			fc.tri.Points[1].X += impulse.X * w1 * w1
+			fc.tri.Points[1].Y += impulse.Y * w1 * w1
+			fc.tri.Points[1].Z += impulse.Z * w1 * w1
+
+			fc.tri.Points[2].X += impulse.X * w2 * w2
+			fc.tri.Points[2].Y += impulse.Y * w2 * w2
+			fc.tri.Points[2].Z += impulse.Z * w2 * w2
+			deformed = true
+		}
+	}
+
+	if deformed {
+		fc.Rebuild()
+		if fc.parent != nil {
+			fc.parent.SetDirty(true)
+		}
+	}
+
+	return deformed
+}
+
+// DeformDent produces an indentation into the face along its negative normal.
+// impact: 3D point of contact on the face.
+// depth: magnitude of the penetration into the surface.
+// radius: influence radius around the impact point.
+// Returns true if at least one vertex of the face was displaced.
+func (fc *Face) DeformDent(impact geometry.XYZ, depth, radius float64) bool {
+	impulse := geometry.XYZ{
+		X: -fc.n.X * depth,
+		Y: -fc.n.Y * depth,
+		Z: -fc.n.Z * depth,
+	}
+	return fc.Deform(impact, impulse, radius)
 }

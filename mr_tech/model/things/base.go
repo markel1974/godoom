@@ -1,6 +1,8 @@
 package things
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
@@ -12,8 +14,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+type IVolumesHandler interface {
+	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
+}
+
 type IThingHandler interface {
 	GetMaterials() *materials.Materials
+
+	GetVolumes() IVolumesHandler
 
 	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
 
@@ -358,24 +366,95 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 				return maxDistance, false
 			}
 		}
-		//if object == sender {
-		//	return maxDistance, false
-		//}
 		closestThing = other
 		closestDist = distance
 		// Ray Shrinking: restringiamo il raggio d'azione dell'albero alla distanza dell'impatto trovato.
 		return distance, true
 	})
 
+	var closestFace *volumes.Face
+	var closestVol *volumes.Volume
+
+	const wallDeform = false
+
+	if wallDeform {
+
+		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
+		if vols := t.things.GetVolumes(); vols != nil {
+			vols.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist, func(object aabb.IObject, distance float64) (float64, bool) {
+				vol, ok := object.(*volumes.Volume)
+				if !ok {
+					return closestDist, false
+				}
+				hit := false
+				if facesTree := vol.GetFacesTree(); facesTree != nil {
+					facesTree.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist, func(fObj aabb.IObject, fDist float64) (float64, bool) {
+						face, fOk := fObj.(*volumes.Face)
+						if !fOk || !face.IsSolid() {
+							return closestDist, false
+						}
+						if tHit, okHit := face.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist); okHit {
+							closestDist = tHit
+							closestFace = face
+							closestVol = vol
+							closestThing = nil // Il muro occlude il colpo verso eventuali Things dietro di esso
+							hit = true
+							return tHit, true
+						}
+						return closestDist, false
+					})
+				}
+				if hit {
+					return closestDist, true
+				}
+				return closestDist, false
+			})
+		}
+	}
+
 	if closestThing != nil {
 		// Calcolo del punto d'impatto reale (Origine + Direzione * Distanza)
 		impactX := pos.X + (dirX * closestDist)
 		impactY := pos.Y + (dirY * closestDist)
 		impactZ := pos.Z + (dirZ * closestDist)
+		impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
 
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDist, dirX, dirY, dirZ)
+
+		// Deformiamo anche il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
+		dentDepth := 2.5
+		dentRadius := 8.0
+		if force > 0 {
+			dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
+			dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
+		}
+		impulse := geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
+		closestThing.Deform(impactPoint, impulse, dentRadius)
+
 		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
+	}
+
+	if closestFace != nil {
+		// Impatto contro un muro/volume: applichiamo la deformazione plastica
+		impactX := pos.X + (dirX * closestDist)
+		impactY := pos.Y + (dirY * closestDist)
+		impactZ := pos.Z + (dirZ * closestDist)
+		impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
+		dentDepth := 2.5
+		dentRadius := 8.0
+		if force > 0 {
+			dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
+			dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
+		}
+		if closestVol != nil {
+			normX, normY, normZ := closestFace.GetNormal()
+			normal := geometry.XYZ{X: normX, Y: normY, Z: normZ}
+			closestVol.DeformDent(impactPoint, normal, dentDepth, dentRadius)
+		} else {
+			closestFace.DeformDent(impactPoint, dentDepth, dentRadius)
+		}
+		t.spawnBulletHole(impactX, impactY, impactZ, nil)
 	}
 }
 
@@ -410,4 +489,29 @@ func (t *Base) onElasticCollision(other collisions.IObject, energy float64) {
 
 func (t *Base) onInelasticCollision(other collisions.IObject, energy float64) {
 	//TODO
+}
+
+// Deform applies plastic deformation to the thing's vertices around a world-space impact point.
+func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	if t.IVertices == nil {
+		return false
+	}
+	// Per modelli 3D e mesh di Thing, le coordinate dei vertici sono locali rispetto al centro entità
+	cx, cy, cz := t.ent.GetCenter()
+	localImpact := geometry.XYZ{
+		X: impact.X - cx,
+		Y: impact.Y - cy,
+		Z: impact.Z - cz,
+	}
+	return t.IVertices.Deform(localImpact, impulse, radius)
+}
+
+// DeformDent produces an indentation on the thing's vertices around a world-space impact point.
+func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	impulse := geometry.XYZ{
+		X: -normal.X * depth,
+		Y: -normal.Y * depth,
+		Z: -normal.Z * depth,
+	}
+	return t.Deform(impact, impulse, radius)
 }

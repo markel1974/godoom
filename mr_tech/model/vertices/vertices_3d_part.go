@@ -1,6 +1,7 @@
 package vertices
 
 import (
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -127,3 +128,17 @@ func (v *Vertices3DPart) HandleImpactEvent(force, dirX, dirY, dirZ float64) {
 
 // SetRagdollMode is handled at the owning Vertices3D level.
 func (v *Vertices3DPart) SetRagdollMode() {}
+
+func (v *Vertices3DPart) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	if v.entry != nil {
+		return v.entry.Deform(impact, impulse, radius)
+	}
+	return false
+}
+
+func (v *Vertices3DPart) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	if v.entry != nil {
+		return v.entry.DeformDent(impact, normal, depth, radius)
+	}
+	return false
+}

@@ -158,6 +158,14 @@ func (m *Material) GetDeformVertexes() [][]string { return m.deformVertexes }
 // GetSurfaceParms returns the surface parameters dictionary.
 func (m *Material) GetSurfaceParms() map[string]bool { return m.surfaceParms }
 
+// HasSurfaceParm checks if a specific surface parameter flag is set on the material.
+func (m *Material) HasSurfaceParm(name string) bool {
+	if m == nil || m.surfaceParms == nil {
+		return false
+	}
+	return m.surfaceParms[name]
+}
+
 // GetSkyParms returns the sky parameters array.
 func (m *Material) GetSkyParms() []string { return m.skyParms }
 

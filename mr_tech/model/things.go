@@ -106,6 +106,11 @@ func (th *Things) GetMaterials() *materials.Materials {
 	return th.materials
 }
 
+// GetVolumes returns a IVolumesHandler interface.
+func (th *Things) GetVolumes() things.IVolumesHandler {
+	return th.volumes
+}
+
 // Len returns the number of staged elements in the coordinator.
 func (th *Things) Len() int {
 	return th.coordinator.StagedLen()

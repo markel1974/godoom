@@ -153,3 +153,11 @@ func (v *VerticesSprite) SetAction(idx int) {
 // SetRagdollMode switches the vertices sprite to ragdoll behavior.
 func (v *VerticesSprite) SetRagdollMode() {
 }
+
+func (v *VerticesSprite) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	return false
+}
+
+func (v *VerticesSprite) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	return false
+}

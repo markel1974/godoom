@@ -42,6 +42,7 @@ type Things struct {
 	maxOverlapsWorld  int
 	maxOverlapsThings int
 	coordinator       *collisions.Coordinator
+	throwable         []*config.Thing
 }
 
 // NewThings initializes and returns an instance of Things with the specified maximum number of things.
@@ -283,6 +284,7 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 		thing = things.NewUI(th, ct)
 	case config.ThingItemDef:
 		thing = things.NewItem(th, ct, volume)
+		th.throwable = append(th.throwable, ct)
 	default:
 		thing = things.NewItem(th, ct, volume)
 	}
@@ -443,7 +445,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		th.event.Wait()
 	}
 
-	// Flush and stage any throwables or newly released ragdoll/detached parts from Thinking on tick 0.
+	// Flush and stage any throwable or newly released ragdoll/detached parts from Thinking on tick 0.
 	if th.hasPending {
 		pLen := int(th.pendingLen.Load())
 		for x := 0; x < pLen; x++ {

@@ -378,7 +378,6 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 	const wallDeform = false
 
 	if wallDeform {
-
 		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
 		if vols := t.things.GetVolumes(); vols != nil {
 			vols.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist, func(object aabb.IObject, distance float64) (float64, bool) {

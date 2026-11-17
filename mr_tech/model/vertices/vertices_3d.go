@@ -100,8 +100,11 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 	v.ent = v.elements.GetSolver().GetEntity()
 	v.Compile(0)
 	if v.minZ <= v.maxZ {
-		if baseZ := -(v.minZ + v.maxZ) * 0.5; math.Abs(baseZ) > 1e-6 {
-			v.joints.SetBaseOffsetZ(baseZ)
+		baseX := -(v.minX + v.maxX) * 0.5
+		baseY := -(v.minY + v.maxY) * 0.5
+		baseZ := -(v.minZ + v.maxZ) * 0.5
+		if math.Abs(baseX) > 1e-6 || math.Abs(baseY) > 1e-6 || math.Abs(baseZ) > 1e-6 {
+			v.joints.SetBaseOffset(baseX, baseY, baseZ)
 			v.compiled = false
 			v.Compile(0)
 		}

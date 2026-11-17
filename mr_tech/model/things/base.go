@@ -351,7 +351,7 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 		if self.IsEqual(other) {
 			return maxDistance, false
 		}
-		if sub, ok := other.(vertices.ISubPart); ok && !sub.IsPhysicsFree() {
+		if sub, sOk := other.(vertices.ISubPart); sOk && !sub.IsPhysicsFree() {
 			if owner := sub.GetOwner(); owner != nil && self.IsEqual(owner) {
 				return maxDistance, false
 			}
@@ -409,20 +409,3 @@ func (t *Base) onElasticCollision(other collisions.IObject, energy float64) {
 func (t *Base) onInelasticCollision(other collisions.IObject, energy float64) {
 	//TODO
 }
-
-/*
-// deadZone checks if the provided velocity components are within a threshold, sets velocity to zero, and returns true if so.
-func (t *ThingBase) deadZone(dx, dy, dz float64) bool {
-	const sleepEpsilon = 0.005
-	if math.Abs(dx) < sleepEpsilon && math.Abs(dy) < sleepEpsilon && math.Abs(dz) < sleepEpsilon {
-		entity := t.vertices.GetEntity()
-		entity.SetVx(0.0)
-		entity.SetVy(0.0)
-		if entity.IsOnGround() {
-			entity.SetVz(0.0)
-		}
-		return true
-	}
-	return false
-}
-*/

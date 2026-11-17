@@ -137,6 +137,13 @@ type Cage struct {
 	passDX              float64
 	passDY              float64
 	passDZ              float64
+	stepDX              float64
+	stepDY              float64
+	stepDZ              float64
+	hasSpawnOrigin      bool
+	spawnX              float64
+	spawnY              float64
+	spawnZ              float64
 	pendingStepZ        float64
 	collisionGroup      uint64
 	solverIdx           int
@@ -202,7 +209,8 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.session = session
 	lEnt := s.entity
 	// Calculate Position
-	s.dX, s.dY, s.dZ = lEnt.GetFrameDisplacement()
+	s.stepDX, s.stepDY, s.stepDZ = lEnt.GetFrameDisplacement()
+	s.dX, s.dY, s.dZ = s.stepDX, s.stepDY, s.stepDZ
 
 	// Oriented extents from entity OBB (kept synchronized by Entity.Update).
 	s.eRadX, s.eRadY, s.eRadZ = lEnt.GetOrientedHalfExtents()
@@ -244,8 +252,20 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 		s.prevQX, s.prevQY, s.prevQZ, s.prevQW = qx, qy, qz, qw
 	}
 
+	s.tX, s.tY, s.tZ = s.cX+s.stepDX, s.cY+s.stepDY, s.cZ+s.stepDZ
+	clampBaseX, clampBaseY, clampBaseZ := entCX, entCY, entCZ
+	if s.hasSpawnOrigin {
+		s.cX = s.spawnX + s.objOffX
+		s.cY = s.spawnY + s.objOffY
+		s.cZ = s.spawnZ + s.objOffZ
+		s.dX = s.tX - s.cX
+		s.dY = s.tY - s.cY
+		s.dZ = s.tZ - s.cZ
+		clampBaseX, clampBaseY, clampBaseZ = s.spawnX, s.spawnY, s.spawnZ
+		s.forceStaticClamp = true
+		s.hasSpawnOrigin = false
+	}
 	s.passDX, s.passDY, s.passDZ = s.dX, s.dY, s.dZ
-	s.tX, s.tY, s.tZ = s.cX+s.dX, s.cY+s.dY, s.cZ+s.dZ
 
 	sx, sy, sz := s.sweptHalfExtents(lEnt)
 
@@ -270,7 +290,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.slotsLen = 0
 	s.hasFloor = false
 	s.applied = false
-	s.clampX, s.clampY, s.clampZ = entCX, entCY, entCZ
+	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
 	s.clampNormalsLen = 0
 	s.flatWallsLen = 0
 	s.clampCornersLen = 0
@@ -406,16 +426,47 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 	v0x, v0y, v0z := rFace.Get0()
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
+	entCX, entCY, entCZ := s.entity.GetCenter()
+	offX, offY, offZ := s.tX-entCX, s.tY-entCY, s.tZ-entCZ
+	distStart := (s.cX-v0x)*fc.nX + (s.cY-v0y)*fc.nY + (s.cZ-v0z)*fc.nZ
+	distTarget := (s.tX-v0x)*fc.nX + (s.tY-v0y)*fc.nY + (s.tZ-v0z)*fc.nZ
+	extraPen := 0.0
+	shiftToTX, shiftToTY, shiftToTZ := 0.0, 0.0, 0.0
+	if distTarget < 0.0 {
+		tau := 0.0
+		if denom := distStart - distTarget; denom > 1e-12 && distStart > 0.0 {
+			tau = math.Max(0.0, math.Min(1.0, distStart/denom))
+		}
+		hitX := s.cX + tau*s.dX
+		hitY := s.cY + tau*s.dY
+		hitZ := s.cZ + tau*s.dZ
+		offX, offY, offZ = hitX-entCX, hitY-entCY, hitZ-entCZ
+		shiftToTX, shiftToTY, shiftToTZ = s.tX-hitX, s.tY-hitY, s.tZ-hitZ
+		extraPen = -distTarget
+	}
 	m := s.manifold
-	if m.ComputeStaticTriangle(s.entity.BoundingBox, s.dX, s.dY, s.dZ, fc.nX, fc.nY, fc.nZ, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z, fc.pen) {
+	if m.ComputeStaticTriangle(s.entity.BoundingBox, offX, offY, offZ, fc.nX, fc.nY, fc.nZ, v0x, v0y, v0z, v1x, v1y, v1z, v2x, v2y, v2z, fc.pen) {
+		added := 0
 		for pi := 0; pi < m.GetCount(); pi++ {
 			ptX, ptY, ptZ, ptPen := m.GetPoint(pi)
+			if extraPen > 0.0 {
+				ptPen = math.Min(fc.pen, ptPen+extraPen)
+				if pi == 0 && ptPen < fc.pen {
+					ptPen = fc.pen
+				}
+			}
 			if ptPen <= 0 {
 				continue
 			}
+			ptX = math.Max(s.tX-s.eRadX, math.Min(s.tX+s.eRadX, ptX+shiftToTX))
+			ptY = math.Max(s.tY-s.eRadY, math.Min(s.tY+s.eRadY, ptY+shiftToTY))
+			ptZ = math.Max(s.tZ-s.eRadZ, math.Min(s.tZ+s.eRadZ, ptZ+shiftToTZ))
 			s.addToBucket(fc.bucket, nil, rFace, -ptPen, ptPen, fc.nX, fc.nY, fc.nZ, ptX, ptY, ptZ, fc.maxZ, ImpactInelastic)
+			added++
 		}
-		return
+		if added > 0 {
+			return
+		}
 	}
 	px, py, pz := s.projectStabilizedStaticContact(fc)
 	s.addToBucket(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, ImpactInelastic)
@@ -425,13 +476,19 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 // clamped to the triangle's world AABB bounds.
 func (s *Cage) projectStabilizedStaticContact(fc *staticFaceContact) (float64, float64, float64) {
 	supX, supY, supZ := s.entity.GetStabilizedContactPoint(-fc.nX, -fc.nY, -fc.nZ)
-	supX += s.dX
-	supY += s.dY
-	supZ += s.dZ
+	entCX, entCY, entCZ := s.entity.GetCenter()
+	supX += s.tX - entCX
+	supY += s.tY - entCY
+	supZ += s.tZ - entCZ
 	distSup := (supX-fc.anchorX)*fc.nX + (supY-fc.anchorY)*fc.nY + (supZ-fc.anchorZ)*fc.nZ
 	px := math.Max(fc.minX, math.Min(fc.maxX, supX-fc.nX*distSup))
 	py := math.Max(fc.minY, math.Min(fc.maxY, supY-fc.nY*distSup))
 	pz := math.Max(fc.minZ, math.Min(fc.maxZ, supZ-fc.nZ*distSup))
+	if !s.entity.KeepUpright() {
+		px = math.Max(s.tX-s.eRadX, math.Min(s.tX+s.eRadX, px))
+		py = math.Max(s.tY-s.eRadY, math.Min(s.tY+s.eRadY, py))
+		pz = math.Max(s.tZ-s.eRadZ, math.Min(s.tZ+s.eRadZ, pz))
+	}
 	return px, py, pz
 }
 
@@ -762,7 +819,7 @@ func (s *Cage) GetRadZ() float64 { return s.eRadZ }
 func (s *Cage) GetC() (float64, float64, float64) { return s.cX, s.cY, s.cZ }
 
 // GetDisplacement returns the displacement of the collision cage along the x, y, and z axes.[cite: 6]
-func (s *Cage) GetDisplacement() (float64, float64, float64) { return s.dX, s.dY, s.dZ }
+func (s *Cage) GetDisplacement() (float64, float64, float64) { return s.stepDX, s.stepDY, s.stepDZ }
 
 // GetT retrieves the current transformed coordinates (tX, tY, tZ) of the Cage.[cite: 6]
 func (s *Cage) GetT() (float64, float64, float64) { return s.tX, s.tY, s.tZ }
@@ -1036,6 +1093,19 @@ func (s *Cage) GetSolver() *Solver {
 // ZeroDisplacement resets any pending displacement delta on this cage when entering sleep.
 func (s *Cage) ZeroDisplacement() {
 	s.dX, s.dY, s.dZ = 0, 0, 0
+	s.stepDX, s.stepDY, s.stepDZ = 0, 0, 0
+}
+
+// SetSpawnOrigin records a safe pre-spawn or pre-rotation origin for the next Rebuild sweep and static clamp.
+func (s *Cage) SetSpawnOrigin(x, y, z float64) {
+	s.spawnX, s.spawnY, s.spawnZ = x, y, z
+	s.hasSpawnOrigin = true
+	s.forceStaticClamp = true
+}
+
+// HasSpawnOrigin reports whether a pending spawn origin is set on this cage.
+func (s *Cage) HasSpawnOrigin() bool {
+	return s.hasSpawnOrigin
 }
 
 // GetEntity returns the physics entity associated with the collision cage.[cite: 6]
@@ -1106,8 +1176,15 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	if solidWE || solidNS {
 		if distStart < -satFilterEpsilon {
 			if rFace.IsSingleSided() {
-				if distStart < -rayEff || !s.entity.KeepUpright() {
+				if distStart < -rayEff {
 					return out, false
+				}
+				if !s.entity.KeepUpright() {
+					impDotOrig := s.passDX*nX + s.passDY*nY + s.passDZ*nZ
+					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
+					if distStart <= -0.5*rayEff || impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT) {
+						return out, false
+					}
 				}
 			} else {
 				impDotOrig := s.passDX*nX + s.passDY*nY + s.passDZ*nZ
@@ -1116,7 +1193,10 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 					distStart = -distStart
 					flipped = true
 				} else if !s.entity.KeepUpright() {
-					return out, false
+					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
+					if impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT) {
+						return out, false
+					}
 				}
 			}
 		}
@@ -1342,8 +1422,12 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	if !s.entity.KeepUpright() && !slopeAdjusted && penetration > minOverlap {
 		if spikeTipCap && distTarget >= -satFilterEpsilon {
 			penetration = minOverlap
+		} else if distTarget < -satFilterEpsilon && s.intersectsFiniteTriangle3D(rFace, distStart, distTarget) {
+			// Preserve full penetration when tunneling through a validated finite 3D triangle.
 		} else if penetration > minOverlap+satFilterEpsilon {
-			return out, false
+			if !s.intersectsFiniteTriangle3D(rFace, distStart, distTarget) {
+				return out, false
+			}
 		} else {
 			penetration = minOverlap
 		}
@@ -1351,6 +1435,55 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 
 	out.pen = penetration
 	return out, true
+}
+
+// intersectsFiniteTriangle3D reports whether the cage's scaled ellipsoid at target t, plane-crossing point,
+// or swept segment [c -> t] intersects the finite 3D triangle rFace.
+func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget float64) bool {
+	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
+		return true
+	}
+	v0x, v0y, v0z := rFace.Get0()
+	v1x, v1y, v1z := rFace.Get1()
+	v2x, v2y, v2z := rFace.Get2()
+	invRX := 1.0 / s.eRadX
+	invRY := 1.0 / s.eRadY
+	invRZ := 1.0 / s.eRadZ
+
+	qx, qy, qz, _ := closestPointOnTriangleZero(
+		(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
+		(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
+		(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
+	)
+	if qx*qx+qy*qy+qz*qz < 1.0-1e-9 {
+		return true
+	}
+
+	if distStart >= -satFilterEpsilon && distTarget < 0.0 {
+		tauPlane := 0.5
+		if denom := distStart - distTarget; denom > 1e-12 {
+			tauPlane = math.Max(0.0, math.Min(1.0, distStart/denom))
+		}
+		px := s.cX + tauPlane*s.dX
+		py := s.cY + tauPlane*s.dY
+		pz := s.cZ + tauPlane*s.dZ
+		qpx, qpy, qpz, _ := closestPointOnTriangleZero(
+			(v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ,
+			(v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ,
+			(v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ,
+		)
+		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 {
+			return true
+		}
+	}
+
+	_, _, _, _, _, _, segSq, _, _ := closestSegmentToTriangleFromOrigin(
+		s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
+		(v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ,
+		(v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ,
+		(v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ,
+	)
+	return segSq < 1.0-1e-9
 }
 
 // refineKeepUprightWall clips a wall triangle to the upright body's Z slab and checks its scaled 2D footprint,

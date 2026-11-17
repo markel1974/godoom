@@ -240,9 +240,14 @@ func (t *Solver) TryMarkStaged(epoch uint64) bool {
 func (t *Solver) StagePrepare(session uint64) {
 	t.beforePrepare()
 	ent := t.entity
+	preX, preY, preZ := ent.GetCenter()
 	ent.ClearActiveContact()
 	ent.ClearPreSolve()
 	ent.Update()
+	postX, postY, postZ := ent.GetCenter()
+	if (postX != preX || postY != preY || postZ != preZ) && !t.cage.HasSpawnOrigin() {
+		t.cage.SetSpawnOrigin(preX, preY, preZ)
+	}
 	t.cage.Rebuild(t.maxStep, session)
 	t.afterPrepare()
 }
@@ -422,6 +427,7 @@ func (t *Solver) StageResolvePosition() {
 		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ, sPushZ)
 		if pen > 0 {
 			t.entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
+			t.entity.ClampNormalVelocity(nX, nY, nZ)
 		}
 	}
 }

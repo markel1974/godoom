@@ -330,6 +330,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		if !thing.IsVisible() {
 			return false
 		}
+		if isPlayer := thing.GetEntity().GetId() == w.playerId; !isPlayer {
+			things.StageAdd(thing)
+		}
 		if thing.GetKind() != config.ThingDoorDef {
 			occState := w.occlusion.GetState(thing.GetEntity().GetId())
 			if occState != nil && !occState.IsVisible {
@@ -343,10 +346,6 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		if pFaces.Len() == 0 {
 			// Anche se non ha facce, teniamo vivo occlusion test
 			return false
-		}
-
-		if isPlayer := thing.GetEntity().GetId() == w.playerId; !isPlayer {
-			things.StageAdd(thing)
 		}
 
 		pushPassThing(thing, pFaces, pNextFaces, lp, renderMode)

@@ -19,6 +19,8 @@ type Joints struct {
 	lastHitDirX      float64
 	lastHitDirY      float64
 	lastHitDirZ      float64
+	baseOffsetX      float64
+	baseOffsetY      float64
 	baseOffsetZ      float64
 
 	rotationsA []*TagAxis
@@ -89,6 +91,13 @@ func (v *Joints) LastHitImpulse() (dirX, dirY, dirZ, fMag float64, hitPart int) 
 
 // SetBaseOffsetZ records the static Z centering offset aligning model bounds with Entity center.
 func (v *Joints) SetBaseOffsetZ(z float64) {
+	v.baseOffsetZ = z
+}
+
+// SetBaseOffset records the static 3D centering offset aligning model bounds with Entity center.
+func (v *Joints) SetBaseOffset(x, y, z float64) {
+	v.baseOffsetX = x
+	v.baseOffsetY = y
 	v.baseOffsetZ = z
 }
 
@@ -215,10 +224,11 @@ func (v *Joints) ActivateRagdoll(pvx, pvy, pvz float64) {
 
 // Restore resets the joint origins and rotations at i using q.
 func (v *Joints) Restore(i int, q *aabb.Quaternion) {
-	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = 0, 0, v.baseOffsetZ
-	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = 0, 0, v.baseOffsetZ
 	v.rotationsA[i].SetFromQuaternion(q)
 	v.rotationsB[i].SetFromQuaternion(q)
+	ox, oy, oz := v.rotationsA[i].RotatePoint(v.baseOffsetX, v.baseOffsetY, v.baseOffsetZ)
+	v.originsA[i].X, v.originsA[i].Y, v.originsA[i].Z = ox, oy, oz
+	v.originsB[i].X, v.originsB[i].Y, v.originsB[i].Z = ox, oy, oz
 }
 
 // Reset copies parent origins and rotations to joint i.

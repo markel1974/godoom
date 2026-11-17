@@ -90,12 +90,12 @@ func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 			}
 			return false
 		})
-		cage.Commit(nil)
 		if counter > maxOverlaps {
 			return true
 		}
 		return false
 	})
+	cage.Commit(nil)
 }
 
 // ClampStaticCage projects any entity moved or pushed during the step strictly outside solid world faces.

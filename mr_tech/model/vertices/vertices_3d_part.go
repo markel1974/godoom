@@ -68,6 +68,10 @@ func (v *Vertices3DPart) ReleasePhysics(collisionGroup uint64, vx, vy, vz, wx, w
 	v.ent.SetRotationQuaternion(qx, qy, qz, qw)
 	v.ent.SetV(vx, vy, vz)
 	v.ent.SetAngularVelocity(wx, wy, wz)
+	if v.parent != nil && v.parent.ent != nil && v.solver != nil && v.solver.GetCage() != nil {
+		ox, oy, oz := v.parent.ent.GetCenter()
+		v.solver.GetCage().SetSpawnOrigin(ox, oy, oz)
+	}
 	v.entry.lastRotVolA = nil
 	v.entry.CompileDetached()
 }

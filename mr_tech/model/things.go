@@ -249,7 +249,11 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 	}
 	if ct.Kind != config.ThingDoorDef {
 		entity := thing.GetEntity()
-		entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		if ct.Kind == config.ThingThrowableDef {
+			entity.MoveCenterTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		} else {
+			entity.MoveTo(ct.Position.X, ct.Position.Y, ct.Position.Z)
+		}
 	}
 	return thing
 }
@@ -275,6 +279,10 @@ func (th *Things) CreateThrowable(self vertices.IThing, throwableIndex int, onCo
 		return
 	}
 	throwable := th.Create(dst, volume)
+	if self != nil && throwable.GetSolver() != nil && throwable.GetSolver().GetCage() != nil {
+		sx, sy, _ := self.GetEntity().GetCenter()
+		throwable.GetSolver().GetCage().SetSpawnOrigin(sx, sy, pos.Z)
+	}
 	th.pending[slot] = throwable
 	th.hasPending = true
 }
@@ -370,7 +378,9 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	th.flushPendingRemovals()
 	if th.hasPending {
 		for x := 0; x < int(th.pendingLen.Load()); x++ {
-			th.addThing(th.pending[x])
+			item := th.pending[x]
+			th.addThing(item)
+			th.StageAdd(item)
 		}
 		th.pendingLen.Store(0)
 		th.hasPending = false

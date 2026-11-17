@@ -25,6 +25,7 @@ type Coordinator struct {
 	//wakeRunningFn    WakeRunningFn
 	queryContactsFn QueryContactsFn
 	clampStaticFn   ClampStaticFn
+	commonCap       int
 }
 
 // NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
@@ -32,19 +33,21 @@ func NewCoordinator(solverIterations, initialCap int, queryContactsFn QueryConta
 	if solverIterations <= 0 {
 		solverIterations = 10
 	}
-	if initialCap <= 0 {
-		initialCap = 1024
+	commonCap := initialCap
+	if commonCap <= 0 {
+		commonCap = 1024
 	}
 	c := &Coordinator{
+		commonCap:        commonCap,
 		solverIterations: solverIterations,
-		staged:           make([]*Solver, initialCap),
-		running:          make([]*Solver, initialCap),
-		removables:       make([]*Solver, initialCap),
-		wakeQueue:        make([]*Solver, initialCap),
-		islandParent:     make([]int, initialCap),
-		islandSleep:      make([]bool, initialCap),
-		jointSupported:   make([]bool, initialCap),
-		joints:           make([]*JointConstraint, 0, initialCap),
+		staged:           make([]*Solver, commonCap),
+		running:          make([]*Solver, commonCap),
+		removables:       make([]*Solver, commonCap),
+		wakeQueue:        make([]*Solver, commonCap),
+		islandParent:     make([]int, commonCap),
+		islandSleep:      make([]bool, commonCap),
+		jointSupported:   make([]bool, commonCap),
+		joints:           make([]*JointConstraint, 0, commonCap),
 		queryContactsFn:  queryContactsFn,
 		clampStaticFn:    clampStaticFn,
 	}
@@ -67,12 +70,12 @@ func (c *Coordinator) AddJoint(j *JointConstraint) {
 
 // EnsureCapacity grows coordinator buffers to hold at least minCap solvers while preserving existing entries.
 func (c *Coordinator) EnsureCapacity(minCap int) {
-	if minCap <= cap(c.running) {
+	if minCap <= c.commonCap {
 		return
 	}
-	newCap := minCap * 2
+	c.commonCap = minCap * 2
 	growSolvers := func(src []*Solver) []*Solver {
-		dst := make([]*Solver, newCap)
+		dst := make([]*Solver, c.commonCap)
 		copy(dst, src)
 		return dst
 	}
@@ -81,15 +84,15 @@ func (c *Coordinator) EnsureCapacity(minCap int) {
 	c.removables = growSolvers(c.removables)
 	c.wakeQueue = growSolvers(c.wakeQueue)
 
-	newParents := make([]int, newCap)
+	newParents := make([]int, c.commonCap)
 	copy(newParents, c.islandParent)
 	c.islandParent = newParents
 
-	newSleep := make([]bool, newCap)
+	newSleep := make([]bool, c.commonCap)
 	copy(newSleep, c.islandSleep)
 	c.islandSleep = newSleep
 
-	newJointSup := make([]bool, newCap)
+	newJointSup := make([]bool, c.commonCap)
 	copy(newJointSup, c.jointSupported)
 	c.jointSupported = newJointSup
 }

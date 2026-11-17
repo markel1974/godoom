@@ -213,19 +213,12 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 			if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
 				faceBlendT = 0.5
 			}
-			material := mat.GetPacked()
-			spec := float32(mat.GetSpecularBoost())
-			shininess := float32(mat.GetShininess())
-			detailScale := mat.GetDetailScale()
-			detailFactor := mat.GetDetailFactor()
+			packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
 			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
-			//p0X, p0Y, p0Z := face.GetPoint0()
-			//p1X, p1Y, p1Z := face.GetPoint1()
-			//p2X, p2Y, p2Z := face.GetPoint2()
 			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-			id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-			id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
-			id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, material, spec, shininess, detailScale, detailFactor)
+			id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
+			id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
+			id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
 			fv.AddTriangle(id0, id1, id2)
 			//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
 			endIdx := fv.GetIndicesLen()
@@ -297,24 +290,15 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				currentTargetDc = w.modes[mat.GetBlendMode()]
 			}
 
-			material := mat.GetPacked()
-			spec := float32(mat.GetSpecularBoost())
-			shininess := float32(mat.GetShininess())
-			detailScale := mat.GetDetailScale()
-			detailFactor := mat.GetDetailFactor()
+			packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
 			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
-			//p0X, p0Y, p0Z := face.GetPoint0()
-			//p1X, p1Y, p1Z := face.GetPoint1()
-			//p2X, p2Y, p2Z := face.GetPoint2()
 			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
 			nf := nextFaces.At(fx)
-			np0X, np0Y, np0Z := nf.GetPoint0()
-			np1X, np1Y, np1Z := nf.GetPoint1()
-			np2X, np2Y, np2Z := nf.GetPoint2()
+			np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z := nf.GetPointsFlat()
 
-			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
-			id1 := w.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, float32(renderMode), float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
-			id2 := w.fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, float32(renderMode), float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, material, spec, shininess, detailScale, detailFactor)
+			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
+			id1 := w.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, float32(renderMode), float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
+			id2 := w.fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, float32(renderMode), float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
 			w.fv.AddTriangle(id0, id1, id2)
 		}
 

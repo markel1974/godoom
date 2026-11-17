@@ -36,8 +36,8 @@ type Material struct {
 	fogGen          []string
 	isLightning     bool
 	isBacksided     bool
-	specularBoost   float64
-	shininess       float64
+	specularBoost   float32
+	shininess       float32
 	// Texture Slots
 	diffuseMap  string
 	normalMap   string
@@ -168,10 +168,10 @@ func (m *Material) GetCloudParms() []string { return m.cloudParms }
 func (m *Material) GetFogGen() []string { return m.fogGen }
 
 // GetSpecularBoost retrieves the specular boost value, which intensifies the specular highlights of the material during rendering.
-func (m *Material) GetSpecularBoost() float64 { return m.specularBoost }
+func (m *Material) GetSpecularBoost() float32 { return m.specularBoost }
 
 // GetShininess returns the shininess property of the material, which determines the specular highlight intensity.
-func (m *Material) GetShininess() float64 { return m.shininess }
+func (m *Material) GetShininess() float32 { return m.shininess }
 
 // GetDiffuseMap returns the diffuse map path/name.
 func (m *Material) GetDiffuseMap() string { return m.diffuseMap }
@@ -381,10 +381,10 @@ func (m *Material) SetLightning(isLightning bool) { m.isLightning = isLightning 
 func (m *Material) SetBacksided(isBacksided bool) { m.isBacksided = isBacksided }
 
 // SetSpecularBoost sets the specular boost value.
-func (m *Material) SetSpecularBoost(specularBoost float64) { m.specularBoost = specularBoost }
+func (m *Material) SetSpecularBoost(specularBoost float32) { m.specularBoost = specularBoost }
 
 // SetShininess sets the shininess property of the material.
-func (m *Material) SetShininess(shininess float64) { m.shininess = shininess }
+func (m *Material) SetShininess(shininess float32) { m.shininess = shininess }
 
 // SetDiffuseMap sets the diffuse map path/name.
 func (m *Material) SetDiffuseMap(diffuseMap string) { m.diffuseMap = diffuseMap }
@@ -460,6 +460,10 @@ func (m *Material) SetAmplitude(a float64) {
 func (m *Material) SetKind(k int) {
 	m.kind = k
 	m.updatePacked()
+}
+
+func (m *Material) GetFlat() (float32, float32, float32, float32, float32) {
+	return m.packed, m.specularBoost, m.shininess, m.detailScale, m.detailFactor
 }
 
 // GetPacked returns the precalculated packed material representation as float32.

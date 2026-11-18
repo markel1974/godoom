@@ -205,12 +205,12 @@ func (t *Things) CreateInternalBModel(rawFaces []*lumps.RawFace3, position geome
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
 		thingCfg.GForce = 0.0
-		thingCfg.Door = lumps.BuildDoorSpec(ent, size)
+		thingCfg.Door = BuildDoorSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_plat") {
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
 		thingCfg.GForce = 0.0
-		thingCfg.Door = lumps.BuildPlatSpec(ent, size)
+		thingCfg.Door = BuildPlatSpec(ent, size)
 	}
 	return thingCfg, nil
 }

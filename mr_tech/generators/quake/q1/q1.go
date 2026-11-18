@@ -159,7 +159,7 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 	volumes := NewVolumes(mIdx, volumesCount)
 
 	const difficulty = 1
-	teleportDests := lumps.CollectTeleportDestinations(entities)
+	teleportDests := CollectTeleportDestinations(entities)
 	for _, ent := range entities {
 		classname, _ := ent.GetProperty("classname")
 		if classname != "worldspawn" && classname != "info_player_start" && !ent.IsLevelAvailable(difficulty) {
@@ -197,7 +197,7 @@ func (q1 *BSPReader) Build(root *config.Root) error {
 				for _, rf := range rawFaces {
 					pts = append(pts, rf.Points...)
 				}
-				if tpThing := lumps.BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
+				if tpThing := BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
 					root.Things = append(root.Things, tpThing)
 				}
 			}

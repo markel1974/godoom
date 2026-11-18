@@ -192,12 +192,12 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
 		thingCfg.GForce = 0.0
-		thingCfg.Door = buildQ1DoorSpec(ent, size)
+		thingCfg.Door = BuildDoorSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_plat") {
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
 		thingCfg.GForce = 0.0
-		thingCfg.Door = lumps.BuildPlatSpec(ent, size)
+		thingCfg.Door = BuildPlatSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_train") {
 		thingCfg.Kind = config.ThingPlatformDef
 		thingCfg.Mass = heavyMass
@@ -206,10 +206,6 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	}
 
 	return thingCfg, nil
-}
-
-func buildQ1DoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
-	return lumps.BuildDoorSpec(ent, size)
 }
 
 // CreateThingBSP loads a BSP file, processes its geometry, and creates a Thing with the specified position and classname.
@@ -299,23 +295,55 @@ func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind c
 	if cModel != nil {
 		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 	}
-	var thingCfg *config.Thing
 	if kind == config.ThingEnemyDef {
-		actions := config.NewEnemyAnimations()
-		if cModel != nil {
-			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
-		}
-		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-		thingCfg.GForce = GForce
-		thingCfg.Model3DEntry = cModel
-		thingCfg.JumpForce = JumpForce
-		thingCfg.WakeupDistance = wakeupDistance
-		_ = common.NewEnemy(thingCfg, actions)
-	} else {
-		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-		thingCfg.GForce = GForce
-		thingCfg.Model3DEntry = cModel
-		_ = common.NewItem(thingCfg)
+		return doCreateConfigEnemy(classname, pos, cModel, angle, mass, speed, wakeupDistance)
 	}
+	if keyId := q1KeyId(classname); keyId != "" {
+		return doCreateConfigKey(classname, pos, cModel, angle, mass, speed, keyId)
+	}
+	return doCreateConfigItem(classname, pos, cModel, angle, mass, speed)
+}
+
+func doCreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed, wakeupDistance float64) *config.Thing {
+	actions := config.NewEnemyAnimations()
+	if cModel != nil {
+		ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
+	}
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingEnemyDef, mass, 0, 0, speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	thingCfg.JumpForce = JumpForce
+	thingCfg.WakeupDistance = wakeupDistance
+	_ = common.NewEnemy(thingCfg, actions)
+	return thingCfg
+}
+
+func doCreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingItemDef, mass, 0, 0, speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	_ = common.NewItem(thingCfg)
+	return thingCfg
+}
+
+func doCreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	thingCfg.Kind = config.ThingKeyDef
+	thingCfg.Mass = 0.1
+	thingCfg.Key = &config.KeySpec{KeyId: keyId}
+	return thingCfg
+}
+
+const heavyMass = 1000.0
+
+func doCreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *lumps.Entity, size geometry.XYZ) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
+	thingCfg.GForce = 0.0
+	thingCfg.Model3DEntry = cModel
+	thingCfg.Kind = config.ThingDoorDef
+	thingCfg.Mass = heavyMass
+	thingCfg.Door = BuildDoorSpec(ent, size)
 	return thingCfg
 }

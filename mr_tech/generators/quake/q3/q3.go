@@ -167,7 +167,7 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	}
 
 	playerSpawned := false
-	teleportDests := lumps.CollectTeleportDestinations(entities)
+	teleportDests := CollectTeleportDestinations(entities)
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
 		baseClass := classname
@@ -203,7 +203,7 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 				for _, rf := range rawFaces {
 					pts = append(pts, rf.Points...)
 				}
-				if tpThing := lumps.BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
+				if tpThing := BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
 					root.Things = append(root.Things, tpThing)
 				}
 			}

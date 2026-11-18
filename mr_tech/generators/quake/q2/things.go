@@ -234,11 +234,7 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace2, position geom
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	center, size := model3d.CenterWithBounds([]string{"default"})
-	worldPos := geometry.XYZ{
-		X: position.X + center.X,
-		Y: position.Y + center.Y,
-		Z: position.Z + center.Z,
-	}
+	worldPos := geometry.XYZ{X: position.X + center.X, Y: position.Y + center.Y, Z: position.Z + center.Z}
 	thingCfg := th.doCreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
 	const heavyMass = 1000.0
@@ -246,12 +242,12 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace2, position geom
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
 		thingCfg.GForce = 0.0
-		thingCfg.Door = lumps.BuildDoorSpec(ent, size)
+		thingCfg.Door = BuildDoorSpec(ent, size)
 	} else if strings.HasPrefix(classname, "func_plat") {
 		thingCfg.Kind = config.ThingDoorDef
 		thingCfg.Mass = heavyMass
 		thingCfg.GForce = 0.0
-		thingCfg.Door = lumps.BuildPlatSpec(ent, size)
+		thingCfg.Door = BuildPlatSpec(ent, size)
 	}
 	return thingCfg, nil
 }

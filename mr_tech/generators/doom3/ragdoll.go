@@ -13,7 +13,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-type ragdollTriSpec struct {
+type RagdollTriSpec struct {
 	partIdx    int
 	mat        *config.Material
 	isHead     bool
@@ -21,20 +21,20 @@ type ragdollTriSpec struct {
 	triIndices [3]int
 }
 
-type ragdollBodyPart struct {
+type RagdollBodyPart struct {
 	name        string
 	anchorJoint int
 }
 
-type rawSkelFrame struct {
-	skel    []*md5.Joint
-	bodyPos [][]geometry.XYZ
-	headPos [][]geometry.XYZ
-}
-
-type CachedRagdoll struct {
+type RagdollCached struct {
 	md3    *config.Model3D
 	radius float64
+}
+
+type RawSkeletonFrame struct {
+	skeleton []*md5.Joint
+	bodyPos  [][]geometry.XYZ
+	headPos  [][]geometry.XYZ
 }
 
 // loadAnimatedMonsterMD3 loads and caches a multi-part articulated MD5 model decomposed into ragdoll limbs
@@ -126,7 +126,7 @@ func (t *Things) loadAnimatedMonsterMD3(spec *ThingSpec) (*config.Model3D, float
 		}
 	}
 
-	t.ragdollCache[cacheKey] = &CachedRagdoll{
+	t.ragdollCache[cacheKey] = &RagdollCached{
 		md3:    md3,
 		radius: radius,
 	}
@@ -186,7 +186,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	}
 
 	// Assign each triangle in mesh.SubMeshes to a ragdoll body based on dominant joint weight
-	var allTriSpecs []ragdollTriSpec
+	var allTriSpecs []RagdollTriSpec
 	partTriCount := make([]int, len(rawParts))
 
 	for sIdx, sub := range mesh.SubMeshes {
@@ -217,7 +217,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 				}
 			}
 			partTriCount[bestBody]++
-			allTriSpecs = append(allTriSpecs, ragdollTriSpec{partIdx: bestBody, mat: mat, isHead: false, subIdx: sIdx, triIndices: triIdx})
+			allTriSpecs = append(allTriSpecs, RagdollTriSpec{partIdx: bestBody, mat: mat, isHead: false, subIdx: sIdx, triIndices: triIdx})
 		}
 	}
 
@@ -239,7 +239,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 				}
 			}
 			headBodyIdx = len(rawParts)
-			rawParts = append(rawParts, ragdollBodyPart{name: "head", anchorJoint: headJointIdx})
+			rawParts = append(rawParts, RagdollBodyPart{name: "head", anchorJoint: headJointIdx})
 			partTriCount = append(partTriCount, 0)
 		}
 		for sIdx, sub := range headMesh.SubMeshes {
@@ -249,7 +249,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 					continue
 				}
 				partTriCount[headBodyIdx]++
-				allTriSpecs = append(allTriSpecs, ragdollTriSpec{
+				allTriSpecs = append(allTriSpecs, RagdollTriSpec{
 					partIdx:    headBodyIdx,
 					mat:        mat,
 					isHead:     true,
@@ -287,7 +287,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	activeBodies[0].anchorJoint = 0
 
 	oldToNewPart := make(map[int]int, len(activeBodies))
-	partTris := make([][]ragdollTriSpec, len(activeBodies))
+	partTris := make([][]RagdollTriSpec, len(activeBodies))
 	for newIdx, ab := range activeBodies {
 		oldToNewPart[ab.oldIdx] = newIdx
 	}
@@ -327,7 +327,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	}
 
 	// 7. Evaluate all animation frames into world/model-space vertex positions and skeletons
-	evaluateSkel := func(skel []*md5.Joint) rawSkelFrame {
+	evaluateSkel := func(skel []*md5.Joint) RawSkeletonFrame {
 		bodyPos := make([][]geometry.XYZ, len(mesh.SubMeshes))
 		for sIdx, sub := range mesh.SubMeshes {
 			computedVerts := make([]geometry.XYZ, len(sub.Vertices))
@@ -368,14 +368,14 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 			}
 		}
 
-		return rawSkelFrame{
-			skel:    skel,
-			bodyPos: bodyPos,
-			headPos: headPos,
+		return RawSkeletonFrame{
+			skeleton: skel,
+			bodyPos:  bodyPos,
+			headPos:  headPos,
 		}
 	}
 
-	var rawFrames []rawSkelFrame
+	var rawFrames []RawSkeletonFrame
 	var actionNames []string
 	var actionIntervals [][2]int
 
@@ -481,7 +481,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 			}
 			if minZ < math.MaxFloat64 {
 				dz := floorZ - minZ
-				for _, j := range rf.skel {
+				for _, j := range rf.skeleton {
 					j.Pos.Z += dz
 				}
 				for sIdx := range rf.bodyPos {
@@ -600,7 +600,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 
 		for pIdx := 1; pIdx < numParts; pIdx++ {
 			jIdx := activeBodies[pIdx].anchorJoint
-			j := rf.skel[jIdx]
+			j := rf.skeleton[jIdx]
 			anchorPos[pIdx] = geometry.XYZ{X: j.Pos.X + centerOffset.X, Y: j.Pos.Y + centerOffset.Y, Z: j.Pos.Z + centerOffset.Z}
 			anchorQuat[pIdx] = j.Orient
 		}
@@ -673,7 +673,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 
 // partitionSkeletonIntoRagdollBodies assigns every joint in mesh.Joints to an articulated ragdoll body
 // using Doom 3's .af (Articulated Figure) body declarations or standard anatomical limb roots.
-func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AFBody) ([]ragdollBodyPart, []int) {
+func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AFBody) ([]RagdollBodyPart, []int) {
 	numJoints := len(joints)
 	if numJoints == 0 {
 		return nil, nil
@@ -704,7 +704,7 @@ func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AF
 		jointToBody[i] = -1
 	}
 
-	var parts []ragdollBodyPart
+	var parts []RagdollBodyPart
 
 	if len(afBodies) > 0 {
 		for _, afb := range afBodies {
@@ -767,7 +767,7 @@ func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AF
 				continue
 			}
 			bodyIdx := len(parts)
-			parts = append(parts, ragdollBodyPart{
+			parts = append(parts, RagdollBodyPart{
 				name:        afb.Name,
 				anchorJoint: anchorIdx,
 			})
@@ -779,7 +779,7 @@ func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AF
 
 	// Fallback if no .af matched the skeleton joints: partition by standard anatomical limb roots
 	if len(parts) == 0 {
-		parts = append(parts, ragdollBodyPart{name: "origin", anchorJoint: 0})
+		parts = append(parts, RagdollBodyPart{name: "origin", anchorJoint: 0})
 		jointToBody[0] = 0
 		limbKeywords := []string{
 			"waist", "pelvis", "hips", "belly", "chest", "torso", "spine", "shoulders",
@@ -797,7 +797,7 @@ func partitionSkeletonIntoRagdollBodies(joints []*md5.Joint, afBodies []*proc.AF
 			}
 			if matched {
 				bIdx := len(parts)
-				parts = append(parts, ragdollBodyPart{name: jLow, anchorJoint: jIdx})
+				parts = append(parts, RagdollBodyPart{name: jLow, anchorJoint: jIdx})
 				jointToBody[jIdx] = bIdx
 			}
 		}

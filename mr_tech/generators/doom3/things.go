@@ -19,7 +19,7 @@ type Things struct {
 	texManager   *textures.Textures
 	imgLoader    *proc.ImageLoader
 	modelCache   map[string]*config.Model3DEntry
-	ragdollCache map[string]*CachedRagdoll
+	ragdollCache map[string]*RagdollCached
 }
 
 // NewThings initializes and returns a new Things manager.
@@ -31,7 +31,7 @@ func NewThings(arc proc.IPkArchive, materials *proc.Materials, defs *proc.Defs, 
 		texManager:   texManager,
 		imgLoader:    imgLoader,
 		modelCache:   make(map[string]*config.Model3DEntry),
-		ragdollCache: make(map[string]*CachedRagdoll),
+		ragdollCache: make(map[string]*RagdollCached),
 	}
 }
 

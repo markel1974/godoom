@@ -344,6 +344,8 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 
 	var closestDistThing = maxDistance
 	var closestThing vertices.IThing
+	var closestThingNormal geometry.XYZ
+	var hasThingNormal bool
 
 	// Usiamo l'origine (pos) e il vettore direzione (dir) calcolato esternamente.
 	// QueryRay richiede invDir (1.0/dir) che viene calcolato internamente.
@@ -361,8 +363,24 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 				return maxDistance, false
 			}
 		}
+
+		meshDist := distance
+		meshNorm := geometry.XYZ{}
+		hasNorm := false
+		if rayTester, okTest := other.(interface {
+			IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool)
+		}); okTest {
+			if dHit, norm, okHit := rayTester.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, distance+128.0); okHit {
+				meshDist = dHit
+				meshNorm = norm
+				hasNorm = true
+			}
+		}
+
 		closestThing = other
-		closestDistThing = distance
+		closestDistThing = meshDist
+		closestThingNormal = meshNorm
+		hasThingNormal = hasNorm
 		// Ray Shrinking: restringiamo il raggio d'azione dell'albero alla distanza dell'impatto trovato.
 		return distance, true
 	})
@@ -419,11 +437,20 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDistThing, dirX, dirY, dirZ)
 
-		// TODO Deformiamo anche il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
-		//impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
-		//dentDepth, dentRadius := t.dentCompute(force)
-		//impulse := geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
-		//closestThing.Deform(impactPoint, impulse, dentRadius)
+		// Deformiamo il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
+		impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
+		dentDepth, dentRadius := t.dentCompute(force)
+		var impulse geometry.XYZ
+		if hasThingNormal {
+			normX, normY, normZ := closestThingNormal.X, closestThingNormal.Y, closestThingNormal.Z
+			if dirX*normX+dirY*normY+dirZ*normZ > 0 {
+				normX, normY, normZ = -normX, -normY, -normZ
+			}
+			impulse = geometry.XYZ{X: -normX * dentDepth, Y: -normY * dentDepth, Z: -normZ * dentDepth}
+		} else {
+			impulse = geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
+		}
+		closestThing.Deform(impactPoint, impulse, dentRadius)
 		//t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 		return
 	}
@@ -472,13 +499,26 @@ func (t *Base) onInelasticCollision(other collisions.IObject, energy float64) {
 
 // Deform applies plastic deformation to the thing's vertices around a world-space impact point.
 func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	if t.IVertices == nil {
+	if t.IVertices == nil || t.ent == nil {
 		return false
 	}
-	// Per modelli 3D e mesh di Thing, le coordinate dei vertici sono locali rispetto al centro entità
+	// Per modelli 3D e mesh di Thing, convertiamo punto d'impatto e impulso dallo spazio mondo allo spazio locale dell'entità
 	cx, cy, cz := t.ent.GetCenter()
-	localImpact := geometry.XYZ{X: impact.X - cx, Y: impact.Y - cy, Z: impact.Z - cz}
-	return t.IVertices.Deform(localImpact, impulse, radius)
+	dx := impact.X - cx
+	dy := impact.Y - cy
+	dz := impact.Z - cz
+	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := t.ent.GetAxes()
+	localImpact := geometry.XYZ{
+		X: dx*ax0 + dy*ay0 + dz*az0,
+		Y: dx*ax1 + dy*ay1 + dz*az1,
+		Z: dx*ax2 + dy*ay2 + dz*az2,
+	}
+	localImpulse := geometry.XYZ{
+		X: impulse.X*ax0 + impulse.Y*ay0 + impulse.Z*az0,
+		Y: impulse.X*ax1 + impulse.Y*ay1 + impulse.Z*az1,
+		Z: impulse.X*ax2 + impulse.Y*ay2 + impulse.Z*az2,
+	}
+	return t.IVertices.Deform(localImpact, localImpulse, radius)
 }
 
 func (t *Base) dentCompute(force float64) (float64, float64) {
@@ -495,6 +535,38 @@ func (t *Base) dentCompute(force float64) (float64, float64) {
 func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	return t.Deform(impact, impulse, radius)
+}
+
+// IntersectRay tests a world-space ray against the thing's mesh geometry and returns the hit distance and face normal.
+func (t *Base) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
+	if t.ent == nil || t.IVertices == nil {
+		return maxDist, geometry.XYZ{}, false
+	}
+	v3d, ok := t.IVertices.(*vertices.Vertices3DEntry)
+	if !ok {
+		return maxDist, geometry.XYZ{}, false
+	}
+	cx, cy, cz := t.ent.GetCenter()
+	dx := oX - cx
+	dy := oY - cy
+	dz := oZ - cz
+	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := t.ent.GetAxes()
+	locOx := dx*ax0 + dy*ay0 + dz*az0
+	locOy := dx*ax1 + dy*ay1 + dz*az1
+	locOz := dx*ax2 + dy*ay2 + dz*az2
+	locDirX := dirX*ax0 + dirY*ay0 + dirZ*az0
+	locDirY := dirX*ax1 + dirY*ay1 + dirZ*az1
+	locDirZ := dirX*ax2 + dirY*ay2 + dirZ*az2
+
+	hitDist, hitFace, okHit := v3d.IntersectRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist)
+	if !okHit || hitFace == nil {
+		return maxDist, geometry.XYZ{}, false
+	}
+	lnx, lny, lnz := hitFace.GetNormal()
+	wnx := lnx*ax0 + lny*ax1 + lnz*ax2
+	wny := lnx*ay0 + lny*ay1 + lnz*ay2
+	wnz := lnx*az0 + lny*az1 + lnz*az2
+	return hitDist, geometry.XYZ{X: wnx, Y: wny, Z: wnz}, true
 }
 
 /*

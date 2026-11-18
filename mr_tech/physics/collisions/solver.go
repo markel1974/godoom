@@ -73,6 +73,15 @@ func (t *Solver) IsDynamic() bool {
 // Rebuild updates the solver entity bounds, centroid, and inertia tensor from the provided values.
 func (t *Solver) Rebuild(minX, minY, minZ float64, w, h, d float64, cx, cy, cz float64, ixx, ixy, ixz, iyy, iyz, izz float64) {
 	ent := t.entity
+	if t.IsDynamic() {
+		ent.SetSize(w, h, d)
+		localMidX := minX + w*0.5
+		localMidY := minY + h*0.5
+		localMidZ := minZ + d*0.5
+		ent.SetCentroidLocal(cx-localMidX, cy-localMidY, cz-localMidZ)
+		ent.SetInertia(ixx, ixy, ixz, iyy, iyz, izz)
+		return
+	}
 	ent.Rebuild(minX, minY, minZ, w, h, d)
 	ent.SetCentroid(cx, cy, cz)
 	ent.SetInertia(ixx, ixy, ixz, iyy, iyz, izz)

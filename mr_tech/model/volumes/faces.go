@@ -183,6 +183,20 @@ func (f *Faces) At(idx int) *Face {
 	return f.container[idx]
 }
 
+// EnsureLen ensures the Faces container has at least targetLen elements, appending empty faces if needed.
+func (f *Faces) EnsureLen(targetLen int) {
+	for f.count < targetLen {
+		f.Add(NewFaceEmpty(nil, [3]float64{}, [3]float64{}))
+	}
+}
+
+// SetCount sets the active face count, keeping it within the container length.
+func (f *Faces) SetCount(count int) {
+	if count <= len(f.container) {
+		f.count = count
+	}
+}
+
 // Clear removes all faces from the collection.
 func (f *Faces) Clear() {
 	f.tree.Clear()
@@ -229,6 +243,43 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 			f.displacements[key] = geometry.XYZ{X: impulse.X * factor, Y: impulse.Y * factor, Z: impulse.Z * factor}
 		}
 	}
+
+	// Fallback per triangoli grandi i cui vertici ricadono all'esterno del raggio d'impatto
+	if len(f.displacements) == 0 {
+		for i := 0; i < f.count; i++ {
+			fc := f.container[i]
+			if fc == nil || !fc.IsDeformable() {
+				continue
+			}
+			w0, w1, w2, inside := fc.Barycentric(impact)
+			if !inside {
+				continue
+			}
+			p0 := fc.tri.Points[0]
+			nx, ny, nz := fc.GetNormal()
+			distPlane := math.Abs((impact.X-p0.X)*nx + (impact.Y-p0.Y)*ny + (impact.Z-p0.Z)*nz)
+			if distPlane > radius*2.0 && distPlane > 16.0 {
+				continue
+			}
+			weights := [3]float64{w0 * w0, w1 * w1, w2 * w2}
+			for j, weight := range weights {
+				if weight <= 0 {
+					continue
+				}
+				p := fc.tri.Points[j]
+				key := MakeVertexKey(p)
+				disp := geometry.XYZ{X: impulse.X * weight, Y: impulse.Y * weight, Z: impulse.Z * weight}
+				if existing, ok := f.displacements[key]; ok {
+					if weight*weight > existing.X*existing.X+existing.Y*existing.Y+existing.Z*existing.Z {
+						f.displacements[key] = disp
+					}
+				} else {
+					f.displacements[key] = disp
+				}
+			}
+		}
+	}
+
 	if len(f.displacements) == 0 {
 		return false
 	}

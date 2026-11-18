@@ -99,6 +99,14 @@ func (e *Entity) SetCentroid(cx, cy, cz float64) {
 	e.hasCentroid = true
 }
 
+// SetCentroidLocal sets the center of mass offset relative to the bounding box center in local body space.
+func (e *Entity) SetCentroidLocal(ecx, ecy, ecz float64) {
+	e.ecx = ecx
+	e.ecy = ecy
+	e.ecz = ecz
+	e.hasCentroid = true
+}
+
 // SetInertia sets a custom body-space inertia tensor per unit mass and applies it immediately if valid.
 func (e *Entity) SetInertia(ixx, ixy, ixz, iyy, iyz, izz float64) {
 	e.eixx, e.eixy, e.eixz = ixx, ixy, ixz

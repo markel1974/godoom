@@ -238,6 +238,13 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 	v.rot = articulated_dynamics.NewTagAxisIdentity()
 	v.lastQw = 1.0
 	v.singleFrame = v.endFrame == 0
+	if v.singleFrame {
+		for _, vol := range v.volumes {
+			if vol != nil {
+				vol.SetAllowTessellate(true)
+			}
+		}
+	}
 
 	if len(v.actions) > 0 {
 		v.SetAction(0)
@@ -415,10 +422,9 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 	noOffset := ox == 0 && oy == 0 && oz == 0
 	count := srcVol.GetFaceCount()
 	dstLen := dstFaces.Len()
+	dstFaces.EnsureLen(count)
+	dstFaces.SetCount(count)
 	limit := count
-	if limit > dstLen {
-		limit = dstLen
-	}
 	for j := 0; j < limit; j++ {
 		src := srcVol.GetFace(j)
 		dst := dstFaces.At(j)
@@ -625,18 +631,21 @@ func v3dCleanString(s string) string {
 // Deform applies plastic deformation to the active model frame volumes and faces around an impact point.
 func (v *Vertices3DEntry) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	deformed := false
-	if v.facesA != nil {
-		for i := 0; i < v.facesA.Len(); i++ {
-			f := v.facesA.At(i)
-			if f != nil && f.Deform(impact, impulse, radius) {
+	if len(v.volumes) > 0 {
+		for _, vol := range v.volumes {
+			if vol != nil && vol.Deform(impact, impulse, radius) {
 				deformed = true
 			}
 		}
-	}
-	if v.volA != nil {
+	} else if v.volA != nil {
 		if v.volA.Deform(impact, impulse, radius) {
 			deformed = true
 		}
+	}
+	if deformed {
+		v.lastRotVolA = nil
+		v.lastRotVolB = nil
+		v.Compile(v.tick)
 	}
 	return deformed
 }
@@ -649,4 +658,32 @@ func (v *Vertices3DEntry) DeformDent(impact geometry.XYZ, normal geometry.XYZ, d
 		Z: -normal.Z * depth,
 	}
 	return v.Deform(impact, impulse, radius)
+}
+
+// IntersectRay tests a ray against the active volume faces in local space and returns the closest hit.
+func (v *Vertices3DEntry) IntersectRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist float64) (float64, *volumes.Face, bool) {
+	if v.volA == nil {
+		return maxDist, nil, false
+	}
+	tree := v.volA.GetFacesTree()
+	if tree == nil {
+		return maxDist, nil, false
+	}
+	var hitFace *volumes.Face
+	closest := maxDist
+	hit := false
+	tree.QueryRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist, func(obj aabb.IObject, d float64) (float64, bool) {
+		fc, ok := obj.(*volumes.Face)
+		if !ok || !fc.IsSolid() {
+			return closest, false
+		}
+		if tHit, okHit := fc.IntersectRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, closest); okHit {
+			closest = tHit
+			hitFace = fc
+			hit = true
+			return tHit, true
+		}
+		return closest, false
+	})
+	return closest, hitFace, hit
 }

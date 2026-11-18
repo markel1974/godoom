@@ -92,45 +92,46 @@ func NewVAction(name string, start int, end int) *VAction {
 
 // Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
 type Vertices3DEntry struct {
-	solver        *collisions.Solver
-	ent           *rigid_body.Entity
-	cfg           *config.Thing
-	materials     *materials.Materials
-	comp          *Vertices3DEntryComposed
-	volumes       []*volumes.Volume
-	startFrame    int
-	endFrame      int
-	startTick     uint64
-	currentAction int
-	actions       []*VAction
-	clampAnim     bool
-	tagMap        map[string]int
-	volA          *volumes.Volume
-	volB          *volumes.Volume
-	lerpT         float64
-	singleFrame   bool
-	lastVolA      *volumes.Volume
-	groupSize     float64
-	salt          uint64
-	tick          uint64
-	facesA        *volumes.Faces
-	facesB        *volumes.Faces
-	frameCenters  []geometry.XYZ
-	frameIdxA     int
-	frameIdxB     int
-	rot           *articulated_dynamics.TagAxis
-	lastQx        float64
-	lastQy        float64
-	lastQz        float64
-	lastQw        float64
-	lastRotVolA   *volumes.Volume
-	lastRotVolB   *volumes.Volume
-	minX          float64
-	minY          float64
-	minZ          float64
-	maxX          float64
-	maxY          float64
-	maxZ          float64
+	solver          *collisions.Solver
+	ent             *rigid_body.Entity
+	cfg             *config.Thing
+	materials       *materials.Materials
+	comp            *Vertices3DEntryComposed
+	volumes         []*volumes.Volume
+	startFrame      int
+	endFrame        int
+	startTick       uint64
+	currentAction   int
+	actions         []*VAction
+	clampAnim       bool
+	tagMap          map[string]int
+	volA            *volumes.Volume
+	volB            *volumes.Volume
+	lerpT           float64
+	singleFrame     bool
+	lastVolA        *volumes.Volume
+	groupSize       float64
+	salt            uint64
+	tick            uint64
+	facesA          *volumes.Faces
+	facesB          *volumes.Faces
+	frameCenters    []geometry.XYZ
+	frameCentersLen int
+	frameIdxA       int
+	frameIdxB       int
+	rot             *articulated_dynamics.TagAxis
+	lastQx          float64
+	lastQy          float64
+	lastQz          float64
+	lastQw          float64
+	lastRotVolA     *volumes.Volume
+	lastRotVolB     *volumes.Volume
+	minX            float64
+	minY            float64
+	minZ            float64
+	maxX            float64
+	maxY            float64
+	maxZ            float64
 }
 
 // NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
@@ -367,7 +368,11 @@ func (v *Vertices3DEntry) AdvanceAnimation(tick uint64) {
 // CenterFrames shifts every frame volume of this entry around its own geometric bounding center
 // and rebuilds volume face trees and part solver geometry so each part is 6-DoF ready from creation.
 func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce float64) {
-	v.frameCenters = make([]geometry.XYZ, len(v.volumes))
+	vLen := len(v.volumes)
+	if len(v.frameCenters) < vLen {
+		v.frameCenters = make([]geometry.XYZ, vLen*2)
+	}
+	v.frameCentersLen = vLen
 	for fIdx, vol := range v.volumes {
 		if vol == nil {
 			continue
@@ -453,7 +458,7 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 
 // FrameCenterA returns the local geometric centering offset for the active A frame.
 func (v *Vertices3DEntry) FrameCenterA() geometry.XYZ {
-	if v.frameIdxA >= 0 && v.frameIdxA < len(v.frameCenters) {
+	if v.frameIdxA >= 0 && v.frameIdxA < v.frameCentersLen {
 		return v.frameCenters[v.frameIdxA]
 	}
 	return geometry.XYZ{}
@@ -461,7 +466,7 @@ func (v *Vertices3DEntry) FrameCenterA() geometry.XYZ {
 
 // FrameCenterB returns the local geometric centering offset for the active B frame.
 func (v *Vertices3DEntry) FrameCenterB() geometry.XYZ {
-	if v.frameIdxB >= 0 && v.frameIdxB < len(v.frameCenters) {
+	if v.frameIdxB >= 0 && v.frameIdxB < v.frameCentersLen {
 		return v.frameCenters[v.frameIdxB]
 	}
 	return geometry.XYZ{}

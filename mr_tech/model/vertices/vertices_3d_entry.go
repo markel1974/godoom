@@ -657,11 +657,7 @@ func (v *Vertices3DEntry) Deform(impact geometry.XYZ, impulse geometry.XYZ, radi
 
 // DeformDent produces an indentation on the 3D model frame faces along the specified normal vector.
 func (v *Vertices3DEntry) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{
-		X: -normal.X * depth,
-		Y: -normal.Y * depth,
-		Z: -normal.Z * depth,
-	}
+	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	return v.Deform(impact, impulse, radius)
 }
 

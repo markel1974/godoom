@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
+
+const heavyMass = 1000.0
 
 // Things represents a container that manages archive access, texture resources, and a shared color palette.
 type Things struct {
@@ -109,24 +110,14 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		cModel.Frames[idx] = cFrame
 	}
 
-	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, speed)
-	if keyId := q1KeyId(classname); keyId != "" {
-		thingCfg.Kind = config.ThingKeyDef
-		thingCfg.Mass = 0.1
-		thingCfg.Key = &config.KeySpec{KeyId: keyId}
-	}
+	thingCfg := CreateConfigThing(classname, pos, kind, cModel, 0, 30.0, speed)
+	//if keyId := q1KeyId(classname); keyId != "" {
+	//	thingCfg.Kind = config.ThingKeyDef
+	//	thingCfg.Mass = 0.1
+	//	thingCfg.Key = &config.KeySpec{KeyId: keyId}
+	//}
 
 	return thingCfg, nil
-}
-
-func q1KeyId(classname string) string {
-	switch classname {
-	case "item_key1":
-		return "silver"
-	case "item_key2":
-		return "gold"
-	}
-	return ""
 }
 
 // CreateInternalBModel generates a Thing with a 3D model from BSP face data, base position, and entity properties.
@@ -175,37 +166,28 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 			allTriangles = append(allTriangles, tri)
 		}
 	}
+
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	center, size := model3d.CenterWithBounds([]string{"default"})
-	worldPos := geometry.XYZ{
-		X: position.X + center.X,
-		Y: position.Y + center.Y,
-		Z: position.Z + center.Z,
-	}
-	thingCfg := th.doCreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	worldPos := geometry.XYZ{X: position.X + center.X, Y: position.Y + center.Y, Z: position.Z + center.Z}
 
 	const heavyMass = 1000.0
 	// Setup standard interactions based on classname
 	if strings.HasPrefix(classname, "func_door") {
-		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = heavyMass
-		thingCfg.GForce = 0.0
-		thingCfg.Door = BuildDoorSpec(ent, size)
-	} else if strings.HasPrefix(classname, "func_plat") {
-		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = heavyMass
-		thingCfg.GForce = 0.0
-		thingCfg.Door = BuildPlatSpec(ent, size)
-	} else if strings.HasPrefix(classname, "func_train") {
-		thingCfg.Kind = config.ThingPlatformDef
-		thingCfg.Mass = heavyMass
-	} else if strings.HasPrefix(classname, "func_button") {
-		thingCfg.Kind = config.ThingButtonDef
+		return CreateConfigDoor(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
 	}
-
-	return thingCfg, nil
+	if strings.HasPrefix(classname, "func_plat") {
+		return CreateConfigPlat(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
+	}
+	if strings.HasPrefix(classname, "func_train") {
+		return CreateConfigPlatform(classname, worldPos, model3d, 0.0, heavyMass, 0.0), nil
+	}
+	if strings.HasPrefix(classname, "func_button") {
+		return CreateConfigButton(classname, worldPos, model3d, 0.0, 16.0, 16.0), nil
+	}
+	return CreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 0.0), nil
 }
 
 // CreateThingBSP loads a BSP file, processes its geometry, and creates a Thing with the specified position and classname.
@@ -280,70 +262,6 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
-	if keyId := q1KeyId(classname); keyId != "" {
-		thingCfg.Kind = config.ThingKeyDef
-		thingCfg.Mass = 0.1
-		thingCfg.Key = &config.KeySpec{KeyId: keyId}
-	}
+	thingCfg := CreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 0.0)
 	return thingCfg, nil
-}
-
-// doCreateConfigThing creates a Thing configuration based on provided parameters and assigns logic for enemy or item behavior.
-func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
-	const wakeupDistance = 300.0
-	if cModel != nil {
-		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
-	}
-	if kind == config.ThingEnemyDef {
-		return doCreateConfigEnemy(classname, pos, cModel, angle, mass, speed, wakeupDistance)
-	}
-	if keyId := q1KeyId(classname); keyId != "" {
-		return doCreateConfigKey(classname, pos, cModel, angle, mass, speed, keyId)
-	}
-	return doCreateConfigItem(classname, pos, cModel, angle, mass, speed)
-}
-
-func doCreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed, wakeupDistance float64) *config.Thing {
-	actions := config.NewEnemyAnimations()
-	if cModel != nil {
-		ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
-	}
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingEnemyDef, mass, 0, 0, speed)
-	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
-	thingCfg.JumpForce = JumpForce
-	thingCfg.WakeupDistance = wakeupDistance
-	_ = common.NewEnemy(thingCfg, actions)
-	return thingCfg
-}
-
-func doCreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingItemDef, mass, 0, 0, speed)
-	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
-	_ = common.NewItem(thingCfg)
-	return thingCfg
-}
-
-func doCreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
-	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
-	thingCfg.Kind = config.ThingKeyDef
-	thingCfg.Mass = 0.1
-	thingCfg.Key = &config.KeySpec{KeyId: keyId}
-	return thingCfg
-}
-
-const heavyMass = 1000.0
-
-func doCreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *lumps.Entity, size geometry.XYZ) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
-	thingCfg.GForce = 0.0
-	thingCfg.Model3DEntry = cModel
-	thingCfg.Kind = config.ThingDoorDef
-	thingCfg.Mass = heavyMass
-	thingCfg.Door = BuildDoorSpec(ent, size)
-	return thingCfg
 }

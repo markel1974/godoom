@@ -139,9 +139,11 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
-		cModel, err = t.bakeMD5Model(mesh, nil, "", nil)
+		converter := NewMD5(t.arc, t.materials)
+		cModel, err = converter.Bake(mesh, nil, "", nil)
 	} else if strings.HasSuffix(cleanPath, ".lwo") {
-		cModel, err = t.bakeLWO(f)
+		converter := NewLWO(t.arc, t.materials)
+		cModel, err = converter.Bake(f)
 	} else {
 		return nil, fmt.Errorf("unsupported model format for %s", cleanPath)
 	}

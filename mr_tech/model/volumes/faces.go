@@ -21,10 +21,11 @@ type Faces struct {
 	maxX, maxY, maxZ float64
 	w, h, d          float64
 
-	markedEdges   map[edgeKey]struct{}
-	midpoints     map[edgeKey]geometry.XYZ
-	displacements map[vertexKey]geometry.XYZ
-	nextFaces     []*Face
+	markedEdges    map[EdgeKey]struct{}
+	midpoints      map[EdgeKey]geometry.XYZ
+	displacements  map[VertexKey]geometry.XYZ
+	nextFaces      []*Face
+	hasTesselation bool
 }
 
 // NewFaces creates a Faces collection with the given initial capacity.
@@ -35,26 +36,26 @@ func NewFaces(initSize int, fill bool) *Faces {
 		count = initSize
 	}
 	return &Faces{
-		tree:          aabb.NewTree(64, 0.0),
-		container:     make([]*Face, initSize),
-		count:         count,
-		markedEdges:   make(map[edgeKey]struct{}, 128),
-		midpoints:     make(map[edgeKey]geometry.XYZ, 128),
-		displacements: make(map[vertexKey]geometry.XYZ, 128),
-		nextFaces:     make([]*Face, 0, initSize),
+		tree:           aabb.NewTree(64, 0.0),
+		container:      make([]*Face, initSize),
+		count:          count,
+		markedEdges:    nil,
+		midpoints:      nil,
+		displacements:  nil,
+		nextFaces:      nil,
+		hasTesselation: false,
 	}
 }
 
-func (f *Faces) initBuffers() {
-	if f.markedEdges == nil {
-		f.markedEdges = make(map[edgeKey]struct{}, 128)
+func (f *Faces) TessellateInit() {
+	if f.hasTesselation {
+		return
 	}
-	if f.midpoints == nil {
-		f.midpoints = make(map[edgeKey]geometry.XYZ, 128)
-	}
-	if f.displacements == nil {
-		f.displacements = make(map[vertexKey]geometry.XYZ, 128)
-	}
+	f.markedEdges = make(map[EdgeKey]struct{}, 128)
+	f.midpoints = make(map[EdgeKey]geometry.XYZ, 128)
+	f.displacements = make(map[VertexKey]geometry.XYZ, 128)
+	f.nextFaces = make([]*Face, 0, f.count)
+	f.hasTesselation = true
 }
 
 // Rebuild recomputes cached centroid and inertia values from the current faces.
@@ -182,9 +183,9 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 	if _, err := f.TessellateNear(impact, radius, targetEdge, deformMaxFaces); err != nil {
 		return false
 	}
+	f.TessellateInit()
 	radiusSq := radius * radius
 
-	f.initBuffers()
 	for k := range f.displacements {
 		delete(f.displacements, k)
 	}
@@ -195,7 +196,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 			continue
 		}
 		for _, p := range fc.tri.Points {
-			key := makeVertexKey(p)
+			key := MakeVertexKey(p)
 			if _, exists := f.displacements[key]; exists {
 				continue
 			}
@@ -223,7 +224,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 		}
 		for j := 0; j < geometry.Triangle3DPoints; j++ {
 			p := &fc.tri.Points[j]
-			if displacement, ok := f.displacements[makeVertexKey(*p)]; ok {
+			if displacement, ok := f.displacements[MakeVertexKey(*p)]; ok {
 				p.X += displacement.X
 				p.Y += displacement.Y
 				p.Z += displacement.Z
@@ -256,11 +257,10 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		return dx*dx + dy*dy + dz*dz
 	}
 
-	f.initBuffers()
+	f.TessellateInit()
 
 	initialCount := f.count
 	maxEdgeSq := maxEdge * maxEdge
-	minEdgeSq := deformMinEdge * deformMinEdge
 	searchRadius := radius + maxEdge
 
 	for pass := 0; pass < deformMaxSubdivisionPasses; pass++ {
@@ -273,7 +273,6 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			if fc == nil || !fc.IsDeformable() {
 				continue
 			}
-
 			if !fc.NearPoint(impact, searchRadius) {
 				continue
 			}
@@ -283,7 +282,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				d2 := distanceSquared(edge[0], edge[1])
 				// Non suddividere se lo spigolo è già più corto di deformMinEdge
 				if d2 > maxEdgeSq && d2 > minEdgeSq {
-					f.markedEdges[makeEdgeKey(edge[0], edge[1])] = struct{}{}
+					f.markedEdges[MakeEdgeKey(edge[0], edge[1])] = struct{}{}
 				}
 			}
 		}
@@ -303,7 +302,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			p := fc.tri.Points
 			edges := [3][2]geometry.XYZ{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 			for _, edge := range edges {
-				key := makeEdgeKey(edge[0], edge[1])
+				key := MakeEdgeKey(edge[0], edge[1])
 				if _, ok := f.markedEdges[key]; ok {
 					if _, exists := f.midpoints[key]; !exists {
 						f.midpoints[key] = midpoint(edge[0], edge[1])
@@ -319,7 +318,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				continue
 			}
 			p := fc.tri.Points
-			keys := [3]edgeKey{makeEdgeKey(p[0], p[1]), makeEdgeKey(p[1], p[2]), makeEdgeKey(p[2], p[0])}
+			keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
 			var mask uint8
 			var mab, mbc, mca geometry.XYZ
 			if m, ok := f.midpoints[keys[0]]; ok {
@@ -334,79 +333,14 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				mask |= 4
 				mca = m
 			}
-			children := fc.splitFace(mask, mab, mbc, mca)
+			children := fc.SplitFace(mask, mab, mbc, mca)
 			f.nextFaces = append(f.nextFaces, children...)
 			if maxFaces > 0 && len(f.nextFaces) > maxFaces {
-				return f.count - initialCount,
-					fmt.Errorf("tessellation face limit exceeded: %d", maxFaces)
+				return f.count - initialCount, fmt.Errorf("tessellation face limit exceeded: %d", maxFaces)
 			}
 		}
 		f.container, f.nextFaces = f.nextFaces, f.container
 		f.count = len(f.container)
 	}
 	return f.count - initialCount, nil
-}
-
-// splitFace subdivides a triangular face along masked edges using supplied midpoints and interpolated UVs.
-// Edge mask bits select AB, BC, and CA; a zero mask returns the original face.
-func (fc *Face) splitFace(mask uint8, mab, mbc, mca geometry.XYZ) []*Face {
-	if mask == 0 {
-		return []*Face{fc}
-	}
-	averageUV := func(a, b float64) float64 {
-		return (a + b) * 0.5
-	}
-	a := fc.tri.Points[0]
-	b := fc.tri.Points[1]
-	c := fc.tri.Points[2]
-
-	u, v := fc.u, fc.v
-
-	uvAB := [2]float64{averageUV(u[0], u[1]), averageUV(v[0], v[1])}
-	uvBC := [2]float64{averageUV(u[1], u[2]), averageUV(v[1], v[2])}
-	uvCA := [2]float64{averageUV(u[2], u[0]), averageUV(v[2], v[0])}
-	newFace := fc.NewFaceSubdivided
-
-	switch mask {
-	case 1:
-		return []*Face{
-			newFace([3]geometry.XYZ{a, mab, c}, [3]float64{u[0], uvAB[0], u[2]}, [3]float64{v[0], uvAB[1], v[2]}),
-			newFace([3]geometry.XYZ{mab, b, c}, [3]float64{uvAB[0], u[1], u[2]}, [3]float64{uvAB[1], v[1], v[2]}),
-		}
-	case 2:
-		return []*Face{
-			newFace([3]geometry.XYZ{a, b, mbc}, [3]float64{u[0], u[1], uvBC[0]}, [3]float64{v[0], v[1], uvBC[1]}),
-			newFace([3]geometry.XYZ{a, mbc, c}, [3]float64{u[0], uvBC[0], u[2]}, [3]float64{v[0], uvBC[1], v[2]}),
-		}
-	case 4:
-		return []*Face{
-			newFace([3]geometry.XYZ{a, b, mca}, [3]float64{u[0], u[1], uvCA[0]}, [3]float64{v[0], v[1], uvCA[1]}),
-			newFace([3]geometry.XYZ{mca, b, c}, [3]float64{uvCA[0], u[1], u[2]}, [3]float64{uvCA[1], v[1], v[2]}),
-		}
-	case 3:
-		return []*Face{
-			newFace([3]geometry.XYZ{b, mbc, mab}, [3]float64{u[1], uvBC[0], uvAB[0]}, [3]float64{v[1], uvBC[1], uvAB[1]}),
-			newFace([3]geometry.XYZ{a, mab, c}, [3]float64{u[0], uvAB[0], u[2]}, [3]float64{v[0], uvAB[1], v[2]}),
-			newFace([3]geometry.XYZ{mab, mbc, c}, [3]float64{uvAB[0], uvBC[0], u[2]}, [3]float64{uvAB[1], uvBC[1], v[2]}),
-		}
-	case 5:
-		return []*Face{
-			newFace([3]geometry.XYZ{a, mab, mca}, [3]float64{u[0], uvAB[0], uvCA[0]}, [3]float64{v[0], uvAB[1], uvCA[1]}),
-			newFace([3]geometry.XYZ{mab, b, c}, [3]float64{uvAB[0], u[1], u[2]}, [3]float64{uvAB[1], v[1], v[2]}),
-			newFace([3]geometry.XYZ{mab, c, mca}, [3]float64{uvAB[0], u[2], uvCA[0]}, [3]float64{uvAB[1], v[2], uvCA[1]}),
-		}
-	case 6:
-		return []*Face{
-			newFace([3]geometry.XYZ{c, mca, mbc}, [3]float64{u[2], uvCA[0], uvBC[0]}, [3]float64{v[2], uvCA[1], uvBC[1]}),
-			newFace([3]geometry.XYZ{a, b, mbc}, [3]float64{u[0], u[1], uvBC[0]}, [3]float64{v[0], v[1], uvBC[1]}),
-			newFace([3]geometry.XYZ{a, mbc, mca}, [3]float64{u[0], uvBC[0], uvCA[0]}, [3]float64{v[0], uvBC[1], uvCA[1]}),
-		}
-	default: // mask == 7
-		return []*Face{
-			newFace([3]geometry.XYZ{a, mab, mca}, [3]float64{u[0], uvAB[0], uvCA[0]}, [3]float64{v[0], uvAB[1], uvCA[1]}),
-			newFace([3]geometry.XYZ{mab, b, mbc}, [3]float64{uvAB[0], u[1], uvBC[0]}, [3]float64{uvAB[1], v[1], uvBC[1]}),
-			newFace([3]geometry.XYZ{mca, mbc, c}, [3]float64{uvCA[0], uvBC[0], u[2]}, [3]float64{uvCA[1], uvBC[1], v[2]}),
-			newFace([3]geometry.XYZ{mab, mbc, mca}, [3]float64{uvAB[0], uvBC[0], uvCA[0]}, [3]float64{uvAB[1], uvBC[1], uvCA[1]}),
-		}
-	}
 }

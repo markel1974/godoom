@@ -68,16 +68,8 @@ func (c *SimpleCrosshair) GetTexture() (string, *textures.Texture) {
 func (c *SimpleCrosshair) Create() *config.Thing {
 	mat := config.NewConfigMaterial("crosshair", []string{c.name}, config.MaterialKindSolid)
 	mat.BlendMode = config.BlendModeAdditive
-	//mat.ScaleW = 1.0
-	//mat.ScaleH = 1.0
 	sprite := config.NewConfigSprite(mat)
-	thing := config.NewConfigThing(
-		"crosshair",
-		geometry.XYZ{X: 0, Y: 0, Z: 0},
-		0,
-		config.ThingInterfaceDef,
-		1, 0, 0, 0,
-	)
+	thing := config.NewConfigThing("crosshair", geometry.XYZ{X: 0, Y: 0, Z: 0}, 0, config.ThingInterfaceDef, 1, 0, 0, 0)
 	thing.OnBind = func(self config.IThingConfig) {}
 	thing.OnImpact = func(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {}
 	thing.OnCollision = func(other config.IThingConfig, energy float64) {}

@@ -208,7 +208,6 @@ func (th *Things) SetPlayer(p *things.Player) {
 
 func (th *Things) GetThing(id string) vertices.IThing {
 	for _, thing := range th.entities {
-		fmt.Println(thing.GetId())
 		if thing.GetId() == id {
 			return thing
 		}

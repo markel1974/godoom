@@ -591,3 +591,67 @@ func (fc *Face) NearPoint(p geometry.XYZ, radius float64) bool {
 	}
 	return dx*dx+dy*dy+dz*dz <= radius*radius
 }
+
+// SplitFace subdivides a triangular face along masked edges using supplied midpoints and interpolated UVs.
+// Edge mask bits select AB, BC, and CA; a zero mask returns the original face.
+func (fc *Face) SplitFace(mask uint8, mab, mbc, mca geometry.XYZ) []*Face {
+	if mask == 0 {
+		return []*Face{fc}
+	}
+	averageUV := func(a, b float64) float64 {
+		return (a + b) * 0.5
+	}
+	a := fc.tri.Points[0]
+	b := fc.tri.Points[1]
+	c := fc.tri.Points[2]
+
+	u, v := fc.u, fc.v
+
+	uvAB := [2]float64{averageUV(u[0], u[1]), averageUV(v[0], v[1])}
+	uvBC := [2]float64{averageUV(u[1], u[2]), averageUV(v[1], v[2])}
+	uvCA := [2]float64{averageUV(u[2], u[0]), averageUV(v[2], v[0])}
+	newFace := fc.NewFaceSubdivided
+
+	switch mask {
+	case 1:
+		return []*Face{
+			newFace([3]geometry.XYZ{a, mab, c}, [3]float64{u[0], uvAB[0], u[2]}, [3]float64{v[0], uvAB[1], v[2]}),
+			newFace([3]geometry.XYZ{mab, b, c}, [3]float64{uvAB[0], u[1], u[2]}, [3]float64{uvAB[1], v[1], v[2]}),
+		}
+	case 2:
+		return []*Face{
+			newFace([3]geometry.XYZ{a, b, mbc}, [3]float64{u[0], u[1], uvBC[0]}, [3]float64{v[0], v[1], uvBC[1]}),
+			newFace([3]geometry.XYZ{a, mbc, c}, [3]float64{u[0], uvBC[0], u[2]}, [3]float64{v[0], uvBC[1], v[2]}),
+		}
+	case 4:
+		return []*Face{
+			newFace([3]geometry.XYZ{a, b, mca}, [3]float64{u[0], u[1], uvCA[0]}, [3]float64{v[0], v[1], uvCA[1]}),
+			newFace([3]geometry.XYZ{mca, b, c}, [3]float64{uvCA[0], u[1], u[2]}, [3]float64{uvCA[1], v[1], v[2]}),
+		}
+	case 3:
+		return []*Face{
+			newFace([3]geometry.XYZ{b, mbc, mab}, [3]float64{u[1], uvBC[0], uvAB[0]}, [3]float64{v[1], uvBC[1], uvAB[1]}),
+			newFace([3]geometry.XYZ{a, mab, c}, [3]float64{u[0], uvAB[0], u[2]}, [3]float64{v[0], uvAB[1], v[2]}),
+			newFace([3]geometry.XYZ{mab, mbc, c}, [3]float64{uvAB[0], uvBC[0], u[2]}, [3]float64{uvAB[1], uvBC[1], v[2]}),
+		}
+	case 5:
+		return []*Face{
+			newFace([3]geometry.XYZ{a, mab, mca}, [3]float64{u[0], uvAB[0], uvCA[0]}, [3]float64{v[0], uvAB[1], uvCA[1]}),
+			newFace([3]geometry.XYZ{mab, b, c}, [3]float64{uvAB[0], u[1], u[2]}, [3]float64{uvAB[1], v[1], v[2]}),
+			newFace([3]geometry.XYZ{mab, c, mca}, [3]float64{uvAB[0], u[2], uvCA[0]}, [3]float64{uvAB[1], v[2], uvCA[1]}),
+		}
+	case 6:
+		return []*Face{
+			newFace([3]geometry.XYZ{c, mca, mbc}, [3]float64{u[2], uvCA[0], uvBC[0]}, [3]float64{v[2], uvCA[1], uvBC[1]}),
+			newFace([3]geometry.XYZ{a, b, mbc}, [3]float64{u[0], u[1], uvBC[0]}, [3]float64{v[0], v[1], uvBC[1]}),
+			newFace([3]geometry.XYZ{a, mbc, mca}, [3]float64{u[0], uvBC[0], uvCA[0]}, [3]float64{v[0], uvBC[1], uvCA[1]}),
+		}
+	default: // mask == 7
+		return []*Face{
+			newFace([3]geometry.XYZ{a, mab, mca}, [3]float64{u[0], uvAB[0], uvCA[0]}, [3]float64{v[0], uvAB[1], uvCA[1]}),
+			newFace([3]geometry.XYZ{mab, b, mbc}, [3]float64{uvAB[0], u[1], uvBC[0]}, [3]float64{uvAB[1], v[1], uvBC[1]}),
+			newFace([3]geometry.XYZ{mca, mbc, c}, [3]float64{uvCA[0], uvBC[0], u[2]}, [3]float64{uvCA[1], uvBC[1], v[2]}),
+			newFace([3]geometry.XYZ{mab, mbc, mca}, [3]float64{uvAB[0], uvBC[0], uvCA[0]}, [3]float64{uvAB[1], uvBC[1], uvCA[1]}),
+		}
+	}
+}

@@ -10,17 +10,14 @@ const (
 	deformMaxSubdivisionPasses = 12
 	deformMaxFaces             = 65536
 	deformMinEdge              = 1.0
+	minEdgeSq                  = deformMinEdge * deformMinEdge
 )
 
-type vertexKey struct {
+type VertexKey struct {
 	x, y, z uint64
 }
 
-type edgeKey struct {
-	a, b vertexKey
-}
-
-func makeVertexKey(p geometry.XYZ) vertexKey {
+func MakeVertexKey(p geometry.XYZ) VertexKey {
 	if p.X == 0 {
 		p.X = 0
 	}
@@ -31,27 +28,30 @@ func makeVertexKey(p geometry.XYZ) vertexKey {
 		p.Z = 0
 	}
 
-	return vertexKey{
+	return VertexKey{
 		x: math.Float64bits(p.X),
 		y: math.Float64bits(p.Y),
 		z: math.Float64bits(p.Z),
 	}
 }
 
-func lessVertex(a, b vertexKey) bool {
-	if a.x != b.x {
-		return a.x < b.x
-	}
-	if a.y != b.y {
-		return a.y < b.y
-	}
-	return a.z < b.z
+type EdgeKey struct {
+	a, b VertexKey
 }
 
-func makeEdgeKey(a, b geometry.XYZ) edgeKey {
-	ka, kb := makeVertexKey(a), makeVertexKey(b)
+func MakeEdgeKey(a, b geometry.XYZ) EdgeKey {
+	lessVertex := func(a, b VertexKey) bool {
+		if a.x != b.x {
+			return a.x < b.x
+		}
+		if a.y != b.y {
+			return a.y < b.y
+		}
+		return a.z < b.z
+	}
+	ka, kb := MakeVertexKey(a), MakeVertexKey(b)
 	if lessVertex(kb, ka) {
 		ka, kb = kb, ka
 	}
-	return edgeKey{a: ka, b: kb}
+	return EdgeKey{a: ka, b: kb}
 }

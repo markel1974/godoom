@@ -382,7 +382,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 		zF1, zC1 := sector.ResolveZ(p1, curFloorY, curCeilY, false)
 		zF2, zC2 := sector.ResolveZ(p2, curFloorY, curCeilY, false)
 
-		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p1.X, Y: p1.Y, Z: zC1}, {X: p2.X, Y: p2.Y, Z: zC2}}
+		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p2.X, Y: p2.Y, Z: zC2}, {X: p1.X, Y: p1.Y, Z: zC1}}
 		ceilFace := volumes.NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
 		if align := sector.GetCeilAlign(); align != nil {
 			if w, h, ok := materialSize(ceilFace.GetMaterial()); ok {
@@ -394,7 +394,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 
 		vol3d.AddFace(ceilFace)
 
-		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p2.X, Y: p2.Y, Z: zF2}, {X: p1.X, Y: p1.Y, Z: zF1}}
+		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p1.X, Y: p1.Y, Z: zF1}, {X: p2.X, Y: p2.Y, Z: zF2}}
 		floorFace := volumes.NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
 
 		if align := sector.GetFloorAlign(); align != nil {

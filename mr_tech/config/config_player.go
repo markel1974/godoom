@@ -4,42 +4,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-type Bobbing struct {
-	SwayScale       float64 `json:"swayScale"`
-	SwaySensitivity float64 `json:"swaySensitivity"`
-	SwayMultiplierX float64 `json:"swayMultiplierX"`
-	SwayMultiplierY float64 `json:"swayMultiplierY"`
-	SwayOffsetX     float64 `json:"swayOffsetX"`
-	SwayOffsetY     float64 `json:"swayOffsetY"`
-	MaxAmplitudeX   float64 `json:"maxAmplitudeX"`
-	MaxAmplitudeY   float64 `json:"maxAmplitudeY"`
-	IdleDrift       float64 `json:"idleDrift"`
-	StrideLength    float64 `json:"strideLength"`
-	SpeedLerp       float64 `json:"speedLerp"`
-	AmpLerp         float64 `json:"ampLerp"`
-	ImpactMax       float64 `json:"impactMax"`
-	ImpactScale     float64 `json:"impactScale"`
-	IdleAmpX        float64 `json:"idleAmpX"`
-	IdleAmpY        float64 `json:"idleAmpY"`
-	SpringTension   float64 `json:"springTension"`
-	SpringDamping   float64 `json:"springDamping"`
-	TiltAmp         float64 `json:"tiltAmp"`
-}
-
-type Flash struct {
-	FovDeg          float64 `json:"flashFovDeg"`
-	ShadowFovFactor float64 `json:"flashShadowFovDeg"`
-	ZNear           float64 `json:"flashZNear"`
-	ZFar            float64 `json:"flashZFar"`
-	Intensity       float64 `json:"flashIntensity"`
-	Falloff         float64 `json:"flashFalloff"`
-	OffsetX         float64 `json:"flashOffsetX"`
-	OffsetY         float64 `json:"flashOffsetY"`
-}
-
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
 type Player struct {
 	*Thing
+	Weapon    *Weapon  `json:"weapon"`
 	Bobbing   *Bobbing `json:"bobbing"`
 	Flash     *Flash   `json:"flash"`
 	Impulse   float64  `json:"impulse"`
@@ -51,8 +19,9 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 	thing := NewConfigThing("PLAYER", position, angle, ThingPlayerDef, mass, radius, height, speed)
 	p := &Player{
 		Thing:     thing,
-		Bobbing:   &Bobbing{},
-		Flash:     &Flash{},
+		Weapon:    NewWeapon(),
+		Bobbing:   NewBobbing(),
+		Flash:     NewFlash(),
 		IsVisible: false,
 	}
 	p.Impulse = 0.06

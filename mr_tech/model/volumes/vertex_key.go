@@ -9,6 +9,7 @@ import (
 const (
 	deformMaxSubdivisionPasses = 12
 	deformMaxFaces             = 65536
+	deformMinEdge              = 1.0
 )
 
 type vertexKey struct {

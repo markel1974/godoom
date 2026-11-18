@@ -20,6 +20,11 @@ type Faces struct {
 	minX, minY, minZ float64
 	maxX, maxY, maxZ float64
 	w, h, d          float64
+
+	markedEdges   map[edgeKey]struct{}
+	midpoints     map[edgeKey]geometry.XYZ
+	displacements map[vertexKey]geometry.XYZ
+	nextFaces     []*Face
 }
 
 // NewFaces creates a Faces collection with the given initial capacity.
@@ -30,9 +35,25 @@ func NewFaces(initSize int, fill bool) *Faces {
 		count = initSize
 	}
 	return &Faces{
-		tree:      aabb.NewTree(64, 0.0),
-		container: make([]*Face, initSize),
-		count:     count,
+		tree:          aabb.NewTree(64, 0.0),
+		container:     make([]*Face, initSize),
+		count:         count,
+		markedEdges:   make(map[edgeKey]struct{}, 128),
+		midpoints:     make(map[edgeKey]geometry.XYZ, 128),
+		displacements: make(map[vertexKey]geometry.XYZ, 128),
+		nextFaces:     make([]*Face, 0, initSize),
+	}
+}
+
+func (f *Faces) initBuffers() {
+	if f.markedEdges == nil {
+		f.markedEdges = make(map[edgeKey]struct{}, 128)
+	}
+	if f.midpoints == nil {
+		f.midpoints = make(map[edgeKey]geometry.XYZ, 128)
+	}
+	if f.displacements == nil {
+		f.displacements = make(map[vertexKey]geometry.XYZ, 128)
 	}
 }
 
@@ -155,12 +176,19 @@ func (f *Faces) Clear() {
 func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	// Quattro intervalli geometrici lungo il raggio d'impatto.
 	targetEdge := radius * 0.25
+	if targetEdge < deformMinEdge {
+		targetEdge = deformMinEdge
+	}
 	if _, err := f.TessellateNear(impact, radius, targetEdge, deformMaxFaces); err != nil {
 		return false
 	}
 	radiusSq := radius * radius
-	// Una sola displacement per ogni vertice geometrico.
-	displacements := make(map[vertexKey]geometry.XYZ)
+
+	f.initBuffers()
+	for k := range f.displacements {
+		delete(f.displacements, k)
+	}
+
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
 		if fc == nil || !fc.IsDeformable() {
@@ -168,7 +196,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 		}
 		for _, p := range fc.tri.Points {
 			key := makeVertexKey(p)
-			if _, exists := displacements[key]; exists {
+			if _, exists := f.displacements[key]; exists {
 				continue
 			}
 			dx := p.X - impact.X
@@ -180,10 +208,10 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 			}
 			t := 1.0 - math.Sqrt(distSq)/radius
 			factor := t * t * (3.0 - 2.0*t)
-			displacements[key] = geometry.XYZ{X: impulse.X * factor, Y: impulse.Y * factor, Z: impulse.Z * factor}
+			f.displacements[key] = geometry.XYZ{X: impulse.X * factor, Y: impulse.Y * factor, Z: impulse.Z * factor}
 		}
 	}
-	if len(displacements) == 0 {
+	if len(f.displacements) == 0 {
 		return false
 	}
 
@@ -195,7 +223,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 		}
 		for j := 0; j < geometry.Triangle3DPoints; j++ {
 			p := &fc.tri.Points[j]
-			if displacement, ok := displacements[makeVertexKey(*p)]; ok {
+			if displacement, ok := f.displacements[makeVertexKey(*p)]; ok {
 				p.X += displacement.X
 				p.Y += displacement.Y
 				p.Z += displacement.Z
@@ -213,6 +241,9 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 	if f == nil || radius <= 0 || maxEdge <= 0 {
 		return 0, fmt.Errorf("invalid tessellation parameters")
 	}
+	if maxEdge < deformMinEdge {
+		maxEdge = deformMinEdge
+	}
 
 	midpoint := func(a, b geometry.XYZ) geometry.XYZ {
 		return geometry.XYZ{X: (a.X + b.X) * 0.5, Y: (a.Y + b.Y) * 0.5, Z: (a.Z + b.Z) * 0.5}
@@ -225,12 +256,17 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		return dx*dx + dy*dy + dz*dz
 	}
 
+	f.initBuffers()
+
 	initialCount := f.count
 	maxEdgeSq := maxEdge * maxEdge
+	minEdgeSq := deformMinEdge * deformMinEdge
 	searchRadius := radius + maxEdge
 
 	for pass := 0; pass < deformMaxSubdivisionPasses; pass++ {
-		marked := make(map[edgeKey]struct{})
+		for k := range f.markedEdges {
+			delete(f.markedEdges, k)
+		}
 		// Fase 1: individua gli spigoli da raffinare nella regione d'impatto.
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]
@@ -244,16 +280,20 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			p := fc.tri.Points
 			edges := [3][2]geometry.XYZ{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 			for _, edge := range edges {
-				if distanceSquared(edge[0], edge[1]) > maxEdgeSq {
-					marked[makeEdgeKey(edge[0], edge[1])] = struct{}{}
+				d2 := distanceSquared(edge[0], edge[1])
+				// Non suddividere se lo spigolo è già più corto di deformMinEdge
+				if d2 > maxEdgeSq && d2 > minEdgeSq {
+					f.markedEdges[makeEdgeKey(edge[0], edge[1])] = struct{}{}
 				}
 			}
 		}
-		if len(marked) == 0 {
+		if len(f.markedEdges) == 0 {
 			break
 		}
 		// Fase 2: ogni lato condiviso riceve un unico punto medio.
-		midpoints := make(map[edgeKey]geometry.XYZ, len(marked))
+		for k := range f.midpoints {
+			delete(f.midpoints, k)
+		}
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]
 			if fc == nil {
@@ -264,15 +304,15 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			edges := [3][2]geometry.XYZ{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 			for _, edge := range edges {
 				key := makeEdgeKey(edge[0], edge[1])
-				if _, ok := marked[key]; ok {
-					if _, exists := midpoints[key]; !exists {
-						midpoints[key] = midpoint(edge[0], edge[1])
+				if _, ok := f.markedEdges[key]; ok {
+					if _, exists := f.midpoints[key]; !exists {
+						f.midpoints[key] = midpoint(edge[0], edge[1])
 					}
 				}
 			}
 		}
 		// Fase 3: applica le suddivisioni a tutte le facce incidenti.
-		next := make([]*Face, 0, f.count+len(marked))
+		f.nextFaces = f.nextFaces[:0]
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]
 			if fc == nil {
@@ -282,27 +322,27 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			keys := [3]edgeKey{makeEdgeKey(p[0], p[1]), makeEdgeKey(p[1], p[2]), makeEdgeKey(p[2], p[0])}
 			var mask uint8
 			var mab, mbc, mca geometry.XYZ
-			if m, ok := midpoints[keys[0]]; ok {
+			if m, ok := f.midpoints[keys[0]]; ok {
 				mask |= 1
 				mab = m
 			}
-			if m, ok := midpoints[keys[1]]; ok {
+			if m, ok := f.midpoints[keys[1]]; ok {
 				mask |= 2
 				mbc = m
 			}
-			if m, ok := midpoints[keys[2]]; ok {
+			if m, ok := f.midpoints[keys[2]]; ok {
 				mask |= 4
 				mca = m
 			}
 			children := fc.splitFace(mask, mab, mbc, mca)
-			next = append(next, children...)
-			if maxFaces > 0 && len(next) > maxFaces {
+			f.nextFaces = append(f.nextFaces, children...)
+			if maxFaces > 0 && len(f.nextFaces) > maxFaces {
 				return f.count - initialCount,
 					fmt.Errorf("tessellation face limit exceeded: %d", maxFaces)
 			}
 		}
-		f.container = next
-		f.count = len(next)
+		f.container, f.nextFaces = f.nextFaces, f.container
+		f.count = len(f.container)
 	}
 	return f.count - initialCount, nil
 }

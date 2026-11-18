@@ -375,7 +375,7 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 	var closestFace *volumes.Face
 	var closestVol *volumes.Volume
 
-	const wallDeform = false
+	const wallDeform = true
 
 	if wallDeform {
 		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
@@ -449,10 +449,18 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 		}
 		if closestVol != nil {
 			normX, normY, normZ := closestFace.GetNormal()
-			normal := geometry.XYZ{X: -normX, Y: -normY, Z: -normZ}
+			if dirX*normX+dirY*normY+dirZ*normZ > 0 {
+				normX, normY, normZ = -normX, -normY, -normZ
+			}
+			normal := geometry.XYZ{X: normX, Y: normY, Z: normZ}
 			closestVol.DeformDent(impactPoint, normal, dentDepth, dentRadius)
 		} else {
-			closestFace.DeformDent(impactPoint, dentDepth, dentRadius)
+			normX, normY, normZ := closestFace.GetNormal()
+			if dirX*normX+dirY*normY+dirZ*normZ > 0 {
+				normX, normY, normZ = -normX, -normY, -normZ
+			}
+			impulse := geometry.XYZ{X: -normX * dentDepth, Y: -normY * dentDepth, Z: -normZ * dentDepth}
+			closestFace.Deform(impactPoint, impulse, dentRadius)
 		}
 		t.spawnBulletHole(impactX, impactY, impactZ, nil)
 	}

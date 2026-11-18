@@ -13,25 +13,23 @@ import (
 
 // Things manages the loading, caching, and instantiation of 3D entities (monsters, items, weapons, ammo) in Doom 3.
 type Things struct {
-	arc          proc.IPkArchive
-	materials    *proc.Materials
-	defs         *proc.Defs
-	texManager   *textures.Textures
-	imgLoader    *proc.ImageLoader
-	modelCache   map[string]*config.Model3DEntry
-	ragdollCache map[string]*RagdollCached
+	arc        proc.IPkArchive
+	materials  *proc.Materials
+	defs       *proc.Defs
+	texManager *textures.Textures
+	imgLoader  *proc.ImageLoader
+	modelCache map[string]*config.Model3DEntry
 }
 
 // NewThings initializes and returns a new Things manager.
 func NewThings(arc proc.IPkArchive, materials *proc.Materials, defs *proc.Defs, texManager *textures.Textures, imgLoader *proc.ImageLoader) *Things {
 	return &Things{
-		arc:          arc,
-		materials:    materials,
-		defs:         defs,
-		texManager:   texManager,
-		imgLoader:    imgLoader,
-		modelCache:   make(map[string]*config.Model3DEntry),
-		ragdollCache: make(map[string]*RagdollCached),
+		arc:        arc,
+		materials:  materials,
+		defs:       defs,
+		texManager: texManager,
+		imgLoader:  imgLoader,
+		modelCache: make(map[string]*config.Model3DEntry),
 	}
 }
 
@@ -89,7 +87,8 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	var radius float64
 
 	if spec.Kind == config.ThingEnemyDef && strings.HasSuffix(strings.ToLower(modelPath), ".md5mesh") {
-		md3, radius, err = t.loadAnimatedMonsterMD3(spec)
+		converter := NewRagdoll(t.arc, t.materials, t.imgLoader)
+		md3, radius, err = converter.Bake(spec)
 	} else {
 		cModel, err = t.loadModel(modelPath)
 		if cModel != nil {

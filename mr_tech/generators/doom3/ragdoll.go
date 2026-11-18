@@ -37,9 +37,25 @@ type RawSkeletonFrame struct {
 	headPos  [][]geometry.XYZ
 }
 
-// loadAnimatedMonsterMD3 loads and caches a multi-part articulated MD5 model decomposed into ragdoll limbs
+type Ragdoll struct {
+	arc          proc.IPkArchive
+	materials    *proc.Materials
+	imgLoader    *proc.ImageLoader
+	ragdollCache map[string]*RagdollCached
+}
+
+func NewRagdoll(arc proc.IPkArchive, materials *proc.Materials, imgLoader *proc.ImageLoader) *Ragdoll {
+	return &Ragdoll{
+		arc:          arc,
+		materials:    materials,
+		imgLoader:    imgLoader,
+		ragdollCache: make(map[string]*RagdollCached),
+	}
+}
+
+// Bake loads and caches a multi-part articulated MD5 model decomposed into ragdoll limbs
 // connected via hierarchical Model3DLink and joint attachment tags.
-func (t *Things) loadAnimatedMonsterMD3(spec *ThingSpec) (*config.Model3D, float64, error) {
+func (t *Ragdoll) Bake(spec *ThingSpec) (*config.Model3D, float64, error) {
 	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.ModelPath, "\\", "/")))
 	cacheKey := cleanPath
 	if len(spec.HeadMesh) > 0 {
@@ -94,7 +110,7 @@ func (t *Things) loadAnimatedMonsterMD3(spec *ThingSpec) (*config.Model3D, float
 	loadAnim("pain", spec.PainAnim)
 	loadAnim("death", spec.DeathAnim)
 
-	parts, links, radius, err := t.bakeMD5Ragdoll(mesh, headMesh, spec.HeadJoint, spec.AFBodies, anims)
+	parts, links, radius, err := t.bakeRagdoll(mesh, headMesh, spec.HeadJoint, spec.AFBodies, anims)
 	if err != nil || len(parts) == 0 {
 		return nil, 0, fmt.Errorf("baking md5 ragdoll %s: %w", cleanPath, err)
 	}
@@ -135,7 +151,7 @@ func (t *Things) loadAnimatedMonsterMD3(spec *ThingSpec) (*config.Model3D, float
 
 // bakeMD5Ragdoll decomposes an MD5Mesh (plus optional attached headMesh) into multiple articulated
 // Model3DEntry parts linked via Model3DLink and per-frame Model3DTag joint transforms.
-func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, afBodies []*proc.AFBody, anims map[string]*md5.Anim) ([]*config.Model3DEntry, []config.Model3DLink, float64, error) {
+func (t *Ragdoll) bakeRagdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, afBodies []*proc.AFBody, anims map[string]*md5.Anim) ([]*config.Model3DEntry, []config.Model3DLink, float64, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 || len(mesh.Joints) == 0 {
 		return nil, nil, 0, fmt.Errorf("empty md5 mesh")
 	}

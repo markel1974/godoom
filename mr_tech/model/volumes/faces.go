@@ -21,11 +21,12 @@ type Faces struct {
 	maxX, maxY, maxZ float64
 	w, h, d          float64
 
-	markedEdges    map[EdgeKey]struct{}
-	midpoints      map[EdgeKey]geometry.XYZ
-	displacements  map[VertexKey]geometry.XYZ
-	nextFaces      []*Face
-	hasTesselation bool
+	markedEdges     map[EdgeKey]struct{}
+	midpoints       map[EdgeKey]geometry.XYZ
+	displacements   map[VertexKey]geometry.XYZ
+	nextFaces       []*Face
+	hasTesselation  bool
+	allowTessellate bool
 }
 
 // NewFaces creates a Faces collection with the given initial capacity.
@@ -36,15 +37,26 @@ func NewFaces(initSize int, fill bool) *Faces {
 		count = initSize
 	}
 	return &Faces{
-		tree:           aabb.NewTree(64, 0.0),
-		container:      make([]*Face, initSize),
-		count:          count,
-		markedEdges:    nil,
-		midpoints:      nil,
-		displacements:  nil,
-		nextFaces:      nil,
-		hasTesselation: false,
+		tree:            aabb.NewTree(64, 0.0),
+		container:       make([]*Face, initSize),
+		count:           count,
+		markedEdges:     nil,
+		midpoints:       nil,
+		displacements:   nil,
+		nextFaces:       nil,
+		hasTesselation:  false,
+		allowTessellate: true,
 	}
+}
+
+// SetAllowTessellate enables or disables dynamic tessellation (subdivision) during deformation.
+func (f *Faces) SetAllowTessellate(allow bool) {
+	f.allowTessellate = allow
+}
+
+// IsAllowTessellate reports whether dynamic tessellation is allowed during deformation.
+func (f *Faces) IsAllowTessellate() bool {
+	return f.allowTessellate
 }
 
 func (f *Faces) TessellateInit() {
@@ -163,8 +175,11 @@ func (f *Faces) Set(idx int, face *Face) {
 	f.container[idx] = face
 }
 
-// At returns the face stored at idx.
+// At returns the face stored at idx, or nil if idx is out of bounds.
 func (f *Faces) At(idx int) *Face {
+	if idx < 0 || idx >= len(f.container) {
+		return nil
+	}
 	return f.container[idx]
 }
 
@@ -175,13 +190,15 @@ func (f *Faces) Clear() {
 }
 
 func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	// Quattro intervalli geometrici lungo il raggio d'impatto.
-	targetEdge := radius * 0.25
-	if targetEdge < deformMinEdge {
-		targetEdge = deformMinEdge
-	}
-	if _, err := f.TessellateNear(impact, radius, targetEdge, deformMaxFaces); err != nil {
-		return false
+	if f.allowTessellate {
+		// Quattro intervalli geometrici lungo il raggio d'impatto.
+		targetEdge := radius * 0.25
+		if targetEdge < deformMinEdge {
+			targetEdge = deformMinEdge
+		}
+		if _, err := f.TessellateNear(impact, radius, targetEdge, deformMaxFaces); err != nil {
+			return false
+		}
 	}
 	f.TessellateInit()
 	radiusSq := radius * radius

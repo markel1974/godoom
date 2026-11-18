@@ -341,7 +341,8 @@ func (t *Base) Jump(self vertices.IThing, leapX float64, leapY float64, zFactor 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
 func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
-	var closestDist = maxDistance
+
+	var closestDistThing = maxDistance
 	var closestThing vertices.IThing
 
 	// Usiamo l'origine (pos) e il vettore direzione (dir) calcolato esternamente.
@@ -361,11 +362,15 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 			}
 		}
 		closestThing = other
-		closestDist = distance
+		closestDistThing = distance
 		// Ray Shrinking: restringiamo il raggio d'azione dell'albero alla distanza dell'impatto trovato.
 		return distance, true
 	})
 
+	var closestDistFace = maxDistance
+	if closestThing != nil {
+		closestDistFace = closestDistThing
+	}
 	var closestFace *volumes.Face
 	var closestVol *volumes.Volume
 
@@ -374,89 +379,73 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 	if wallDeform {
 		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
 		if vols := t.things.GetVolumes(); vols != nil {
-			vols.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist, func(object aabb.IObject, distance float64) (float64, bool) {
+			vols.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace, func(object aabb.IObject, distance float64) (float64, bool) {
 				vol, ok := object.(*volumes.Volume)
 				if !ok {
-					return closestDist, false
+					return closestDistFace, false
 				}
 				hit := false
 				if facesTree := vol.GetFacesTree(); facesTree != nil {
-					facesTree.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist, func(fObj aabb.IObject, fDist float64) (float64, bool) {
+					facesTree.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace, func(fObj aabb.IObject, fDist float64) (float64, bool) {
 						face, fOk := fObj.(*volumes.Face)
 						if !fOk || !face.IsSolid() {
-							return closestDist, false
+							return closestDistFace, false
 						}
-						if tHit, okHit := face.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDist); okHit {
-							closestDist = tHit
+						if tHit, okHit := face.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace); okHit {
+							closestDistFace = tHit
 							closestFace = face
 							closestVol = vol
-							closestThing = nil // Il muro occlude il colpo verso eventuali Things dietro di esso
 							hit = true
 							return tHit, true
 						}
-						return closestDist, false
+						return closestDistFace, false
 					})
 				}
 				if hit {
-					return closestDist, true
+					return closestDistFace, true
 				}
-				return closestDist, false
+				return closestDistFace, false
 			})
 		}
 	}
 
-	if closestThing != nil {
+	if closestThing != nil && (closestFace == nil || closestDistThing < closestDistFace) {
 		// Calcolo del punto d'impatto reale (Origine + Direzione * Distanza)
-		impactX := pos.X + (dirX * closestDist)
-		impactY := pos.Y + (dirY * closestDist)
-		impactZ := pos.Z + (dirZ * closestDist)
-		//
+		impactX := pos.X + (dirX * closestDistThing)
+		impactY := pos.Y + (dirY * closestDistThing)
+		impactZ := pos.Z + (dirZ * closestDistThing)
 
+		closestThing.WakeUp()
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
-		closestThing.Impact(self, id, force, closestDist, dirX, dirY, dirZ)
+		closestThing.Impact(self, id, force, closestDistThing, dirX, dirY, dirZ)
 
 		// TODO Deformiamo anche il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
-		/*
-			impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
-				dentDepth := 2.5
-				dentRadius := 8.0
-				if force > 0 {
-					dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
-					dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
-				}
-				impulse := geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
-				closestThing.Deform(impactPoint, impulse, dentRadius)
-		*/
+		//impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
+		//dentDepth, dentRadius := t.dentCompute(force)
+		//impulse := geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
+		//closestThing.Deform(impactPoint, impulse, dentRadius)
+		//t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
+		return
+	}
 
-		t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
-	} else if closestFace != nil {
-		// Impatto contro un muro/volume: applichiamo la deformazione plastica
-		impactX := pos.X + (dirX * closestDist)
-		impactY := pos.Y + (dirY * closestDist)
-		impactZ := pos.Z + (dirZ * closestDist)
+	if closestFace != nil {
+		impactX := pos.X + (dirX * closestDistFace)
+		impactY := pos.Y + (dirY * closestDistFace)
+		impactZ := pos.Z + (dirZ * closestDistFace)
 		impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
-		dentDepth := 2.5
-		dentRadius := 8.0
-		if force > 0 {
-			dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
-			dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
+		dentDepth, dentRadius := t.dentCompute(force)
+		normX, normY, normZ := closestFace.GetNormal()
+		if dirX*normX+dirY*normY+dirZ*normZ > 0 {
+			normX, normY, normZ = -normX, -normY, -normZ
 		}
+		impulse := geometry.XYZ{X: -normX * dentDepth, Y: -normY * dentDepth, Z: -normZ * dentDepth}
 		if closestVol != nil {
-			normX, normY, normZ := closestFace.GetNormal()
-			if dirX*normX+dirY*normY+dirZ*normZ > 0 {
-				normX, normY, normZ = -normX, -normY, -normZ
-			}
-			normal := geometry.XYZ{X: normX, Y: normY, Z: normZ}
-			closestVol.DeformDent(impactPoint, normal, dentDepth, dentRadius)
+			closestVol.Deform(impactPoint, impulse, dentRadius)
 		} else {
-			normX, normY, normZ := closestFace.GetNormal()
-			if dirX*normX+dirY*normY+dirZ*normZ > 0 {
-				normX, normY, normZ = -normX, -normY, -normZ
-			}
-			impulse := geometry.XYZ{X: -normX * dentDepth, Y: -normY * dentDepth, Z: -normZ * dentDepth}
 			closestFace.Deform(impactPoint, impulse, dentRadius)
 		}
-		t.spawnBulletHole(impactX, impactY, impactZ, nil)
+		//t.spawnBulletHole(impactX, impactY, impactZ, nil)
+		return
 	}
 }
 
@@ -468,18 +457,6 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 // dirX, dirY, and dirZ specify the directional vector of the impact in 3D space.
 func (t *Base) Impact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 	t.onImpact(other, id, force, closestDist, dirX, dirY, dirZ)
-}
-
-// spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.
-// It offsets slightly from the surface to avoid Z-fighting and applies a visual decal for a limited duration.
-func (t *Base) spawnBulletHole(x, y, z float64, target vertices.IThing) {
-	// Creiamo un'entità visiva temporanea tramite il gestore Things
-	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)
-	// per evitare lo Z-fighting durante il rendering.
-
-	// Se il target è un muro, possiamo estrarre la normale per ruotare la decalcomania
-	// ma per ora posizioniamola semplicemente nel punto XYZ.
-	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
 }
 
 func (t *Base) onElasticCollision(other collisions.IObject, energy float64) {
@@ -504,8 +481,32 @@ func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64)
 	return t.IVertices.Deform(localImpact, impulse, radius)
 }
 
+func (t *Base) dentCompute(force float64) (float64, float64) {
+	dentDepth := 2.5
+	dentRadius := 8.0
+	if force > 0 {
+		dentDepth = math.Min(math.Max(force*0.00001, 1.5), 6.0)
+		dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
+	}
+	return dentDepth, dentRadius
+}
+
 // DeformDent produces an indentation on the thing's vertices around a world-space impact point.
 func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	return t.Deform(impact, impulse, radius)
 }
+
+/*
+// spawnBulletHole creates a temporary visual entity at the specified coordinates to simulate a bullet hole effect.
+// It offsets slightly from the surface to avoid Z-fighting and applies a visual decal for a limited duration.
+func (t *Base) spawnBulletHole(x, y, z float64, target vertices.IThing) {
+	// Creiamo un'entità visiva temporanea tramite il gestore Things
+	// Deve essere posizionata leggermente "staccata" dalla superficie (offset 0.1)
+	// per evitare lo Z-fighting durante il rendering.
+
+	// Se il target è un muro, possiamo estrarre la normale per ruotare la decalcomania
+	// ma per ora posizioniamola semplicemente nel punto XYZ.
+	//p.things.CreateDecal("BULLET_HOLE", x, y, z, 5.0) // 5.0 secondi di durata
+}
+*/

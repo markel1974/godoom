@@ -208,6 +208,8 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 	}
 	facesA := volumes.NewFaces(maxFaces, true)
 	facesB := volumes.NewFaces(maxFaces, true)
+	facesA.SetAllowTessellate(false)
+	facesB.SetAllowTessellate(false)
 	for j := 0; j < maxFaces; j++ {
 		var mat *textures.Material
 		var tu, tv [3]float64
@@ -407,11 +409,22 @@ func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
 }
 
 func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *articulated_dynamics.TagAxis, isIdent bool, ox, oy, oz float64, minX, minY, minZ, maxX, maxY, maxZ float64, trackBounds bool) (float64, float64, float64, float64, float64, float64) {
-	count := srcVol.GetFaceCount()
+	if srcVol == nil || dstFaces == nil {
+		return minX, minY, minZ, maxX, maxY, maxZ
+	}
 	noOffset := ox == 0 && oy == 0 && oz == 0
-	for j := 0; j < count; j++ {
+	count := srcVol.GetFaceCount()
+	dstLen := dstFaces.Len()
+	limit := count
+	if limit > dstLen {
+		limit = dstLen
+	}
+	for j := 0; j < limit; j++ {
 		src := srcVol.GetFace(j)
 		dst := dstFaces.At(j)
+		if src == nil || dst == nil {
+			continue
+		}
 		dst.SetMaterial(src.GetMaterial())
 		dst.SetU(src.GetU())
 		dst.SetV(src.GetV())
@@ -424,7 +437,7 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
 		}
 	}
-	for j := count; j < dstFaces.Len(); j++ {
+	for j := limit; j < dstLen; j++ {
 		if f := dstFaces.At(j); f != nil {
 			f.Zero()
 		}

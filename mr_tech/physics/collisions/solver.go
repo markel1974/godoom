@@ -65,6 +65,11 @@ func (t *Solver) Setup(object IObject) error {
 	return nil
 }
 
+// IsDynamic returns whether the solver is configured for dynamic motion.
+func (t *Solver) IsDynamic() bool {
+	return t.cage != nil
+}
+
 // Rebuild updates the solver entity bounds, centroid, and inertia tensor from the provided values.
 func (t *Solver) Rebuild(minX, minY, minZ float64, w, h, d float64, cx, cy, cz float64, ixx, ixy, ixz, iyy, iyz, izz float64) {
 	ent := t.entity

@@ -185,6 +185,9 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		//added := false
 		for x := 0; x < faces.Len(); x++ {
 			face := faces.At(x)
+			if face == nil {
+				continue
+			}
 			mat := face.GetMaterial()
 			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 				continue
@@ -247,6 +250,9 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	pushPassThing := func(thing vertices.IThing) {
 		thing.Compile(textures.GlobalTick())
 		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
+		if pFaces == nil || pFaces.Len() == 0 {
+			return
+		}
 		//thing.SetVisible()
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
@@ -260,8 +266,16 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		var currentTargetDc *DrawCommands
 		batchStart := w.fv.GetIndicesLen()
 
-		for fx := 0; fx < pFaces.Len(); fx++ {
+		limit := pFaces.Len()
+		if pNextFaces != nil && pNextFaces.Len() < limit {
+			limit = pNextFaces.Len()
+		}
+
+		for fx := 0; fx < limit; fx++ {
 			face := pFaces.At(fx)
+			if face == nil {
+				continue
+			}
 			mat := face.GetMaterial()
 			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
 				continue
@@ -289,8 +303,16 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
 			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
 			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-			nf := pNextFaces.At(fx)
-			np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z := nf.GetPointsFlat()
+			var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
+			if pNextFaces != nil {
+				if nf := pNextFaces.At(fx); nf != nil {
+					np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = nf.GetPointsFlat()
+				} else {
+					np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
+				}
+			} else {
+				np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
+			}
 
 			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
 			id1 := w.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, float32(renderMode), float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)

@@ -11,6 +11,7 @@ import (
 
 // Volume represents a spatial model element that groups geometry, lighting, physics, and sector data.
 type Volume struct {
+	dynamic    bool
 	modelId    int
 	id         string
 	faces      *Faces
@@ -27,6 +28,7 @@ type Volume struct {
 // NewVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
 func newVolume(dynamic bool, modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
 	v := &Volume{
+		dynamic:    dynamic,
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
@@ -42,7 +44,9 @@ func newVolume(dynamic bool, modelId int, id string, tag string, mass, restituti
 
 // NewVolumeDynamic creates a dynamic Volume with the given identifiers, tag, and physics settings.
 func NewVolumeDynamic(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
-	return newVolume(true, modelId, id, tag, mass, restitution, friction, restCombine, frictionCombine, gForce)
+	v := newVolume(true, modelId, id, tag, mass, restitution, friction, restCombine, frictionCombine, gForce)
+	v.SetAllowTessellate(false)
+	return v
 }
 
 // NewVolumeConcrete creates a static Volume with concrete material physics defaults and the given identifiers and tag.
@@ -75,6 +79,11 @@ func (v *Volume) Rebuild() bool {
 	v.dirty = true
 
 	return true
+}
+
+// IsDynamic reports whether the volume is configured for dynamic physics.
+func (v *Volume) IsDynamic() bool {
+	return v.dynamic
 }
 
 // GetFacesTree returns the spatial tree containing the volume's faces.
@@ -218,13 +227,33 @@ func (v *Volume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IO
 	v.faces.GetTree().QueryOverlaps(object, callback)
 }
 
+// SetAllowTessellate enables or disables dynamic tessellation on the volume's faces.
+func (v *Volume) SetAllowTessellate(allow bool) {
+	if v.faces != nil {
+		v.faces.SetAllowTessellate(allow)
+	}
+}
+
+// IsAllowTessellate reports whether dynamic tessellation is enabled on the volume's faces.
+func (v *Volume) IsAllowTessellate() bool {
+	if v.faces != nil {
+		return v.faces.IsAllowTessellate()
+	}
+	return false
+}
+
 // QueryPoint calls callback for each face whose bounding box contains the given 3D point.
 func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IObject) bool) {
 	v.faces.GetTree().QueryPoint3d(px, py, pz, callback)
 }
 
-// Deform applies a local plastic deformation to all volume faces within radius of impact.
+// DeformDent creates an indentation on the volume faces along the specified normal vector.
+func (v *Volume) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
+	return v.Deform(impact, impulse, radius)
+}
 
+// Deform applies a local plastic deformation to all volume faces within radius of impact.
 func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if radius <= 0 {
 		return false
@@ -235,16 +264,5 @@ func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float6
 	// Una sola ricostruzione al termine dell'intera deformazione.
 	v.Rebuild()
 	v.SetDirty(true)
-
 	return true
-}
-
-// DeformDent creates an indentation on the volume faces along the specified normal vector.
-func (v *Volume) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
-	status := v.Deform(impact, impulse, radius)
-	if status {
-		v.dirty = true
-	}
-	return status
 }

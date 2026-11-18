@@ -43,7 +43,9 @@ func NewWeapon(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) 
 	if err := w.Prepare(w, volume); err != nil {
 		// Volume may be nil if weapon is carried by player without independent 3D placement
 	}
-	cfg.OnBind(w)
+	if cfg.OnBind != nil {
+		cfg.OnBind(w)
+	}
 	return w
 }
 

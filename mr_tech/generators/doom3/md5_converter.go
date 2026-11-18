@@ -11,20 +11,20 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-type MD5 struct {
+type MD5Converter struct {
 	arc       proc.IPkArchive
 	materials *proc.Materials
 }
 
-func NewMD5(arc proc.IPkArchive, materials *proc.Materials) *MD5 {
-	return &MD5{
+func NewMD5Converter(arc proc.IPkArchive, materials *proc.Materials) *MD5Converter {
+	return &MD5Converter{
 		arc:       arc,
 		materials: materials,
 	}
 }
 
-// Bake evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
-func (t *MD5) Bake(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim) (*config.Model3DEntry, error) {
+// Convert evaluates an MD5Mesh (and optional attached headMesh) with optional animations and compiles it into a Config Model3DEntry.
+func (t *MD5Converter) Convert(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, anims map[string]*md5.Anim) (*config.Model3DEntry, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 {
 		return nil, fmt.Errorf("empty md5 mesh")
 	}

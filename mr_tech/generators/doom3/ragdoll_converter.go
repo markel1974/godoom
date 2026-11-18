@@ -37,15 +37,15 @@ type RawSkeletonFrame struct {
 	headPos  [][]geometry.XYZ
 }
 
-type Ragdoll struct {
+type RagdollConverter struct {
 	arc          proc.IPkArchive
 	materials    *proc.Materials
 	imgLoader    *proc.ImageLoader
 	ragdollCache map[string]*RagdollCached
 }
 
-func NewRagdoll(arc proc.IPkArchive, materials *proc.Materials, imgLoader *proc.ImageLoader) *Ragdoll {
-	return &Ragdoll{
+func NewRagdollConverter(arc proc.IPkArchive, materials *proc.Materials, imgLoader *proc.ImageLoader) *RagdollConverter {
+	return &RagdollConverter{
 		arc:          arc,
 		materials:    materials,
 		imgLoader:    imgLoader,
@@ -53,9 +53,9 @@ func NewRagdoll(arc proc.IPkArchive, materials *proc.Materials, imgLoader *proc.
 	}
 }
 
-// Bake loads and caches a multi-part articulated MD5 model decomposed into ragdoll limbs
+// Convert loads and caches a multi-part articulated MD5Converter model decomposed into ragdoll limbs
 // connected via hierarchical Model3DLink and joint attachment tags.
-func (t *Ragdoll) Bake(spec *ThingSpec) (*config.Model3D, float64, error) {
+func (t *RagdollConverter) Convert(spec *ThingSpec) (*config.Model3D, float64, error) {
 	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(spec.ModelPath, "\\", "/")))
 	cacheKey := cleanPath
 	if len(spec.HeadMesh) > 0 {
@@ -110,7 +110,7 @@ func (t *Ragdoll) Bake(spec *ThingSpec) (*config.Model3D, float64, error) {
 	loadAnim("pain", spec.PainAnim)
 	loadAnim("death", spec.DeathAnim)
 
-	parts, links, radius, err := t.bakeRagdoll(mesh, headMesh, spec.HeadJoint, spec.AFBodies, anims)
+	parts, links, radius, err := t.convertRagdoll(mesh, headMesh, spec.HeadJoint, spec.AFBodies, anims)
 	if err != nil || len(parts) == 0 {
 		return nil, 0, fmt.Errorf("baking md5 ragdoll %s: %w", cleanPath, err)
 	}
@@ -142,16 +142,13 @@ func (t *Ragdoll) Bake(spec *ThingSpec) (*config.Model3D, float64, error) {
 		}
 	}
 
-	t.ragdollCache[cacheKey] = &RagdollCached{
-		md3:    md3,
-		radius: radius,
-	}
+	t.ragdollCache[cacheKey] = &RagdollCached{md3: md3, radius: radius}
 	return md3, radius, nil
 }
 
 // bakeMD5Ragdoll decomposes an MD5Mesh (plus optional attached headMesh) into multiple articulated
 // Model3DEntry parts linked via Model3DLink and per-frame Model3DTag joint transforms.
-func (t *Ragdoll) bakeRagdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, afBodies []*proc.AFBody, anims map[string]*md5.Anim) ([]*config.Model3DEntry, []config.Model3DLink, float64, error) {
+func (t *RagdollConverter) convertRagdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName string, afBodies []*proc.AFBody, anims map[string]*md5.Anim) ([]*config.Model3DEntry, []config.Model3DLink, float64, error) {
 	if mesh == nil || len(mesh.SubMeshes) == 0 || len(mesh.Joints) == 0 {
 		return nil, nil, 0, fmt.Errorf("empty md5 mesh")
 	}
@@ -289,11 +286,7 @@ func (t *Ragdoll) bakeRagdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 	var activeBodies []activeBodyInfo
 	for bIdx, bp := range rawParts {
 		if partTriCount[bIdx] > 0 {
-			activeBodies = append(activeBodies, activeBodyInfo{
-				oldIdx:      bIdx,
-				name:        bp.name,
-				anchorJoint: bp.anchorJoint,
-			})
+			activeBodies = append(activeBodies, activeBodyInfo{oldIdx: bIdx, name: bp.name, anchorJoint: bp.anchorJoint})
 		}
 	}
 	sort.SliceStable(activeBodies, func(i, j int) bool {
@@ -384,11 +377,7 @@ func (t *Ragdoll) bakeRagdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 			}
 		}
 
-		return RawSkeletonFrame{
-			skeleton: skel,
-			bodyPos:  bodyPos,
-			headPos:  headPos,
-		}
+		return RawSkeletonFrame{skeleton: skel, bodyPos: bodyPos, headPos: headPos}
 	}
 
 	var rawFrames []RawSkeletonFrame

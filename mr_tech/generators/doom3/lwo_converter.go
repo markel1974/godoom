@@ -9,20 +9,20 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
-type LWO struct {
+type LWOConverter struct {
 	arc       proc.IPkArchive
 	materials *proc.Materials
 }
 
-func NewLWO(arc proc.IPkArchive, materials *proc.Materials) *LWO {
-	return &LWO{
+func NewLWOConverter(arc proc.IPkArchive, materials *proc.Materials) *LWOConverter {
+	return &LWOConverter{
 		arc:       arc,
 		materials: materials,
 	}
 }
 
-// Bake parses a LightWave Object (LWO2) binary model file and converts it into a Config Model3DEntry.
-func (t *LWO) Bake(r io.Reader) (*config.Model3DEntry, error) {
+// Convert parses a LightWave Object (LWO2) binary model file and converts it into a Config Model3DEntry.
+func (t *LWOConverter) Convert(r io.Reader) (*config.Model3DEntry, error) {
 	lwd := proc.NewLWO()
 	if err := lwd.Parse(r); err != nil {
 		return nil, err

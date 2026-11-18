@@ -64,7 +64,7 @@ func ConfigureMaterial(mat *config.Material, matName string, def *proc.MaterialD
 }
 
 // ConfigureThingMaterial assigns physically differentiated SpecularBoost and Shininess for Doom 3 3D models
-// (MD5 monsters/characters and LWO items/weapons/props) while setting DetailFactor to 0.0 to preserve clean model skins.
+// (MD5Converter monsters/characters and LWOConverter items/weapons/props) while setting DetailFactor to 0.0 to preserve clean model skins.
 func ConfigureThingMaterial(mat *config.Material, name string, def *proc.MaterialDef) {
 	if mat == nil {
 		return
@@ -197,7 +197,7 @@ func HeuristicMaterialProperties(matName string, def *proc.MaterialDef) (float64
 }
 
 // HeuristicThingMaterialProperties determines specular and shininess properties for Doom 3 3D models
-// (monsters, characters, weapons, ammo, items, and LWO props).
+// (monsters, characters, weapons, ammo, items, and LWOConverter props).
 func HeuristicThingMaterialProperties(name string, def *proc.MaterialDef) (float64, float64) {
 	c := strings.TrimSpace(strings.ToLower(name))
 	surfType := ""

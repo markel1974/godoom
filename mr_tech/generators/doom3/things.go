@@ -87,8 +87,8 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	var radius float64
 
 	if spec.Kind == config.ThingEnemyDef && strings.HasSuffix(strings.ToLower(modelPath), ".md5mesh") {
-		converter := NewRagdoll(t.arc, t.materials, t.imgLoader)
-		md3, radius, err = converter.Bake(spec)
+		converter := NewRagdollConverter(t.arc, t.materials, t.imgLoader)
+		md3, radius, err = converter.Convert(spec)
 	} else {
 		cModel, err = t.loadModel(modelPath)
 		if cModel != nil {
@@ -138,11 +138,11 @@ func (t *Things) loadModel(modelPath string) (*config.Model3DEntry, error) {
 		if mErr := mesh.Parse(f); mErr != nil {
 			return nil, mErr
 		}
-		converter := NewMD5(t.arc, t.materials)
-		cModel, err = converter.Bake(mesh, nil, "", nil)
+		converter := NewMD5Converter(t.arc, t.materials)
+		cModel, err = converter.Convert(mesh, nil, "", nil)
 	} else if strings.HasSuffix(cleanPath, ".lwo") {
-		converter := NewLWO(t.arc, t.materials)
-		cModel, err = converter.Bake(f)
+		converter := NewLWOConverter(t.arc, t.materials)
+		cModel, err = converter.Convert(f)
 	} else {
 		return nil, fmt.Errorf("unsupported model format for %s", cleanPath)
 	}

@@ -32,74 +32,35 @@ const (
 	ThingTeleportDef
 )
 
-// DoorActivation defines how a door can be triggered by an actor.
-type DoorActivation int
-
-const (
-	// DoorActivateTouch opens the door automatically on actor collision as well as explicit Use.
-	DoorActivateTouch DoorActivation = iota
-	// DoorActivateUse opens the door only when explicitly activated via Use or trigger target.
-	DoorActivateUse
-)
-
-// DoorSpec defines kinematic translation, timing, and key lock parameters for a ThingDoorDef.
-type DoorSpec struct {
-	RequiredKey string         `json:"requiredKey,omitempty"`
-	OpenOffset  geometry.XYZ   `json:"openOffset"`
-	Speed       float64        `json:"speed"`
-	WaitSeconds float64        `json:"waitSeconds"`
-	StartOpen   bool           `json:"startOpen,omitempty"`
-	TargetName  string         `json:"targetName,omitempty"`
-	Target      string         `json:"target,omitempty"`
-	Activation  DoorActivation `json:"activation"`
-}
-
-// KeySpec defines key identity and optional target metadata for a ThingKeyDef.
-type KeySpec struct {
-	KeyId  string `json:"keyId"`
-	Target string `json:"target,omitempty"`
-}
-
-// TeleportSpec defines destination coordinates, orientation, and linking metadata for a ThingTeleportDef.
-type TeleportSpec struct {
-	Destination   geometry.XYZ `json:"destination"`
-	TargetAngle   float64      `json:"targetAngle,omitempty"`
-	PreserveAngle bool         `json:"preserveAngle,omitempty"`
-	ResetVelocity bool         `json:"resetVelocity,omitempty"`
-	Cooldown      float64      `json:"cooldown,omitempty"`
-	TargetName    string       `json:"targetName,omitempty"`
-	Target        string       `json:"target,omitempty"`
-	PlayerOnly    bool         `json:"playerOnly,omitempty"`
-}
-
 // Thing represents a game entity with physical, visual, and behavior attributes in a simulation environment.
 type Thing struct {
-	Id                 string        `json:"id"`
-	Position           geometry.XYZ  `json:"position"`
-	Kind               ThingType     `json:"kind"`
-	Angle              float64       `json:"angle"`
-	Mass               float64       `json:"mass"`
-	Restitution        float64       `json:"restitution"`
-	Friction           float64       `json:"friction"`
-	RestitutionCombine int           `json:"restitutionCombine"`
-	FrictionCombine    int           `json:"frictionCombine"`
-	Radius             float64       `json:"radius"`
-	Height             float64       `json:"height"`
-	Speed              float64       `json:"speed"`
-	Impulse            float64       `json:"impulse"`
-	Acceleration       float64       `json:"acceleration"`
-	JumpForce          float64       `json:"jumpForce"`
-	Pitch              float64       `json:"pitch"`
-	WakeupDistance     float64       `json:"wakeupDistance"`
-	GForce             float64       `json:"gForce"`
-	Model3DEntry       *Model3DEntry `json:"md1"`
-	Model3D            *Model3D      `json:"md3"`
-	MultiSprite        *MultiSprite  `json:"multiSprite"`
-	Sprite             *Sprite       `json:"sprite"`
-	MaxStepFactor      float64       `json:"maxStep"`
-	Door               *DoorSpec     `json:"door,omitempty"`
-	Key                *KeySpec      `json:"key,omitempty"`
-	Teleport           *TeleportSpec `json:"teleport,omitempty"`
+	Id                 string       `json:"id"`
+	Position           geometry.XYZ `json:"position"`
+	Kind               ThingType    `json:"kind"`
+	Angle              float64      `json:"angle"`
+	Mass               float64      `json:"mass"`
+	Restitution        float64      `json:"restitution"`
+	Friction           float64      `json:"friction"`
+	RestitutionCombine int          `json:"restitutionCombine"`
+	FrictionCombine    int          `json:"frictionCombine"`
+	Radius             float64      `json:"radius"`
+	Height             float64      `json:"height"`
+	Speed              float64      `json:"speed"`
+	Impulse            float64      `json:"impulse"`
+	Acceleration       float64      `json:"acceleration"`
+	JumpForce          float64      `json:"jumpForce"`
+	Pitch              float64      `json:"pitch"`
+	WakeupDistance     float64      `json:"wakeupDistance"`
+	GForce             float64      `json:"gForce"`
+	MaxStepFactor      float64      `json:"maxStep"`
+
+	Model3DEntry *Model3DEntry `json:"md1"`
+	Model3D      *Model3D      `json:"md3"`
+	MultiSprite  *MultiSprite  `json:"multiSprite"`
+	Sprite       *Sprite       `json:"sprite"`
+	Door         *DoorSpec     `json:"door,omitempty"`
+	Key          *KeySpec      `json:"key,omitempty"`
+	Teleport     *TeleportSpec `json:"teleport,omitempty"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc
@@ -147,21 +108,6 @@ func (t *Thing) Scale(scale geometry.XYZ) {
 
 // Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
 func (t *Thing) Clone() *Thing {
-	var doorCopy *DoorSpec
-	if t.Door != nil {
-		d := *t.Door
-		doorCopy = &d
-	}
-	var keyCopy *KeySpec
-	if t.Key != nil {
-		k := *t.Key
-		keyCopy = &k
-	}
-	var teleportCopy *TeleportSpec
-	if t.Teleport != nil {
-		tp := *t.Teleport
-		teleportCopy = &tp
-	}
 	return &Thing{
 		Id:          t.Id,
 		Position:    t.Position,
@@ -181,9 +127,9 @@ func (t *Thing) Clone() *Thing {
 		Model3D:      t.Model3D,
 		MultiSprite:  t.MultiSprite,
 		Sprite:       t.Sprite,
-		Door:         doorCopy,
-		Key:          keyCopy,
-		Teleport:     teleportCopy,
+		Door:         t.Door,
+		Key:          t.Key,
+		Teleport:     t.Teleport,
 		OnBind:       t.OnBind,
 		OnThinking:   t.OnThinking,
 		OnCollision:  t.OnCollision,

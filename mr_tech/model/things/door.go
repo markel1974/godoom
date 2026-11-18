@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -33,7 +32,6 @@ const (
 // Door represents an interactive barrier that can open and close, optionally requiring a key and activation trigger.
 type Door struct {
 	*Base
-	mu          sync.Mutex
 	closedPos   geometry.XYZ
 	openOffset  geometry.XYZ
 	speed       float64
@@ -110,9 +108,6 @@ func (d *Door) IsEqual(other vertices.IThing) bool {
 // Activate attempts to open the door for the given thing, requiring any configured key.
 // Activate returns true when activation succeeds or refreshes an open door's wait timer.
 func (d *Door) Activate(by vertices.IThing) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	if d.requiredKey != "" {
 		holder, ok := by.(IKeyHolder)
 		if !ok || !holder.HasKey(d.requiredKey) {
@@ -143,8 +138,6 @@ func (d *Door) RequiredKey() string {
 
 // IsOpen reports whether the door is open or currently opening.
 func (d *Door) IsOpen() bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	return d.state == doorOpen || d.state == doorOpening
 }
 
@@ -195,9 +188,6 @@ func (d *Door) HasThinking() bool {
 
 // StageThinking advances the door state for the current tick, updating velocity and auto-close timing.
 func (d *Door) StageThinking(playerX float64, playerY float64, playerZ float64) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	ent := d.GetEntity()
 	dt := ent.GetDt()
 	if dt <= 0 {
@@ -265,10 +255,8 @@ func (d *Door) advanceDoor(ent *rigid_body.Entity, dt float64, dir float64, next
 func (d *Door) onDoorCollision(other collisions.IObject, energy float64) {
 	if otherThing, ok := other.(vertices.IThing); ok {
 		if _, isHolder := other.(IKeyHolder); isHolder {
-			d.mu.Lock()
 			state := d.state
 			activation := d.activation
-			d.mu.Unlock()
 
 			if state == doorClosing || activation == config.DoorActivateTouch {
 				d.Activate(otherThing)

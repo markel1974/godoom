@@ -35,8 +35,8 @@ func buildQuad(v *volumes.Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, 
 	v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE}
 	v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE}
 	v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS}
-	face1 := volumes.NewFace([3]geometry.XYZ{v0, v1, v2}, tag, material)
-	face2 := volumes.NewFace([3]geometry.XYZ{v0, v2, v3}, tag, material)
+	face1 := volumes.NewFace([3]geometry.XYZ{v0, v2, v1}, tag, material)
+	face2 := volumes.NewFace([3]geometry.XYZ{v0, v3, v2}, tag, material)
 	if singleSided {
 		face1.SetSingleSided(true)
 		face2.SetSingleSided(true)
@@ -44,9 +44,9 @@ func buildQuad(v *volumes.Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, 
 	if align != nil {
 		if w, h, ok := materialSize(material); ok {
 			uStart, uEnd, vBS, vBE, vTS, vTE := align.ComputeVertical(w, h, t1, t2, s, e, zBS, zBE, zTS, zTE)
-			face1.SetUV(uStart, vBS, uEnd, vBE, uEnd, vTE)
+			face1.SetUV(uStart, vBS, uEnd, vTE, uEnd, vBE)
 			face1.LockUV(true)
-			face2.SetUV(uStart, vBS, uEnd, vTE, uStart, vTS)
+			face2.SetUV(uStart, vBS, uStart, vTS, uEnd, vTE)
 			face2.LockUV(true)
 		}
 	}

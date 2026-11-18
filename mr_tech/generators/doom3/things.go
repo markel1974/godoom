@@ -8,12 +8,11 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/md5"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/proc"
 	"github.com/markel1974/godoom/mr_tech/generators/doom3/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	common2 "github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 type cachedRagdoll struct {
@@ -311,49 +310,19 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	// To align the bottom-left coordinate so center lands at (origin.X, origin.Y, origin.Z + height/2):
 	pos := geometry.XYZ{X: origin.X - radius, Y: origin.Y - radius, Z: origin.Z}
 
-	thingCfg := config.NewConfigThing(classname, pos, angle, spec.Kind, spec.Mass, 0, 0, spec.Speed)
-	thingCfg.GForce = GForce
-
 	if spec.Kind == config.ThingEnemyDef {
-		if md3 == nil && cModel != nil {
-			parts := []*config.Model3DEntry{cModel}
-			links := []config.Model3DLink{{Parent: -1, Tag: ""}}
-			md3 = config.NewMD3(parts, links)
-			md3.ActionDefinitions = cModel.ActionDefinitions
-			md3.ActionIntervals = cModel.ActionIntervals
-			numActions := len(cModel.ActionDefinitions)
-			md3.ActionMaps = make([][]int, len(parts))
-			for i := range md3.ActionMaps {
-				md3.ActionMaps[i] = make([]int, numActions)
-				for a := 0; a < numActions; a++ {
-					md3.ActionMaps[i][a] = a
-				}
-			}
+		if md3 != nil {
+			return CreateConfigEnemyParts(classname, pos, md3, angle, spec.Mass, spec.Speed, 300.0), nil
 		}
-
-		actions := config.NewEnemyAnimations()
-		if md3 != nil && len(md3.ActionDefinitions) > 0 {
-			ConvertAnimation(actions, md3.ActionDefinitions, md3.ActionIntervals)
-		}
-		if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
-			actions.Add(config.EnemyStateIdle, 0, 1)
-			actions.Add(config.EnemyStateWalk, 0, 1)
-			actions.Add(config.EnemyStateRun, 0, 1)
-		}
-		thingCfg.Model3D = md3
-		thingCfg.JumpForce = JumpForce
-		thingCfg.Impulse = 3.0
-		thingCfg.WakeupDistance = 300.0
-		_ = common.NewEnemy(thingCfg, actions)
-	} else if spec.Kind == config.ThingItemDef {
-		thingCfg.Model3DEntry = cModel
-		_ = common.NewItem(thingCfg)
-	} else {
-		thingCfg.Model3DEntry = cModel
-		_ = common.NewItem(thingCfg)
+		return CreateConfigEnemy(classname, pos, cModel, angle, spec.Mass, spec.Speed, 300.0), nil
 	}
-
-	return thingCfg, nil
+	if keyId := d3KeyId(classname); keyId != "" || spec.Kind == config.ThingKeyDef {
+		if keyId == "" {
+			keyId = classname
+		}
+		return CreateConfigKey(classname, pos, cModel, angle, spec.Mass, spec.Speed, keyId), nil
+	}
+	return CreateConfigItem(classname, pos, cModel, angle, spec.Mass, spec.Speed), nil
 }
 
 type ragdollBodyPart struct {
@@ -849,7 +818,7 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 
 		const deathFrames = 16
 		startFrame := len(rawFrames)
-		qFall := common2.NewQuaternionEmpty()
+		qFall := aabb.NewQuaternionEmpty()
 		for f := 0; f < deathFrames; f++ {
 			var skel []*md5.Joint
 			if baseAnim != nil && len(baseAnim.Frames) > 0 {
@@ -1005,10 +974,10 @@ func (t *Things) bakeMD5Ragdoll(mesh *md5.Mesh, headMesh *md5.Mesh, headJointNam
 	}
 
 	anchorPos := make([]geometry.XYZ, numParts)
-	anchorQuat := make([]*common2.Quaternion, numParts)
-	identityQuat := common2.NewQuaternionIdentity()
-	invParentQ := common2.NewQuaternionEmpty()
-	relQ := common2.NewQuaternionEmpty()
+	anchorQuat := make([]*aabb.Quaternion, numParts)
+	identityQuat := aabb.NewQuaternionIdentity()
+	invParentQ := aabb.NewQuaternionEmpty()
+	relQ := aabb.NewQuaternionEmpty()
 
 	for fIdx, rf := range rawFrames {
 		// Part 0 is the root coordinate frame at centered origin (0,0,0) with identity orientation
@@ -1295,7 +1264,7 @@ func (t *Things) bakeMD5Model(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName 
 
 		const deathFrames = 16
 		startFrame := len(allFrames)
-		qFall := common2.NewQuaternionEmpty()
+		qFall := aabb.NewQuaternionEmpty()
 		for f := 0; f < deathFrames; f++ {
 			var skel []*md5.Joint
 			if baseAnim != nil && len(baseAnim.Frames) > 0 {

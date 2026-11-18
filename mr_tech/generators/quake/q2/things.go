@@ -6,23 +6,22 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
-	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
+	"github.com/markel1974/godoom/mr_tech/generators/quake/textures"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Things represents a collection of resources and utilities for managing textures and images within an archive.
 type Things struct {
 	arc        interfaces.IArchive
-	texManager *common2.Textures
+	texManager *textures.Textures
 	palette    [256]color.RGBA
 	il         *ImageLoader
 }
 
 // NewThings creates and initializes a new Things instance with the provided archive, texture manager, and color palette.
-func NewThings(arc interfaces.IArchive, texManager *common2.Textures, palette [256]color.RGBA) *Things {
+func NewThings(arc interfaces.IArchive, texManager *textures.Textures, palette [256]color.RGBA) *Things {
 	return &Things{
 		arc:        arc,
 		texManager: texManager,
@@ -127,7 +126,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		cFrame := config.NewModel3DEntryFrame(triangles)
 		cModel.Frames[idx] = cFrame
 	}
-	thingCfg := th.doCreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 1300.0)
+	thingCfg := CreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 1300.0)
 	return thingCfg, nil
 }
 
@@ -198,7 +197,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	thingCfg := th.doCreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	thingCfg := CreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 0.0)
 	return thingCfg, nil
 }
 
@@ -235,49 +234,22 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace2, position geom
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	center, size := model3d.CenterWithBounds([]string{"default"})
 	worldPos := geometry.XYZ{X: position.X + center.X, Y: position.Y + center.Y, Z: position.Z + center.Z}
-	thingCfg := th.doCreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
 	const heavyMass = 1000.0
+	// Setup standard interactions based on classname
 	if strings.HasPrefix(classname, "func_door") {
-		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = heavyMass
-		thingCfg.GForce = 0.0
-		thingCfg.Door = BuildDoorSpec(ent, size)
-	} else if strings.HasPrefix(classname, "func_plat") {
-		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = heavyMass
-		thingCfg.GForce = 0.0
-		thingCfg.Door = BuildPlatSpec(ent, size)
+		return CreateConfigDoor(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
 	}
-	return thingCfg, nil
-}
-
-// doCreateConfigThing creates a Thing configuration with specified attributes, initializing logic based on its type.
-func (th *Things) doCreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
-	if cModel != nil {
-		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+	if strings.HasPrefix(classname, "func_plat") {
+		return CreateConfigPlat(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
 	}
-	var thingCfg *config.Thing
-	if kind == config.ThingEnemyDef {
-		const wakeupDistance = 400
-		actions := config.NewEnemyAnimations()
-		if cModel != nil {
-			ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
-		}
-		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-		thingCfg.GForce = GForce
-		thingCfg.Model3DEntry = cModel
-		thingCfg.JumpForce = JumpForce
-		thingCfg.Impulse = 3
-		thingCfg.WakeupDistance = wakeupDistance
-		_ = common.NewEnemy(thingCfg, actions)
-	} else {
-		thingCfg = config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-		thingCfg.GForce = GForce
-		thingCfg.Model3DEntry = cModel
-		_ = common.NewItem(thingCfg)
+	if strings.HasPrefix(classname, "func_train") {
+		return CreateConfigPlatform(classname, worldPos, model3d, 0.0, heavyMass, 0.0), nil
 	}
-	return thingCfg
+	if strings.HasPrefix(classname, "func_button") {
+		return CreateConfigButton(classname, worldPos, model3d, 0.0, 16.0, 16.0), nil
+	}
+	return CreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 0.0), nil
 }
 
 // registerPixels registers a texture using palette-based pixel data with optional transparency and vertical inversion.

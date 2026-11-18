@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/interfaces"
 	"github.com/markel1974/godoom/mr_tech/generators/quake/lumps"
 	common2 "github.com/markel1974/godoom/mr_tech/generators/quake/textures"
@@ -80,7 +79,7 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		}
 	}
 
-	thingCfg := t.doCreate(classname, pos, kind, cModel, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := CreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 600.0)
 
 	return thingCfg, nil
 }
@@ -152,7 +151,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	thingCfg := t.doCreate(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
+	thingCfg := CreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 0.0)
 	return thingCfg, nil
 }
 
@@ -198,73 +197,22 @@ func (t *Things) CreateInternalBModel(rawFaces []*lumps.RawFace3, position geome
 		Y: position.Y + center.Y,
 		Z: position.Z + center.Z,
 	}
-	thingCfg := t.doCreate(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 16.0, 32.0, 0.0)
 
 	const heavyMass = 1000.0
+	// Setup standard interactions based on classname
 	if strings.HasPrefix(classname, "func_door") {
-		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = heavyMass
-		thingCfg.GForce = 0.0
-		thingCfg.Door = BuildDoorSpec(ent, size)
-	} else if strings.HasPrefix(classname, "func_plat") {
-		thingCfg.Kind = config.ThingDoorDef
-		thingCfg.Mass = heavyMass
-		thingCfg.GForce = 0.0
-		thingCfg.Door = BuildPlatSpec(ent, size)
+		return CreateConfigDoor(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
 	}
-	return thingCfg, nil
-}
-
-// createConfigThing creates and configures a new Thing entity based on the provided parameters and its type.
-func (t *Things) doCreate(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, radius, height, speed float64) *config.Thing {
-	if cModel != nil {
-		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+	if strings.HasPrefix(classname, "func_plat") {
+		return CreateConfigPlat(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
 	}
-	if kind == config.ThingEnemyDef {
-		var parts []*config.Model3DEntry
-		if cModel != nil {
-			parts = append(parts, cModel)
-		}
-		links := []config.Model3DLink{{Parent: -1, Tag: ""}}
-		md3 := config.NewMD3(parts, links)
-		if cModel != nil {
-			md3.ActionDefinitions = cModel.ActionDefinitions
-			md3.ActionIntervals = cModel.ActionIntervals
-			numActions := len(cModel.ActionDefinitions)
-			md3.ActionMaps = make([][]int, len(parts))
-			for i := range md3.ActionMaps {
-				md3.ActionMaps[i] = make([]int, numActions)
-				for a := 0; a < numActions; a++ {
-					md3.ActionMaps[i][a] = a
-				}
-			}
-		}
-		return t.doCreateParts(classname, pos, kind, md3, angle, mass, radius, height, speed)
+	if strings.HasPrefix(classname, "func_train") {
+		return CreateConfigPlatform(classname, worldPos, model3d, 0.0, heavyMass, 0.0), nil
 	}
-	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-	thingCfg.GForce = GForce
-	thingCfg.Model3DEntry = cModel
-	_ = common.NewItem(thingCfg)
-	return thingCfg
-}
-
-func (t *Things) doCreateParts(classname string, pos geometry.XYZ, kind config.ThingType, md3 *config.Model3D, angle, mass, radius, height, speed float64) *config.Thing {
-	const wakeupDistance = 300
-	thingCfg := config.NewConfigThing(classname, pos, angle, kind, mass, radius, height, speed)
-	thingCfg.Model3D = md3
-	thingCfg.GForce = GForce
-	if thingCfg.Kind == config.ThingEnemyDef {
-		actions := config.NewEnemyAnimations()
-		if md3 != nil && len(md3.ActionDefinitions) > 0 {
-			ConvertAnimation(actions, md3.ActionDefinitions, md3.ActionIntervals)
-		}
-		_ = common.NewEnemy(thingCfg, actions)
-		thingCfg.JumpForce = JumpForce
-		thingCfg.WakeupDistance = wakeupDistance
-	} else {
-		_ = common.NewItem(thingCfg)
+	if strings.HasPrefix(classname, "func_button") {
+		return CreateConfigButton(classname, worldPos, model3d, 0.0, 16.0, 16.0), nil
 	}
-	return thingCfg
+	return CreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 0.0), nil
 }
 
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.
@@ -312,12 +260,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 	}
 
 	parts := []*config.Model3DEntry{lower, upper, head, weapon}
-	links := []config.Model3DLink{
-		{-1, ""},
-		{0, "tag_torso"},
-		{1, "tag_head"},
-		{1, "tag_weapon"},
-	}
+	links := []config.Model3DLink{{-1, ""}, {0, "tag_torso"}, {1, "tag_head"}, {1, "tag_weapon"}}
 	md3 := config.NewMD3(parts, links)
 
 	// Reset any dummy actions generated from raw MD3 frame names
@@ -446,7 +389,7 @@ func (t *Things) CreatePlayer(basePath string, pos geometry.XYZ, classname strin
 		md3.ActionMaps[3][idx] = 0
 	}
 
-	thingCfg := t.doCreateParts(classname, pos, config.ThingEnemyDef, md3, 0, 30.0, 16.0, 56, 600.0)
+	thingCfg := CreateConfigEnemyParts(classname, pos, md3, 0, 30.0, 600.0, 300.0)
 
 	return thingCfg, nil
 }
@@ -497,12 +440,8 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 					axis[2] = geometry.XYZ{X: 0, Y: 0, Z: 1}
 				}
 				cfg.Frames[i].Tags[tagName] = config.Model3DTag{
-					Origin: geometry.XYZ{
-						X: float64(tag.Origin[0]),
-						Y: float64(tag.Origin[1]),
-						Z: float64(tag.Origin[2]),
-					},
-					Axis: axis,
+					Origin: geometry.XYZ{X: float64(tag.Origin[0]), Y: float64(tag.Origin[1]), Z: float64(tag.Origin[2])},
+					Axis:   axis,
 				}
 			}
 		}
@@ -543,23 +482,17 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 			for t := 0; t < int(surf.Header.NumTriangles); t++ {
 				var configTri config.Model3DEntryTriangle
 				configTri.Material = material
-
 				for k := 0; k < 3; k++ {
 					vIndex := surf.Triangles[t].Indexes[k]
-
 					// The 'vertices' array contains vertices of all frames concatenated
 					globVIndex := (i * int(surf.Header.NumVerts)) + int(vIndex)
 					v := surf.Vertices[globVIndex]
 					uv := surf.TexCoords[vIndex]
 
 					configTri.Vertices[k] = config.Model3DEntryVertex{
-						Pos: geometry.XYZ{
-							X: float64(v.Coord[0]) * md3Scale,
-							Y: float64(v.Coord[1]) * md3Scale,
-							Z: float64(v.Coord[2]) * md3Scale,
-						},
-						U: uv.St[0],
-						V: uv.St[1],
+						Pos: geometry.XYZ{X: float64(v.Coord[0]) * md3Scale, Y: float64(v.Coord[1]) * md3Scale, Z: float64(v.Coord[2]) * md3Scale},
+						U:   uv.St[0],
+						V:   uv.St[1],
 					}
 				}
 				cfg.Frames[i].Triangles = append(cfg.Frames[i].Triangles, configTri)

@@ -142,7 +142,7 @@ func (q2 *BSPReader) Build(root *config.Root) error {
 
 		if modelProp, _ := ent.GetProperty("model"); strings.HasPrefix(modelProp, "*") {
 			modelIdx, _ := strconv.Atoi(modelProp[1:])
-			if strings.HasPrefix(classname, "func_door") || strings.HasPrefix(classname, "func_plat") {
+			if strings.HasPrefix(classname, "func_door") || strings.HasPrefix(classname, "func_plat") || strings.HasPrefix(classname, "func_train") || strings.HasPrefix(classname, "func_button") {
 				rawFaces, err := q2.GetRawFaces(modelIdx)
 				if err != nil {
 					fmt.Printf("warning on internal bmodel %s (index %d): %v\n", classname, modelIdx, err)

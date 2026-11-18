@@ -11,6 +11,33 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+func d3KeyId(classname string) string {
+	switch classname {
+	case "item_key_blue":
+		return "blue"
+	case "item_key_yellow":
+		return "yellow"
+	case "item_keycard_aco":
+		return "aco"
+	case "item_keycard_generic":
+		return "generic"
+	case "item_key1":
+		return "silver"
+	case "item_key2":
+		return "gold"
+	}
+	if strings.HasPrefix(classname, "item_key_") {
+		return strings.TrimPrefix(classname, "item_key_")
+	}
+	if strings.HasPrefix(classname, "item_keycard_") {
+		return strings.TrimPrefix(classname, "item_keycard_")
+	}
+	if strings.HasPrefix(classname, "key_") {
+		return strings.TrimPrefix(classname, "key_")
+	}
+	return ""
+}
+
 type TeleportDest struct {
 	pos   geometry.XYZ
 	angle float64
@@ -50,7 +77,7 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 		return nil, false
 	}
 	classname, _ := ent.GetProperty("classname")
-	if classname != "func_door" && classname != "func_door_rotating" && classname != "func_plat" && classname != "func_elevator" {
+	if classname != "func_door" && classname != "func_door_rotating" && classname != "func_plat" && classname != "func_elevator" && classname != "func_mover" && classname != "func_train" && classname != "func_button" {
 		return nil, false
 	}
 
@@ -82,18 +109,19 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 		id = classname
 	}
 	const heavyMass = 1000.0
-	radius := math.Max(size.X, size.Y) * 0.5
-	thingCfg := config.NewConfigThing(id, worldPos, 0, config.ThingDoorDef, heavyMass, radius, size.Z, 0)
-	thingCfg.GForce = 0
-	thingCfg.Model3DEntry = cModel
-	_ = common.NewItem(thingCfg)
-
 	if classname == "func_door" || classname == "func_door_rotating" {
-		thingCfg.Door = buildDoorSpec(ent, size)
-	} else {
-		thingCfg.Door = buildLiftSpec(ent, size)
+		return CreateConfigDoor(id, worldPos, cModel, 0.0, heavyMass, 0.0, ent, size), true
 	}
-	return thingCfg, true
+	if classname == "func_plat" || classname == "func_elevator" {
+		return CreateConfigPlat(id, worldPos, cModel, 0.0, heavyMass, 0.0, ent, size), true
+	}
+	if classname == "func_mover" || classname == "func_train" {
+		return CreateConfigPlatform(id, worldPos, cModel, 0.0, heavyMass, 0.0), true
+	}
+	if classname == "func_button" {
+		return CreateConfigButton(id, worldPos, cModel, 0.0, 16.0, 16.0), true
+	}
+	return CreateConfigThing(id, worldPos, config.ThingItemDef, cModel, 0.0, 16.0, 0.0), true
 }
 
 // bakeLWOModel converts an external Doom 3 .lwo model into a world-transformed Model3DEntry.
@@ -223,7 +251,8 @@ func bakeProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Mater
 	return model3d
 }
 
-func buildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
+// BuildDoorSpec maps Doom 3 func_door entity properties and model bounds into a config.DoorSpec.
+func BuildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	var dirX, dirY, dirZ float64
 	hasDir := false
 	if raw, ok := ent.GetProperty("movedir"); ok {
@@ -339,7 +368,8 @@ func buildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-func buildLiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
+// BuildPlatSpec maps Doom 3 func_plat / func_elevator entity properties and model bounds into a config.DoorSpec.
+func BuildPlatSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	lip := 8.0
 	if raw, ok := ent.GetProperty("lip"); ok {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64); err == nil {
@@ -467,4 +497,123 @@ func buildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, d
 		Cooldown:      0.5,
 	}
 	return tpCfg
+}
+
+// BuildLiftSpec is an alias for BuildPlatSpec.
+func BuildLiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
+	return BuildPlatSpec(ent, size)
+}
+
+// BuildTeleportSpec is an exported wrapper for buildTeleportSpec.
+func BuildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, destinations map[string]*TeleportDest) *config.Thing {
+	return buildTeleportSpec(ent, procModels, destinations)
+}
+
+// BuildDoorOrLift is an exported wrapper for buildDoorOrLift.
+func BuildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, materials *proc.Materials, arc *proc.Pk4, thingsManager *Things) (*config.Thing, bool) {
+	return buildDoorOrLift(ent, procModels, materials, arc, thingsManager)
+}
+
+// CreateConfigThing creates a Thing configuration based on provided parameters and assigns logic for enemy or item behavior.
+func CreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
+	const wakeupDistance = 300.0
+	if cModel != nil {
+		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+	}
+	if kind == config.ThingEnemyDef {
+		return CreateConfigEnemy(classname, pos, cModel, angle, mass, speed, wakeupDistance)
+	}
+	if keyId := d3KeyId(classname); keyId != "" {
+		return CreateConfigKey(classname, pos, cModel, angle, mass, speed, keyId)
+	}
+	return CreateConfigItem(classname, pos, cModel, angle, mass, speed)
+}
+
+func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed, wakeupDistance float64) *config.Thing {
+	var parts []*config.Model3DEntry
+	if cModel != nil {
+		parts = append(parts, cModel)
+	}
+	links := []config.Model3DLink{{Parent: -1, Tag: ""}}
+	md3 := config.NewMD3(parts, links)
+	if cModel != nil {
+		md3.ActionDefinitions = cModel.ActionDefinitions
+		md3.ActionIntervals = cModel.ActionIntervals
+		numActions := len(cModel.ActionDefinitions)
+		md3.ActionMaps = make([][]int, len(parts))
+		for i := range md3.ActionMaps {
+			md3.ActionMaps[i] = make([]int, numActions)
+			for a := 0; a < numActions; a++ {
+				md3.ActionMaps[i][a] = a
+			}
+		}
+	}
+	return CreateConfigEnemyParts(classname, pos, md3, angle, mass, speed, wakeupDistance)
+}
+
+func CreateConfigEnemyParts(classname string, pos geometry.XYZ, md3 *config.Model3D, angle, mass, speed, wakeupDistance float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingEnemyDef, mass, 0, 0, speed)
+	thingCfg.Model3D = md3
+	thingCfg.GForce = GForce
+	thingCfg.JumpForce = JumpForce
+	thingCfg.Impulse = 3.0
+	thingCfg.WakeupDistance = wakeupDistance
+	actions := config.NewEnemyAnimations()
+	if md3 != nil && len(md3.ActionDefinitions) > 0 {
+		ConvertAnimation(actions, md3.ActionDefinitions, md3.ActionIntervals)
+	}
+	if len(actions.Content[config.EnemyStateIdle].Indices) == 0 {
+		actions.Add(config.EnemyStateIdle, 0, 1)
+		actions.Add(config.EnemyStateWalk, 0, 1)
+		actions.Add(config.EnemyStateRun, 0, 1)
+	}
+	_ = common.NewEnemy(thingCfg, actions)
+	return thingCfg
+}
+
+func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingItemDef, mass, 0, 0, speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	_ = common.NewItem(thingCfg)
+	return thingCfg
+}
+
+func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	thingCfg.Mass = 0.1
+	thingCfg.Key = &config.KeySpec{KeyId: keyId}
+	return thingCfg
+}
+
+func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *proc.MapEntity, size geometry.XYZ) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
+	thingCfg.GForce = 0.0
+	thingCfg.Model3DEntry = cModel
+	thingCfg.Door = BuildDoorSpec(ent, size)
+	return thingCfg
+}
+
+func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *proc.MapEntity, size geometry.XYZ) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
+	thingCfg.GForce = 0.0
+	thingCfg.Model3DEntry = cModel
+	thingCfg.Door = BuildPlatSpec(ent, size)
+	return thingCfg
+}
+
+func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingPlatformDef, mass, 0, 0, speed)
+	thingCfg.GForce = 0.0
+	thingCfg.Model3DEntry = cModel
+	return thingCfg
+}
+
+func CreateConfigButton(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
+	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingButtonDef, mass, 0, 0, speed)
+	thingCfg.GForce = 0.0
+	thingCfg.Model3DEntry = cModel
+	return thingCfg
 }

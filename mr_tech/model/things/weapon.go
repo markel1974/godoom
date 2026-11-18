@@ -1,8 +1,7 @@
 package things
 
 import (
-	"fmt"
-	"sync"
+	"math"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -10,191 +9,247 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
-// Weapon represents an interactive barrier that can open and close, optionally requiring a key and activation trigger.
+// Weapon represents an equipped or world weapon entity with ammunition, fire rate, and reload mechanics.
 type Weapon struct {
 	*Base
-	mu          sync.Mutex
-	closedPos   geometry.XYZ
-	openOffset  geometry.XYZ
-	speed       float64
-	waitSeconds float64
-	requiredKey string
-	activation  config.DoorActivation
-	state       doorState
-	progress    float64
-	waitTimer   float64
+	force        float64
+	fireInterval float64
+	rechargeTime float64
+	magazineSize int
+	ammo         int
+	cooldown     float64
+	reloadTimer  float64
+	reloading    bool
 }
 
-// NewDoor creates and initializes a door thing from configuration, applying defaults and preparing its volume.
+// NewWeapon creates and initializes a weapon Thing from configuration and binds it to its volume.
 func NewWeapon(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *Weapon {
-	return &Weapon{}
-
-	/*
-		if cfg.Door != nil {
-			spec = *cfg.Door
-		}
-		if spec.Speed <= 0 {
-			spec.Speed = 100.0
-		}
-
-		door := &Door{
-			Base:        NewBase(things, cfg),
-			closedPos:   cfg.Position,
-			openOffset:  spec.OpenOffset,
-			speed:       spec.Speed,
-			waitSeconds: spec.WaitSeconds,
-			requiredKey: strings.ToLower(strings.TrimSpace(spec.RequiredKey)),
-			activation:  spec.Activation,
-			state:       doorClosed,
-			progress:    0.0,
-		}
-		if err := door.Prepare(door, volume); err != nil {
-			panic(err)
-		}
-
-		ent := door.GetEntity()
-		ent.SetKinematic(true)
-		door.GetSolver().SetIgnoreStatic(true)
-		door.GetSolver().SetCanSleep(true)
-		door.GetSolver().SetElasticCollision(door.onDoorCollision)
-		cfg.OnBind(door)
-
-		if spec.StartOpen {
-			// Symmetrize start-open doors so progress=0 is their initial open position and activation closes them.
-			door.closedPos = geometry.XYZ{
-				X: cfg.Position.X + spec.OpenOffset.X,
-				Y: cfg.Position.Y + spec.OpenOffset.Y,
-				Z: cfg.Position.Z + spec.OpenOffset.Z,
-			}
-			door.openOffset = geometry.XYZ{
-				X: -spec.OpenOffset.X,
-				Y: -spec.OpenOffset.Y,
-				Z: -spec.OpenOffset.Z,
-			}
-		}
-		ent.MoveCenterTo(door.closedPos.X, door.closedPos.Y, door.closedPos.Z)
-		door.Compile(0)
-		return door
-
-	*/
-
+	spec := cfg.Weapon
+	if spec == nil {
+		spec = config.NewWeaponDefault()
+	}
+	mag := spec.MagazineSize
+	if mag <= 0 {
+		mag = 1
+	}
+	w := &Weapon{
+		Base:         NewBase(things, cfg),
+		force:        spec.Force,
+		fireInterval: spec.FireInterval,
+		rechargeTime: spec.RechargeTime,
+		magazineSize: mag,
+		ammo:         mag,
+	}
+	if err := w.Prepare(w, volume); err != nil {
+		// Volume may be nil if weapon is carried by player without independent 3D placement
+	}
+	cfg.OnBind(w)
+	return w
 }
 
-// IsEqual reports whether other is the same Door instance.
-func (d *Weapon) IsEqual(other vertices.IThing) bool {
-	if v, ok := other.(*Weapon); ok && d == v {
+// IsEqual reports whether other is the same Weapon instance.
+func (w *Weapon) IsEqual(other vertices.IThing) bool {
+	if v, ok := other.(*Weapon); ok && w == v {
 		return true
 	}
 	return false
 }
 
-// Activate attempts to open the door for the given thing, requiring any configured key.
-// Activate returns true when activation succeeds or refreshes an open door's wait timer.
-func (d *Weapon) Activate(by vertices.IThing) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.requiredKey != "" {
-		holder, ok := by.(IKeyHolder)
-		if !ok || !holder.HasKey(d.requiredKey) {
-			fmt.Printf("Door %s locked: requires key %q\n", d.id, d.requiredKey)
-			return false
-		}
-	}
-
-	switch d.state {
-	case doorClosed, doorClosing:
-		d.state = doorOpening
-		d.WakeUp()
-		return true
-	case doorOpen:
-		if d.waitSeconds >= 0 {
-			d.waitTimer = d.waitSeconds
-		}
-		return true
-	default:
-		return false
-	}
-}
-
-// RequiredKey returns the key identifier required to activate the door, or an empty string if unlocked.
-func (d *Weapon) RequiredKey() string {
-	return d.requiredKey
-}
-
-// IsOpen reports whether the door is open or currently opening.
-func (d *Weapon) IsOpen() bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.state == doorOpen || d.state == doorOpening
-}
-
-// Jump reports whether the door accepted a jump request; doors cannot jump, so it always returns false.
-func (d *Weapon) Jump(leapX float64, leapY float64, zFactor float64) bool {
+// Jump reports whether the weapon can jump; weapons cannot jump, so it returns false.
+func (w *Weapon) Jump(leapX float64, leapY float64, zFactor float64) bool {
 	return false
 }
 
-// FireHitscan ignores hitscan impacts on the door.
-func (d *Weapon) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+// FireHitscan delegates hitscan execution through the weapon's base entity.
+func (w *Weapon) FireHitscan(id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+	w.Base.FireHitscan(w, id, pos, force, dirX, dirY, dirZ)
 }
 
-// LaunchObject ignores projectile launch requests for doors.
-func (d *Weapon) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+// LaunchObject delegates projectile launching through the weapon's base entity.
+func (w *Weapon) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, pos geometry.XYZ, angle, pitch, speed float64) {
+	//w.Base.LaunchObject(throwableIndex, onCollision, onImpact, pos, angle, pitch, speed)
 }
 
-// PostMessage queues the given thing event for asynchronous door processing.
-func (d *Weapon) PostMessage(ec *vertices.ThingEvent) {
-	d.inbox <- ec
+// PostMessage sends a ThingEvent to the Weapon inbox channel.
+func (w *Weapon) PostMessage(ec *vertices.ThingEvent) {
+	w.inbox <- ec
 }
 
-// StartLoop starts a goroutine that processes door stage events until the door is done.
-func (d *Weapon) StartLoop() {
+// StartLoop begins processing asynchronous stage events for the weapon.
+func (w *Weapon) StartLoop() {
 	go func() {
 		for {
 			select {
-			case evt := <-d.inbox:
+			case evt := <-w.inbox:
 				switch evt.GetKind() {
 				case vertices.StageThinking:
-					d.StageThinking(evt.GetCoords())
+					w.StageThinking(evt.GetCoords())
 				case vertices.StageResolve:
-					d.StageResolve()
+					w.StageResolve()
 				case vertices.StageApply:
-					d.StageApply()
+					w.StageApply()
 				}
 				evt.Done()
-			case <-d.done:
+			case <-w.done:
 				return
 			}
 		}
 	}()
 }
 
-// HasThinking reports whether the door participates in the thinking update stage.
-func (d *Weapon) HasThinking() bool {
+// HasThinking reports whether the weapon participates in the thinking update stage.
+func (w *Weapon) HasThinking() bool {
 	return true
 }
 
-// StageThinking advances the door state for the current tick, updating velocity and auto-close timing.
-func (d *Weapon) StageThinking(playerX float64, playerY float64, playerZ float64) {
+// StageThinking advances the weapon state for the current tick.
+func (w *Weapon) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }
 
-/*
-// onDoorCollision activates the door for key holders on touch or while closing, then applies elastic collision handling.
-func (d *Weapon) onDoorCollision(other collisions.IObject, energy float64) {
-	if otherThing, ok := other.(vertices.IThing); ok {
-		if _, isHolder := other.(IKeyHolder); isHolder {
-			d.mu.Lock()
-			state := d.state
-			activation := d.activation
-			d.mu.Unlock()
+// GetForce returns the impact impulse force generated by the weapon.
+func (w *Weapon) GetForce() float64 {
+	return w.force
+}
 
-			if state == doorClosing || activation == config.DoorActivateTouch {
-				d.Activate(otherThing)
-			}
+// SetForce updates the weapon's impulse force.
+func (w *Weapon) SetForce(force float64) {
+	w.force = force
+}
+
+// GetFireInterval returns the minimum duration in seconds between consecutive shots.
+func (w *Weapon) GetFireInterval() float64 {
+	return w.fireInterval
+}
+
+// SetFireInterval updates the minimum duration in seconds between consecutive shots.
+func (w *Weapon) SetFireInterval(interval float64) {
+	w.fireInterval = interval
+}
+
+// GetRechargeTime returns the duration in seconds needed to reload the weapon.
+func (w *Weapon) GetRechargeTime() float64 {
+	return w.rechargeTime
+}
+
+// SetRechargeTime updates the duration in seconds needed to reload the weapon.
+func (w *Weapon) SetRechargeTime(rechargeTime float64) {
+	w.rechargeTime = rechargeTime
+}
+
+// GetMagazineSize returns the maximum ammunition capacity of the weapon's magazine.
+func (w *Weapon) GetMagazineSize() int {
+	return w.magazineSize
+}
+
+// SetMagazineSize updates the magazine capacity and clamps current ammunition if necessary.
+func (w *Weapon) SetMagazineSize(size int) {
+	if size <= 0 {
+		size = 1
+	}
+	w.magazineSize = size
+	if w.ammo > w.magazineSize {
+		w.ammo = w.magazineSize
+	}
+}
+
+// GetAmmo returns the current number of rounds remaining in the magazine.
+func (w *Weapon) GetAmmo() int {
+	return w.ammo
+}
+
+// SetAmmo sets the current ammunition count, clamped to [0, magazineSize].
+func (w *Weapon) SetAmmo(ammo int) {
+	if ammo < 0 {
+		ammo = 0
+	} else if ammo > w.magazineSize {
+		ammo = w.magazineSize
+	}
+	w.ammo = ammo
+}
+
+// IsReloading reports whether the weapon is currently in the reload state.
+func (w *Weapon) IsReloading() bool {
+	return w.reloading
+}
+
+// GetReloadProgress returns the reload completion progress from 0.0 to 1.0.
+func (w *Weapon) GetReloadProgress() float64 {
+	if !w.reloading || w.rechargeTime <= 0 {
+		return 1.0
+	}
+	progress := 1.0 - (w.reloadTimer / w.rechargeTime)
+	return math.Max(0.0, math.Min(1.0, progress))
+}
+
+// CanFire reports whether the weapon is ready to discharge a round.
+func (w *Weapon) CanFire() bool {
+	return !w.reloading && w.ammo > 0 && w.cooldown <= 0
+}
+
+// Fire discharges a round if possible. Returns true if a shot was fired.
+// If the magazine is depleted, it automatically initiates reload and returns false.
+func (w *Weapon) Fire() bool {
+	if w.reloading || w.cooldown > 0 {
+		return false
+	}
+	if w.ammo <= 0 {
+		w.startReloadLocked()
+		return false
+	}
+
+	w.ammo--
+	w.cooldown = w.fireInterval
+	if w.ammo == 0 {
+		w.startReloadLocked()
+	}
+	return true
+}
+
+// Reload initiates a manual reload if the magazine is not already full and not currently reloading.
+func (w *Weapon) Reload() bool {
+	return w.startReloadLocked()
+}
+
+func (w *Weapon) startReloadLocked() bool {
+	if w.reloading || w.ammo >= w.magazineSize || w.rechargeTime <= 0 {
+		return false
+	}
+	w.reloading = true
+	w.reloadTimer = w.rechargeTime
+	return true
+}
+
+// CancelReload cancels an in-progress reload.
+func (w *Weapon) CancelReload() {
+	w.reloading = false
+	w.reloadTimer = 0
+}
+
+// Reset restores the weapon to a ready state with a full magazine.
+func (w *Weapon) Reset() {
+	w.ammo = w.magazineSize
+	w.cooldown = 0
+	w.reloadTimer = 0
+	w.reloading = false
+}
+
+// Update advances cooldown and reload timers by dt seconds.
+func (w *Weapon) Update(dt float64) {
+	if dt <= 0 {
+		return
+	}
+	if w.cooldown > 0 {
+		w.cooldown -= dt
+		if w.cooldown < 0 {
+			w.cooldown = 0
 		}
 	}
-	d.onElasticCollision(other, energy)
+	if w.reloading {
+		w.reloadTimer -= dt
+		if w.reloadTimer <= 0 {
+			w.reloading = false
+			w.reloadTimer = 0
+			w.ammo = w.magazineSize
+		}
+	}
 }
-
-
-*/

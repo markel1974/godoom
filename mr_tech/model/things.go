@@ -89,7 +89,6 @@ func (th *Things) Setup() error {
 		}
 		if volume == nil {
 			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
-			continue
 		}
 		t2 := th.Create(ct, volume)
 		th.addThing(t2)
@@ -207,6 +206,16 @@ func (th *Things) SetPlayer(p *things.Player) {
 	th.addThing(p)
 }
 
+func (th *Things) GetThing(id string) vertices.IThing {
+	for _, thing := range th.entities {
+		fmt.Println(thing.GetId())
+		if thing.GetId() == id {
+			return thing
+		}
+	}
+	return nil
+}
+
 // GetTextures fetches the ITextures instance from the associated Materials object.
 func (th *Things) GetTextures() textures.ITextures {
 	return th.materials.GetTextures()
@@ -260,6 +269,19 @@ func (th *Things) resolveTeleportTargets() {
 
 // Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
 func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThing {
+	if ct.OnCollision == nil {
+		fmt.Println("onCollision is nil for thing:" + ct.Id)
+		ct.OnCollision = func(other config.IThingConfig, energy float64) {}
+	}
+	if ct.OnImpact == nil {
+		fmt.Println("OnImpact is nil for thing:" + ct.Id)
+		ct.OnImpact = func(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {}
+	}
+	if ct.OnBind == nil {
+		fmt.Println("OnBind is nil for thing:" + ct.Id)
+		ct.OnBind = func(self config.IThingConfig) {}
+	}
+
 	const disableEnemies = false
 	if disableEnemies {
 		if ct.Kind == config.ThingEnemyDef {
@@ -271,7 +293,7 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 	case config.ThingEnemyDef:
 		thing = things.NewEnemy(th, ct, volume)
 	case config.ThingWeaponDef:
-		thing = things.NewItem(th, ct, volume)
+		thing = things.NewWeapon(th, ct, volume)
 	case config.ThingThrowableDef:
 		thing = things.NewThingThrowable(th, ct, volume)
 	case config.ThingKeyDef:

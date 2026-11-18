@@ -23,7 +23,7 @@ type Root struct {
 
 // NewConfigRoot creates and initializes a new Root object with the specified sectors, player, things, and configuration.
 func NewConfigRoot(calibration *Calibration, sectors []*Sector, player *Player, things []*Thing, scaleFactor geometry.XYZ, t textures.ITextures) *Root {
-	return &Root{
+	r := &Root{
 		Id:          utils.NextUUId(),
 		Calibration: calibration,
 		Sectors:     sectors,
@@ -32,6 +32,10 @@ func NewConfigRoot(calibration *Calibration, sectors []*Sector, player *Player, 
 		ScaleFactor: scaleFactor,
 		textures:    t,
 	}
+
+	r.Things = append(r.Things, NewConfigWeapon(weaponTest, geometry.XYZ{X: 0, Y: 0, Z: 0}, 0, 1))
+
+	return r
 }
 
 // AddUIElement appends a new UI element to the UI slice of the Root configuration.

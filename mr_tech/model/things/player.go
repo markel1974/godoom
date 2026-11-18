@@ -26,6 +26,7 @@ type Player struct {
 	lightIntensity float64
 	bobbing        *Bobbing
 	flash          *Flash
+	weapon         *Weapon
 	visible        bool
 	debug          bool
 	vol            *volumes.Volume
@@ -48,10 +49,11 @@ func NewPlayer(things IThingHandler, c *config.Player, vol *volumes.Volume, debu
 		vol:            vol,
 		pitch:          0,
 		pitchState:     0,
+		weapon:         nil,
 		bobbing:        NewBobbing(c.Bobbing),
+		flash:          NewFlash(c.Flash),
 		lightIntensity: 0.0039,
 		debug:          debug,
-		flash:          NewFlash(c.Flash),
 		pitchMin:       -5.0,
 		pitchMax:       5.0,
 		pitchSens:      0.05,
@@ -95,6 +97,10 @@ func (pr *Player) IsEqual(other vertices.IThing) bool {
 		return true
 	}
 	return false
+}
+
+func (pr *Player) SetWeapon(weapon *Weapon) {
+	pr.weapon = weapon
 }
 
 // Jump attempts to make the enemy leap with the given horizontal movement and vertical scaling, reporting success.
@@ -335,7 +341,11 @@ func (pr *Player) afterApply() {
 		// Inietta la velocità terminale reale calcolata dall'integratore per schiacciare la molla
 		pr.bobbing.InjectVerticalImpulse(pr.preImpactVz)
 	}
-	pr.bobbing.Compute(entity.GetDt(), pr.speed, entity.GetVx(), entity.GetVy())
+	dt := entity.GetDt()
+	pr.bobbing.Compute(dt, pr.speed, entity.GetVx(), entity.GetVy())
+	if pr.weapon != nil {
+		pr.weapon.Update(dt)
+	}
 }
 
 // StageApply processes the physics-related updates for the entity, including ground detection and velocity adjustments.
@@ -365,7 +375,14 @@ func (pr *Player) Throw(throwableIndex int, speed float64) {
 }
 
 // Fire triggers a hitscan action from the player's position along a calculated direction vector.
-func (pr *Player) Fire(id string) {
+// Returns true if a shot was successfully fired, or false if prevented by fire rate or ammo.
+func (pr *Player) Fire(id string) bool {
+	if pr.weapon == nil {
+		return false
+	}
+	if !pr.weapon.Fire() {
+		return false
+	}
 	// Origine della vista (camera eye, include Bobbing e Crouch)
 	camX, camY, camZ := pr.GetVisualPosition()
 	// Calcolo del vettore direzione (Radianti)
@@ -375,11 +392,26 @@ func (pr *Player) Fire(id string) {
 	dirY := pr.angleSin * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
 
-	const weaponForce = 50000.0 * 10.0 // TODO CONFIG
+	weaponForce := pr.weapon.GetForce()
+
 	// Il raggio hitscan parte direttamente dal punto di vista (camera eye) per collimare
 	// perfettamente con il mirino a schermo. Il self-culling è gestito nativamente in Base.FireHitscan.
 	spawnPos := geometry.XYZ{X: camX, Y: camY, Z: camZ}
 	pr.FireHitscan(id, spawnPos, weaponForce, dirX, dirY, dirZ)
+	return true
+}
+
+// Reload initiates a reload of the player's weapon.
+func (pr *Player) Reload() bool {
+	if pr.weapon != nil {
+		return pr.weapon.Reload()
+	}
+	return false
+}
+
+// GetWeapon returns the equipped Weapon instance for the player.
+func (pr *Player) GetWeapon() *Weapon {
+	return pr.weapon
 }
 
 // GiveKey adds keyId to the player's key inventory.

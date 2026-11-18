@@ -1,5 +1,11 @@
 package config
 
+import (
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
+
+const weaponTest = "weapon_test"
+
 type Weapon struct {
 	Force        float64
 	FireInterval float64
@@ -7,11 +13,21 @@ type Weapon struct {
 	MagazineSize int
 }
 
-func NewWeapon() *Weapon {
+func NewWeaponDefault() *Weapon {
 	return &Weapon{
-		Force:        50000,
+		Force:        500000.0,
 		FireInterval: 1,
 		RechargeTime: 3,
 		MagazineSize: 6,
 	}
+}
+
+func NewConfigWeapon(id string, pos geometry.XYZ, angle float64, mass float64) *Thing {
+	c := NewConfigThing(id, pos, angle, ThingWeaponDef, mass, 0, 0, 0)
+	c.Weapon = NewWeaponDefault()
+	//weapon := common.NewWeapon(c)
+	//c.OnCollision = weapon.OnCollision
+	//c.OnImpact = weapon.OnImpact
+	//c.OnBind = weapon.OnBind
+	return c
 }

@@ -112,6 +112,11 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		return err
 	}
 	r.things.SetPlayer(r.player)
+	if w := r.things.GetThing(cfg.Player.DefaultWeaponId); w != nil {
+		if weapon, ok := w.(*things.Weapon); ok {
+			r.player.SetWeapon(weapon)
+		}
+	}
 
 	for _, i := range cfg.UI {
 		e := things.NewUI(r.things, i)

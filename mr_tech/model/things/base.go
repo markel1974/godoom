@@ -64,12 +64,6 @@ func NewBase(things IThingHandler, cfg *config.Thing) *Base {
 
 // NewBaseWithVertices creates a Base instance using a caller-supplied IVertices implementation.
 func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts vertices.IVertices) *Base {
-	if cfg.OnCollision == nil {
-		panic("onCollision is nil for thing:" + cfg.Id)
-	}
-	if cfg.OnImpact == nil {
-		panic("OnImpact is nil for thing:" + cfg.Id)
-	}
 	if cfg.Mass == 0 {
 		panic("mass is zero for thing:" + cfg.Id)
 	}

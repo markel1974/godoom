@@ -7,11 +7,11 @@ import (
 // Player represents a specialized game entity with inherited attributes and behaviors from the Thing type.
 type Player struct {
 	*Thing
-	Weapon    *Weapon  `json:"weapon"`
-	Bobbing   *Bobbing `json:"bobbing"`
-	Flash     *Flash   `json:"flash"`
-	Impulse   float64  `json:"impulse"`
-	IsVisible bool     `json:"isVisible"`
+	Bobbing         *Bobbing `json:"bobbing"`
+	Flash           *Flash   `json:"flash"`
+	DefaultWeaponId string   `json:"defaultWeaponId"`
+	Impulse         float64  `json:"impulse"`
+	IsVisible       bool     `json:"isVisible"`
 }
 
 // NewConfigPlayer creates and returns a new Player instance configured with the given position, angle, height, radius, and mass.
@@ -19,11 +19,11 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 	thing := NewConfigThing("PLAYER", position, angle, ThingPlayerDef, mass, radius, height, speed)
 	p := &Player{
 		Thing:     thing,
-		Weapon:    NewWeapon(),
 		Bobbing:   NewBobbing(),
 		Flash:     NewFlash(),
 		IsVisible: false,
 	}
+	p.DefaultWeaponId = weaponTest
 	p.Impulse = 0.06
 	p.Flash.FovDeg = 80.0
 	p.Flash.ShadowFovFactor = 1.75

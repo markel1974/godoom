@@ -81,16 +81,8 @@ func NewDoor(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *D
 
 	if spec.StartOpen {
 		// Symmetrize start-open doors so progress=0 is their initial open position and activation closes them.
-		door.closedPos = geometry.XYZ{
-			X: cfg.Position.X + spec.OpenOffset.X,
-			Y: cfg.Position.Y + spec.OpenOffset.Y,
-			Z: cfg.Position.Z + spec.OpenOffset.Z,
-		}
-		door.openOffset = geometry.XYZ{
-			X: -spec.OpenOffset.X,
-			Y: -spec.OpenOffset.Y,
-			Z: -spec.OpenOffset.Z,
-		}
+		door.closedPos = geometry.XYZ{X: cfg.Position.X + spec.OpenOffset.X, Y: cfg.Position.Y + spec.OpenOffset.Y, Z: cfg.Position.Z + spec.OpenOffset.Z}
+		door.openOffset = geometry.XYZ{X: -spec.OpenOffset.X, Y: -spec.OpenOffset.Y, Z: -spec.OpenOffset.Z}
 	}
 	ent.MoveCenterTo(door.closedPos.X, door.closedPos.Y, door.closedPos.Z)
 	door.Compile(0)

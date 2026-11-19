@@ -294,10 +294,10 @@ func (b *Things) createConfigThing(classname string, pos geometry.XYZ, kind conf
 		if thingCfg.Model3DEntry != nil {
 			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
 		}
-		_ = common.NewEnemy(thingCfg, actions)
+		_ = common.NewEnemyFromConfig(thingCfg, actions)
 		thingCfg.WakeupDistance = 400
 	} else {
-		_ = common.NewItem(thingCfg)
+		_ = common.NewItemFromConfig(thingCfg)
 	}
 	return thingCfg
 }

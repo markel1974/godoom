@@ -13,3 +13,10 @@ type TeleportSpec struct {
 	Target        string       `json:"target,omitempty"`
 	PlayerOnly    bool         `json:"playerOnly,omitempty"`
 }
+
+// NewConfigTeleport creates a teleport Thing configuration with the provided TeleportSpec and dimensions.
+func NewConfigTeleport(id string, pos geometry.XYZ, radius, height float64, spec *TeleportSpec) *Thing {
+	c := NewConfigThing(id, pos, 0, ThingTeleportDef, 1000.0, radius, height, 0)
+	c.Teleport = spec
+	return c
+}

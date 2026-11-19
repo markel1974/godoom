@@ -227,7 +227,7 @@ func (bld *Builder) buildSectorDoorThing(
 	cfgThing.GForce = 0
 	cfgThing.Model3DEntry = model3d
 	cfgThing.Door = spec
-	_ = common.NewItem(cfgThing)
+	_ = common.NewItemFromConfig(cfgThing)
 	return cfgThing
 }
 
@@ -340,7 +340,7 @@ func (bld *Builder) buildWadTeleports(level *Level, sectorsEdges [][]Edge, verte
 			0,
 		)
 		tpCfg.GForce = 0
-		_ = common.NewItem(tpCfg)
+		_ = common.NewItemFromConfig(tpCfg)
 		tpCfg.Teleport = &config.TeleportSpec{
 			Destination:   dest.pos,
 			TargetAngle:   dest.angle,

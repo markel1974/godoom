@@ -96,6 +96,21 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 	return th
 }
 
+// NewConfigItem creates an item Thing configuration.
+func NewConfigItem(id string, pos geometry.XYZ, angle float64, mass, speed float64) *Thing {
+	return NewConfigThing(id, pos, angle, ThingItemDef, mass, 0, 0, speed)
+}
+
+// NewConfigPlatform creates a platform Thing configuration.
+func NewConfigPlatform(id string, pos geometry.XYZ, angle float64, mass, speed float64) *Thing {
+	return NewConfigThing(id, pos, angle, ThingPlatformDef, mass, 0, 0, speed)
+}
+
+// NewConfigButton creates a button Thing configuration.
+func NewConfigButton(id string, pos geometry.XYZ, angle float64, mass, speed float64) *Thing {
+	return NewConfigThing(id, pos, angle, ThingButtonDef, mass, 0, 0, speed)
+}
+
 // Scale applies the given scaling factors to the Position of the Thing by modifying its X, Y, and Z coordinates.
 func (t *Thing) Scale(scale geometry.XYZ) {
 	t.Position.Scale(scale)

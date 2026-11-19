@@ -2,16 +2,23 @@ package common
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Teleport handles binding and event callbacks for a teleport entity.
 type Teleport struct {
+	*config.Thing
 	self config.IThingConfig
 }
 
-// NewTeleport creates a Teleport and assigns its bind, collision, and impact handlers to cfgThing.
-func NewTeleport(cfgThing *config.Thing) *Teleport {
-	p := &Teleport{}
+// NewTeleport creates a Teleport and assigns its bind, collision, and impact handlers.
+func NewTeleport(id string, pos geometry.XYZ, radius, height float64, spec *config.TeleportSpec) *Teleport {
+	return NewTeleportFromConfig(config.NewConfigTeleport(id, pos, radius, height, spec))
+}
+
+// NewTeleportFromConfig wraps an existing teleport Thing configuration.
+func NewTeleportFromConfig(cfgThing *config.Thing) *Teleport {
+	p := &Teleport{Thing: cfgThing}
 	cfgThing.OnBind = p.OnBind
 	cfgThing.OnCollision = p.OnCollision
 	cfgThing.OnImpact = p.OnImpact

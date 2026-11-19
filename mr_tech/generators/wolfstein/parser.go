@@ -112,10 +112,10 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 					cfgThing.Sprite = config.NewConfigSprite(anim)
 					if cfgThing.Kind == config.ThingEnemyDef {
 						animations := config.NewEnemyAnimations()
-						_ = common.NewEnemy(cfgThing, animations)
+						_ = common.NewEnemyFromConfig(cfgThing, animations)
 						cfgThing.WakeupDistance = 100
 					} else {
-						_ = common.NewItem(cfgThing)
+						_ = common.NewItemFromConfig(cfgThing)
 					}
 					root.Things = append(root.Things, cfgThing)
 				}

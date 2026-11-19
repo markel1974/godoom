@@ -23,3 +23,10 @@ type DoorSpec struct {
 	Target      string         `json:"target,omitempty"`
 	Activation  DoorActivation `json:"activation"`
 }
+
+// NewConfigDoor creates a door Thing configuration with the provided DoorSpec.
+func NewConfigDoor(id string, pos geometry.XYZ, angle float64, mass, speed float64, door *DoorSpec) *Thing {
+	c := NewConfigThing(id, pos, angle, ThingDoorDef, mass, 0, 0, speed)
+	c.Door = door
+	return c
+}

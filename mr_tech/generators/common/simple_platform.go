@@ -2,16 +2,23 @@ package common
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Platform provides behavior callbacks for a platform entity in the simulation.
 type Platform struct {
+	*config.Thing
 	self config.IThingConfig
 }
 
-// NewPlatform creates a Platform and registers its bind, collision, and impact handlers on cfgThing.
-func NewPlatform(cfgThing *config.Thing) *Platform {
-	p := &Platform{}
+// NewPlatform creates a Platform and registers its bind, collision, and impact handlers.
+func NewPlatform(classname string, pos geometry.XYZ, angle float64, mass, speed float64) *Platform {
+	return NewPlatformFromConfig(config.NewConfigPlatform(classname, pos, angle, mass, speed))
+}
+
+// NewPlatformFromConfig wraps an existing platform Thing configuration.
+func NewPlatformFromConfig(cfgThing *config.Thing) *Platform {
+	p := &Platform{Thing: cfgThing}
 	cfgThing.OnBind = p.OnBind
 	cfgThing.OnCollision = p.OnCollision
 	cfgThing.OnImpact = p.OnImpact

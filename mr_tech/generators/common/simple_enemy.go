@@ -34,6 +34,7 @@ func framesToSeconds(frames int) float64 {
 
 // Enemy represents an entity with various states, animations, health, and timers for interaction and combat behavior.
 type Enemy struct {
+	*config.Thing
 	state                   EnemyState
 	activeAnimation         config.EnemyState
 	health                  float64
@@ -48,12 +49,18 @@ type Enemy struct {
 }
 
 // NewEnemy initializes and returns a new Enemy instance with default state, health, and animations.
-func NewEnemy(thingCfg *config.Thing, animations *config.EnemyAnimations) *Enemy {
+func NewEnemy(classname string, pos geometry.XYZ, angle float64, mass, speed, wakeupDistance float64, animations *config.EnemyAnimations) *Enemy {
+	return NewEnemyFromConfig(config.NewConfigEnemy(classname, pos, angle, mass, speed, wakeupDistance), animations)
+}
+
+// NewEnemyFromConfig wraps an existing enemy Thing configuration with animation handlers.
+func NewEnemyFromConfig(thingCfg *config.Thing, animations *config.EnemyAnimations) *Enemy {
 	const (
 		shotIntervalMin = 2
 		shotIntervalMax = 4
 	)
 	e := &Enemy{
+		Thing:           thingCfg,
 		state:           EnemyStateUnknown,
 		activeAnimation: config.EnemyStateUnknown,
 		health:          100,

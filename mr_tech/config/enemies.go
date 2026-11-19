@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/markel1974/godoom/mr_tech/geometry"
+)
 
 // EnemyState represents the various states an enemy entity can be in during its lifecycle.
 type EnemyState uint8
@@ -131,4 +135,11 @@ func (e *EnemyAnimations) Add(es EnemyState, indices int, duration int) {
 	e.Content[es].Name = es.String()
 	e.Content[es].Indices = append(e.Content[es].Indices, indices)
 	e.Content[es].Duration = append(e.Content[es].Duration, duration)
+}
+
+// NewConfigEnemy creates an enemy Thing configuration with physical attributes and wakeup distance.
+func NewConfigEnemy(id string, pos geometry.XYZ, angle float64, mass, speed float64, wakeupDistance float64) *Thing {
+	c := NewConfigThing(id, pos, angle, ThingEnemyDef, mass, 0, 0, speed)
+	c.WakeupDistance = wakeupDistance
+	return c
 }

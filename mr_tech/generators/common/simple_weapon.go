@@ -2,16 +2,23 @@ package common
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Weapon represents a bindable weapon behavior for a configurable simulation entity.
 type Weapon struct {
+	*config.Thing
 	self config.IThingConfig
 }
 
-// NewWeapon creates a Weapon and binds its event handlers to the provided thing configuration.
-func NewWeapon(cfgThing *config.Thing) *Weapon {
-	p := &Weapon{}
+// NewWeapon creates a Weapon and binds its event handlers.
+func NewWeapon(classname string, pos geometry.XYZ, angle float64, mass float64) *Weapon {
+	return NewWeaponFromConfig(config.NewConfigWeapon(classname, pos, angle, mass))
+}
+
+// NewWeaponFromConfig wraps an existing weapon Thing configuration.
+func NewWeaponFromConfig(cfgThing *config.Thing) *Weapon {
+	p := &Weapon{Thing: cfgThing}
 	cfgThing.OnBind = p.OnBind
 	cfgThing.OnCollision = p.OnCollision
 	cfgThing.OnImpact = p.OnImpact

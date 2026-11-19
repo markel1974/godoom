@@ -188,79 +188,68 @@ func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3
 	if cModel != nil {
 		ConvertAnimation(actions, cModel.ActionDefinitions, cModel.ActionIntervals)
 	}
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingEnemyDef, mass, 0, 0, speed)
+	thingCfg := common.NewEnemy(classname, pos, angle, mass, speed, wakeupDistance, actions)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
 	thingCfg.JumpForce = JumpForce
-	thingCfg.WakeupDistance = wakeupDistance
-	_ = common.NewEnemy(thingCfg, actions)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigItem creates and registers an item thing with the given class, position, model, angle, mass, and speed.
 func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingItemDef, mass, 0, 0, speed)
+	thingCfg := common.NewItem(classname, pos, angle, mass, speed)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
-	_ = common.NewItem(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigWeapon creates and returns a weapon configuration with position, model, angle, and mass.
 // It applies global gravity and initializes weapon behavior for the returned configuration.
 func CreateConfigWeapon(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
-	thingCfg := config.NewConfigWeapon(classname, pos, angle, mass)
+	thingCfg := common.NewWeapon(classname, pos, angle, mass)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
-	_ = common.NewWeapon(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigKey creates a key Thing at the given position with model, movement, and key identifier settings.
 func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass float64, keyId string) *config.Thing {
-	thingCfg := config.NewConfigKey(classname, pos, angle, mass, keyId)
+	thingCfg := common.NewKey(classname, pos, angle, mass, keyId)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
-	_ = common.NewKey(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigDoor creates a door thing configuration with model, transform, physics, and door spec data.
 func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *lumps.Entity, size geometry.XYZ) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
+	thingCfg := common.NewDoor(classname, pos, angle, mass, speed, BuildDoorSpec(ent, size))
 	thingCfg.GForce = 0.0
 	thingCfg.Model3DEntry = cModel
-	thingCfg.Door = BuildDoorSpec(ent, size)
-	_ = common.NewDoor(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigPlat creates a platform thing configuration with model, movement, physics, and platform door data.
 func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *lumps.Entity, size geometry.XYZ) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
+	thingCfg := common.NewDoor(classname, pos, angle, mass, speed, BuildPlatSpec(ent, size))
 	thingCfg.GForce = 0.0
 	thingCfg.Model3DEntry = cModel
-	thingCfg.Door = BuildPlatSpec(ent, size)
-	_ = common.NewDoor(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigPlatform creates a platform thing configuration with the given position, model, angle, mass, and speed.
 func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingPlatformDef, mass, 0, 0, speed)
+	thingCfg := common.NewPlatform(classname, pos, angle, mass, speed)
 	thingCfg.GForce = 0.0
 	thingCfg.Model3DEntry = cModel
-	_ = common.NewPlatform(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigButton creates a button thing configuration with the given class, position, model, angle, mass, and speed.
 func CreateConfigButton(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingButtonDef, mass, 0, 0, speed)
+	thingCfg := common.NewButton(classname, pos, angle, mass, speed)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
-	_ = common.NewButton(thingCfg)
-	return thingCfg
+	return thingCfg.Thing
 }
 
 // CreateConfigTeleport creates a teleport thing from point bounds and an entity target.
@@ -302,9 +291,7 @@ func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ,
 		height = 32.0
 	}
 
-	tpCfg := config.NewConfigThing(id, pos, 0, config.ThingTeleportDef, 1000.0, radius, height, 0)
-	tpCfg.GForce = 0
-	tpCfg.Teleport = &config.TeleportSpec{Destination: dest.Pos, TargetAngle: dest.Angle, ResetVelocity: true, Cooldown: 0.5}
-	_ = common.NewTeleport(tpCfg)
-	return tpCfg
+	thingCfg := common.NewTeleport(id, pos, radius, height, &config.TeleportSpec{Destination: dest.Pos, TargetAngle: dest.Angle, ResetVelocity: true, Cooldown: 0.5})
+	thingCfg.GForce = 0
+	return thingCfg.Thing
 }

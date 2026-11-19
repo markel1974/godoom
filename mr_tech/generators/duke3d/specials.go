@@ -94,7 +94,7 @@ func (w *World) buildDukeDoorThing(id string, sec *lumps.Sector, minZ, maxZ floa
 	cfgThing.GForce = 0
 	cfgThing.Model3DEntry = model3d
 	cfgThing.Door = spec
-	_ = common.NewItem(cfgThing)
+	_ = common.NewItemFromConfig(cfgThing)
 	return cfgThing
 }
 
@@ -185,7 +185,7 @@ func buildDukeTeleports(level *lumps.Level, w *World) []*config.Thing {
 				0,
 			)
 			tpCfg.GForce = 0
-			_ = common.NewItem(tpCfg)
+			_ = common.NewItemFromConfig(tpCfg)
 			tpCfg.Teleport = &config.TeleportSpec{
 				Destination:   dst.pos,
 				TargetAngle:   dst.angle,

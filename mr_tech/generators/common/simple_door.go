@@ -2,16 +2,23 @@ package common
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Door represents a configurable door entity that can bind to thing behavior and respond to collisions or impacts.
 type Door struct {
+	*config.Thing
 	self config.IThingConfig
 }
 
-// NewDoor creates a Door and registers its bind, collision, and impact handlers on cfgThing.
-func NewDoor(cfgThing *config.Thing) *Door {
-	p := &Door{}
+// NewDoor creates a Door and registers its bind, collision, and impact handlers.
+func NewDoor(classname string, pos geometry.XYZ, angle float64, mass, speed float64, door *config.DoorSpec) *Door {
+	return NewDoorFromConfig(config.NewConfigDoor(classname, pos, angle, mass, speed, door))
+}
+
+// NewDoorFromConfig wraps an existing door Thing configuration.
+func NewDoorFromConfig(cfgThing *config.Thing) *Door {
+	p := &Door{Thing: cfgThing}
 	cfgThing.OnBind = p.OnBind
 	cfgThing.OnCollision = p.OnCollision
 	cfgThing.OnImpact = p.OnImpact

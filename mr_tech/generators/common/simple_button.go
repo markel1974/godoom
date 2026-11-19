@@ -2,16 +2,23 @@ package common
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
 // Button represents an interactive entity that can bind to its configuration and react to collisions or impacts.
 type Button struct {
+	*config.Thing
 	self config.IThingConfig
 }
 
-// NewButton creates a Button and registers its bind, collision, and impact handlers on cfgThing.
-func NewButton(cfgThing *config.Thing) *Button {
-	p := &Button{}
+// NewButton creates a Button and registers its bind, collision, and impact handlers.
+func NewButton(classname string, pos geometry.XYZ, angle float64, mass, speed float64) *Button {
+	return NewButtonFromConfig(config.NewConfigButton(classname, pos, angle, mass, speed))
+}
+
+// NewButtonFromConfig wraps an existing button Thing configuration.
+func NewButtonFromConfig(cfgThing *config.Thing) *Button {
+	p := &Button{Thing: cfgThing}
 	cfgThing.OnBind = p.OnBind
 	cfgThing.OnCollision = p.OnCollision
 	cfgThing.OnImpact = p.OnImpact

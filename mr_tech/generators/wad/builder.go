@@ -354,7 +354,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 		cfgThing.GForce = GForce
 		cfgThing.JumpForce = GForce * 6
 		cfgThing.WakeupDistance = 400
-		_ = common.NewEnemy(cfgThing, animations)
+		_ = common.NewEnemyFromConfig(cfgThing, animations)
 	} else {
 		if cfgThing.Kind == config.ThingKeyDef {
 			switch t.GetType() {
@@ -367,7 +367,7 @@ func (bld *Builder) buildThings(t *lumps.Thing, i int, texHandler *Textures) (*c
 			}
 		}
 		cfgThing.GForce = GForce
-		_ = common.NewItem(cfgThing)
+		_ = common.NewItemFromConfig(cfgThing)
 	}
 	return cfgThing, nil
 }

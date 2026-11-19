@@ -90,7 +90,10 @@ func (th *Things) Setup() error {
 		if volume == nil {
 			fmt.Printf("Warning can't find thing location at %f, %f, %f\n", ct.Position.X, ct.Position.Y, ct.Position.Z)
 		}
-		t2 := th.Create(ct, volume)
+		t2 := th.create(ct, volume)
+		if t2.GetKind() == config.ThingItemDef {
+			th.throwable = append(th.throwable, ct)
+		}
 		th.addThing(t2)
 	}
 
@@ -267,7 +270,7 @@ func (th *Things) resolveTeleportTargets() {
 }
 
 // Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
-func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThing {
+func (th *Things) create(ct *config.Thing, volume *volumes.Volume) vertices.IThing {
 	if ct.OnCollision == nil {
 		fmt.Println("onCollision is nil for thing:" + ct.Id)
 		ct.OnCollision = func(other config.IThingConfig, energy float64) {}
@@ -322,10 +325,10 @@ func (th *Things) Create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
 func (th *Things) CreateThrowable(self vertices.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64) {
-	if len(th.config) <= throwableIndex {
+	if len(th.throwable) <= throwableIndex {
 		return
 	}
-	src := th.config[throwableIndex]
+	src := th.throwable[throwableIndex]
 	dst := src.Clone()
 	dst.Id = utils.NextUUId()
 	dst.Kind = config.ThingThrowableDef
@@ -340,7 +343,7 @@ func (th *Things) CreateThrowable(self vertices.IThing, throwableIndex int, onCo
 		fmt.Println("max slot reached!")
 		return
 	}
-	throwable := th.Create(dst, volume)
+	throwable := th.create(dst, volume)
 	if self != nil && throwable.GetSolver() != nil && throwable.GetSolver().GetCage() != nil {
 		sx, sy, _ := self.GetEntity().GetCenter()
 		throwable.GetSolver().GetCage().SetSpawnOrigin(sx, sy, pos.Z)

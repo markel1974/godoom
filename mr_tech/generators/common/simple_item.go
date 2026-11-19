@@ -4,12 +4,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
-// Item represents an interactive object or entity in the system that can respond to collisions or other events.
+// Item represents a bindable game object that handles collision and impact callbacks.
 type Item struct {
 	self config.IThingConfig
 }
 
-// NewItem creates and initializes a new Enemy instance with default properties and returns a pointer to it.
+// NewItem creates an Item and registers its bind, collision, and impact handlers on cfgThing.
 func NewItem(cfgThing *config.Thing) *Item {
 	p := &Item{}
 	cfgThing.OnBind = p.OnBind
@@ -18,11 +18,12 @@ func NewItem(cfgThing *config.Thing) *Item {
 	return p
 }
 
+// OnBind stores the bound thing configuration for later item behavior callbacks.
 func (e *Item) OnBind(self config.IThingConfig) {
 	e.self = self
 }
 
-// OnCollision handles the collision event between the current item and another object.
+// OnCollision handles a collision with another thing and receives the impact energy.
 func (e *Item) OnCollision(other config.IThingConfig, impactEnergy float64) {
 	//otherId := "UNKNOWN"
 	//if other != nil {
@@ -31,6 +32,7 @@ func (e *Item) OnCollision(other config.IThingConfig, impactEnergy float64) {
 	//fmt.Println("Item.OnCollision:", self.GetId(), otherId)
 }
 
+// OnImpact handles impact notifications for the item.
 func (e *Item) OnImpact(other config.IThingConfig, id string, force, closestDist, dirX, dirY, dirZ float64) {
 	//fmt.Println("Item IMPACT!!!!")
 }

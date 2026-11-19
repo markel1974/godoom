@@ -231,6 +231,7 @@ func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3D
 	thingCfg.GForce = 0.0
 	thingCfg.Model3DEntry = cModel
 	thingCfg.Door = BuildDoorSpec(ent, size)
+	_ = common.NewDoor(thingCfg)
 	return thingCfg
 }
 
@@ -240,6 +241,7 @@ func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3D
 	thingCfg.GForce = 0.0
 	thingCfg.Model3DEntry = cModel
 	thingCfg.Door = BuildPlatSpec(ent, size)
+	_ = common.NewDoor(thingCfg)
 	return thingCfg
 }
 
@@ -248,6 +250,7 @@ func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Mod
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingPlatformDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
 	thingCfg.Model3DEntry = cModel
+	_ = common.NewPlatform(thingCfg)
 	return thingCfg
 }
 
@@ -256,6 +259,7 @@ func CreateConfigButton(classname string, pos geometry.XYZ, cModel *config.Model
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingButtonDef, mass, 0, 0, speed)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
+	_ = common.NewButton(thingCfg)
 	return thingCfg
 }
 
@@ -300,7 +304,7 @@ func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ,
 
 	tpCfg := config.NewConfigThing(id, pos, 0, config.ThingTeleportDef, 1000.0, radius, height, 0)
 	tpCfg.GForce = 0
-	_ = common.NewItem(tpCfg)
 	tpCfg.Teleport = &config.TeleportSpec{Destination: dest.Pos, TargetAngle: dest.Angle, ResetVelocity: true, Cooldown: 0.5}
+	_ = common.NewTeleport(tpCfg)
 	return tpCfg
 }

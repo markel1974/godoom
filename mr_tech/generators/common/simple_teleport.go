@@ -9,7 +9,7 @@ type Teleport struct {
 	self config.IThingConfig
 }
 
-// NewTeleport creates a Teleport and registers its bind, collision, and impact handlers on cfgThing.
+// NewTeleport creates a Teleport and assigns its bind, collision, and impact handlers to cfgThing.
 func NewTeleport(cfgThing *config.Thing) *Teleport {
 	p := &Teleport{}
 	cfgThing.OnBind = p.OnBind
@@ -18,12 +18,12 @@ func NewTeleport(cfgThing *config.Thing) *Teleport {
 	return p
 }
 
-// OnBind stores the bound thing configuration for later use.
+// OnBind stores the bound thing configuration for later teleport behavior.
 func (e *Teleport) OnBind(self config.IThingConfig) {
 	e.self = self
 }
 
-// OnCollision handles a collision with another thing and receives the collision impact energy.
+// OnCollision handles collision notifications for the teleport entity.
 func (e *Teleport) OnCollision(other config.IThingConfig, impactEnergy float64) {
 	//otherId := "UNKNOWN"
 	//if other != nil {

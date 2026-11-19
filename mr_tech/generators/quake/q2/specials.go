@@ -10,6 +10,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const heavyMass = 1000
+
 func q2KeyId(classname string) string {
 	switch classname {
 	case "item_key1":
@@ -234,19 +236,43 @@ func BuildTeleportFromPoints(id string, points []geometry.XYZ, offset geometry.X
 	return tpCfg
 }
 
-// CreateConfigThing creates a Thing configuration based on provided parameters and assigns logic for enemy or item behavior.
-func CreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
-	const wakeupDistance = 400.0
-	if cModel != nil {
-		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+// CreateConfigThing creates a configured thing at the given position, selecting enemy, key, weapon, or item behavior by class.
+func CreateConfigThing(classname string, category string, pos geometry.XYZ, cModel *config.Model3DEntry, ent *lumps.Entity) *config.Thing {
+	if strings.HasPrefix(classname, "func_door") {
+		center, size := cModel.CenterWithBounds([]string{"default"})
+		worldPos := geometry.XYZ{X: pos.X + center.X, Y: pos.Y + center.Y, Z: pos.Z + center.Z}
+		return CreateConfigDoor(classname, worldPos, cModel, 0.0, heavyMass, 0.0, ent, size)
 	}
-	if kind == config.ThingEnemyDef {
-		return CreateConfigEnemy(classname, pos, cModel, angle, mass, speed, wakeupDistance)
+	if strings.HasPrefix(classname, "func_plat") {
+		center, size := cModel.CenterWithBounds([]string{"default"})
+		worldPos := geometry.XYZ{X: pos.X + center.X, Y: pos.Y + center.Y, Z: pos.Z + center.Z}
+		return CreateConfigPlat(classname, worldPos, cModel, 0.0, heavyMass, 0.0, ent, size)
 	}
-	if keyId := q2KeyId(classname); keyId != "" {
-		return CreateConfigKey(classname, pos, cModel, angle, mass, speed, keyId)
+	if strings.HasPrefix(classname, "func_train") {
+		center, _ := cModel.CenterWithBounds([]string{"default"})
+		worldPos := geometry.XYZ{X: pos.X + center.X, Y: pos.Y + center.Y, Z: pos.Z + center.Z}
+		return CreateConfigPlatform(classname, worldPos, cModel, 0.0, heavyMass, 0.0)
 	}
-	return CreateConfigItem(classname, pos, cModel, angle, mass, speed)
+	if strings.HasPrefix(classname, "func_button") {
+		center, _ := cModel.CenterWithBounds([]string{"default"})
+		worldPos := geometry.XYZ{X: pos.X + center.X, Y: pos.Y + center.Y, Z: pos.Z + center.Z}
+		return CreateConfigButton(classname, worldPos, cModel, 0.0, 16.0, 16.0)
+	}
+	cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+	if keyId := q2KeyId(classname); len(keyId) > 0 {
+		return CreateConfigKey(classname, pos, cModel, 0, 0.1, 0.0, keyId)
+	}
+	switch category {
+	case "item", "ammo":
+		return CreateConfigItem(classname, pos, cModel, 0, 30, 0)
+	case "weapon":
+		return CreateConfigWeapon(classname, pos, cModel, 0, 30, 0)
+	case "enemy", "monster":
+		const wakeupDistance = 400.0
+		return CreateConfigEnemy(classname, pos, cModel, 0, 30, 1300, wakeupDistance)
+	default:
+		return CreateConfigItem(classname, pos, cModel, 0, 30, 0)
+	}
 }
 
 func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed, wakeupDistance float64) *config.Thing {
@@ -271,12 +297,20 @@ func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+func CreateConfigWeapon(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
+	thingCfg := config.NewConfigWeapon(classname, pos, angle, mass)
+	thingCfg.GForce = GForce
+	thingCfg.Model3DEntry = cModel
+	_ = common.NewWeapon(thingCfg)
+	return thingCfg
+}
+
 func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
 	thingCfg.Mass = 0.1
-	thingCfg.Key = &config.KeySpec{KeyId: keyId}
+	thingCfg.Key = config.NewKeySpec(keyId)
 	return thingCfg
 }
 

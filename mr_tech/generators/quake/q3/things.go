@@ -34,20 +34,15 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 
-	kind := config.ThingEnemyDef
 	var category string
 	if c := strings.Split(classname, "_"); len(c) > 1 {
 		category = c[0]
 	}
 	switch category {
 	case "item", "ammo", "holdable":
-		kind = config.ThingItemDef
 	case "weapon":
-		kind = config.ThingItemDef
 	case "enemy":
-		kind = config.ThingEnemyDef
 	case "monster":
-		kind = config.ThingEnemyDef
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
@@ -79,7 +74,7 @@ func (t *Things) Create(thingPath string, pos geometry.XYZ, classname string) (*
 		}
 	}
 
-	thingCfg := CreateConfigThing(classname, pos, kind, cModel, 0, 30.0, 600.0)
+	thingCfg := CreateConfigThing(classname, category, pos, cModel, nil)
 
 	return thingCfg, nil
 }
@@ -151,7 +146,7 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	thingCfg := CreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 0.0)
+	thingCfg := CreateConfigThing(classname, "", position, model3d, nil)
 	return thingCfg, nil
 }
 
@@ -191,28 +186,7 @@ func (t *Things) CreateInternalBModel(rawFaces []*lumps.RawFace3, position geome
 	}
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	center, size := model3d.CenterWithBounds([]string{"default"})
-	worldPos := geometry.XYZ{
-		X: position.X + center.X,
-		Y: position.Y + center.Y,
-		Z: position.Z + center.Z,
-	}
-
-	const heavyMass = 1000.0
-	// Setup standard interactions based on classname
-	if strings.HasPrefix(classname, "func_door") {
-		return CreateConfigDoor(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
-	}
-	if strings.HasPrefix(classname, "func_plat") {
-		return CreateConfigPlat(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
-	}
-	if strings.HasPrefix(classname, "func_train") {
-		return CreateConfigPlatform(classname, worldPos, model3d, 0.0, heavyMass, 0.0), nil
-	}
-	if strings.HasPrefix(classname, "func_button") {
-		return CreateConfigButton(classname, worldPos, model3d, 0.0, 16.0, 16.0), nil
-	}
-	return CreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 0.0), nil
+	return CreateConfigThing(classname, "", position, model3d, ent), nil
 }
 
 // CreatePlayer loads and assembles a multi-part Quake 3 player model.

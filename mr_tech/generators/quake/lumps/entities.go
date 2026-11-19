@@ -97,6 +97,14 @@ func (p *Entity) GetProperty(text string) (string, bool) {
 	return v, ok
 }
 
+func (p *Entity) GetPropertyCleaned(text string) (string, bool) {
+	v, ok := p.GetProperty(text)
+	if !ok {
+		return "", false
+	}
+	return CleanString(v), ok
+}
+
 // GetSpawnFlags returns the parsed integer bitmask from the entity's "spawnflags" property.
 func (p *Entity) GetSpawnFlags() int {
 	val, ok := p.GetProperty("spawnflags")

@@ -104,19 +104,27 @@ func (t *Things) Create(ent *proc.MapEntity) (*config.Thing, error) {
 	// To align the bottom-left coordinate so center lands at (origin.X, origin.Y, origin.Z + height/2):
 	pos := geometry.XYZ{X: origin.X - radius, Y: origin.Y - radius, Z: origin.Z}
 
+	if spec.Kind == config.ThingEnemyDef && md3 != nil {
+		return CreateConfigEnemyParts(classname, pos, md3, angle, spec.Mass, spec.Speed, 300.0), nil
+	}
+	var category string
+	if c := strings.Split(classname, "_"); len(c) > 1 {
+		category = c[0]
+	}
 	if spec.Kind == config.ThingEnemyDef {
-		if md3 != nil {
-			return CreateConfigEnemyParts(classname, pos, md3, angle, spec.Mass, spec.Speed, 300.0), nil
-		}
-		return CreateConfigEnemy(classname, pos, cModel, angle, spec.Mass, spec.Speed, 300.0), nil
+		category = "enemy"
 	}
-	if keyId := d3KeyId(classname); keyId != "" || spec.Kind == config.ThingKeyDef {
-		if keyId == "" {
-			keyId = classname
-		}
-		return CreateConfigKey(classname, pos, cModel, angle, spec.Mass, spec.Speed, keyId), nil
+	thingCfg := CreateConfigThing(classname, category, pos, cModel, ent)
+	if angle != 0 {
+		thingCfg.Angle = angle
 	}
-	return CreateConfigItem(classname, pos, cModel, angle, spec.Mass, spec.Speed), nil
+	if spec.Mass > 0 && thingCfg.Kind != config.ThingKeyDef {
+		thingCfg.Mass = spec.Mass
+	}
+	if spec.Speed > 0 {
+		thingCfg.Speed = spec.Speed
+	}
+	return thingCfg, nil
 }
 
 // loadModel loads and caches a static 3D model (.md5mesh or .lwo) from the PK4 archive.

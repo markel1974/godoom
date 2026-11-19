@@ -38,8 +38,6 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
 
-	skinTargetIndex := 0
-	kind := config.ThingEnemyDef
 	var category string
 	var definition string
 	if c := strings.Split(classname, "_"); len(c) > 1 {
@@ -47,24 +45,14 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		definition = c[1]
 	}
 	items := map[string]int{"armor1": 0, "armor2": 1, "armorInv": 2}
-	speed := 0.0
+	skinTargetIndex := 0
 	switch category {
 	case "item":
-		kind = config.ThingItemDef
 		if skinTIndex, ok := items[definition]; ok {
 			skinTargetIndex = skinTIndex
 		}
-	case "weapon":
-		kind = config.ThingItemDef
-	case "enemy":
-		kind = config.ThingEnemyDef
-		speed = 1000
-	case "monster":
-		kind = config.ThingEnemyDef
-		speed = 1000
-	default:
-		return nil, fmt.Errorf("unknown thing %s", classname)
 	}
+
 	rsMd1, err := th.arc.Open(thingPath)
 	if err != nil {
 		return nil, fmt.Errorf("can't open %s: %s", thingPath, err.Error())
@@ -110,12 +98,7 @@ func (th *Things) CreateThing(pos geometry.XYZ, classname string) (*config.Thing
 		cModel.Frames[idx] = cFrame
 	}
 
-	thingCfg := CreateConfigThing(classname, pos, kind, cModel, 0, 30.0, speed)
-	//if keyId := q1KeyId(classname); keyId != "" {
-	//	thingCfg.Kind = config.ThingKeyDef
-	//	thingCfg.Mass = 0.1
-	//	thingCfg.Key = &config.KeySpec{KeyId: keyId}
-	//}
+	thingCfg := CreateConfigThing(classname, category, pos, cModel, nil)
 
 	return thingCfg, nil
 }
@@ -170,24 +153,8 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace, position geome
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	center, size := model3d.CenterWithBounds([]string{"default"})
-	worldPos := geometry.XYZ{X: position.X + center.X, Y: position.Y + center.Y, Z: position.Z + center.Z}
 
-	const heavyMass = 1000.0
-	// Setup standard interactions based on classname
-	if strings.HasPrefix(classname, "func_door") {
-		return CreateConfigDoor(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
-	}
-	if strings.HasPrefix(classname, "func_plat") {
-		return CreateConfigPlat(classname, worldPos, model3d, 0.0, heavyMass, 0.0, ent, size), nil
-	}
-	if strings.HasPrefix(classname, "func_train") {
-		return CreateConfigPlatform(classname, worldPos, model3d, 0.0, heavyMass, 0.0), nil
-	}
-	if strings.HasPrefix(classname, "func_button") {
-		return CreateConfigButton(classname, worldPos, model3d, 0.0, 16.0, 16.0), nil
-	}
-	return CreateConfigThing(classname, worldPos, config.ThingItemDef, model3d, 0.0, 16.0, 0.0), nil
+	return CreateConfigThing(classname, "", position, model3d, ent), nil
 }
 
 // CreateThingBSP loads a BSP file, processes its geometry, and creates a Thing with the specified position and classname.
@@ -262,6 +229,6 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 	// BSPs do not have vertex-morphing animations, 1 single frame
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
-	thingCfg := CreateConfigThing(classname, position, config.ThingItemDef, model3d, 0.0, 16.0, 0.0)
+	thingCfg := CreateConfigThing(classname, "", position, model3d, nil)
 	return thingCfg, nil
 }

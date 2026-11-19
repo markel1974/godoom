@@ -10,6 +10,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+func CleanString(in string) string {
+	return strings.Trim(strings.ToUpper(in), "\n\r\t ")
+}
+
 // ToString converts an array of 8 bytes into a string, stopping at the first null byte or the end of the array.
 func ToString(s [8]byte) string {
 	var i int

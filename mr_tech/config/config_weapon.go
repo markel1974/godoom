@@ -16,9 +16,9 @@ type Weapon struct {
 func NewWeaponDefault() *Weapon {
 	return &Weapon{
 		Force:        500000.0,
-		FireInterval: 1,
-		RechargeTime: 3,
-		MagazineSize: 6,
+		FireInterval: 0.3,
+		RechargeTime: 1,
+		MagazineSize: 12,
 	}
 }
 

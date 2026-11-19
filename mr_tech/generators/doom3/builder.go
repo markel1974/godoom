@@ -202,7 +202,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 				root.Things = append(root.Things, doorThing)
 			}
 		case "trigger":
-			if tpThing := buildTeleportSpec(ent, procModels, teleportDests); tpThing != nil {
+			if tpThing := BuildTeleportSpec(ent, procModels, teleportDests); tpThing != nil {
 				root.Things = append(root.Things, tpThing)
 			}
 		case "speaker": //IMPLEMENT

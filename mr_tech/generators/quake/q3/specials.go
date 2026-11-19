@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// q3KeyId returns the key identifier for a Quake 3 key classname, or an empty string if none matches.
 func q3KeyId(classname string) string {
 	switch classname {
 	case "item_key1":
@@ -27,13 +28,14 @@ func q3KeyId(classname string) string {
 	return ""
 }
 
-// TeleportDest holds the world position and facing angle (radians) of a Quake teleport destination entity.
+// TeleportDest describes a teleport target position and facing angle.
 type TeleportDest struct {
 	Pos   geometry.XYZ
 	Angle float64
 }
 
-// CollectTeleportDestinations indexes all teleport destination entities by their targetname.
+// CollectTeleportDestinations returns teleport destinations keyed by targetname from supported destination entities.
+// It reads origin coordinates and converts angle values from degrees to radians when present.
 func CollectTeleportDestinations(entities []*lumps.Entity) map[string]TeleportDest {
 	dests := make(map[string]TeleportDest)
 	for _, ent := range entities {
@@ -63,7 +65,8 @@ func CollectTeleportDestinations(entities []*lumps.Entity) map[string]TeleportDe
 	return dests
 }
 
-// BuildDoorSpec maps Quake func_door entity properties and brush bounds into a config.DoorSpec.
+// BuildDoorSpec constructs a door specification from entity properties and brush size.
+// It derives movement offset, timing, key requirements, start state, targets, and touch activation.
 func BuildDoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	const (
 		q1DoorStartOpen = 1
@@ -135,7 +138,8 @@ func BuildDoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// BuildPlatSpec maps Quake func_plat entity properties and brush bounds into a downward-sliding DoorSpec.
+// BuildPlatSpec builds a door spec for a moving platform from entity properties and brush size.
+// It derives downward travel from height or size minus lip, with defaults for speed and wait time.
 func BuildPlatSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	lip := 8.0
 	if rawLip, ok := ent.GetProperty("lip"); ok {
@@ -180,7 +184,8 @@ func BuildPlatSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// BuildTeleportFromPoints creates a ThingTeleportDef from a trigger brush's points and entity target.
+// BuildTeleportFromPoints creates a teleport Thing from brush points and an entity target.
+// It returns nil when points are empty, the target is missing, or no destination matches.
 func BuildTeleportFromPoints(id string, points []geometry.XYZ, offset geometry.XYZ, ent *lumps.Entity, dests map[string]TeleportDest) *config.Thing {
 	if len(points) == 0 {
 		return nil
@@ -243,7 +248,8 @@ func BuildTeleportFromPoints(id string, points []geometry.XYZ, offset geometry.X
 	return tpCfg
 }
 
-// CreateConfigThing creates a Thing configuration based on provided parameters and assigns logic for enemy or item behavior.
+// CreateConfigThing creates a thing at pos, centering its model and selecting enemy, key, or item config.
+// It uses a fixed enemy wakeup distance when kind identifies an enemy definition.
 func CreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	const wakeupDistance = 300.0
 	if cModel != nil {
@@ -258,6 +264,7 @@ func CreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType
 	return CreateConfigItem(classname, pos, cModel, angle, mass, speed)
 }
 
+// CreateConfigEnemy creates an enemy thing with an optional 3D model, position, orientation, and behavior parameters.
 func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed, wakeupDistance float64) *config.Thing {
 	var parts []*config.Model3DEntry
 	if cModel != nil {
@@ -280,6 +287,7 @@ func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3
 	return CreateConfigEnemyParts(classname, pos, md3, angle, mass, speed, wakeupDistance)
 }
 
+// CreateConfigEnemyParts creates an enemy thing configured with a multi-part 3D model, physics, and animations.
 func CreateConfigEnemyParts(classname string, pos geometry.XYZ, md3 *config.Model3D, angle, mass, speed, wakeupDistance float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingEnemyDef, mass, 0, 0, speed)
 	thingCfg.Model3D = md3
@@ -294,6 +302,7 @@ func CreateConfigEnemyParts(classname string, pos geometry.XYZ, md3 *config.Mode
 	return thingCfg
 }
 
+// CreateConfigItem creates an item thing with the given position, model, angle, mass, and speed.
 func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingItemDef, mass, 0, 0, speed)
 	thingCfg.GForce = GForce
@@ -302,6 +311,7 @@ func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+// CreateConfigKey creates a key thing at the given position with model, angle, movement speed, and key ID.
 func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
 	thingCfg.GForce = GForce
@@ -311,6 +321,7 @@ func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DE
 	return thingCfg
 }
 
+// CreateConfigDoor creates a door thing configuration with model, movement, physics, and entity-derived door data.
 func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *lumps.Entity, size geometry.XYZ) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
@@ -319,6 +330,7 @@ func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+// CreateConfigPlat creates a platform thing configuration with model, motion settings, and door platform spec.
 func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *lumps.Entity, size geometry.XYZ) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
@@ -327,6 +339,7 @@ func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+// CreateConfigPlatform creates a platform thing configuration with the given transform, model, mass, and speed.
 func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingPlatformDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
@@ -334,6 +347,7 @@ func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Mod
 	return thingCfg
 }
 
+// CreateConfigButton creates a button thing configuration with the given class, position, model, angle, mass, and speed.
 func CreateConfigButton(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingButtonDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0

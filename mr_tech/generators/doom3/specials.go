@@ -11,6 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// d3KeyId returns the normalized key identifier for a Doom 3 key classname, or an empty string if unknown.
 func d3KeyId(classname string) string {
 	switch classname {
 	case "item_key_blue":
@@ -38,12 +39,13 @@ func d3KeyId(classname string) string {
 	return ""
 }
 
+// TeleportDest describes a named teleport destination with its target position and facing angle.
 type TeleportDest struct {
 	pos   geometry.XYZ
 	angle float64
 }
 
-// collectTeleportDestinations indexes teleport destination entities by their Doom 3 entity "name".
+// collectTeleportDestinations returns named teleport destination entities with valid origins and yaw angles.
 func collectTeleportDestinations(entities []*proc.MapEntity) map[string]*TeleportDest {
 	destinations := make(map[string]*TeleportDest)
 	for _, ent := range entities {
@@ -70,8 +72,8 @@ func collectTeleportDestinations(entities []*proc.MapEntity) map[string]*Telepor
 	return destinations
 }
 
-// buildDoorOrLift converts a Doom 3 func_door, func_plat, or func_elevator entity (using either
-// an inline .proc submodel or an external .lwo model) into a dynamic ThingDoorDef.
+// buildDoorOrLift converts a supported non-dormant mover entity into a door, lift, platform, or button thing.
+// It bakes the entity model and reports false when unsupported or lacking usable geometry.
 func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, materials *proc.Materials, arc *proc.Pk4, thingsManager *Things) (*config.Thing, bool) {
 	if ent.IsDormant() {
 		return nil, false
@@ -124,7 +126,8 @@ func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, mat
 	return CreateConfigThing(id, worldPos, config.ThingItemDef, cModel, 0.0, 16.0, 0.0), true
 }
 
-// bakeLWOModel converts an external Doom 3 .lwo model into a world-transformed Model3DEntry.
+// bakeLWOModel loads and converts an LWO model into a Model3DEntry using entity transforms and resolved materials.
+// It returns nil when the model cannot be opened, parsed, or produces no triangles.
 func bakeLWOModel(modelPath string, ent *proc.MapEntity, materials *proc.Materials, arc proc.IPkArchive) *config.Model3DEntry {
 	cleanPath := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(modelPath, "\\", "/")))
 	lf, err := arc.Open(cleanPath)
@@ -203,7 +206,8 @@ func bakeLWOModel(modelPath string, ent *proc.MapEntity, materials *proc.Materia
 	return model3d
 }
 
-// bakeProcModel converts an inline Doom 3 .proc submodel into a world-transformed Model3DEntry.
+// bakeProcModel converts a proc model entity into a Model3D entry.
+// It resolves materials, skips decal and shadow surfaces, and applies the entity transform.
 func bakeProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Materials, arc *proc.Pk4) *config.Model3DEntry {
 	var allTriangles []config.Model3DEntryTriangle
 	for _, surface := range model.Surfaces {
@@ -251,7 +255,8 @@ func bakeProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Mater
 	return model3d
 }
 
-// BuildDoorSpec maps Doom 3 func_door entity properties and model bounds into a config.DoorSpec.
+// BuildDoorSpec builds a door specification from entity properties and the provided door size.
+// It derives movement direction, travel distance, speed, wait time, lock requirements, and targets.
 func BuildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	var dirX, dirY, dirZ float64
 	hasDir := false
@@ -368,7 +373,8 @@ func BuildDoorSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// BuildPlatSpec maps Doom 3 func_plat / func_elevator entity properties and model bounds into a config.DoorSpec.
+// BuildPlatSpec creates a touch-activated platform door spec from entity properties and brush size.
+// It derives travel, speed, wait time, target name, and target with sensible defaults.
 func BuildPlatSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	lip := 8.0
 	if raw, ok := ent.GetProperty("lip"); ok {
@@ -409,8 +415,9 @@ func BuildPlatSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// buildTeleport creates a ThingTeleportDef from a trigger_teleport (or trigger targeting a teleport dest).
-func buildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, destinations map[string]*TeleportDest) *config.Thing {
+// BuildTeleportSpec creates a teleport config thing from a map entity and its target destination.
+// It returns nil for dormant entities, missing targets, unknown destinations, or unresolved positions.
+func BuildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, destinations map[string]*TeleportDest) *config.Thing {
 	if ent.IsDormant() {
 		return nil
 	}
@@ -499,22 +506,7 @@ func buildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, d
 	return tpCfg
 }
 
-// BuildLiftSpec is an alias for BuildPlatSpec.
-func BuildLiftSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
-	return BuildPlatSpec(ent, size)
-}
-
-// BuildTeleportSpec is an exported wrapper for buildTeleportSpec.
-func BuildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, destinations map[string]*TeleportDest) *config.Thing {
-	return buildTeleportSpec(ent, procModels, destinations)
-}
-
-// BuildDoorOrLift is an exported wrapper for buildDoorOrLift.
-func BuildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, materials *proc.Materials, arc *proc.Pk4, thingsManager *Things) (*config.Thing, bool) {
-	return buildDoorOrLift(ent, procModels, materials, arc, thingsManager)
-}
-
-// CreateConfigThing creates a Thing configuration based on provided parameters and assigns logic for enemy or item behavior.
+// CreateConfigThing creates a configured thing at pos, centering its model and selecting enemy, key, or item behavior.
 func CreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	const wakeupDistance = 300.0
 	if cModel != nil {
@@ -529,6 +521,7 @@ func CreateConfigThing(classname string, pos geometry.XYZ, kind config.ThingType
 	return CreateConfigItem(classname, pos, cModel, angle, mass, speed)
 }
 
+// CreateConfigEnemy creates an enemy thing from an optional model and basic movement and wakeup settings.
 func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed, wakeupDistance float64) *config.Thing {
 	var parts []*config.Model3DEntry
 	if cModel != nil {
@@ -551,6 +544,7 @@ func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3
 	return CreateConfigEnemyParts(classname, pos, md3, angle, mass, speed, wakeupDistance)
 }
 
+// CreateConfigEnemyParts creates an enemy Thing with a multipart 3D model, physics settings, and animations.
 func CreateConfigEnemyParts(classname string, pos geometry.XYZ, md3 *config.Model3D, angle, mass, speed, wakeupDistance float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingEnemyDef, mass, 0, 0, speed)
 	thingCfg.Model3D = md3
@@ -571,6 +565,8 @@ func CreateConfigEnemyParts(classname string, pos geometry.XYZ, md3 *config.Mode
 	return thingCfg
 }
 
+// CreateConfigItem creates an item thing configuration with the given class, position, model, angle, mass, and speed.
+// It applies the default gravity force, registers the item, and returns the configured thing.
 func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingItemDef, mass, 0, 0, speed)
 	thingCfg.GForce = GForce
@@ -579,6 +575,7 @@ func CreateConfigItem(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+// CreateConfigKey creates a key thing configuration with the given class, placement, model, motion values, and key ID.
 func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
 	thingCfg.GForce = GForce
@@ -588,6 +585,8 @@ func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DE
 	return thingCfg
 }
 
+// CreateConfigDoor creates a door thing configuration with model, physics, placement, and door spec data.
+// It builds the door spec from the source map entity and size, then attaches it to the returned thing.
 func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *proc.MapEntity, size geometry.XYZ) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
@@ -596,6 +595,7 @@ func CreateConfigDoor(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+// CreateConfigPlat creates a platform thing configuration with model, motion, and door platform settings.
 func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, ent *proc.MapEntity, size geometry.XYZ) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingDoorDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
@@ -604,6 +604,8 @@ func CreateConfigPlat(classname string, pos geometry.XYZ, cModel *config.Model3D
 	return thingCfg
 }
 
+// CreateConfigPlatform creates a platform Thing at pos with the given model, angle, mass, and movement speed.
+// CreateConfigPlatform sets gravity force to zero for the returned platform.
 func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingPlatformDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0
@@ -611,6 +613,8 @@ func CreateConfigPlatform(classname string, pos geometry.XYZ, cModel *config.Mod
 	return thingCfg
 }
 
+// CreateConfigButton creates a button thing at the given position with model, angle, mass, and speed settings.
+// It initializes the button with no gravity force and attaches the supplied 3D model entry.
 func CreateConfigButton(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64) *config.Thing {
 	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingButtonDef, mass, 0, 0, speed)
 	thingCfg.GForce = 0.0

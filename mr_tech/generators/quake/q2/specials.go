@@ -112,11 +112,11 @@ func BuildDoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 		}
 	}
 
-	spawnflags := ent.GetSpawnFlags()
+	spawnFlags := ent.GetSpawnFlags()
 	requiredKey := ""
-	if spawnflags&q1DoorGoldKey != 0 {
+	if spawnFlags&q1DoorGoldKey != 0 {
 		requiredKey = "gold"
-	} else if spawnflags&q1DoorSilverKey != 0 {
+	} else if spawnFlags&q1DoorSilverKey != 0 {
 		requiredKey = "silver"
 	}
 
@@ -128,7 +128,7 @@ func BuildDoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 		OpenOffset:  geometry.XYZ{X: dirX * travel, Y: dirY * travel, Z: dirZ * travel},
 		Speed:       speed,
 		WaitSeconds: waitSeconds,
-		StartOpen:   spawnflags&q1DoorStartOpen != 0,
+		StartOpen:   spawnFlags&q1DoorStartOpen != 0,
 		TargetName:  targetName,
 		Target:      target,
 		Activation:  config.DoorActivateTouch,

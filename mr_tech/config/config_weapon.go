@@ -4,8 +4,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// weaponTest identifies the default test weapon used in player and root configuration.
 const weaponTest = "weapon_test"
 
+// Weapon defines firing and reload characteristics for a weapon attached to a game entity.
 type Weapon struct {
 	Force        float64
 	FireInterval float64
@@ -13,6 +15,7 @@ type Weapon struct {
 	MagazineSize int
 }
 
+// NewWeaponDefault creates and returns a Weapon initialized with default gameplay settings.
 func NewWeaponDefault() *Weapon {
 	return &Weapon{
 		Force:        500000.0,
@@ -22,12 +25,10 @@ func NewWeaponDefault() *Weapon {
 	}
 }
 
+// NewConfigWeapon creates a weapon Thing configuration with the specified ID, position, angle, and mass.
+// It initializes the Thing with default weapon settings.
 func NewConfigWeapon(id string, pos geometry.XYZ, angle float64, mass float64) *Thing {
 	c := NewConfigThing(id, pos, angle, ThingWeaponDef, mass, 0, 0, 0)
 	c.Weapon = NewWeaponDefault()
-	//weapon := common.NewWeapon(c)
-	//c.OnCollision = weapon.OnCollision
-	//c.OnImpact = weapon.OnImpact
-	//c.OnBind = weapon.OnBind
 	return c
 }

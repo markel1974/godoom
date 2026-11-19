@@ -262,11 +262,10 @@ func CreateConfigWeapon(classname string, pos geometry.XYZ, cModel *config.Model
 }
 
 func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
+	thingCfg := config.NewConfigKey(classname, pos, angle, mass, keyId)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
-	thingCfg.Mass = 0.1
-	thingCfg.Key = config.NewKeySpec(keyId)
+	_ = common.NewKey(thingCfg)
 	return thingCfg
 }
 

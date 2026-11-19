@@ -230,7 +230,7 @@ func CreateConfigThing(classname string, category string, pos geometry.XYZ, cMod
 		cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
 	}
 	if keyId := q3KeyId(classname); len(keyId) > 0 {
-		return CreateConfigKey(classname, pos, cModel, 0, 0.1, 0.0, keyId)
+		return CreateConfigKey(classname, pos, cModel, 0, 0.1, keyId)
 	}
 	switch category {
 	case "item", "ammo", "holdable":
@@ -302,12 +302,11 @@ func CreateConfigWeapon(classname string, pos geometry.XYZ, cModel *config.Model
 }
 
 // CreateConfigKey creates a key thing at the given position with model, angle, movement speed, and key ID.
-func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass, speed float64, keyId string) *config.Thing {
-	thingCfg := config.NewConfigThing(classname, pos, angle, config.ThingKeyDef, mass, 0, 0, speed)
+func CreateConfigKey(classname string, pos geometry.XYZ, cModel *config.Model3DEntry, angle, mass float64, keyId string) *config.Thing {
+	thingCfg := config.NewConfigKey(classname, pos, angle, mass, keyId)
 	thingCfg.GForce = GForce
 	thingCfg.Model3DEntry = cModel
-	thingCfg.Mass = 0.1
-	thingCfg.Key = config.NewKeySpec(keyId)
+	_ = common.NewKey(thingCfg)
 	return thingCfg
 }
 

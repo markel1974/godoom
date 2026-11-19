@@ -29,42 +29,6 @@ func q2KeyId(classname string) string {
 	return ""
 }
 
-// TeleportDest holds the world position and facing angle (radians) of a Quake teleport destination entity.
-type TeleportDest struct {
-	Pos   geometry.XYZ
-	Angle float64
-}
-
-// CollectTeleportDestinations indexes all teleport destination entities by their targetname.
-func CollectTeleportDestinations(entities []*lumps.Entity) map[string]TeleportDest {
-	dests := make(map[string]TeleportDest)
-	for _, ent := range entities {
-		classname, _ := ent.GetProperty("classname")
-		if classname != "info_teleport_destination" &&
-			classname != "misc_teleporter_dest" &&
-			classname != "target_position" {
-			continue
-		}
-		targetName, ok := ent.GetProperty("targetname")
-		if !ok || targetName == "" {
-			continue
-		}
-		var pos geometry.XYZ
-		if origin, okOrig := ent.GetProperty("origin"); okOrig {
-			x, y, z, _ := lumps.ParseVector(origin)
-			pos = lumps.CreateXYZ(x, y, z)
-		}
-		angle := 0.0
-		if rawAngle, okAng := ent.GetProperty("angle"); okAng {
-			if parsed, okParse := lumps.ParseFloat(rawAngle); okParse {
-				angle = parsed * (math.Pi / 180.0)
-			}
-		}
-		dests[targetName] = TeleportDest{Pos: pos, Angle: angle}
-	}
-	return dests
-}
-
 // BuildDoorSpec maps Quake func_door entity properties and brush bounds into a config.DoorSpec.
 func BuildDoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	const (
@@ -182,17 +146,9 @@ func BuildPlatSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// BuildTeleportFromPoints creates a ThingTeleportDef from a trigger brush's points and entity target.
-func BuildTeleportFromPoints(id string, points []geometry.XYZ, offset geometry.XYZ, ent *lumps.Entity, dests map[string]TeleportDest) *config.Thing {
+// CreateConfigTeleport creates a teleport thing from brush point bounds and a target destination.
+func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ, dest *TeleportDest) *config.Thing {
 	if len(points) == 0 {
-		return nil
-	}
-	target, ok := ent.GetProperty("target")
-	if !ok || strings.TrimSpace(target) == "" {
-		return nil
-	}
-	dest, ok := dests[target]
-	if !ok {
 		return nil
 	}
 

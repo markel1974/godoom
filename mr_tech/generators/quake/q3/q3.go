@@ -167,7 +167,8 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	}
 
 	playerSpawned := false
-	teleportDests := CollectTeleportDestinations(entities)
+	teleport := NewTeleport()
+	teleport.Collect(entities)
 	for _, ent := range entities {
 		classname := ent.Properties["classname"]
 		baseClass := classname
@@ -203,8 +204,12 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 				for _, rf := range rawFaces {
 					pts = append(pts, rf.Points...)
 				}
-				if tpThing := BuildTeleportFromPoints(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, ent, teleportDests); tpThing != nil {
-					root.Things = append(root.Things, tpThing)
+				if target, ok := ent.GetProperty("target"); ok {
+					if dest := teleport.Get(target); dest != nil {
+						if tpThing := CreateConfigTeleport(fmt.Sprintf("%s_%d", classname, modelIdx), pts, pos, dest); tpThing != nil {
+							root.Things = append(root.Things, tpThing)
+						}
+					}
 				}
 			}
 			continue

@@ -39,39 +39,6 @@ func d3KeyId(classname string) string {
 	return ""
 }
 
-// TeleportDest describes a named teleport destination with its target position and facing angle.
-type TeleportDest struct {
-	pos   geometry.XYZ
-	angle float64
-}
-
-// collectTeleportDestinations returns named teleport destination entities with valid origins and yaw angles.
-func collectTeleportDestinations(entities []*proc.MapEntity) map[string]*TeleportDest {
-	destinations := make(map[string]*TeleportDest)
-	for _, ent := range entities {
-		classname, _ := ent.GetProperty("classname")
-		if classname != "info_player_teleport" &&
-			classname != "info_teleport_destination" &&
-			classname != "target_teleporter" &&
-			classname != "misc_teleporter_dest" {
-			continue
-		}
-		name, ok := ent.GetProperty("name")
-		if !ok || name == "" {
-			continue
-		}
-		origin, err := ent.GetOrigin()
-		if err != nil {
-			continue
-		}
-		destinations[name] = &TeleportDest{
-			pos:   origin,
-			angle: ent.GetAngle(),
-		}
-	}
-	return destinations
-}
-
 // buildDoorOrLift converts a supported non-dormant mover entity into a door, lift, platform, or button thing.
 // It bakes the entity model and reports false when unsupported or lacking usable geometry.
 func buildDoorOrLift(ent *proc.MapEntity, procModels map[string]*proc.Model, materials *proc.Materials, arc *proc.Pk4, thingsManager *Things) (*config.Thing, bool) {
@@ -399,22 +366,13 @@ func BuildPlatSpec(ent *proc.MapEntity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// BuildTeleportSpec creates a teleport config thing from a map entity and its target destination.
-// It returns nil for dormant entities, missing targets, unknown destinations, or unresolved positions.
-func BuildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, destinations map[string]*TeleportDest) *config.Thing {
+// CreateConfigTeleport creates a teleport config thing from a map entity and its target destination.
+// It returns nil for dormant entities or unresolved positions.
+func CreateConfigTeleport(ent *proc.MapEntity, procModels map[string]*proc.Model, dest *TeleportDest) *config.Thing {
 	if ent.IsDormant() {
 		return nil
 	}
 	classname, _ := ent.GetProperty("classname")
-	target, ok := ent.GetProperty("target")
-	if !ok || strings.TrimSpace(target) == "" {
-		return nil
-	}
-	dest, ok := destinations[target]
-	if !ok {
-		return nil
-	}
-
 	modelProp, _ := ent.GetProperty("model")
 	nameProp, _ := ent.GetProperty("name")
 	var pModel *proc.Model
@@ -482,8 +440,8 @@ func BuildTeleportSpec(ent *proc.MapEntity, procModels map[string]*proc.Model, d
 	tpCfg.GForce = 0
 	_ = common.NewItem(tpCfg)
 	tpCfg.Teleport = &config.TeleportSpec{
-		Destination:   dest.pos,
-		TargetAngle:   dest.angle,
+		Destination:   dest.Pos,
+		TargetAngle:   dest.Angle,
 		ResetVelocity: true,
 		Cooldown:      0.5,
 	}

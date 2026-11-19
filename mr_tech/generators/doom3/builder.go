@@ -168,7 +168,8 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	for _, model := range procFile.Models {
 		procModels[model.Name] = model
 	}
-	teleportDests := collectTeleportDestinations(entities)
+	teleport := NewTeleport()
+	teleport.Collect(entities)
 
 	thingsManager := NewThings(arc, materials, defs, texManager, imgLoader)
 	for _, ent := range entities {
@@ -202,8 +203,12 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 				root.Things = append(root.Things, doorThing)
 			}
 		case "trigger":
-			if tpThing := BuildTeleportSpec(ent, procModels, teleportDests); tpThing != nil {
-				root.Things = append(root.Things, tpThing)
+			if target, ok := ent.GetProperty("target"); ok {
+				if dest := teleport.Get(target); dest != nil {
+					if tpThing := CreateConfigTeleport(ent, procModels, dest); tpThing != nil {
+						root.Things = append(root.Things, tpThing)
+					}
+				}
 			}
 		case "speaker": //IMPLEMENT
 		case "sound": //IMPLEMENT

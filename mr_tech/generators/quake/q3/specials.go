@@ -28,43 +28,6 @@ func q3KeyId(classname string) string {
 	return ""
 }
 
-// TeleportDest describes a teleport target position and facing angle.
-type TeleportDest struct {
-	Pos   geometry.XYZ
-	Angle float64
-}
-
-// CollectTeleportDestinations returns teleport destinations keyed by targetname from supported destination entities.
-// It reads origin coordinates and converts angle values from degrees to radians when present.
-func CollectTeleportDestinations(entities []*lumps.Entity) map[string]TeleportDest {
-	dests := make(map[string]TeleportDest)
-	for _, ent := range entities {
-		classname, _ := ent.GetProperty("classname")
-		if classname != "info_teleport_destination" &&
-			classname != "misc_teleporter_dest" &&
-			classname != "target_position" {
-			continue
-		}
-		targetName, ok := ent.GetProperty("targetname")
-		if !ok || targetName == "" {
-			continue
-		}
-		var pos geometry.XYZ
-		if origin, okOrig := ent.GetProperty("origin"); okOrig {
-			x, y, z, _ := lumps.ParseVector(origin)
-			pos = lumps.CreateXYZ(x, y, z)
-		}
-		angle := 0.0
-		if rawAngle, okAng := ent.GetProperty("angle"); okAng {
-			if parsed, okParse := lumps.ParseFloat(rawAngle); okParse {
-				angle = parsed * (math.Pi / 180.0)
-			}
-		}
-		dests[targetName] = TeleportDest{Pos: pos, Angle: angle}
-	}
-	return dests
-}
-
 // BuildDoorSpec constructs a door specification from entity properties and brush size.
 // It derives movement offset, timing, key requirements, start state, targets, and touch activation.
 func BuildDoorSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
@@ -184,18 +147,10 @@ func BuildPlatSpec(ent *lumps.Entity, size geometry.XYZ) *config.DoorSpec {
 	}
 }
 
-// BuildTeleportFromPoints creates a teleport Thing from brush points and an entity target.
-// It returns nil when points are empty, the target is missing, or no destination matches.
-func BuildTeleportFromPoints(id string, points []geometry.XYZ, offset geometry.XYZ, ent *lumps.Entity, dests map[string]TeleportDest) *config.Thing {
+// CreateConfigTeleport creates a teleport Thing from brush points and a destination.
+// It returns nil when points are empty.
+func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ, dest *TeleportDest) *config.Thing {
 	if len(points) == 0 {
-		return nil
-	}
-	target, ok := ent.GetProperty("target")
-	if !ok || strings.TrimSpace(target) == "" {
-		return nil
-	}
-	dest, ok := dests[target]
-	if !ok {
 		return nil
 	}
 

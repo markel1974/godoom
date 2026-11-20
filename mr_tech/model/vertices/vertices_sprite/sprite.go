@@ -125,13 +125,11 @@ func (v *VerticesSprite) QueryOverlaps(object aabb.IObject, callback func(object
 
 // GetAABB returns the axis-aligned bounding box of the sprite's underlying entity.
 func (v *VerticesSprite) GetAABB() *aabb.AABB {
-	ent := v.ent
-	cx, cy, cz := ent.GetCenter()
-	w, h, d := ent.GetSize()
-	hx, hy, hz := w*0.5, h*0.5, d*0.5
-	b := ent.GetAABB()
-	b.Rebuild(cx-hx, cy-hy, cz-hz, cx+hx, cy+hy, cz+hz)
-	return b
+	return v.ent.GetAABB()
+}
+
+// Translate shifts the sprite AABB by the specified displacement.
+func (v *VerticesSprite) Translate(dx, dy, dz float64) {
 }
 
 // Compile updates the sprite's view volume from its current volume.

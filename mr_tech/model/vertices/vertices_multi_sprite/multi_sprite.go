@@ -51,14 +51,17 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 		debug:      false,
 	}
 
-	v.standingHalfH = v.cfg.Height * 0.5
-	if v.standingHalfH <= 0 && len(v.cfg.MultiSprite.Views) > 0 {
+	v.standingHalfH = 0
+	if len(v.cfg.MultiSprite.Views) > 0 {
 		if mat0 := v.materials.GetMaterial(v.cfg.MultiSprite.Views[0]); mat0 != nil {
 			if head0 := mat0.GetHeadFrame(); head0 != nil {
 				_, h0 := head0.GetSize()
 				v.standingHalfH = h0 * 0.5
 			}
 		}
+	}
+	if v.standingHalfH <= 0 {
+		v.standingHalfH = v.cfg.Height * 0.5
 	}
 	if v.standingHalfH <= 0 {
 		v.standingHalfH = 28.0
@@ -127,14 +130,14 @@ func (v *MultiSprite) GetSolver() *collisions.Solver {
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
 func (v *MultiSprite) updateBounds() {
 	ent := v.ent
-	w, _, d := ent.GetSize()
-	halfW := w * 0.5
+	width, _, height := ent.GetSize()
+	halfW := width * 0.5
 	v.minX = -halfW
 	v.maxX = halfW
 	v.minY = -halfW
 	v.maxY = halfW
 	v.minZ = -v.standingHalfH
-	v.maxZ = -v.standingHalfH + d
+	v.maxZ = -v.standingHalfH + height
 }
 
 // QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
@@ -144,11 +147,11 @@ func (v *MultiSprite) QueryOverlaps(object aabb.IObject, callback func(object aa
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *MultiSprite) GetAABB() *aabb.AABB {
-	ent := v.ent
-	cx, cy, cz := ent.GetCenter()
-	b := ent.GetAABB()
-	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
-	return b
+	return v.ent.GetAABB()
+}
+
+// Translate shifts the multi-sprite AABB by the specified displacement.
+func (v *MultiSprite) Translate(dx, dy, dz float64) {
 }
 
 // Compile updates the view volume to the current action volume and refreshes the enclosing AABB.

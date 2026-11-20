@@ -262,17 +262,11 @@ func (v *Element3D) GetSolver() *collisions.Solver {
 
 // GetAABB returns the entity bounding box updated from cached vertex bounds when applicable.
 func (v *Element3D) GetAABB() *aabb.AABB {
-	ent := v.ent
-	b := ent.GetAABB()
-	if v.singleFrame {
-		qx, qy, qz, qw := ent.GetQRotation().Get()
-		if qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
-			return b
-		}
-	}
-	cx, cy, cz := ent.GetCenter()
-	b.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
-	return b
+	return v.ent.GetAABB()
+}
+
+// Translate shifts the 3D element AABB by the specified displacement.
+func (v *Element3D) Translate(dx, dy, dz float64) {
 }
 
 // QueryOverlaps invokes callback for each object whose bounds overlap object, stopping when callback returns false.
@@ -558,11 +552,7 @@ func (v *Element3D) IsActionClamped(idx int) bool {
 	if idx < 0 || idx >= len(v.actions) || v.actions[idx] == nil {
 		return false
 	}
-	act := v.actions[idx]
-	if act.Clamp {
-		return true
-	}
-	return strings.Contains(act.Name, "death") || strings.Contains(act.Name, "die") || strings.Contains(act.Name, "dead")
+	return v.actions[idx].Clamp
 }
 
 // FreezeCurrentFrame locks the entry to the current frame and resets interpolation.

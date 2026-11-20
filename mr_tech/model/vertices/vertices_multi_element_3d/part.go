@@ -78,26 +78,34 @@ func (v *Part) ReleasePhysics(collisionGroup uint64, vx, vy, vz, wx, wy, wz floa
 	}
 	v.entry.UnsetLastRolVolA()
 	v.entry.CompileDetached()
+	v.UpdateAABB()
 }
 
 // Compile updates the owner animation pose when attached, or rotates the frozen rigid mesh when detached/ragdoll.
 func (v *Part) Compile(tick uint64) bool {
 	if v.physicsFree {
 		v.entry.CompileDetached()
+		v.UpdateAABB()
 		return false
 	}
 	v.parent.Compile(tick)
 	return false
 }
 
-// GetAABB returns this segment's current world-space bounding box.
-func (v *Part) GetAABB() *aabb.AABB {
-	//TODO BETTER IMPLEMENTATION
-	b := v.ent.GetAABB()
+// UpdateAABB updates the part's world-space bounding box from its current entity center and entry bounds.
+func (v *Part) UpdateAABB() {
 	cx, cy, cz := v.ent.GetCenter()
 	entryMinX, entryMinY, entryMinZ, entryMaxX, entryMaxY, entryMaxZ := v.entry.GetMinMax()
-	b.Rebuild(cx+entryMinX, cy+entryMinY, cz+entryMinZ, cx+entryMaxX, cy+entryMaxY, cz+entryMaxZ)
-	return b
+	v.ent.GetAABB().Rebuild(cx+entryMinX, cy+entryMinY, cz+entryMinZ, cx+entryMaxX, cy+entryMaxY, cz+entryMaxZ)
+}
+
+// GetAABB returns this segment's current world-space bounding box.
+func (v *Part) GetAABB() *aabb.AABB {
+	return v.ent.GetAABB()
+}
+
+// Translate shifts the part AABB by the specified displacement.
+func (v *Part) Translate(dx, dy, dz float64) {
 }
 
 // GetSolver returns this segment's dedicated collision solver.

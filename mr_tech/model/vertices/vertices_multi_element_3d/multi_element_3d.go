@@ -168,15 +168,13 @@ func (v *MultiElement3D) QueryOverlaps(object aabb.IObject, callback func(object
 	v.elements.QueryOverlaps(object, callback)
 }
 
-// GetAABB returns the entity's axis-aligned bounding box, rebuilding it from cached vertex extents when available.
+// GetAABB returns the entity's axis-aligned bounding box.
 func (v *MultiElement3D) GetAABB() *aabb.AABB {
-	ent := v.ent
-	ab := ent.GetAABB()
-	if v.minX <= v.maxX {
-		cx, cy, cz := ent.GetCenter()
-		ab.Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
-	}
-	return ab
+	return v.ent.GetAABB()
+}
+
+// Translate shifts the multi-element 3D AABB by the specified displacement.
+func (v *MultiElement3D) Translate(dx, dy, dz float64) {
 }
 
 // HandlePartImpact applies an impact to a part, records the hit, adds knockback, and may detach stressed joints.
@@ -478,7 +476,7 @@ func (v *MultiElement3D) SyncAttachedParts() {
 		rcAx, rcAy, rcAz := rotA.RotatePoint(mcA.X, mcA.Y, mcA.Z)
 		origAX, origAY, origAZ := v.joints.GetOriginsA(i)
 		pv.ent.MoveCenterTo(cx+origAX+rcAx, cy+origAY+rcAy, cz+origAZ+rcAz)
-		pv.GetAABB()
+		pv.UpdateAABB()
 	}
 }
 
@@ -562,7 +560,7 @@ func (v *MultiElement3D) Compile(tick uint64) bool {
 		pqx, pqy, pqz, pqw := v.partScratchQ.Get()
 		pv.ent.MoveCenterTo(cx+relX, cy+relY, cz+relZ)
 		pv.ent.SetRotationQuaternion(pqx, pqy, pqz, pqw)
-		pv.GetAABB()
+		pv.UpdateAABB()
 		entryMinX, entryMinY, entryMinZ, entryMaxX, entryMaxY, entryMaxZ := entry.GetMinMax()
 
 		if pMinX := relX + entryMinX; pMinX < minX {

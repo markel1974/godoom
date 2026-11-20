@@ -37,6 +37,16 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxZ = maxZ
 }
 
+// Translate shifts the AABB by the specified displacement.
+func (a *AABB) Translate(dx, dy, dz float64) {
+	a.minX += dx
+	a.maxX += dx
+	a.minY += dy
+	a.maxY += dy
+	a.minZ += dz
+	a.maxZ += dz
+}
+
 // GetMinMax returns the minimum and maximum coordinates (minX, minY, minZ, maxX, maxY, maxZ) of the AABB.
 func (a *AABB) GetMinMax() (float64, float64, float64, float64, float64, float64) {
 	return a.minX, a.minY, a.minZ, a.maxX, a.maxY, a.maxZ

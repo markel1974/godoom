@@ -17,13 +17,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Vertices3DEntryComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
+// Vertices3DEntryComposed links a volume with its collision solver for composed 3D vertex processing.
 type Vertices3DEntryComposed struct {
 	volume *volumes.Volume
 	solver *collisions.Solver
 }
 
-// NewVertices3DEntryComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
+// NewVertices3DEntryComposed creates a composed 3D vertices entry for volume using its collision solver.
 func NewVertices3DEntryComposed(volume *volumes.Volume) *Vertices3DEntryComposed {
 	return &Vertices3DEntryComposed{
 		solver: volume.GetSolver(),
@@ -31,12 +31,12 @@ func NewVertices3DEntryComposed(volume *volumes.Volume) *Vertices3DEntryComposed
 	}
 }
 
-// Setup initializes the composed 3D entry volume's collision solver with object.
+// Setup initializes the collision solver with the provided object.
 func (vm *Vertices3DEntryComposed) Setup(object collisions.IObject) error {
 	return vm.solver.Setup(object)
 }
 
-// QueryOverlaps checks for overlaps between the entity's volume and the given object, invoking the callback for each match.
+// QueryOverlaps searches the active volume for objects whose AABB overlaps object's AABB, invoking callback for each.
 func (vm *Vertices3DEntryComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	vm.volume.QueryOverlaps(object, callback)
 }
@@ -46,16 +46,17 @@ func (vm *Vertices3DEntryComposed) GetSolver() *collisions.Solver {
 	return vm.solver
 }
 
-// GetFaces retrieves the collection of faces associated with the entity's current volume.
+// GetFaces returns the face collection for the current volume.
 func (vm *Vertices3DEntryComposed) GetFaces() *volumes.Faces {
 	return vm.volume.GetFaces()
 }
 
-// SetVolume updates the current volume of the entity.
+// SetVolume assigns the active volume used by the composed entry.
 func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *volumes.Volume) {
 	vm.volume = activeVolume
 }
 
+// Deform applies an impulse to the volume around impact within radius and reports whether it changed.
 func (vm *Vertices3DEntryComposed) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if vm.volume != nil {
 		return vm.volume.Deform(impact, impulse, radius)
@@ -63,6 +64,7 @@ func (vm *Vertices3DEntryComposed) Deform(impact geometry.XYZ, impulse geometry.
 	return false
 }
 
+// DeformDent applies an inward dent at impact along the opposite normal, scaled by depth within radius.
 func (vm *Vertices3DEntryComposed) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{
 		X: -normal.X * depth,
@@ -72,7 +74,7 @@ func (vm *Vertices3DEntryComposed) DeformDent(impact geometry.XYZ, normal geomet
 	return vm.Deform(impact, impulse, radius)
 }
 
-// VAction defines a named animation action with frame bounds and optional clamping behavior.
+// VAction describes a named vertex animation frame range and whether playback should clamp at its end.
 type VAction struct {
 	Name  string
 	Start int
@@ -80,7 +82,7 @@ type VAction struct {
 	Clamp bool
 }
 
-// NewVAction creates a vertex action with the given name and frame interval, with clamping disabled.
+// NewVAction creates a VAction with the given name and frame interval, with clamping disabled.
 func NewVAction(name string, start int, end int) *VAction {
 	return &VAction{
 		Name:  name,
@@ -90,52 +92,50 @@ func NewVAction(name string, start int, end int) *VAction {
 	}
 }
 
-// Vertices3DEntry stores 3D volume animation state, frame ranges, actions, and interpolation data.
+// Vertices3DEntry stores runtime state for a 3D vertex-based entity with animation, volumes, and physics data.
 type Vertices3DEntry struct {
-	solver          *collisions.Solver
-	ent             *rigid_body.Entity
-	cfg             *config.Thing
-	materials       *materials.Materials
-	comp            *Vertices3DEntryComposed
-	volumes         []*volumes.Volume
-	startFrame      int
-	endFrame        int
-	startTick       uint64
-	currentAction   int
-	actions         []*VAction
-	clampAnim       bool
-	tagMap          map[string]int
-	volA            *volumes.Volume
-	volB            *volumes.Volume
-	lerpT           float64
-	singleFrame     bool
-	lastVolA        *volumes.Volume
-	groupSize       float64
-	salt            uint64
-	tick            uint64
-	facesA          *volumes.Faces
-	facesB          *volumes.Faces
-	frameCenters    []geometry.XYZ
-	frameCentersLen int
-	frameIdxA       int
-	frameIdxB       int
-	rot             *articulated_dynamics.TagAxis
-	lastQx          float64
-	lastQy          float64
-	lastQz          float64
-	lastQw          float64
-	lastRotVolA     *volumes.Volume
-	lastRotVolB     *volumes.Volume
-	minX            float64
-	minY            float64
-	minZ            float64
-	maxX            float64
-	maxY            float64
-	maxZ            float64
+	solver        *collisions.Solver
+	ent           *rigid_body.Entity
+	cfg           *config.Thing
+	materials     *materials.Materials
+	comp          *Vertices3DEntryComposed
+	vols          *volumes.Volumes //[]*volumes.Volume
+	startFrame    int
+	endFrame      int
+	startTick     uint64
+	currentAction int
+	actions       []*VAction
+	clampAnim     bool
+	tagMap        map[string]int
+	volA          *volumes.Volume
+	volB          *volumes.Volume
+	lerpT         float64
+	singleFrame   bool
+	lastVolA      *volumes.Volume
+	groupSize     float64
+	salt          uint64
+	tick          uint64
+	facesA        *volumes.Faces
+	facesB        *volumes.Faces
+	frameIdxA     int
+	frameIdxB     int
+	rot           *articulated_dynamics.TagAxis
+	lastQx        float64
+	lastQy        float64
+	lastQz        float64
+	lastQw        float64
+	lastRotVolA   *volumes.Volume
+	lastRotVolB   *volumes.Volume
+	minX          float64
+	minY          float64
+	minZ          float64
+	maxX          float64
+	maxY          float64
+	maxZ          float64
 }
 
-// NewVertices3DEntry builds a vertex-based 3D entry from thing configuration, frames, tags, actions, and materials.
-// It panics if required frame, action interval, or group size configuration is invalid.
+// NewVertices3DEntry creates and initializes a 3D vertex entry from thing model frames, actions, tags, and materials.
+// NewVertices3DEntry panics if required frame, action, or group size configuration is invalid.
 func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vertices3DEntry {
 	v := &Vertices3DEntry{
 		solver:    nil,
@@ -177,7 +177,9 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 		}
 	}
 
-	v.volumes = make([]*volumes.Volume, len(model.Frames))
+	v.vols = volumes.NewVolumes(len(model.Frames))
+
+	//v.volumes = make([]*volumes.Volume, len(model.Frames))
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", v.cfg.Id, frameIdx)
 		volume := volumes.NewVolumeDynamic(frameIdx, baseId, "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
@@ -198,24 +200,21 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
-		v.volumes[frameIdx] = volume
+		v.vols.Set(frameIdx, volume)
 	}
 
-	maxFaces := 0
-	for _, vol := range v.volumes {
-		if c := vol.GetFaceCount(); c > maxFaces {
-			maxFaces = c
-		}
-	}
+	maxFaces := v.vols.GetFaceCount()
 	facesA := volumes.NewFaces(maxFaces, true)
 	facesB := volumes.NewFaces(maxFaces, true)
 	facesA.SetAllowTessellate(false)
 	facesB.SetAllowTessellate(false)
+	refVol := v.vols.Get(0)
+
 	for j := 0; j < maxFaces; j++ {
 		var mat *textures.Material
 		var tu, tv [3]float64
-		if len(v.volumes) > 0 && v.volumes[0] != nil && j < v.volumes[0].GetFaceCount() {
-			src := v.volumes[0].GetFace(j)
+		if j < refVol.GetFaceCount() {
+			src := refVol.GetFace(j)
 			mat = src.GetMaterial()
 			tu, tv = src.GetUV()
 		}
@@ -228,9 +227,10 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 	v.startFrame = 0
 	v.endFrame = len(model.Frames) - 1
 	v.currentAction = -1
-	v.volA = v.volumes[0]
-	v.volB = v.volumes[0]
-	v.comp = NewVertices3DEntryComposed(v.volumes[0])
+
+	v.volA = refVol
+	v.volB = refVol
+	v.comp = NewVertices3DEntryComposed(refVol)
 	v.lerpT = 0.0
 	v.lastVolA = nil
 	v.salt = uint64(rand.Intn(len(model.Frames)))
@@ -240,11 +240,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 	v.lastQw = 1.0
 	v.singleFrame = v.endFrame == 0
 	if v.singleFrame {
-		for _, vol := range v.volumes {
-			if vol != nil {
-				vol.SetAllowTessellate(true)
-			}
-		}
+		v.vols.SetAllowTessellate(true)
 	}
 
 	if len(v.actions) > 0 {
@@ -254,7 +250,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 	return v
 }
 
-// Setup assigns thing to all volumes and initializes the collision solver for it.
+// Setup initializes the entry with the given thing and stores its solver and entity references.
 func (v *Vertices3DEntry) Setup(thing IThing) error {
 	//for _, f := range v.volumes {
 	//	f.SetThing(thing)
@@ -267,12 +263,22 @@ func (v *Vertices3DEntry) Setup(thing IThing) error {
 	return nil
 }
 
-// GetSolver returns the collision solver associated with this vertices entry.
+// GetVolume returns the volume at the specified index.
+func (v *Vertices3DEntry) GetVolume(idx int) *volumes.Volume {
+	return v.vols.Get(idx)
+}
+
+// GetVolumesLen returns the number of volumes associated with the entry.
+func (v *Vertices3DEntry) GetVolumesLen() int {
+	return v.vols.Len()
+}
+
+// GetSolver returns the collision solver associated with the vertices entry.
 func (v *Vertices3DEntry) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// GetAABB returns the axis-aligned bounding box of the entry's entity.
+// GetAABB returns the entity bounding box updated from cached vertex bounds when applicable.
 func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 	ent := v.ent
 	b := ent.GetAABB()
@@ -287,12 +293,12 @@ func (v *Vertices3DEntry) GetAABB() *aabb.AABB {
 	return b
 }
 
-// QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
+// QueryOverlaps invokes callback for each object whose bounds overlap object, stopping when callback returns false.
 func (v *Vertices3DEntry) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.comp.QueryOverlaps(object, callback)
 }
 
-// SetAction selects the animation action at idx and resets timing for its frame interval.
+// SetAction switches to the action at idx and initializes its animation frame, volume, and interpolation state.
 func (v *Vertices3DEntry) SetAction(idx int) {
 	if idx < 0 || idx >= len(v.actions) {
 		fmt.Printf("Invalid action index: %d\n", idx)
@@ -308,20 +314,21 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 	v.endFrame = action.End
 	v.clampAnim = action.Clamp
 	v.singleFrame = v.startFrame == v.endFrame
-	if v.startFrame >= 0 && v.startFrame < len(v.volumes) {
+	if v.startFrame >= 0 {
 		v.frameIdxA = v.startFrame
 		v.frameIdxB = v.startFrame
-		v.volA = v.volumes[v.startFrame]
-		v.volB = v.volumes[v.startFrame]
+		refVol := v.vols.Get(v.startFrame)
+		v.volA = refVol
+		v.volB = refVol
 		v.lerpT = 0.0
 		v.comp.SetVolume(v.volA)
-		if v.frameCenters == nil {
+		if !v.vols.HasFrameCenter() {
 			v.lastVolA = v.volA
 		}
 	}
 }
 
-// AdvanceAnimation updates volA, volB, and lerpT for tick without transforming render faces or entity AABB.
+// AdvanceAnimation advances the animation state to tick, selecting frame volumes and interpolation factor.
 func (v *Vertices3DEntry) AdvanceAnimation(tick uint64) {
 	if v.singleFrame {
 		v.lerpT = 0.0
@@ -360,44 +367,14 @@ func (v *Vertices3DEntry) AdvanceAnimation(tick uint64) {
 	}
 	v.frameIdxA = v.startFrame + relativeFrameA
 	v.frameIdxB = v.startFrame + relativeFrameB
-	v.volA = v.volumes[v.frameIdxA]
-	v.volB = v.volumes[v.frameIdxB]
+	v.volA = v.vols.Get(v.frameIdxA)
+	v.volB = v.vols.Get(v.frameIdxB)
 	v.lerpT = lerpT
 }
 
-// CenterFrames shifts every frame volume of this entry around its own geometric bounding center
-// and rebuilds volume face trees and part solver geometry so each part is 6-DoF ready from creation.
+// CenterFrames recenters the entry volumes and rebuilds the collision solver using the given physics parameters.
 func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce float64) {
-	vLen := len(v.volumes)
-	if len(v.frameCenters) < vLen {
-		v.frameCenters = make([]geometry.XYZ, vLen*2)
-	}
-	v.frameCentersLen = vLen
-	for fIdx, vol := range v.volumes {
-		if vol == nil {
-			continue
-		}
-		faces := vol.GetFaces()
-		minX, minY, minZ := faces.GetMin()
-		maxX, maxY, maxZ := faces.GetMax()
-		mcx := (minX + maxX) * 0.5
-		mcy := (minY + maxY) * 0.5
-		mcz := (minZ + maxZ) * 0.5
-		v.frameCenters[fIdx] = geometry.XYZ{X: mcx, Y: mcy, Z: mcz}
-		if math.Abs(mcx) > 1e-6 || math.Abs(mcy) > 1e-6 || math.Abs(mcz) > 1e-6 {
-			for j := 0; j < faces.Len(); j++ {
-				f := faces.At(j)
-				p0X, p0Y, p0Z := f.Get0()
-				p1X, p1Y, p1Z := f.Get1()
-				p2X, p2Y, p2Z := f.Get2()
-				f.Set0(p0X-mcx, p0Y-mcy, p0Z-mcz)
-				f.Set1(p1X-mcx, p1Y-mcy, p1Z-mcz)
-				f.Set2(p2X-mcx, p2Y-mcy, p2Z-mcz)
-				f.Rebuild()
-			}
-			vol.Rebuild()
-		}
-	}
+	v.vols.CenterFrame()
 
 	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, gForce)
 	rebuildSolverFromVolume(partSolver, v.volA)
@@ -408,6 +385,7 @@ func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce f
 	v.lastVolA = v.volA
 }
 
+// rebuildSolverFromVolume updates solver collision data from volume face bounds, centroid, and inertia when non-nil.
 func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
 	if vol == nil || solver == nil {
 		return
@@ -420,6 +398,7 @@ func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
 	solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
 }
 
+// transformVolumeFaces copies and transforms volume faces into dstFaces, optionally updating and returning bounds.
 func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *articulated_dynamics.TagAxis, isIdent bool, ox, oy, oz float64, minX, minY, minZ, maxX, maxY, maxZ float64, trackBounds bool) (float64, float64, float64, float64, float64, float64) {
 	if srcVol == nil || dstFaces == nil {
 		return minX, minY, minZ, maxX, maxY, maxZ
@@ -456,23 +435,17 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 	return minX, minY, minZ, maxX, maxY, maxZ
 }
 
-// FrameCenterA returns the local geometric centering offset for the active A frame.
+// FrameCenterA returns the center coordinates of frame A.
 func (v *Vertices3DEntry) FrameCenterA() geometry.XYZ {
-	if v.frameIdxA >= 0 && v.frameIdxA < v.frameCentersLen {
-		return v.frameCenters[v.frameIdxA]
-	}
-	return geometry.XYZ{}
+	return v.vols.FrameCenter(v.frameIdxA)
 }
 
-// FrameCenterB returns the local geometric centering offset for the active B frame.
+// FrameCenterB returns the center of frame B.
 func (v *Vertices3DEntry) FrameCenterB() geometry.XYZ {
-	if v.frameIdxB >= 0 && v.frameIdxB < v.frameCentersLen {
-		return v.frameCenters[v.frameIdxB]
-	}
-	return geometry.XYZ{}
+	return v.vols.FrameCenter(v.frameIdxB)
 }
 
-// SyncSolverToCurrentFrame synchronizes the entry's active collision volume and solver bounds/inertia with volA.
+// SyncSolverToCurrentFrame updates the solver from the current frame volume when it has changed.
 func (v *Vertices3DEntry) SyncSolverToCurrentFrame() {
 	if v.volA == nil || v.lastVolA == v.volA {
 		return
@@ -482,7 +455,7 @@ func (v *Vertices3DEntry) SyncSolverToCurrentFrame() {
 	v.lastVolA = v.volA
 }
 
-// CompileAttached transforms centered facesA/facesB for attached hierarchy rendering and updates local bounds.
+// CompileAttached updates transformed attached volumes and records their combined bounding extents.
 func (v *Vertices3DEntry) CompileAttached(rotA, rotB *articulated_dynamics.TagAxis, dOffX, dOffY, dOffZ float64) {
 	v.SyncSolverToCurrentFrame()
 	if v.volA == nil {
@@ -506,7 +479,7 @@ func (v *Vertices3DEntry) CompileAttached(rotA, rotB *articulated_dynamics.TagAx
 	v.maxX, v.maxY, v.maxZ = maxX, maxY, maxZ
 }
 
-// CompileDetached rotates the frozen centered volA into facesA using the part entity's 6-DoF quaternion.
+// CompileDetached updates cached rotated volume bounds and rebuilds the entity AABB at its current center.
 func (v *Vertices3DEntry) CompileDetached() {
 	if v.volA == nil || v.ent == nil {
 		return
@@ -535,7 +508,7 @@ func (v *Vertices3DEntry) CompileDetached() {
 	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
 }
 
-// Compile updates the active animation frames and interpolation factor for the given tick.
+// Compile advances animation, updates rotated bounds and volume state, rebuilds the entity AABB, and returns true.
 func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	v.AdvanceAnimation(tick)
 
@@ -584,21 +557,21 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 	return true
 }
 
-// GetUIFaces returns the two face sets rotated by the entity's orientation quaternion, interpolation factor, and model 3D render mode.
+// GetUIFaces returns the face sets, interpolation value, and render mode for UI rendering.
 func (v *Vertices3DEntry) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
 }
 
-// GetVolumes returns the current source and target volumes with the interpolation factor between them.
+// GetVolumes returns the entry's source and target volumes along with the interpolation factor.
 func (v *Vertices3DEntry) GetVolumes() (*volumes.Volume, *volumes.Volume, float64) {
 	return v.volA, v.volB, v.lerpT
 }
 
-// SetRagdollMode switches the vertices entry to ragdoll behavior.
+// SetRagdollMode switches the vertices entry to ragdoll mode.
 func (v *Vertices3DEntry) SetRagdollMode() {
 }
 
-// IsActionClamped reports whether the action at idx is clamped (such as a death animation).
+// IsActionClamped reports whether the action at idx is clamped or death-related; invalid or nil actions return false.
 func (v *Vertices3DEntry) IsActionClamped(idx int) bool {
 	if idx < 0 || idx >= len(v.actions) || v.actions[idx] == nil {
 		return false
@@ -610,7 +583,7 @@ func (v *Vertices3DEntry) IsActionClamped(idx int) bool {
 	return strings.Contains(act.Name, "death") || strings.Contains(act.Name, "die") || strings.Contains(act.Name, "dead")
 }
 
-// FreezeCurrentFrame locks this part on its current animation frame (used when dismembered).
+// FreezeCurrentFrame locks the entry to the current frame and resets interpolation.
 func (v *Vertices3DEntry) FreezeCurrentFrame() {
 	v.singleFrame = true
 	if v.volA != nil {
@@ -628,25 +601,15 @@ func (v *Vertices3DEntry) GetTagIndex(name string) int {
 	return -1
 }
 
-// v3dCleanString normalizes s by trimming surrounding whitespace and converting it to lowercase.
+// v3dCleanString returns s with leading and trailing spaces removed and all letters converted to lowercase.
 func v3dCleanString(s string) string {
 	return strings.TrimSpace(strings.ToLower(s))
 }
 
-// Deform applies plastic deformation to the active model frame volumes and faces around an impact point.
+// Deform applies an impulse within the given radius and recompiles cached data when geometry changes.
+// Deform returns true if any vertex volume was modified.
 func (v *Vertices3DEntry) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	deformed := false
-	if len(v.volumes) > 0 {
-		for _, vol := range v.volumes {
-			if vol != nil && vol.Deform(impact, impulse, radius) {
-				deformed = true
-			}
-		}
-	} else if v.volA != nil {
-		if v.volA.Deform(impact, impulse, radius) {
-			deformed = true
-		}
-	}
+	deformed := v.vols.Deform(impact, impulse, radius)
 	if deformed {
 		v.lastRotVolA = nil
 		v.lastRotVolB = nil
@@ -655,13 +618,14 @@ func (v *Vertices3DEntry) Deform(impact geometry.XYZ, impulse geometry.XYZ, radi
 	return deformed
 }
 
-// DeformDent produces an indentation on the 3D model frame faces along the specified normal vector.
+// DeformDent applies a dent at impact along the opposite normal, with the given depth and radius.
 func (v *Vertices3DEntry) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	return v.Deform(impact, impulse, radius)
 }
 
-// IntersectRay tests a ray against the active volume faces in local space and returns the closest hit.
+// IntersectRay finds the closest solid face hit by a ray within maxDist.
+// It returns the hit distance, the intersected face, and whether a hit occurred.
 func (v *Vertices3DEntry) IntersectRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist float64) (float64, *volumes.Face, bool) {
 	if v.volA == nil {
 		return maxDist, nil, false

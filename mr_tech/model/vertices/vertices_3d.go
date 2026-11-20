@@ -14,21 +14,21 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-// PartSpawnFunc constructs an IThing wrapping one segment's IVertices so all parts live in Things.tree from creation.
+// PartSpawnFunc creates a thing for a separated part using its vertices and collision group.
 type PartSpawnFunc func(partVerts IVertices, collisionGroup uint64) IThing
 
-// PartReleaseFunc notifies the world Thing manager when an attached segment transitions to autonomous physics mid-tick.
+// PartReleaseFunc is called when a part is released.
 type PartReleaseFunc func(part IThing)
 
-// RagdollJointAddFunc registers a bilateral PGS joint constraint with optional breakability on the child limb.
+// RagdollJointAddFunc handles registration of a ragdoll joint for a child thing, including detachment rules.
 type RagdollJointAddFunc func(joint *collisions.JointConstraint, childThing IThing, canDetach bool, breakThreshold float64)
 
-// IPartedVertices is optionally implemented by composite models whose segments live as autonomous IThings in Things.tree.
+// IPartedVertices supports spawning, releasing, and jointing detachable vertex parts for composite bodies.
 type IPartedVertices interface {
 	SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc)
 }
 
-// Vertices3D represents a composite animated 3D model whose linked segments each have a Volume, Solver, and node in Things.tree.
+// Vertices3D represents a 3D vertex-based physical entity with articulated parts, collision solving, and bounds tracking.
 type Vertices3D struct {
 	id            string
 	mass          float64
@@ -62,7 +62,8 @@ type Vertices3D struct {
 	compiledCZ    float64
 }
 
-// NewVertices3D creates a Vertices3D model from cfg and materials, centering each segment frame on its geometric center.
+// NewVertices3D creates and initializes a 3D vertices model from the provided thing configuration and materials.
+// It sets up elements, links, joints, actions, part views, compiled bounds, and base offset.
 func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3D {
 	v := &Vertices3D{
 		id:            cfg.Id,
@@ -115,7 +116,7 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 	return v
 }
 
-// Setup binds the owner locomotion virtual volume to thing.
+// Setup initializes the vertices for thing, caches solver state, and assigns the entity collision group.
 func (v *Vertices3D) Setup(thing IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
@@ -127,7 +128,7 @@ func (v *Vertices3D) Setup(thing IThing) error {
 	return nil
 }
 
-// SetupParts instantiates a standalone IThing for each segment so all segments reside in Things.tree from creation.
+// SetupParts registers part lifecycle callbacks, spawns part things, assigns their collision group, and recompiles.
 func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc) {
 	v.onPartRelease = onRelease
 	v.onAddJoint = addJoint
@@ -144,27 +145,28 @@ func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFu
 	v.Compile(v.compiledTick)
 }
 
-// GetPartLen returns the number of instantiated segment part things.
+// GetPartLen returns the number of part things associated with the vertices.
 func (v *Vertices3D) GetPartLen() int {
 	return len(v.partThings)
 }
 
-// GetPartAt returns the segment thing stored at idx.
+// GetPartAt returns the part thing at idx.
+// idx must be within the range of configured parts.
 func (v *Vertices3D) GetPartAt(idx int) IThing {
 	return v.partThings[idx]
 }
 
-// GetSolver returns the owner locomotion collision solver.
+// GetSolver returns the collision solver associated with the Vertices3D instance.
 func (v *Vertices3D) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
-// QueryOverlaps queries face overlaps against the owner's local-space bounding Volume.
+// QueryOverlaps finds element objects overlapping object and calls callback for each until it returns false.
 func (v *Vertices3D) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.elements.QueryOverlaps(object, callback)
 }
 
-// GetAABB returns the enclosing world-space AABB for the owner's locomotion entity.
+// GetAABB returns the entity's axis-aligned bounding box, rebuilding it from cached vertex extents when available.
 func (v *Vertices3D) GetAABB() *aabb.AABB {
 	ent := v.ent
 	ab := ent.GetAABB()
@@ -175,8 +177,7 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 	return ab
 }
 
-// HandlePartImpact processes an impact event emerging on segment partIdx, forwarding physical knockback
-// to the living owner and propagating stress into the joint chain to trigger subtree detachment.
+// HandlePartImpact applies an impact to a part, records the hit, adds knockback, and may detach stressed joints.
 func (v *Vertices3D) HandlePartImpact(partIdx int, force, dirX, dirY, dirZ float64) {
 	if force <= 1e-6 {
 		return
@@ -233,8 +234,7 @@ func (v *Vertices3D) HandlePartImpact(partIdx int, force, dirX, dirY, dirZ float
 	}
 }
 
-// releaseSubtree detaches partIdx and its attached descendants directly in-place inside Things.tree,
-// adding internal PGS JointConstraints if multiple segments detach together.
+// releaseSubtree detaches partIdx and eligible descendants, releases their physics, and recreates joints within the group.
 func (v *Vertices3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag float64) {
 	v.compiled = false
 	v.Compile(v.compiledTick)
@@ -300,8 +300,8 @@ func (v *Vertices3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag float64)
 	}
 }
 
-// SetRagdollMode transitions all remaining attached segments in-place to 6-DoF rigid-body ragdoll physics
-// connected by bilateral PGS JointConstraints and disables the owner's single locomotion collider.
+// SetRagdollMode switches the articulated model into ragdoll physics.
+// It releases attached parts, applies inherited and hit impulse motion, and creates ragdoll joint constraints.
 func (v *Vertices3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
@@ -381,6 +381,8 @@ func (v *Vertices3D) SetRagdollMode() {
 	}
 }
 
+// buildJointConstraint creates a ragdoll joint constraint between parent and child part solvers.
+// It derives anchors from frame centers and vertex tags, then applies the joint rest rotation and limits.
 func (v *Vertices3D) buildJointConstraint(pIdx, i int) *collisions.JointConstraint {
 	pEntry := v.elements.GetEntry(pIdx)
 	cEntry := v.elements.GetEntry(i)
@@ -390,8 +392,8 @@ func (v *Vertices3D) buildJointConstraint(pIdx, i int) *collisions.JointConstrai
 	var ax, ay, az float64
 	restQ := aabb.NewQuaternionIdentity()
 	parentVol := v.elements.volsA[pIdx]
-	if parentVol == nil && len(pEntry.volumes) > 0 {
-		parentVol = pEntry.volumes[0]
+	if parentVol == nil && pEntry.GetVolumesLen() > 0 {
+		parentVol = pEntry.GetVolume(0)
 	}
 	tagIdx := v.links.GetTagIndex(i)
 	if tagIdx >= 0 && parentVol != nil {
@@ -417,7 +419,8 @@ func (v *Vertices3D) buildJointConstraint(pIdx, i int) *collisions.JointConstrai
 	)
 }
 
-// SetAction selects action idx and propagates mapped sub-actions to still-attached parts in execution order.
+// SetAction changes the active action and applies mapped actions to attached parts.
+// SetAction may enter ragdoll mode if a mapped part action is clamped.
 func (v *Vertices3D) SetAction(idx int) {
 	if idx < 0 || v.currentAction == idx || v.joints.IsRagdoll() {
 		return
@@ -447,7 +450,8 @@ func (v *Vertices3D) SetAction(idx int) {
 	}
 }
 
-// SyncAttachedParts refreshes positions and AABBs of all attached segments after owner locomotion.
+// SyncAttachedParts updates non-free part entities to match the parent entity transform.
+// It recompiles when the parent rotation changes and skips synchronization in ragdoll mode.
 func (v *Vertices3D) SyncAttachedParts() {
 	if v.joints.IsRagdoll() || v.ent == nil {
 		return
@@ -476,7 +480,7 @@ func (v *Vertices3D) SyncAttachedParts() {
 	}
 }
 
-// Compile updates hierarchical animation frames and syncs every still-attached segment's render faces and tree AABB.
+// Compile updates part transforms and bounds for the given tick unless ragdoll or cached state is current.
 func (v *Vertices3D) Compile(tick uint64) bool {
 	if v.joints.IsRagdoll() {
 		return false
@@ -587,11 +591,13 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 	return false
 }
 
-// GetUIFaces returns empty faces on the owner because individual segments render through their own tree nodes.
+// GetUIFaces returns empty UI face sets with zero depth and the 3D model render mode.
 func (v *Vertices3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, RenderModeModel3D
 }
 
+// Deform applies an impulse-based deformation to all part views within radius of impact.
+// It returns true if any part was deformed.
 func (v *Vertices3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	deformed := false
 	for _, part := range v.partViews {
@@ -602,6 +608,8 @@ func (v *Vertices3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius fl
 	return deformed
 }
 
+// DeformDent dents vertices around impact by pushing them opposite the normal by depth within radius.
+// It returns true if any part was deformed.
 func (v *Vertices3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{
 		X: -normal.X * depth,
@@ -611,6 +619,8 @@ func (v *Vertices3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth,
 	return v.Deform(impact, impulse, radius)
 }
 
+// createConfigJoints builds articulated joints for each configured model part.
+// It initializes local centers from element geometry and applies root or configured joint limits.
 func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*articulated_dynamics.Joint, error) {
 	numParts := len(cfg.Parts)
 	joints := make([]*articulated_dynamics.Joint, numParts)
@@ -622,7 +632,7 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3
 		j := articulated_dynamics.NewJoint2(8.0)
 		joints[i] = j
 
-		if vol := element.volumes[0]; vol != nil {
+		if vol := element.GetVolume(0); vol != nil {
 			if fc := vol.GetFaceCount(); fc > 0 {
 				minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 				maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
@@ -649,6 +659,8 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3
 	return joints, nil
 }
 
+// createConfigLinks builds articulated links from the model configuration.
+// It resolves parent tag indices when available and warns when parent or tag data is missing.
 func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dynamics.Link, error) {
 	numParts := len(cfg.Parts)
 	links := make([]*articulated_dynamics.Link, numParts)
@@ -675,7 +687,8 @@ func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dyna
 			continue
 		}
 		link.SetTagIndex(tagIdx)
-		for frameIdx, vol := range element.volumes {
+		for frameIdx := 0; frameIdx < element.GetVolumesLen(); frameIdx++ {
+			vol := element.GetVolume(frameIdx)
 			if vol == nil {
 				fmt.Printf("[warning] Vertices3D: volume not found in frame %d of parent %d for part %d, inheriting parent origin and rotation without tag offset\n", frameIdx, lParent, i)
 				continue

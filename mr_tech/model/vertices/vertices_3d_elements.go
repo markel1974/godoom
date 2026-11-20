@@ -65,7 +65,7 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		}
 		entry.CenterFrames(partMass, restitution, friction, gForce)
 		v.entries[i] = entry
-		if len(entry.volumes) == 0 || entry.volumes[0] == nil {
+		if entry.GetVolumesLen() == 0 || entry.GetVolume(0) == nil {
 			panic(fmt.Sprintf("empty volumes found in vertices_3d"))
 		}
 	}

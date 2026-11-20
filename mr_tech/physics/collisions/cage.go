@@ -874,7 +874,11 @@ func (s *Cage) NeedsStaticClamp() bool {
 		return true
 	}
 	curX, curY, curZ := s.entity.GetCenter()
-	return curX != s.clampX || curY != s.clampY || curZ != s.clampZ
+	dx := curX - s.clampX
+	dy := curY - s.clampY
+	dz := curZ - s.clampZ
+	const clampToleranceSq = 1e-6
+	return dx*dx+dy*dy+dz*dz > clampToleranceSq
 }
 
 // CommitStaticClamp records the current entity center as the latest statically clamped baseline position.

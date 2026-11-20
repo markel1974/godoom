@@ -367,6 +367,7 @@ func (c *Coordinator) Step() {
 			cage := c.running[x].cage
 			if cage.NeedsStaticClamp() {
 				c.clampStaticFn(cage)
+				cage.CommitStaticClamp()
 			}
 		}
 	}

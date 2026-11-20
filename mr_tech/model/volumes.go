@@ -122,20 +122,40 @@ func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 
 // ClampStaticCage projects any entity moved or pushed during the step strictly outside solid world faces.
 func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
-	const maxPasses = 4
+	const maxPasses = 3
+	var nearVols [8]*volumes.Volume
+	nearVolsLen := 0
+
 	for pass := 0; pass < maxPasses; pass++ {
 		moved := false
 		origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, lAABB := cage.BeginStaticClamp()
-		s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
-			vol := object.(*volumes.Volume)
-			vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-				if cage.ClampStaticFace(lAABB, otherEnt.(*volumes.Face)) {
-					moved = true
+
+		if pass == 0 {
+			s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
+				vol := object.(*volumes.Volume)
+				if nearVolsLen < len(nearVols) {
+					nearVols[nearVolsLen] = vol
+					nearVolsLen++
 				}
+				vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
+					if cage.ClampStaticFace(lAABB, otherEnt.(*volumes.Face)) {
+						moved = true
+					}
+					return false
+				})
 				return false
 			})
-			return false
-		})
+		} else {
+			for v := 0; v < nearVolsLen; v++ {
+				nearVols[v].QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
+					if cage.ClampStaticFace(lAABB, otherEnt.(*volumes.Face)) {
+						moved = true
+					}
+					return false
+				})
+			}
+		}
+
 		if cage.FlushStaticClamp(lAABB) {
 			moved = true
 		}
@@ -144,6 +164,7 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 			break
 		}
 	}
+	cage.CommitStaticClamp()
 }
 
 // QueryFrustum performs a spatial query using a frustum, invoking the callback for each intersected object in the tree.

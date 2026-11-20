@@ -58,10 +58,11 @@ type Thing struct {
 	Element3D      *Model3DEntry `json:"element3D"`
 	MultiSprite    *MultiSprite  `json:"multiSprite"`
 	Sprite         *Sprite       `json:"sprite"`
-	Door           *DoorSpec     `json:"door,omitempty"`
-	Key            *KeySpec      `json:"key,omitempty"`
-	Teleport       *TeleportSpec `json:"teleport,omitempty"`
-	Weapon         *Weapon       `json:"weapon,omitempty"`
+
+	Door     *DoorSpec     `json:"door,omitempty"`
+	Key      *KeySpec      `json:"key,omitempty"`
+	Teleport *TeleportSpec `json:"teleport,omitempty"`
+	Weapon   *WeaponSpec   `json:"weapon,omitempty"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc

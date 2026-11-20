@@ -7,8 +7,8 @@ import (
 // weaponTest identifies the default test weapon used in player and root configuration.
 const weaponTest = "weapon_test"
 
-// Weapon defines firing and reload characteristics for a weapon attached to a game entity.
-type Weapon struct {
+// WeaponSpec defines firing and reload characteristics for a weapon attached to a game entity.
+type WeaponSpec struct {
 	Force        float64
 	FireInterval float64
 	RechargeTime float64
@@ -16,8 +16,8 @@ type Weapon struct {
 }
 
 // NewWeaponDefault creates and returns a Weapon initialized with default gameplay settings.
-func NewWeaponDefault() *Weapon {
-	return &Weapon{
+func NewWeaponDefault() *WeaponSpec {
+	return &WeaponSpec{
 		Force:        500000.0,
 		FireInterval: 0.3,
 		RechargeTime: 1,

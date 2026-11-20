@@ -108,6 +108,8 @@ type Bucket struct {
 	prevPool         *[FacesPerBucket]*Entry
 	containerCounter int
 	prevCount        int
+	cachedPenetrable int8
+	cachedFrom       uint64
 }
 
 // NewBucket creates a new Bucket for a given BucketType, preallocating its double-buffered Entry pools.
@@ -129,6 +131,8 @@ func (b *Bucket) Rebuild() {
 	b.currPool, b.prevPool = b.prevPool, b.currPool
 	b.prevCount = b.containerCounter
 	b.containerCounter = 0
+	b.cachedPenetrable = 0
+	b.cachedFrom = 0
 }
 
 // Count returns the total number of entries currently stored in the Bucket.
@@ -161,40 +165,49 @@ func (b *Bucket) HasEntryFor(entityId uint64) bool {
 
 // Penetrable reports whether this bucket can yield to a push from the given entity within the recursion depth.
 func (b *Bucket) Penetrable(from uint64, depth int) bool {
+	if depth == 0 && b.cachedPenetrable != 0 && b.cachedFrom == from {
+		return b.cachedPenetrable == 1
+	}
 	var visited [maxPushDepth]uint64
 	var visitedLen int
 	if from != 0 {
 		visited[0] = from
 		visitedLen = 1
 	}
-	return b.doPenetrable(depth, &visited, visitedLen)
+	res := b.doPenetrable(depth, visited, visitedLen)
+	if depth == 0 {
+		b.cachedFrom = from
+		if res {
+			b.cachedPenetrable = 1
+		} else {
+			b.cachedPenetrable = -1
+		}
+	}
+	return res
 }
 
-// penetrableInternal reports whether this bucket and chained remote buckets can yield within the push depth limit.
+// doPenetrable reports whether this bucket and chained remote buckets can yield within the push depth limit.
 // It returns false when an inelastic contact blocks movement and avoids revisiting entities during recursion.
-func (b *Bucket) doPenetrable(depth int, visited *[maxPushDepth]uint64, visitedLen int) bool {
+func (b *Bucket) doPenetrable(depth int, visited [maxPushDepth]uint64, visitedLen int) bool {
 	if depth >= maxPushDepth {
 		return true
 	}
 	// Deduplicate remote entities within this bucket pass:
-	// contact manifold generation creates up to maxPushDepth points for the exact same remote cage.
-	var checked [maxPushDepth]uint64
+	// contact manifold generation creates multiple points for the exact same remote cage.
+	var checked [FacesPerBucket]uint64
 	checkedCount := 0
 	for i := 0; i < b.containerCounter; i++ {
 		entry := b.currPool[i]
 		if entry == nil {
 			continue
 		}
-		// Directly touching an inelastic static wall -> immovable
-		if entry.iMode == ImpactInelastic {
+		// Directly touching an inelastic static wall or immovable geometry -> immovable
+		if entry.iMode == ImpactInelastic || entry.rCage == nil {
 			return false
-		}
-		if entry.rCage == nil {
-			continue
 		}
 		rEnt := entry.rCage.GetEntity()
 		if rEnt == nil {
-			continue
+			return false
 		}
 		rId := rEnt.GetId()
 		// Skip if remote entity is already in the visited caller chain

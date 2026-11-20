@@ -4,35 +4,36 @@ const maxPushDepth = 8
 
 // Entry represents a collision entry used during spatial computations in the collision detection system.
 type Entry struct {
-	bucket        BucketType
-	rCage         *Cage
-	rFace         IFace
-	lCage         *Cage
-	iMode         ImpactMode
-	dist          float64
-	penetration   float64
-	nX            float64
-	nY            float64
-	nZ            float64
-	p0X           float64
-	p0Y           float64
-	p0Z           float64
-	maxZ          float64
-	accNormal     float64
-	accTx         float64
-	accTy         float64
-	accTz         float64
-	restTarget    float64
-	hasRestTarget bool
-	warmConsumed  bool
-	warmEligible  bool
-	isCorner      bool
-	origNX        float64
-	origNY        float64
-	origNZ        float64
-	origAX        float64
-	origAY        float64
-	origAZ        float64
+	bucket           BucketType
+	rCage            *Cage
+	rFace            IFace
+	lCage            *Cage
+	iMode            ImpactMode
+	dist             float64
+	penetration      float64
+	nX               float64
+	nY               float64
+	nZ               float64
+	p0X              float64
+	p0Y              float64
+	p0Z              float64
+	maxZ             float64
+	accNormal        float64
+	accTx            float64
+	accTy            float64
+	accTz            float64
+	restTarget       float64
+	hasRestTarget    bool
+	warmConsumed     bool
+	warmEligible     bool
+	isCorner         bool
+	origNX           float64
+	origNY           float64
+	origNZ           float64
+	origAX           float64
+	origAY           float64
+	origAZ           float64
+	penetrableCached int8
 }
 
 // NewCageEntry creates and returns a new instance of Entry initialized with default zero values.
@@ -117,6 +118,7 @@ func (s *Entry) Rebuild(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace
 	s.isCorner = false
 	s.origNX, s.origNY, s.origNZ = 0, 0, 0
 	s.origAX, s.origAY, s.origAZ = 0, 0, 0
+	s.penetrableCached = 0
 }
 
 // SetCornerOrigin records whether this entry came from a wall corner refinement and stores the unrefined triangle plane.
@@ -128,6 +130,9 @@ func (s *Entry) SetCornerOrigin(isCorner bool, nx, ny, nz, ax, ay, az float64) {
 
 // Penetrable reports whether this entry can be penetrated or pushed, following remote cages up to depth.
 func (s *Entry) Penetrable(depth int) bool {
+	if depth == 0 && s.penetrableCached != 0 {
+		return s.penetrableCached == 1
+	}
 	var visited [maxPushDepth]uint64
 	var visitedLen int
 	if s.lCage != nil {
@@ -136,19 +141,28 @@ func (s *Entry) Penetrable(depth int) bool {
 			visitedLen = 1
 		}
 	}
-	return s.penetrableInternal(depth, &visited, visitedLen)
+	res := s.penetrableInternal(depth, visited, visitedLen)
+	if depth == 0 {
+		if res {
+			s.penetrableCached = 1
+		} else {
+			s.penetrableCached = -1
+		}
+	}
+	return res
 }
 
-func (s *Entry) penetrableInternal(depth int, visited *[maxPushDepth]uint64, visitedLen int) bool {
-	if s.iMode == ImpactInelastic {
+// penetrableInternal reports whether this entry can yield along a push chain without hitting inelastic or cyclic contacts.
+func (s *Entry) penetrableInternal(depth int, visited [maxPushDepth]uint64, visitedLen int) bool {
+	if s.iMode == ImpactInelastic || s.rCage == nil {
 		return false
 	}
-	if s.rCage == nil || depth >= maxPushDepth {
+	if depth >= maxPushDepth {
 		return true
 	}
 	rEnt := s.rCage.GetEntity()
 	if rEnt == nil {
-		return true
+		return false
 	}
 	rId := rEnt.GetId()
 

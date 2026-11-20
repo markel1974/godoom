@@ -156,7 +156,6 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 				})
 			}
 		}
-
 		if cage.FlushStaticClamp(lAABB) {
 			moved = true
 		}

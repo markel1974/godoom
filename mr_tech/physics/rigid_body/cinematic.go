@@ -842,16 +842,13 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 }
 
 // WarmStartImpact pre-applies persisted normal and tangential impulses before PGS iterations begin.
-func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, accNormal, accTx, accTy, accTz *float64) {
-	if accNormal == nil || *accNormal <= 0.0 {
+func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, acc *Accumulator) {
+	if acc == nil || acc.normal <= 0.0 {
 		return
 	}
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen <= 0.0 {
-		*accNormal = 0.0
-		if accTx != nil && accTy != nil && accTz != nil {
-			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
-		}
+		acc.Reset()
 		return
 	}
 	nx /= nLen
@@ -871,14 +868,11 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 	vry := (e.vy + (e.wz*r1x - e.wx*r1z)) - (e2.vy + (e2.wz*r2x - e2.wx*r2z))
 	vrz := (e.vz + (e.wx*r1y - e.wy*r1x)) - (e2.vz + (e2.wx*r2y - e2.wy*r2x))
 	if vrx*nx+vry*ny+vrz*nz > 0.0 {
-		*accNormal = 0.0
-		if accTx != nil && accTy != nil && accTz != nil {
-			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
-		}
+		acc.Reset()
 		return
 	}
 
-	jn := *accNormal
+	jn := acc.normal
 	var u1nx, u1ny, u1nz float64
 	var u2nx, u2ny, u2nz float64
 	alpha := 1.0
@@ -911,20 +905,15 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 		}
 	}
 	if alpha <= 0.0 {
-		*accNormal = 0.0
-		if accTx != nil && accTy != nil && accTz != nil {
-			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
-		}
+		acc.Reset()
 		return
 	}
 	if alpha < 1.0 {
 		jn *= alpha
-		*accNormal = jn
-		if accTx != nil && accTy != nil && accTz != nil {
-			*accTx *= alpha
-			*accTy *= alpha
-			*accTz *= alpha
-		}
+		acc.normal = jn
+		acc.tx *= alpha
+		acc.ty *= alpha
+		acc.tz *= alpha
 	}
 
 	jx, jy, jz := jn*nx, jn*ny, jn*nz
@@ -942,8 +931,8 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 		e2.addClampedAngular(-jn, u2nx, u2ny, u2nz)
 	}
 
-	if accTx != nil && accTy != nil && accTz != nil {
-		wtx, wty, wtz := *accTx, *accTy, *accTz
+	if acc.tx != 0.0 || acc.ty != 0.0 || acc.tz != 0.0 {
+		wtx, wty, wtz := acc.tx, acc.ty, acc.tz
 		tDotN := wtx*nx + wty*ny + wtz*nz
 		wtx -= tDotN * nx
 		wty -= tDotN * ny
@@ -955,7 +944,7 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 			wty *= scale
 			wtz *= scale
 		}
-		*accTx, *accTy, *accTz = wtx, wty, wtz
+		acc.tx, acc.ty, acc.tz = wtx, wty, wtz
 		fRotBase1 := e.frictionRotBaseScale(nz)
 		fRotBase2 := e2.frictionRotBaseScale(-nz)
 		e.applyTangentImpulse(e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, wtx, wty, wtz, fRotBase1, fRotBase2)
@@ -1008,8 +997,8 @@ func (e *Cinematic) applyTangentImpulse(e2 *Cinematic, invMass1, invMass2, r1x, 
 }
 
 // ResolveImpactAccumulated resolves a 6-DoF rigid-body collision between two Cinematic objects
-// using optional accumulated normal/tangential impulses and target restitution velocity across PGS iterations.
-func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, accNormal, accTx, accTy, accTz, restTarget *float64, hasRestTarget *bool) {
+// using an optional Accumulator for normal/tangential impulses and target restitution velocity across PGS iterations.
+func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, cx1, cy1, cz1 float64, cx2, cy2, cz2 float64, px, py, pz float64, acc *Accumulator) {
 	// Safe normalization before computing lever arms or normal thresholds.
 	nLen := math.Sqrt(nx*nx + ny*ny + nz*nz)
 	if nLen <= 0 {
@@ -1043,8 +1032,9 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	vrz := vp1z - vp2z
 	vRelDotN := vrx*nx + vry*ny + vrz*nz
 
-	firstIter := hasRestTarget == nil || !*hasRestTarget
-	warmStarted := accNormal != nil && *accNormal > 0.0
+	hasAcc := acc != nil
+	firstIter := !hasAcc || !acc.hasRestTarget
+	warmStarted := hasAcc && acc.normal > 0.0
 	// If bodies are separating on a fresh non-warm-started contact, no collision to resolve.
 	if firstIter && !warmStarted && vRelDotN > 0.0 {
 		return
@@ -1053,8 +1043,8 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	invMass1, invMass2 := e.effectiveContactInvMasses(e2, nz)
 
 	var targetVelN float64
-	var actualRestitution float64
 	if firstIter {
+		var actualRestitution float64
 		if warmStarted {
 			// Persistent contact already carrying load: keep zero restitution bounce.
 			actualRestitution = 0.0
@@ -1075,13 +1065,12 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 			}
 			targetVelN = -actualRestitution * vRelDotN
 		}
-		if hasRestTarget != nil && restTarget != nil {
-			*restTarget = targetVelN
-			*hasRestTarget = true
+		if hasAcc {
+			acc.restTarget = targetVelN
+			acc.hasRestTarget = true
 		}
-	} else if restTarget != nil {
-		targetVelN = *restTarget
-		actualRestitution = targetVelN
+	} else {
+		targetVelN = acc.restTarget
 	}
 
 	jDir := targetVelN - vRelDotN
@@ -1100,17 +1089,17 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		return
 	}
 
-	// Unilateral accumulated normal impulse clamping (accNormal >= 0):
+	// Unilateral accumulated normal impulse clamping (acc.normal >= 0):
 	// allows trimming back excess warm-start/previous-iteration load without pulling.
 	rawJ := (targetVelN - vRelDotN) / effMassN
 	var j float64
-	if accNormal != nil {
-		oldAcc := *accNormal
+	if hasAcc {
+		oldAcc := acc.normal
 		candAcc := oldAcc + rawJ
 		if candAcc < 0.0 {
 			candAcc = 0.0
 		}
-		*accNormal = candAcc
+		acc.normal = candAcc
 		j = candAcc - oldAcc
 	} else {
 		j = math.Max(0.0, rawJ)
@@ -1134,8 +1123,8 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 			e2.addClampedAngular(-j, u2nx, u2ny, u2nz)
 		}
 	}
-	hasAccT := accTx != nil && (*accTx != 0.0 || *accTy != 0.0 || *accTz != 0.0)
-	if j <= 0.0 && (accNormal == nil || (*accNormal <= 0.0 && !hasAccT)) {
+	hasAccT := hasAcc && (acc.tx != 0.0 || acc.ty != 0.0 || acc.tz != 0.0)
+	if j <= 0.0 && (!hasAcc || (acc.normal <= 0.0 && !hasAccT)) {
 		return
 	}
 
@@ -1161,9 +1150,9 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	tLen := math.Sqrt(tx*tx + ty*ty + tz*tz)
 	if tLen <= tangentLenEpsilon {
 		// If normal impulse clamped down to 0, still unwind any lingering warm-started tangential impulse.
-		if accNormal != nil && *accNormal <= 0.0 && hasAccT {
-			jtx, jty, jtz := -*accTx, -*accTy, -*accTz
-			*accTx, *accTy, *accTz = 0.0, 0.0, 0.0
+		if hasAcc && acc.normal <= 0.0 && hasAccT {
+			jtx, jty, jtz := -acc.tx, -acc.ty, -acc.tz
+			acc.tx, acc.ty, acc.tz = 0.0, 0.0, 0.0
 			fRotBase1 := e.frictionRotBaseScale(nz)
 			fRotBase2 := e2.frictionRotBaseScale(-nz)
 			e.applyTangentImpulse(e2, invMass1, invMass2, r1x, r1y, r1z, r2x, r2y, r2z, jtx, jty, jtz, fRotBase1, fRotBase2)
@@ -1200,9 +1189,9 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 	// Friction mixing: explicit contact material properties.
 	mu := e.material.CombineFriction(e2.material)
 	var jtx, jty, jtz float64
-	if accNormal != nil && accTx != nil && accTy != nil && accTz != nil {
+	if hasAcc {
 		// Clamp the total 3D tangent impulse across solver iterations within the Coulomb cone.
-		oldTx, oldTy, oldTz := *accTx, *accTy, *accTz
+		oldTx, oldTy, oldTz := acc.tx, acc.ty, acc.tz
 		oldDotN := oldTx*nx + oldTy*ny + oldTz*nz
 		oldTx -= oldDotN * nx
 		oldTy -= oldDotN * ny
@@ -1211,14 +1200,14 @@ func (e *Cinematic) ResolveImpactAccumulated(e2 *Cinematic, nx, ny, nz float64, 
 		newTx := oldTx + candJt*tx
 		newTy := oldTy + candJt*ty
 		newTz := oldTz + candJt*tz
-		maxTotalFriction := *accNormal * mu
+		maxTotalFriction := acc.normal * mu
 		if totalMag := math.Sqrt(newTx*newTx + newTy*newTy + newTz*newTz); totalMag > maxTotalFriction && totalMag > 0.0 {
 			scale := maxTotalFriction / totalMag
 			newTx *= scale
 			newTy *= scale
 			newTz *= scale
 		}
-		*accTx, *accTy, *accTz = newTx, newTy, newTz
+		acc.tx, acc.ty, acc.tz = newTx, newTy, newTz
 		jtx = newTx - oldTx
 		jty = newTy - oldTy
 		jtz = newTz - oldTz

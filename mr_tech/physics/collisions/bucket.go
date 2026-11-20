@@ -481,7 +481,7 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 
 	for i := 0; i < b.prevCount; i++ {
 		w := b.prevPoolPtr[i]
-		if w.warmConsumed || w.accNormal <= 0.0 {
+		if w.warmConsumed || w.acc.GetNormal() <= 0.0 {
 			continue
 		}
 		var wId uint64
@@ -510,18 +510,19 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 		bestPrev.warmConsumed = true
 		// Ignore impulses from bouncing contacts or initial single-frame crash transients;
 		// once persistent across consecutive frames without rebound, seed warm-starting from frame 2+.
-		if bestPrev.restTarget > 1e-3 {
+		if bestPrev.acc.GetRestTarget() > 1e-3 {
 			return
 		}
 		entry.warmEligible = true
 		if !bestPrev.warmEligible {
 			return
 		}
+		accNormal, accTx, accTy, accTz := bestPrev.acc.Get()
 		entry.SetWarmImpulse(
-			bestPrev.accNormal*warmStartFactor,
-			bestPrev.accTx*warmStartFactor,
-			bestPrev.accTy*warmStartFactor,
-			bestPrev.accTz*warmStartFactor,
+			accNormal*warmStartFactor,
+			accTx*warmStartFactor,
+			accTy*warmStartFactor,
+			accTz*warmStartFactor,
 		)
 	}
 }

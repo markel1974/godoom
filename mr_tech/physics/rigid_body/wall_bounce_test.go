@@ -15,8 +15,7 @@ func TestKeepUprightWallContactNoVelocityRebound(t *testing.T) {
 	wall := NewEntity(0.0, 0.0, 0.2, int(CombineAverage), int(CombineAverage), 0.0)
 	wall.Rebuild(40.0, -100.0, -100.0, 20.0, 200.0, 200.0)
 
-	var accNormal, accTx, accTy, accTz, restTarget float64
-	var hasRestTarget bool
+	var acc Accumulator
 
 	// Off-center impact point in both Y and Z relative to player center (20, 20, 30).
 	const nx, ny, nz = -1.0, 0.0, 0.0
@@ -24,10 +23,10 @@ func TestKeepUprightWallContactNoVelocityRebound(t *testing.T) {
 
 	for tick := 0; tick < 8; tick++ {
 		if tick > 0 {
-			player.WarmStartImpact(wall, nx, ny, nz, px, py, pz, &accNormal, &accTx, &accTy, &accTz)
+			player.WarmStartImpact(wall, nx, ny, nz, px, py, pz, &acc)
 		}
 		for iter := 0; iter < 10; iter++ {
-			player.ResolveImpactAccumulated(wall, nx, ny, nz, px, py, pz, &accNormal, &accTx, &accTy, &accTz, &restTarget, &hasRestTarget)
+			player.ResolveImpactAccumulated(wall, nx, ny, nz, px, py, pz, &acc)
 		}
 
 		wx, wy, wz := player.GetAngularVelocity()
@@ -58,9 +57,8 @@ func TestDynamic6DoFRetainsRotationalImpact(t *testing.T) {
 	wall := NewEntity(0.0, 0.0, 0.2, int(CombineAverage), int(CombineAverage), 0.0)
 	wall.Rebuild(40.0, -100.0, -100.0, 20.0, 200.0, 200.0)
 
-	var accNormal, accTx, accTy, accTz, restTarget float64
-	var hasRestTarget bool
-	box.ResolveImpactAccumulated(wall, -1.0, 0.0, 0.0, 40.0, 32.0, 48.0, &accNormal, &accTx, &accTy, &accTz, &restTarget, &hasRestTarget)
+	var acc Accumulator
+	box.ResolveImpactAccumulated(wall, -1.0, 0.0, 0.0, 40.0, 32.0, 48.0, &acc)
 
 	_, wy, wz := box.GetAngularVelocity()
 	if wy == 0.0 && wz == 0.0 {
@@ -77,13 +75,12 @@ func TestKeepUprightImpactAllocs(t *testing.T) {
 	wall := NewEntity(0.0, 0.0, 0.2, int(CombineAverage), int(CombineAverage), 0.0)
 	wall.Rebuild(40.0, -100.0, -100.0, 20.0, 200.0, 200.0)
 
-	var accNormal, accTx, accTy, accTz, restTarget float64
-	var hasRestTarget bool
+	var acc Accumulator
 
 	allocs := testing.AllocsPerRun(100, func() {
 		player.SetV(300.0, 150.0, 0.0)
-		player.WarmStartImpact(wall, -1.0, 0.0, 0.0, 40.0, 32.0, 48.0, &accNormal, &accTx, &accTy, &accTz)
-		player.ResolveImpactAccumulated(wall, -1.0, 0.0, 0.0, 40.0, 32.0, 48.0, &accNormal, &accTx, &accTy, &accTz, &restTarget, &hasRestTarget)
+		player.WarmStartImpact(wall, -1.0, 0.0, 0.0, 40.0, 32.0, 48.0, &acc)
+		player.ResolveImpactAccumulated(wall, -1.0, 0.0, 0.0, 40.0, 32.0, 48.0, &acc)
 	})
 	if allocs != 0 {
 		t.Fatalf("expected 0 heap allocs per impact solve, got %v", allocs)

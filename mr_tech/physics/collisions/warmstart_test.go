@@ -16,11 +16,9 @@ func TestBucketWarmStartSkipsInitialTransientAndRebound(t *testing.T) {
 	if e0 == nil {
 		t.Fatalf("expected frame 0 entry")
 	}
-	accN, accTx, accTy, accTz, restT, hasRest := e0.GetSolverState()
-	*accN = 15000.0
-	*accTx, *accTy, *accTz = 100.0, 0.0, 0.0
-	*restT = 0.0
-	*hasRest = true
+	acc0 := e0.GetSolverState()
+	acc0.Set(15000.0, 100.0, 0.0, 0.0)
+	acc0.SetRestTarget(0.0)
 
 	// Frame 1: persistent contact becomes warm-eligible for frame 2+, but does not seed the frame 0 crash impulse.
 	b.Rebuild()
@@ -32,11 +30,9 @@ func TestBucketWarmStartSkipsInitialTransientAndRebound(t *testing.T) {
 	if warmN1 != 0.0 {
 		t.Fatalf("expected 0 warm-start impulse immediately after initial crash frame, got %v", warmN1)
 	}
-	accN, accTx, accTy, accTz, restT, hasRest = e1.GetSolverState()
-	*accN = 122.0
-	*accTx, *accTy, *accTz = 10.0, 0.0, 0.0
-	*restT = 0.0
-	*hasRest = true
+	acc1 := e1.GetSolverState()
+	acc1.Set(122.0, 10.0, 0.0, 0.0)
+	acc1.SetRestTarget(0.0)
 
 	// Frame 2: resting contact across consecutive frames seeds 0.80 * steady load.
 	b.Rebuild()
@@ -50,8 +46,8 @@ func TestBucketWarmStartSkipsInitialTransientAndRebound(t *testing.T) {
 	}
 
 	// Simulate an elastic bounce on frame 2: frame 3 must reset warm start.
-	_, _, _, _, restT, _ = e2.GetSolverState()
-	*restT = 50.0
+	acc2 := e2.GetSolverState()
+	acc2.SetRestTarget(50.0)
 
 	b.Rebuild()
 	e3 := b.Add(BucketFloor, cage, nil, nil, 0.0, 0.01, 0, 0, 1, 0, 0, 0, 0, ImpactElastic)

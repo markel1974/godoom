@@ -277,21 +277,20 @@ func (e *Entity) predictedContactCOMs(e2 *Entity) (float64, float64, float64, fl
 }
 
 // WarmStartImpact pre-applies persisted normal and tangential impulses for this entity pair before PGS iterations.
-func (e *Entity) WarmStartImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64, accNormal, accTx, accTy, accTz *float64) {
+func (e *Entity) WarmStartImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64, acc *Accumulator) {
 	cx1, cy1, cz1, cx2, cy2, cz2 := e.predictedContactCOMs(e2)
-	e.Cinematic.WarmStartImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, accNormal, accTx, accTy, accTz)
+	e.Cinematic.WarmStartImpact(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, acc)
 }
 
-// ResolveImpact resolves a 6-DoF collision impact with another entity .
+// ResolveImpact resolves a 6-DoF collision impact with another entity.
 func (e *Entity) ResolveImpact(e2 *Entity, nx, ny, nz float64, px, py, pz float64) {
-	var accTx, accTy, accTz float64
-	e.ResolveImpactAccumulated(e2, nx, ny, nz, px, py, pz, nil, &accTx, &accTy, &accTz, nil, nil)
+	e.ResolveImpactAccumulated(e2, nx, ny, nz, px, py, pz, nil)
 }
 
 // ResolveImpactAccumulated resolves a 6-DoF collision impact with another entity using accumulated PGS impulse clamping.
-func (e *Entity) ResolveImpactAccumulated(e2 *Entity, nx, ny, nz float64, px, py, pz float64, accNormal, accTx, accTy, accTz, restTarget *float64, hasRestTarget *bool) {
+func (e *Entity) ResolveImpactAccumulated(e2 *Entity, nx, ny, nz float64, px, py, pz float64, acc *Accumulator) {
 	cx1, cy1, cz1, cx2, cy2, cz2 := e.predictedContactCOMs(e2)
-	e.Cinematic.ResolveImpactAccumulated(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, accNormal, accTx, accTy, accTz, restTarget, hasRestTarget)
+	e.Cinematic.ResolveImpactAccumulated(e2.Cinematic, nx, ny, nz, cx1, cy1, cz1, cx2, cy2, cz2, px, py, pz, acc)
 }
 
 // ResolveElasticPenetration separates overlapping entities using an elastic, inverse-mass-weighted correction.

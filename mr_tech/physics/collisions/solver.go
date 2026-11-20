@@ -278,13 +278,13 @@ func (t *Solver) StageWarmStart() {
 		if rParentEnt == nil {
 			continue
 		}
-		accNormal, accTx, accTy, accTz, _, _ := slot.GetSolverState()
-		if *accNormal <= 0.0 {
+		acc := slot.GetSolverState()
+		if acc.GetNormal() <= 0.0 {
 			continue
 		}
 		nX, nY, nZ := slot.GetNormal()
 		pX, pY, pZ := slot.GetPoint()
-		t.entity.WarmStartImpact(rParentEnt, nX, nY, nZ, pX, pY, pZ, accNormal, accTx, accTy, accTz)
+		t.entity.WarmStartImpact(rParentEnt, nX, nY, nZ, pX, pY, pZ, acc)
 	}
 }
 
@@ -304,8 +304,8 @@ func (t *Solver) StageResolve() {
 		// Risoluzione Impulsi e Attrito (Fase Cinetica) con Proprietà Esplicite del Materiale di Contatto.
 		nX, nY, nZ := slot.GetNormal()
 		pX, pY, pZ := slot.GetPoint()
-		accNormal, accTx, accTy, accTz, restTarget, hasRestTarget := slot.GetSolverState()
-		t.entity.ResolveImpactAccumulated(rParentEnt, nX, nY, nZ, pX, pY, pZ, accNormal, accTx, accTy, accTz, restTarget, hasRestTarget)
+		acc := slot.GetSolverState()
+		t.entity.ResolveImpactAccumulated(rParentEnt, nX, nY, nZ, pX, pY, pZ, acc)
 	}
 }
 

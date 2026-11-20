@@ -37,8 +37,7 @@ func TestKineticEnergyNonIncreasingUnderSpinClampAndWarmStart(t *testing.T) {
 			e2.Rebuild(20.0, 0.0, 0.0, 32.0, 32.0, 64.0)
 			e2.SetKeepUpright(tc.upright2)
 
-			var accN, accTx, accTy, accTz, restT [4]float64
-			var hasRest [4]bool
+			var acc [4]Accumulator
 			pts := [4][3]float64{
 				{20.0, 0.0, 0.0},
 				{20.0, 8.0, 0.0},
@@ -51,18 +50,13 @@ func TestKineticEnergyNonIncreasingUnderSpinClampAndWarmStart(t *testing.T) {
 			for frame := 0; frame < 6; frame++ {
 				if frame > 0 {
 					for p := 0; p < tc.points; p++ {
-						accN[p] *= 0.80
-						accTx[p] *= 0.80
-						accTy[p] *= 0.80
-						accTz[p] *= 0.80
-						hasRest[p] = false
-						restT[p] = 0.0
-						e1.WarmStartImpact(e2, -1.0, 0.0, 0.0, pts[p][0], pts[p][1], pts[p][2], &accN[p], &accTx[p], &accTy[p], &accTz[p])
+						acc[p].ScaleWarm(0.80)
+						e1.WarmStartImpact(e2, -1.0, 0.0, 0.0, pts[p][0], pts[p][1], pts[p][2], &acc[p])
 					}
 				}
 				for iter := 0; iter < 8; iter++ {
 					for p := 0; p < tc.points; p++ {
-						e1.ResolveImpactAccumulated(e2, -1.0, 0.0, 0.0, pts[p][0], pts[p][1], pts[p][2], &accN[p], &accTx[p], &accTy[p], &accTz[p], &restT[p], &hasRest[p])
+						e1.ResolveImpactAccumulated(e2, -1.0, 0.0, 0.0, pts[p][0], pts[p][1], pts[p][2], &acc[p])
 					}
 				}
 				keNow := entityTotalKE(e1) + entityTotalKE(e2)
@@ -167,7 +161,7 @@ func TestImpactEnergyZeroAllocs(t *testing.T) {
 }
 
 func TestComputeStaticNormalKineticImpactAt(t *testing.T) {
-	// 1. Upright body slamming downward onto a horizontal static floor (50 units/m):
+	//  Upright body slamming downward onto a horizontal static floor (50 units/m):
 	// m = 80 kg, vz = -500 units/s (10 m/s) -> 0.5 * 80 * 10^2 = 4000 J.
 	body := NewEntity(80.0, 0.0, 0.2, int(CombineAverage), int(CombineAverage), 0.0)
 	body.Rebuild(0.0, 0.0, 0.0, 40.0, 40.0, 60.0)
@@ -180,12 +174,12 @@ func TestComputeStaticNormalKineticImpactAt(t *testing.T) {
 		t.Fatalf("expected 4000 J against static floor, got %v", eFloor)
 	}
 
-	// 2. Tangential motion along a vertical wall returns 0 J.
+	//  Tangential motion along a vertical wall returns 0 J.
 	if eWall := body.ComputeStaticNormalKineticImpactAt(-1, 0, 0, 40, 20, 30); eWall != 0.0 {
 		t.Fatalf("expected 0 J for tangential slide along static wall, got %v", eWall)
 	}
 
-	// 3. Rotating 6DoF box hitting a static floor off-center includes lever-arm closing velocity.
+	// Rotating 6DoF box hitting a static floor off-center includes lever-arm closing velocity.
 	rotBox := NewEntity(80.0, 0.0, 0.2, int(CombineAverage), int(CombineAverage), 0.0)
 	rotBox.Rebuild(0.0, 0.0, 0.0, 40.0, 40.0, 40.0)
 	rotBox.SetKeepUpright(false)

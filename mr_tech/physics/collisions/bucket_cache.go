@@ -2,7 +2,7 @@ package collisions
 
 const bucketCacheSlots = 4
 
-type bucketCacheEntry struct {
+type BucketCacheEntry struct {
 	from       uint64
 	penetrable int8
 	depth      int8
@@ -10,7 +10,7 @@ type bucketCacheEntry struct {
 
 // BucketCache caches bucket penetrability results by source entity and traversal depth.
 type BucketCache struct {
-	entries [bucketCacheSlots]bucketCacheEntry
+	entries [bucketCacheSlots]BucketCacheEntry
 	count   uint8
 	next    uint8
 }

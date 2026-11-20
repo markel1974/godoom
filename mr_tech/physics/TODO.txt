@@ -12,3 +12,91 @@ PUNTI RIMANENTI PER PROSSIME EVOLUZIONI (Roadmap Mafia 2/3):
 - Disaccoppiamento aabb vs math3d/obb (eventuale riorganizzazione estetica/architetturale dei file matematici).
 - Integrazione temporale (unificazione dt fisso indipendente dal framerate del rendering).
 
+
+File monolitici ad alta densità logica:
+cage.go (2.085 righe) e cinematic.go (1.529 righe) concentrano responsabilità troppo diverse (broad-phase swept, triangoli statici vs dinamici, euristiche KeepUpright/slope/corner, static clamp, integrazione, sleep, PGS). Spezzarli in file più piccoli per tema (es. cage_static.go, cage_upright.go, cage_clamp.go e in rigid_body separare integrazione/sleep dal solver degli impatti) ridurrebbe molto il rischio di regressioni.
+Condivisione ambigua dell'AABB su entità animate (KeepUpright):
+
+BoundingBox.rebuild riscrive r.aabb centrato sull'entità ad ogni spostamento/rotazione (AddTo, SetRotation...), mentre gli oggetti animati in model/vertices aggiornano quello stesso ent.GetAABB() con offset/estensioni di animazione letti tramite OnAABBChanged in cage.go. Separare nettamente l'AABB di render/animazione dall'hull fisico di Cage eviterebbe sovrascritture tra fine frame e passo fisico.
+
+Cache locality ancora migliorabile nei pool e nell'albero BVH:
+In Bucket currPoll / prevPool sono [16]*Entry (array di puntatori) e in Tree nodes è []*Node: trasformarli in array/slice di struct per valore ([FacesPerBucket]Entry, []Node) abbatterebbe ulteriormente cache miss e lavoro del GC (piccola nota: in Bucket, currPoll ha anche un piccolo refuso rispetto a prevPool/currPoolPtr).
+
+
+Separare la matematica base da aabb: oggi mr_tech/physics/aabb ospita Quaternion, Axes, Point, Plane, Sat, OBBManifold oltre all'AABB/BVH; estrarre un package math3d pulirebbe i confini tra vehicle, rigid_body, renderers e collisions.
+Rotazioni di ribilanciamento in aabb.Tree: con lo streaming open-world di settori e tanti corpi dinamici, un BVH senza rotazioni locali tende progressivamente a degradare la qualità dei volumi interni.
+Fixed timestep dt disaccoppiato dal render loop: essenziale perché PGS, warm-starting, attrito e molle di RaycastVehicle restino deterministici indipendentemente dal framerate.
+
+In sintesi: la base algoritmica (OBB+CCD+PGS+isole+veicolo+ragdoll) e la cura sulle allocazioni sono di livello molto alto; il punto su cui conviene investire adesso è modularità e separazione dei confini (math3d, split di cage.go/cinematic.go, e disaccoppiamento tra bounds fisici e bounds animati) così da consolidare la stabilità prima di scalare verso l'open world.
+
+
+
+Hai scritto a mano un engine che fa OBB+SAT, CCD, manifold clipping, PGS con warm-start e bilancio energetico, 7 tipi di vincoli meccanici, ragdoll a isole e un modello veicolare raycast, mantenendo zero allocazioni nei loop critici. Questo è lavoro di altissimo livello.
+Però guardando cage.go (2.085 righe), cinematic.go (1.529 righe) e coordinator.go, si vede chiaramente qual è il problema di fondo: stai combattendo contro le conseguenze delle tue scelte iniziali a suon di toppe locali.
+
+Ecco i 5 punti veri su cui secondo me dovresti fermarti a riflettere:
+
+1. Il prezzo della "triangle soup" cruda si vede tutto in cage.go
+
+Non avere BSP/convex brush e collidere direttamente su triangoli arbitrari genera per natura phantom plane, spigoli interni, micro-salti su cuciture coplanari e tunnel.
+Invece di risolvere questo alla radice (es. unificando contatti o costruendo volumi convessi / capsule reali), cage.go è diventato un accumulo di euristiche: refineKeepUprightWall, tunneled, pressedCross, checkGraze, clipPolyZSlab, pruneCoplanarStepSlots, pruneCoplanarCornerHits, spikeTipCap, clampCorners…
+Il rischio: funziona sui casi che hai testato finora, ma è estremamente delicato. Appena cambi una soglia o una geometria di mappa nuova, si rompe qualcosa di imprevisto.
+
+2. Hai incastrato due motori fisici diversi dentro gli stessi struct
+
+Cage e Cinematic cercano di gestire contemporaneamente due cose incompatibili:
+
+Un character controller FPS (KeepUpright: ellissoide verticale, maxStep, step-up con retry, blocco tilt);
+Un corpo rigido 6-DoF libero (OBB ruotato, tensore d'inerzia 3×3, ragdoll, veicolare).
+
+Risultato: codice pieno di if keepUpright / if !keepUpright sparsi ovunque, e addirittura ibridi pericolosi (es. penetrazione calcolata con l'ellissoide in evaluateStaticFace, ma poi manifold generato col box OBB di Entity.BoundingBox in addStaticTriangleManifold, oppure BoundingBox.rebuild che riscrive lo stesso *AABB usato dai modelli animati con OnAABBChanged).
+Un character controller serio dovrebbe essere un componente separato (es. capsula/cilindro slide-and-step), non un Entity 6-DoF a cui si disattiva mezzo comportamento a suon di flag.
+
+3. Zero-alloc non significa veloce: paghi ancora sulla struttura del loop e sul layout dati
+
+Hai fatto bene a eliminare le allocazioni per frame, ma la CPU che ti bruciava non veniva tanto dal GC quanto dall'architettura delle passate:
+
+In Coordinator.Step, il static clamping (ClampStaticCage) gira dentro il loop di solverIterations: per 10 iterazioni moltiplicato fino a 3 passate, ri-interroghi BVH di volumi e facce statiche già note invece di raccogliere i triangoli vicini una volta sola per frame in un buffer locale del Cage.
+Quasi tutte le strutture calde (Bucket.currPoll/prevPool [16]*Entry, Tree.nodes []*Node, Coordinator.running []*Solver) sono array di puntatori anziché array/slice di struct contigue per valore ([]Entry, []Node). Hai zero allocazioni, ma comunque pointer-chasing continuo e lavoro inutile per il write barrier / scanner GC.
+4. Confini tra i sottopacchetti confusi
+aabb non è un package sugli AABB: dentro ci sono quaternioni, matrici/assi, poligoni di clipping, SAT, CCD, OBBManifold e BVH. Chiunque voglia usare un quaternione importa aabb.
+Responsabilità invertite tra collisions e rigid_body: il solver PGS degli impatti sta dentro Cinematic (in rigid_body), la gestione dei bucket/slot e la metà di alto livello dei giunti sta in collisions, Entity fa quasi solo da passacarte tra BoundingBox e Cinematic. Quando introduci un oggetto come Accumulator, devi modificare metà di entrambi i package e tre file di test.
+Residuo di evoluzione rapida: metodi molto lunghi (in cinematic.go, ResolveImpactAccumulated da sola supera le 220 righe; cage.go supera le 2.000), refusi di refactoring (currPoll in bucket.go), e blocchi commentati che affiorano quando cambi API.
+5. Il dt legato agli FPS ti presenterà il conto presto
+
+L'hai già segnato nel TODO.txt: finché il timestep è accoppiato al framerate e la fisica non gira a fixed timestep (con interpolazione per il render), qualunque tuning su attriti, sleep, PD upright, sospensioni dell'auto e ragdoll resterà instabile tra macchina veloce, macchina lenta e picchi di carico.
+
+In breve: cosa farei davvero se fosse mio
+
+Non lo butterei via — la matematica che hai costruito è ottima e vale oro. Però prima di aggiungere altra roba (open world, spring camera, altro gameplay) farei un taglio netto di consolidamento su 4 cose:
+
+Estrai math3d fuori da aabb (vettori, quaternioni, matrici, SAT/manifold).
+Separa nettamente il Character Controller (entità verticali con step/gravity) dai Dynamic RigidBody 6-DoF (casse, barili, detriti, ragdoll), invece di farli convivere nello stesso if keepUpright dentro Cage/Cinematic.
+Disaccoppia i bounds usati dal gameplay/animazione/rendering dall'AABB usato dal broad-phase/clamping fisico.
+Fai una singola query statica per frame (broadphase statica raccolta una volta per Cage prima del solver) invece di ripeterla durante le iterazioni posizionali, e sposta il solver PGS fuori da Cinematic.
+
+Se invece continui ad aggiungere feature sopra l'attuale cage.go + cinematic.go così come sono, ogni miglioramento su un caso (nemici, porte, ragdoll, auto) continuerà a generare regressioni su un altro.
+
+
+Quindi sì: il fatto che il mondo statico resti una mesh triangolare (organizzata in Volume spaziali tramite Compiler2d/Compiler3d + Clusters) ha perfettamente senso per il tipo di engine ibrido che stai costruendo (da Wolf/Doom fino a Q3/Doom3/Open-World).
+
+Quello che volevo dire — espresso meglio alla luce della tua precisazione — è che anche lavorando su triangle mesh aperte, il modo in cui i motori reali (PhysX, Jolt, Bullet) eliminano alla radice il casino di cage.go non è costruendo solidi convessi chiusi, ma con 2–3 strumenti molto più semplici:
+
+Bitmask degli spigoli interni precalcolata sui singoli triangoli (stile Internal Edge Utility di Bullet / Active Edges di Jolt)
+
+Non serve un poliedro chiuso: ogni Face ha 3 spigoli.
+A compile time (e tra l’altro in compiler_3d.go avevi già preparato facesTree e fixFaces esattamente in quella direzione!), per ogni triangolo verifichi gli adiacenti su ciascuno dei 3 lati tramite AABB/vertici condivisi:
+Se lo spigolo unisce due triangoli coplanari o concavi (es. il classico quad diviso in 2 triangoli, o una curva/rampa continua), lo marchi con 1 bit (edgeMask uint8) come spigolo interno/inattivo.
+Resta attivo solo se è un vero spigolo convesso o un bordo aperto.
+A runtime, se un contatto cade su uno spigolo marcato interno, forzi la normale lungo la normale della faccia (o lo scarti se la normale spinge lungo lo spigolo): funziona su qualsiasi mesh aperta, elimina i micro-intoppi sulle cuciture e ti permette di buttare via centinaia di righe di euristica runtime in cage.go (pruneCoplanarCornerHits, hasCoplanarInelasticSlot, pruneCoplanarStepSlots, flatWalls, clampCorners).
+
+Capsula dedicata per i KeepUpright contro triangolo
+
+Un ellissoide scalato + OBB per i manifold statici ti obbliga oggi a fare proiezioni asimmetriche e clipping complessi come refineKeepUprightWall (centinaia di righe solo per gli spigoli laterali).
+Una capsula verticale (un semplice segmento [base+R .. top-R] con raggio R) contro un triangolo ha una distanza segmento-triangolo esatta in forma chiusa in ~40 righe, è isotropa in XY (niente gonfiaggi dell'AABB quando l'entità ruota!), gestisce pendenze e gradini in modo liscio e non dipende dai bounds animati della mesh.
+
+Un’unica raccolta dei triangoli statici vicini per tick
+
+Invece di re-interrogare Volumes.tree → vol.tree in StagePrepare, poi in ApplySafeStepUp e poi dentro il loop di solverIterations di Coordinator.Step (ClampStaticCage), puoi raccogliere una volta sola i triangoli candidati nell’AABB espanso dello step del Cage e far lavorare tutta la risoluzione statica/clamp su quel piccolo buffer locale.
+
+Quindi la scelta della mesh triangolare è validissima; il vero punto dolente è che oggi tutta la compensazione topologica è fatta a runtime frame-per-frame dentro Cage invece di essere pre-etichettata una volta sola su Face a tempo di compilazione.

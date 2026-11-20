@@ -322,7 +322,7 @@ func (v *Vertices3DEntry) SetAction(idx int) {
 		v.volB = refVol
 		v.lerpT = 0.0
 		v.comp.SetVolume(v.volA)
-		if !v.vols.HasFrameCenter() {
+		if !v.vols.HasCenters() {
 			v.lastVolA = v.volA
 		}
 	}
@@ -374,7 +374,7 @@ func (v *Vertices3DEntry) AdvanceAnimation(tick uint64) {
 
 // CenterFrames recenters the entry volumes and rebuilds the collision solver using the given physics parameters.
 func (v *Vertices3DEntry) CenterFrames(partMass, restitution, friction, gForce float64) {
-	v.vols.CenterFrame()
+	v.vols.BuildCenters()
 
 	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, gForce)
 	rebuildSolverFromVolume(partSolver, v.volA)
@@ -437,12 +437,12 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 
 // FrameCenterA returns the center coordinates of frame A.
 func (v *Vertices3DEntry) FrameCenterA() geometry.XYZ {
-	return v.vols.FrameCenter(v.frameIdxA)
+	return v.vols.GetCenter(v.frameIdxA)
 }
 
 // FrameCenterB returns the center of frame B.
 func (v *Vertices3DEntry) FrameCenterB() geometry.XYZ {
-	return v.vols.FrameCenter(v.frameIdxB)
+	return v.vols.GetCenter(v.frameIdxB)
 }
 
 // SyncSolverToCurrentFrame updates the solver from the current frame volume when it has changed.

@@ -8,17 +8,17 @@ import (
 
 // Volumes manages a collection of spatial volumes and cached frame center data.
 type Volumes struct {
-	vols            []*Volume
-	frameCenters    []geometry.XYZ
-	frameCentersLen int
+	vols       []*Volume
+	centers    []geometry.XYZ
+	centersLen int
 }
 
 // NewVolumes creates a Volumes collection sized to hold v volume pointers.
 func NewVolumes(v int) *Volumes {
 	return &Volumes{
-		vols:            make([]*Volume, v),
-		frameCenters:    nil,
-		frameCentersLen: 0,
+		vols:       make([]*Volume, v),
+		centers:    nil,
+		centersLen: 0,
 	}
 }
 
@@ -58,26 +58,26 @@ func (v *Volumes) SetAllowTessellate(t bool) {
 	}
 }
 
-// FrameCenter returns the stored centering offset for idx, or a zero vector if idx is out of range.
-func (v *Volumes) FrameCenter(idx int) geometry.XYZ {
-	if idx >= 0 && idx < v.frameCentersLen {
-		return v.frameCenters[idx]
+// GetCenter returns the stored centering offset for idx, or a zero vector if idx is out of range.
+func (v *Volumes) GetCenter(idx int) geometry.XYZ {
+	if idx >= 0 && idx < v.centersLen {
+		return v.centers[idx]
 	}
 	return geometry.XYZ{}
 }
 
-// HasFrameCenter reports whether frame center data is available.
-func (v *Volumes) HasFrameCenter() bool {
-	return v.frameCentersLen > 0
+// HasCenters reports whether frame center data is available.
+func (v *Volumes) HasCenters() bool {
+	return v.centersLen > 0
 }
 
-// CenterFrame recenter each volume around its bounding-box center and records the original centers.
-func (v *Volumes) CenterFrame() {
+// BuildCenters recenter each volume around its bounding-box center and records the original centers.
+func (v *Volumes) BuildCenters() {
 	vLen := len(v.vols)
-	if len(v.frameCenters) < vLen {
-		v.frameCenters = make([]geometry.XYZ, vLen*2)
+	if len(v.centers) < vLen {
+		v.centers = make([]geometry.XYZ, vLen*2)
 	}
-	v.frameCentersLen = vLen
+	v.centersLen = vLen
 	for fIdx, vol := range v.vols {
 		if vol == nil {
 			continue
@@ -88,7 +88,7 @@ func (v *Volumes) CenterFrame() {
 		mcx := (minX + maxX) * 0.5
 		mcy := (minY + maxY) * 0.5
 		mcz := (minZ + maxZ) * 0.5
-		center := &v.frameCenters[fIdx]
+		center := &v.centers[fIdx]
 		center.X, center.Y, center.Z = mcx, mcy, mcz
 		if math.Abs(mcx) > 1e-6 || math.Abs(mcy) > 1e-6 || math.Abs(mcz) > 1e-6 {
 			for j := 0; j < faces.Len(); j++ {

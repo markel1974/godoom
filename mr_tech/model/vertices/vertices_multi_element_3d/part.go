@@ -101,6 +101,9 @@ func (v *Part) UpdateAABB() {
 
 // GetAABB returns this segment's current world-space bounding box.
 func (v *Part) GetAABB() *aabb.AABB {
+	if v.ent == nil {
+		return nil
+	}
 	return v.ent.GetAABB()
 }
 

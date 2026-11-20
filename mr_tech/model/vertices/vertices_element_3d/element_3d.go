@@ -158,6 +158,8 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 	v.volA = refVol
 	v.volB = refVol
 	v.comp = NewComposer(refVol)
+	v.solver = v.comp.GetSolver()
+	v.ent = v.solver.GetEntity()
 	v.lerpT = 0.0
 	v.lastVolA = nil
 	v.salt = uint64(rand.Intn(len(model.Frames)))
@@ -262,11 +264,10 @@ func (v *Element3D) GetSolver() *collisions.Solver {
 
 // GetAABB returns the entity bounding box updated from cached vertex bounds when applicable.
 func (v *Element3D) GetAABB() *aabb.AABB {
+	if v.ent == nil {
+		return nil
+	}
 	return v.ent.GetAABB()
-}
-
-// Translate shifts the 3D element AABB by the specified displacement.
-func (v *Element3D) Translate(dx, dy, dz float64) {
 }
 
 // QueryOverlaps invokes callback for each object whose bounds overlap object, stopping when callback returns false.

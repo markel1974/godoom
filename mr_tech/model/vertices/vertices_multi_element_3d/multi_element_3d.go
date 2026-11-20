@@ -170,11 +170,10 @@ func (v *MultiElement3D) QueryOverlaps(object aabb.IObject, callback func(object
 
 // GetAABB returns the entity's axis-aligned bounding box.
 func (v *MultiElement3D) GetAABB() *aabb.AABB {
+	if v.ent == nil {
+		return nil
+	}
 	return v.ent.GetAABB()
-}
-
-// Translate shifts the multi-element 3D AABB by the specified displacement.
-func (v *MultiElement3D) Translate(dx, dy, dz float64) {
 }
 
 // HandlePartImpact applies an impact to a part, records the hit, adds knockback, and may detach stressed joints.

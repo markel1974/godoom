@@ -196,7 +196,42 @@ func (s *Cage) Setup(solver *Solver) error {
 	s.solver = solver
 	s.object = solver.GetObject()
 	s.entity = s.solver.GetEntity()
+	if s.entity != nil {
+		if ab := s.entity.GetAABB(); ab != nil {
+			ab.SetOnChange(s.OnAABBChanged)
+			s.OnAABBChanged(ab)
+		}
+	} else if s.object != nil {
+		if ab := s.object.GetAABB(); ab != nil {
+			ab.SetOnChange(s.OnAABBChanged)
+			s.OnAABBChanged(ab)
+		}
+	}
 	return nil
+}
+
+// OnAABBChanged updates upright collision cage extents and offsets when the underlying AABB changes.
+func (s *Cage) OnAABBChanged(ab *aabb.AABB) {
+	if s.entity == nil || !s.entity.KeepUpright() {
+		return
+	}
+	minX, minY, minZ, maxX, maxY, maxZ := ab.GetMinMax()
+	if maxX > minX && maxY > minY && maxZ > minZ {
+		entCX, entCY, entCZ := s.entity.GetCenter()
+		cX := (minX + maxX) * 0.5
+		cY := (minY + maxY) * 0.5
+		cZ := (minZ + maxZ) * 0.5
+		s.objOffX = cX - entCX
+		s.objOffY = cY - entCY
+		s.objOffZ = cZ - entCZ
+		s.eRadX = (maxX - minX) * 0.5
+		s.eRadY = (maxY - minY) * 0.5
+		s.eRadZ = (maxZ - minZ) * 0.5
+		s.uprightHull = true
+	} else {
+		s.objOffX, s.objOffY, s.objOffZ = 0, 0, 0
+		s.uprightHull = false
+	}
 }
 
 // GetObject returns the object associated with the cage.[cite: 6]
@@ -212,34 +247,21 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.stepDX, s.stepDY, s.stepDZ = lEnt.GetFrameDisplacement()
 	s.dX, s.dY, s.dZ = s.stepDX, s.stepDY, s.stepDZ
 
-	// Oriented extents from entity OBB (kept synchronized by Entity.Update).
-	s.eRadX, s.eRadY, s.eRadZ = lEnt.GetOrientedHalfExtents()
 	entCX, entCY, entCZ := lEnt.GetCenter()
-	s.cX, s.cY, s.cZ = entCX, entCY, entCZ
-	s.objOffX, s.objOffY, s.objOffZ = 0, 0, 0
-	s.uprightHull = false
-
 	if lEnt.KeepUpright() {
-		if objAABB := s.object.GetAABB(); objAABB != nil {
-			minX := objAABB.GetMinX()
-			maxX := objAABB.GetMaxX()
-			minY := objAABB.GetMinY()
-			maxY := objAABB.GetMaxY()
-			minZ := objAABB.GetMinZ()
-			maxZ := objAABB.GetMaxZ()
-			if maxX > minX && maxY > minY && maxZ > minZ {
-				s.cX = (minX + maxX) * 0.5
-				s.cY = (minY + maxY) * 0.5
-				s.cZ = (minZ + maxZ) * 0.5
-				s.eRadX = (maxX - minX) * 0.5
-				s.eRadY = (maxY - minY) * 0.5
-				s.eRadZ = (maxZ - minZ) * 0.5
-				s.objOffX = s.cX - entCX
-				s.objOffY = s.cY - entCY
-				s.objOffZ = s.cZ - entCZ
-				s.uprightHull = true
+		if !s.uprightHull {
+			if objAABB := s.object.GetAABB(); objAABB != nil {
+				s.OnAABBChanged(objAABB)
 			}
 		}
+		s.cX = entCX + s.objOffX
+		s.cY = entCY + s.objOffY
+		s.cZ = entCZ + s.objOffZ
+	} else {
+		s.eRadX, s.eRadY, s.eRadZ = lEnt.GetOrientedHalfExtents()
+		s.cX, s.cY, s.cZ = entCX, entCY, entCZ
+		s.objOffX, s.objOffY, s.objOffZ = 0, 0, 0
+		s.uprightHull = false
 	}
 
 	qx, qy, qz, qw := lEnt.GetQRotation().Get()

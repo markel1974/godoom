@@ -28,8 +28,6 @@ type IVertices interface {
 	Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool
 
 	DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool
-
-	Translate(dx, dy, dz float64)
 }
 
 // IPartOwner is implemented by articulated owners whose sub-parts live as independent nodes in Things.tree.

@@ -10,13 +10,14 @@ type IObject interface {
 
 // AABB represents an axis-aligned bounding box in 3D space, defined by its minimum and maximum coordinates.
 type AABB struct {
-	index int64
-	minX  float64
-	minY  float64
-	minZ  float64
-	maxX  float64
-	maxY  float64
-	maxZ  float64
+	index    int64
+	minX     float64
+	minY     float64
+	minZ     float64
+	maxX     float64
+	maxY     float64
+	maxZ     float64
+	onChange func(a *AABB)
 }
 
 // NewAABB creates and returns a new axis-aligned bounding box (AABB) with default uninitialized properties.
@@ -27,24 +28,47 @@ func NewAABB() *AABB {
 	return a
 }
 
+// SetOnChange registers a callback function invoked whenever the AABB boundaries change.
+func (a *AABB) SetOnChange(fn func(a *AABB)) {
+	a.onChange = fn
+}
+
+// GetOnChange returns the current on-change callback function.
+func (a *AABB) GetOnChange() func(a *AABB) {
+	return a.onChange
+}
+
 // Rebuild recalculates and sets the bounds of the AABB using the specified minimum and maximum coordinates.
 func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
+	if a.minX == minX && a.minY == minY && a.minZ == minZ &&
+		a.maxX == maxX && a.maxY == maxY && a.maxZ == maxZ {
+		return
+	}
 	a.minX = minX
 	a.minY = minY
 	a.minZ = minZ
 	a.maxX = maxX
 	a.maxY = maxY
 	a.maxZ = maxZ
+	if a.onChange != nil {
+		a.onChange(a)
+	}
 }
 
 // Translate shifts the AABB by the specified displacement.
 func (a *AABB) Translate(dx, dy, dz float64) {
+	if dx == 0.0 && dy == 0.0 && dz == 0.0 {
+		return
+	}
 	a.minX += dx
 	a.maxX += dx
 	a.minY += dy
 	a.maxY += dy
 	a.minZ += dz
 	a.maxZ += dz
+	if a.onChange != nil {
+		a.onChange(a)
+	}
 }
 
 // GetMinMax returns the minimum and maximum coordinates (minX, minY, minZ, maxX, maxY, maxZ) of the AABB.

@@ -96,6 +96,9 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 	// Bottom (Z = 0)
 	addQuad(v000, v010, v110, v100)
 
+	v.solver = v.volume.GetSolver()
+	v.ent = v.solver.GetEntity()
+
 	return v
 }
 
@@ -125,11 +128,10 @@ func (v *VerticesSprite) QueryOverlaps(object aabb.IObject, callback func(object
 
 // GetAABB returns the axis-aligned bounding box of the sprite's underlying entity.
 func (v *VerticesSprite) GetAABB() *aabb.AABB {
+	if v.ent == nil {
+		return nil
+	}
 	return v.ent.GetAABB()
-}
-
-// Translate shifts the sprite AABB by the specified displacement.
-func (v *VerticesSprite) Translate(dx, dy, dz float64) {
 }
 
 // Compile updates the sprite's view volume from its current volume.

@@ -92,8 +92,8 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 	}
 
 	v.comp = NewComposer(v.volumes[0])
-	//f.ent = f.volumes[0].entity
-	//f.actionVolume = f.volumes[0]
+	v.solver = v.comp.GetSolver()
+	v.ent = v.solver.GetEntity()
 
 	for _, viewIdx := range v.cfg.MultiSprite.Clamps {
 		if viewIdx < len(v.volumes) {
@@ -147,11 +147,10 @@ func (v *MultiSprite) QueryOverlaps(object aabb.IObject, callback func(object aa
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
 func (v *MultiSprite) GetAABB() *aabb.AABB {
+	if v.ent == nil {
+		return nil
+	}
 	return v.ent.GetAABB()
-}
-
-// Translate shifts the multi-sprite AABB by the specified displacement.
-func (v *MultiSprite) Translate(dx, dy, dz float64) {
 }
 
 // Compile updates the view volume to the current action volume and refreshes the enclosing AABB.

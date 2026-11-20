@@ -123,7 +123,8 @@ func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 // ClampStaticCage projects any entity moved or pushed during the step strictly outside solid world faces.
 func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 	const maxPasses = 3
-	var nearVols [8]*volumes.Volume
+	const maxNearVolumes = 8
+	var nearVols [maxNearVolumes]*volumes.Volume
 	nearVolsLen := 0
 
 	for pass := 0; pass < maxPasses; pass++ {

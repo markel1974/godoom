@@ -1,51 +1,12 @@
-1)
-manca ancora un sistema generale di vincoli meccanici tra corpi rigidi (hinge, ball-socket, slider, ecc.)
+COMPLETATI:
+- [x] Sistema generale di vincoli meccanici tra corpi rigidi (Hinge, Ball-Socket, Slider, Fixed, Universal, Cylindrical, Generic 6-DoF).
+- [x] Modello veicolare RaycastVehicle (sospensioni molla-smorzatore, cerchio di attrito, barre antirollio, drift).
+- [x] Linearizzazione del percorso collisioni in cage.go: unificato il clipping statico multi-punto (Sutherland-Hodgman fino a 4 contatti) con la logica dei manifold dinamici sia per corpi liberi che per corpi keepUpright.
+- [x] Regola di mixing simmetrica per restituzione e attrito in PhysicsMaterial e Cinematic.ResolveImpact (commutativa, min/max/average/multiply indipendente dall'ordine dei corpi con nil-safety).
 
-Il percorso collisioni in cage.go è ancora ibrido: il clipping multi-punto (ComputeStaticTriangle) convive sopra le vecchie euristiche a punto singolo (computeFace / computeFaceMeshVsMesh con GetStabilizedContactPoint). È pragmatico e funziona, ma resta la parte meno lineare rispetto a commitDynamicManifold.
-
-4) Rotazioni di ribilanciamento in Tree
-
-fixUpwardsTree aggiorna gli AABB risalendo verso la radice ma non esegue rotazioni AVL/SAH come b2DynamicTree, e updateLeaf reinserisce sempre la foglia senza tolleranza di movimento dentro il margin: su mappe con molti oggetti dinamici in movimento continuo l'albero può sbilanciarsi nel tempo.
-
-6) Pulizia architetturale dei package (aabb vs obb/math3d)
-
-Come accennavi prima, mr_tech/physics/aabb oggi contiene sia la broadphase (Tree, AABB) sia la parte matematica/OBB (BoundingBox, Quaternion, Axis, Frustum, Plane): separarli renderebbe molto più chiari i confini tra broadphase e narrowphase.
-
-
-
-Se vuoi, il prossimo salto di qualità più concreto (e meno invasivo rispetto a riscrivere tutto) è proprio il punto 1/6 (usare l'asse SAT vincente in OverlapBBAtOffset + eventuale manifold a 2–4 punti) oppure lo split/rinomina del package aabb, o un passo sul warm starting / sleeping. Quale vuoi affrontare?
-
-A. Risposta agli impatti
-
-In Cinematic.ResolveImpact() utilizzi:
-actualRestitution := e2.restitution
-
-Quindi il coefficiente di restituzione dipende esclusivamente dal secondo corpo. Scambiando l'ordine dei due oggetti, il risultato può cambiare.
-
-Valuterei una regola di mixing simmetrica, oppure una proprietà esplicita del materiale di contatto.
-
-B. Punto di contatto tra OBB
-
-In Entity.ResolveImpact() ricavi il punto di contatto attraverso l'intersezione degli intervalli degli AABB globali.
-
-È una buona approssimazione per alcuni casi, ma non equivale a un vero contact manifold tra due OBB.
-
-Hai già implementato il SAT a 15 assi per stabilire l'intersezione geometrica. Il passo successivo sarebbe utilizzare anche l'asse di separazione minimo e ricavare un punto di contatto coerente con le superfici coinvolte.
-
-Questo migliorerebbe soprattutto la distribuzione degli impulsi rotazionali.
-
-C. Bilanciamento dell'albero AABB
-
-La strategia di inserimento usa il costo delle superfici per scegliere il ramo. È una buona euristica.
-
-Vorrei però verificare fino in fondo il comportamento dell'albero sotto carichi dinamici prolungati: un albero che continua a ricevere aggiornamenti e reinserimenti può diventare progressivamente sbilanciato.
-
-Il costo di inserimento non sostituisce necessariamente le rotazioni di bilanciamento.
-
-D. Integrazione temporale
-
-Hai un dt associato a Cinematic, un FPS globale e un tick specifico per Joints.
-
-La cosa che renderei rigorosa è l'esistenza di un unico riferimento temporale per tutti i sottosistemi, preferibilmente attraverso un timestep fisso indipendente dal framerate del rendering.
+PUNTI RIMANENTI PER PROSSIME EVOLUZIONI:
+- Rotazioni di bilanciamento AVL in aabb.Tree: aggiungere le rotazioni stile b2DynamicTree per evitare che l'albero si sbilanci sotto carichi dinamici prolungati con molti oggetti in movimento.
+- Disaccoppiamento aabb vs math3d/obb (eventuale riorganizzazione estetica/architetturale dei file matematici).
+- Integrazione temporale (unificazione dt fisso indipendente dal framerate del rendering).
 
 

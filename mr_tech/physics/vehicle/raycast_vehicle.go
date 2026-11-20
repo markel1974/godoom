@@ -23,49 +23,6 @@ const (
 	DriveAllWheel                    // AWD / 4WD: trucks and military jeeps
 )
 
-// Wheel represents one suspension and tire unit attached to the vehicle chassis.
-type Wheel struct {
-	// Local hardpoint on chassis
-	HardpointX, HardpointY, HardpointZ float64
-
-	// Suspension parameters
-	SuspensionRestLength     float64 // Uncompressed spring length
-	SuspensionMaxTravel      float64 // Maximum spring compression/droop
-	SpringStiffness          float64 // Hooke's spring constant k (N/m)
-	SpringDampingCompression float64 // Damper coefficient in compression (N*s/m)
-	SpringDampingRebound     float64 // Damper coefficient in rebound (N*s/m)
-	WheelRadius              float64 // Outer tire radius
-	WheelWidth               float64 // Tire tread width
-
-	// Tire friction & cornering properties
-	FrictionSlip       float64 // Coulomb friction coefficient (mu)
-	CorneringStiffness float64 // Cornering grip curve slope
-
-	// Mechanical roles
-	IsFront     bool // Located on front axle
-	IsSteerable bool // Steers with wheel input
-	IsDrive     bool // Powered by engine
-
-	// Dynamic inputs
-	SteeringAngle float64 // Current steer angle in radians
-	DriveTorque   float64 // Drive torque in N*m
-	BrakeTorque   float64 // Braking torque in N*m
-	Handbrake     bool    // Handbrake lock
-
-	// Instantaneous state computed during simulation
-	InContact        bool       // Is tire contacting ground?
-	HitPoint         [3]float64 // World contact point
-	HitNormal        [3]float64 // Ground normal at contact point
-	SuspensionLength float64    // Current spring length
-	SuspensionForce  float64    // Upward spring force (N)
-	RotationAngle    float64    // Cumulative rolling angle for visual rendering (rad)
-	AngularVelocity  float64    // Angular wheel spin speed (rad/s)
-	SkidFactor       float64    // Lateral skid intensity [0..1] for tire smoke / skidmarks
-
-	// Internal state tracking
-	prevSuspensionLength float64
-}
-
 // RaycastVehicle implements a 4-wheel (or N-wheel) raycast car dynamics simulator.
 // It applies suspension spring-damper forces, longitudinal traction/braking, lateral cornering
 // and anti-roll bar distribution directly to an underlying 6-DoF rigid-body Entity.
@@ -110,40 +67,17 @@ func NewRaycastVehicle(entity *rigid_body.Entity, raycastFn RaycastFn) *RaycastV
 }
 
 // AddWheel attaches a new wheel to the vehicle chassis at local position (hx, hy, hz).
-func (v *RaycastVehicle) AddWheel(
-	hx, hy, hz float64,
-	radius, restLength, maxTravel float64,
-	stiffness, dampingComp, dampingReb float64,
-	frictionSlip, corneringStiffness float64,
-	isFront, isSteerable, isDrive bool,
-) int {
-	w := &Wheel{
-		HardpointX:               hx,
-		HardpointY:               hy,
-		HardpointZ:               hz,
-		WheelRadius:              radius,
-		WheelWidth:               radius * 0.5,
-		SuspensionRestLength:     restLength,
-		SuspensionMaxTravel:      maxTravel,
-		SpringStiffness:          stiffness,
-		SpringDampingCompression: dampingComp,
-		SpringDampingRebound:     dampingReb,
-		FrictionSlip:             frictionSlip,
-		CorneringStiffness:       corneringStiffness,
-		IsFront:                  isFront,
-		IsSteerable:              isSteerable,
-		IsDrive:                  isDrive,
-		SuspensionLength:         restLength,
-		prevSuspensionLength:     restLength,
-	}
+func (v *RaycastVehicle) AddWheel(hx, hy, hz float64, radius, restLength, maxTravel float64, stiffness, dampingComp, dampingReb float64, frictionSlip, corneringStiffness float64, isFront, isSteerable, isDrive bool) int {
+	w := NewWheel(hx, hy, hz, radius, restLength, maxTravel, stiffness, dampingComp, dampingReb, frictionSlip, corneringStiffness, isFront, isSteerable, isDrive)
 	v.wheels = append(v.wheels, w)
 	v.wheelsLen = len(v.wheels)
 	return v.wheelsLen - 1
 }
 
-// SetupMafiaSedanDefault configures a classic 1930s heavy 4-door sedan chassis.
-// Dimensions: width ~1.8m, length ~4.2m, height ~1.6m, mass ~1500 kg.
-func (v *RaycastVehicle) SetupMafiaSedanDefault(halfWidth, frontDist, rearDist, downDist float64) {
+// SetupDefault configures a default four-wheel rear-drive sedan layout using the given wheel placement offsets.
+func (v *RaycastVehicle) SetupDefault(halfWidth, frontDist, rearDist, downDist float64) {
+	//configures a classic 1930s heavy 4-door sedan chassis.
+	//width ~1.8m, length ~4.2m, height ~1.6m, mass ~1500 kg.
 	const (
 		radius      = 0.38   // 38 cm wheels
 		restLen     = 0.35   // 35 cm suspension travel
@@ -154,15 +88,12 @@ func (v *RaycastVehicle) SetupMafiaSedanDefault(halfWidth, frontDist, rearDist, 
 		grip        = 1.15   // Dry asphalt tire friction
 		cornerStiff = 16.0   // Cornering stiffness
 	)
-
 	// Front-Left (0), Front-Right (1)
 	v.AddWheel(halfWidth, frontDist, downDist, radius, restLen, maxTravel, stiffness, dampComp, dampReb, grip, cornerStiff, true, true, false)
 	v.AddWheel(-halfWidth, frontDist, downDist, radius, restLen, maxTravel, stiffness, dampComp, dampReb, grip, cornerStiff, true, true, false)
-
 	// Rear-Left (2), Rear-Right (3) - RWD
 	v.AddWheel(halfWidth, -rearDist, downDist, radius, restLen, maxTravel, stiffness, dampComp, dampReb, grip, cornerStiff, false, false, true)
 	v.AddWheel(-halfWidth, -rearDist, downDist, radius, restLen, maxTravel, stiffness, dampComp, dampReb, grip, cornerStiff, false, false, true)
-
 	v.driveType = DriveRearWheel
 	v.maxEngineTorque = 3000.0
 	v.maxBrakeTorque = 4500.0

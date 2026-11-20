@@ -367,7 +367,6 @@ func (s *Cage) Commit(rCage *Cage) {
 
 // commitStaticFaces evaluates accumulated static world triangles and inserts single-point or clipped multi-point contacts.
 func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
-	keepUpright := s.entity.KeepUpright()
 	baseZ := s.GetBaseZ()
 	minBaseZ := math.Min(baseZ, baseZ+s.dZ)
 	stepZ := baseZ + s.maxStep
@@ -427,14 +426,7 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 			}
 		}
 
-		if iMode == ImpactInelastic && !keepUpright {
-			s.addStaticTriangleManifold(rFace, &fc)
-		} else {
-			px, py, pz := s.projectStabilizedStaticContact(&fc)
-			if entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode); entry != nil && fc.bucket.IsWall() {
-				entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
-			}
-		}
+		s.addStaticTriangleManifold(rFace, &fc, iMode)
 
 		if fc.bucket == BucketFloor {
 			s.hasFloor = true
@@ -444,7 +436,7 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 
 // addStaticTriangleManifold clips the entity OBB against the static triangle rFace, falling back to a stabilized
 // single contact point if clipping produces no penetrating candidates (e.g. diagonal endpoint or degenerate edge).
-func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
+func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact, iMode ImpactMode) {
 	v0x, v0y, v0z := rFace.Get0()
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
@@ -483,7 +475,10 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 			ptX = math.Max(s.tX-s.eRadX, math.Min(s.tX+s.eRadX, ptX+shiftToTX))
 			ptY = math.Max(s.tY-s.eRadY, math.Min(s.tY+s.eRadY, ptY+shiftToTY))
 			ptZ = math.Max(s.tZ-s.eRadZ, math.Min(s.tZ+s.eRadZ, ptZ+shiftToTZ))
-			s.addToBucket(fc.bucket, nil, rFace, -ptPen, ptPen, fc.nX, fc.nY, fc.nZ, ptX, ptY, ptZ, fc.maxZ, ImpactInelastic)
+			entry := s.addToBucketEntry(fc.bucket, nil, rFace, -ptPen, ptPen, fc.nX, fc.nY, fc.nZ, ptX, ptY, ptZ, fc.maxZ, iMode)
+			if entry != nil && fc.bucket.IsWall() {
+				entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+			}
 			added++
 		}
 		if added > 0 {
@@ -491,7 +486,10 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact) {
 		}
 	}
 	px, py, pz := s.projectStabilizedStaticContact(fc)
-	s.addToBucket(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, ImpactInelastic)
+	entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode)
+	if entry != nil && fc.bucket.IsWall() {
+		entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+	}
 }
 
 // projectStabilizedStaticContact projects the stabilized single-point support onto the static face plane,

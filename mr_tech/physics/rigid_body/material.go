@@ -59,6 +59,15 @@ func (m1 *PhysicsMaterial) GetGroundDamping() float64 {
 
 // CombineRestitution returns the combined restitution with m2 using the higher-priority combine mode.
 func (m1 *PhysicsMaterial) CombineRestitution(m2 *PhysicsMaterial) float64 {
+	if m1 == nil && m2 == nil {
+		return 0.0
+	}
+	if m1 == nil {
+		return m2.restitution
+	}
+	if m2 == nil {
+		return m1.restitution
+	}
 	mode := m1.restitutionCombine
 	if m2.restitutionCombine > mode {
 		mode = m2.restitutionCombine
@@ -80,6 +89,15 @@ func (m1 *PhysicsMaterial) CombineRestitution(m2 *PhysicsMaterial) float64 {
 // CombineFriction returns the combined friction value for this material and m2.
 // It uses the higher-priority friction combine mode of the two materials.
 func (m1 *PhysicsMaterial) CombineFriction(m2 *PhysicsMaterial) float64 {
+	if m1 == nil && m2 == nil {
+		return 0.0
+	}
+	if m1 == nil {
+		return m2.friction
+	}
+	if m2 == nil {
+		return m1.friction
+	}
 	mode := m1.frictionCombine
 	if m2.frictionCombine > mode {
 		mode = m2.frictionCombine

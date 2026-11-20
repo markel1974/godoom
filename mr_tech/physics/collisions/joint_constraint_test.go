@@ -24,8 +24,6 @@ func TestJointConstraintAnchorInvarianceConeLimitAndSleep(t *testing.T) {
 	rigid_body.SetFps(60)
 	defer rigid_body.SetFps(120)
 
-	coord := NewCoordinator(10, 8)
-
 	// Anchor A is a heavy floor-supported body at (0,0,10); B is a limb at (0,0,30) joined at z=20.
 	sA, _ := newFreeSixDoFSolver(200.0, 0, 0, 10, 20, 20, 20, 490.0, true)
 	sB, _ := newFreeSixDoFSolver(20.0, 0, 0, 30, 16, 16, 20, 490.0, true)
@@ -35,10 +33,6 @@ func TestJointConstraintAnchorInvarianceConeLimitAndSleep(t *testing.T) {
 	// Kick B laterally to test ball-socket cohesion and cone limit clamping.
 	sB.GetEntity().SetV(180.0, 0.0, 40.0)
 	sB.GetEntity().SetAngularVelocity(0.0, 12.0, 0.0)
-
-	const maxCone = 0.90
-	jc := NewJointConstraint(sA, sB, 0, 0, 10, 0, 0, -10, aabb.NewQuaternionIdentity(), maxCone, 6.0)
-	coord.AddJoint(jc)
 
 	// Static 2-triangle floor quad at z=0.
 	floorParent := NewSolver(false, 0, 0, 0.5, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
@@ -52,7 +46,7 @@ func TestJointConstraintAnchorInvarianceConeLimitAndSleep(t *testing.T) {
 		parent:   floorParent,
 	}
 
-	queryContacts := func(cage *Cage, _ func(*Solver)) {
+	queryContacts := func(cage *Cage, _ WakeRunningFn) {
 		for _, cand := range []*Solver{sA, sB} {
 			ent := cand.GetEntity()
 			_, _, z := ent.GetCenter()
@@ -75,13 +69,19 @@ func TestJointConstraintAnchorInvarianceConeLimitAndSleep(t *testing.T) {
 		}
 	}
 
+	coord := NewCoordinator(10, 8, queryContacts, clampStatic)
+
+	const maxCone = 0.90
+	jc := NewJointConstraint(sA, sB, 0, 0, 10, 0, 0, -10, aabb.NewQuaternionIdentity(), maxCone, 6.0)
+	coord.AddJoint(jc)
+
 	var maxAnchorGap float64
 	var maxConeSeen float64
 	for step := 0; step < 600; step++ {
 		coord.Reset()
 		coord.Stage(sA)
 		coord.Stage(sB)
-		coord.Step(queryContacts, clampStatic)
+		coord.Step()
 
 		ax, ay, az := sA.GetEntity().GetCenter()
 		ax0, ay0, az0, _, _, _, a2x, a2y, a2z := sA.GetEntity().GetAxes()
@@ -142,7 +142,7 @@ func TestJointConstraintAnchorInvarianceConeLimitAndSleep(t *testing.T) {
 	coord.Reset()
 	coord.Stage(sA)
 	coord.Stage(sB)
-	coord.Step(queryContacts, clampStatic)
+	coord.Step()
 	if sA.IsSleeping() {
 		t.Fatalf("expected waking child limb sB to cascade-wake sA via JointConstraint")
 	}

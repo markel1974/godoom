@@ -187,8 +187,8 @@ func TestKeepUprightFlatWallDiagonalSeamNoSnag(t *testing.T) {
 	cageClamp := newTestCage(11, objClamp)
 	cageClamp.Rebuild(18.0, 1)
 	origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, lAABB := cageClamp.BeginStaticClamp()
-	cageClamp.ClampStaticFace(lAABB, t1)
-	cageClamp.ClampStaticFace(lAABB, t2)
+	cageClamp.StaticFaceClamp(lAABB, t1)
+	cageClamp.StaticFaceClamp(lAABB, t2)
 	cageClamp.StaticFaceFlushClamp(lAABB)
 	cageClamp.EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ)
 	cx, cy, _ := objClamp.ent.GetCenter()
@@ -293,7 +293,7 @@ func TestSingleSidedBackfacingWallIgnoredAtConcaveCorner(t *testing.T) {
 	seam2.singleSided = true
 	objSeam.ent.AddTo(3154.435-3159.966, 3251.452-3171.839, 0.0)
 	oCX, oCY, oCZ, oDX, oDY, oDZ, oTX, oTY, oTZ, box := cageSeam.BeginStaticClamp()
-	if cageSeam.ClampStaticFace(box, seam1) || cageSeam.ClampStaticFace(box, seam2) || cageSeam.StaticFaceFlushClamp(box) {
+	if cageSeam.StaticFaceClamp(box, seam1) || cageSeam.StaticFaceClamp(box, seam2) || cageSeam.StaticFaceFlushClamp(box) {
 		px, py, _ := objSeam.ent.GetCenter()
 		t.Fatalf("expected exiting backfacing concave facet not to pull inward, got (%.3f,%.3f)", px, py)
 	}
@@ -511,22 +511,22 @@ func TestKeepUprightHighSpeedSweptWallsAndZeroAllocs(t *testing.T) {
 	cageUp.CommitStaticClamp()
 	objUp.ent.AddTo(200.0, 0.0, 160.0)
 	oCX, oCY, oCZ, oDX, oDY, oDZ, oTX, oTY, oTZ, lAABB := cageUp.BeginStaticClamp()
-	cageUp.ClampStaticFace(lAABB, wall1)
-	cageUp.ClampStaticFace(lAABB, wall2)
+	cageUp.StaticFaceClamp(lAABB, wall1)
+	cageUp.StaticFaceClamp(lAABB, wall2)
 	cageUp.StaticFaceFlushClamp(lAABB)
 	cageUp.EndStaticClamp(oCX, oCY, oCZ, oDX, oDY, oDZ, oTX, oTY, oTZ)
 	if px, _, _ := objUp.ent.GetCenter(); px > 80.5 {
 		t.Fatalf("expected static clamp to stop upward launch at x<=80.5, got x=%v", px)
 	}
 
-	// Zero heap allocations in high-speed swept Commit and ClampStaticFace hot paths.
+	// Zero heap allocations in high-speed swept Commit and StaticFaceClamp hot paths.
 	allocs := testing.AllocsPerRun(20, func() {
 		cageLintel.Rebuild(18.0, 1)
 		cageLintel.AddFace(lintel1, nil)
 		cageLintel.AddFace(lintel2, nil)
 		cageLintel.Commit(nil)
 		ocx, ocy, ocz, odx, ody, odz, otx, oty, otz, box := cageUp.BeginStaticClamp()
-		cageUp.ClampStaticFace(box, wall1)
+		cageUp.StaticFaceClamp(box, wall1)
 		cageUp.StaticFaceFlushClamp(box)
 		cageUp.EndStaticClamp(ocx, ocy, ocz, odx, ody, odz, otx, oty, otz)
 	})
@@ -548,8 +548,8 @@ func TestKeepUprightPressedCornerGrazingClamps(t *testing.T) {
 	cage58.CommitStaticClamp()
 	obj58.ent.AddTo(3228.837-3159.966, 3338.109-3171.839, 0.0)
 	oCX2, oCY2, oCZ2, oDX2, oDY2, oDZ2, oTX2, oTY2, oTZ2, box58 := cage58.BeginStaticClamp()
-	m1 := cage58.ClampStaticFace(box58, f2a)
-	m2 := cage58.ClampStaticFace(box58, f2b)
+	m1 := cage58.StaticFaceClamp(box58, f2a)
+	m2 := cage58.StaticFaceClamp(box58, f2b)
 	mf := cage58.StaticFaceFlushClamp(box58)
 	cage58.EndStaticClamp(oCX2, oCY2, oCZ2, oDX2, oDY2, oDZ2, oTX2, oTY2, oTZ2)
 	if !m1 && !m2 && !mf {

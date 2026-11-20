@@ -132,8 +132,6 @@ type Cage struct {
 	forceStaticClamp    bool
 	clampNormals        [16][3]float64
 	clampNormalsLen     int
-	flatWalls           [32]flatWallPlane
-	flatWallsLen        int
 	clampCorners        [16]IFace
 	clampCornersLen     int
 	passDX              float64
@@ -150,11 +148,6 @@ type Cage struct {
 	collisionGroup      uint64
 	solverIdx           int
 	solver              *Solver
-}
-
-type flatWallPlane struct {
-	nX, nY, nZ float64
-	pX, pY, pZ float64
 }
 
 var _counter atomic.Uint64
@@ -268,7 +261,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.applied = false
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
 	s.clampNormalsLen = 0
-	s.flatWallsLen = 0
+	s.staticContact.Reset()
 	s.clampCornersLen = 0
 
 	//clear(s.seen)
@@ -299,8 +292,18 @@ func (s *Cage) Commit(rCage *Cage) {
 		s.facesIdx = 0
 		return
 	}
-	s.StaticFacesCommit(s.ellipsoid.GetAABB())
+	s.staticContact.Commit(s, s.ellipsoid.GetAABB())
 	s.facesIdx = 0
+}
+
+// StaticFaceClamp clamps static contact data against the given AABB and face, reporting whether it succeeded.
+func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
+	return s.staticContact.Clamp(s, lAABB, rFace)
+}
+
+// StaticFaceFlushClamp reports whether the cage's static contact can flush-clamp against the given AABB.
+func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
+	return s.staticContact.FlushClamp(s, lAABB)
 }
 
 // addStaticTriangleManifold emits either the single closest contact for KeepUpright entities or a clipped OBB
@@ -410,6 +413,8 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pe
 	return s.addToBucketEntry(bucket, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode) != nil
 }
 
+// addToBucketEntry adds a collision entry to the selected bucket and tracks it in the cage slots.
+// It returns the created entry, or nil if no entry was added.
 func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	entry := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if entry != nil {
@@ -418,28 +423,6 @@ func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dis
 		return entry
 	}
 	return nil
-}
-
-func (s *Cage) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64) bool {
-	for i := 0; i < s.flatWallsLen; i++ {
-		w := &s.flatWalls[i]
-		if nX*w.nX+nY*w.nY+nZ*w.nZ > 0.999 &&
-			math.Abs((ax-w.pX)*w.nX+(ay-w.pY)*w.nY+(az-w.pZ)*w.nZ) < planeEpsilon {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Cage) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
-	if s.hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az) || s.flatWallsLen >= len(s.flatWalls) {
-		return
-	}
-	s.flatWalls[s.flatWallsLen] = flatWallPlane{
-		nX: nX, nY: nY, nZ: nZ,
-		pX: ax, pY: ay, pZ: az,
-	}
-	s.flatWallsLen++
 }
 
 func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
@@ -810,21 +793,6 @@ func (s *Cage) CommitStaticClamp() {
 	s.forceStaticClamp = false
 }
 
-func (s *Cage) addClampNormal(nX, nY, nZ float64) {
-	for i := 0; i < s.clampNormalsLen; i++ {
-		c := &s.clampNormals[i]
-		if c[0]*nX+c[1]*nY+c[2]*nZ > 0.999 {
-			return
-		}
-	}
-	if s.clampNormalsLen < len(s.clampNormals) {
-		s.clampNormals[s.clampNormalsLen][0] = nX
-		s.clampNormals[s.clampNormalsLen][1] = nY
-		s.clampNormals[s.clampNormalsLen][2] = nZ
-		s.clampNormalsLen++
-	}
-}
-
 // IsBlockedAlong reports whether pushing this cage along unit direction (dirX, dirY, dirZ)
 // pushes into any active or clamped static world face.
 func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
@@ -885,7 +853,7 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	minZ := s.cZ - sz + math.Min(0.0, s.dZ)
 	maxZ := s.cZ + sz + math.Max(0.0, s.dZ)
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
-	s.flatWallsLen = 0
+	s.staticContact.Reset()
 	s.clampCornersLen = 0
 	return origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
 }

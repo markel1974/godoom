@@ -16,9 +16,9 @@ type solverParentFace struct {
 
 func (f *solverParentFace) GetParent() *Solver { return f.parent }
 
-func noopCollision(IObject, float64) {}
+func noopCollision(aabb.IObject, float64) {}
 
-func newConfiguredSolver(obj *testObject, location IObject, maxStep float64, canSleep bool, onElastic, onInelastic CollisionT) *Solver {
+func newConfiguredSolver(obj *testObject, location aabb.IObject, maxStep float64, canSleep bool, onElastic, onInelastic CollisionT) *Solver {
 	s := obj.solver
 	s.SetLocation(location)
 	s.SetMaxStep(maxStep)
@@ -94,8 +94,8 @@ func TestSolverLocationUpdateAndCallbacks(t *testing.T) {
 	inelasticCalls := 0
 	var inelasticEnergy float64
 	solver := newConfiguredSolver(obj, initLoc, 10.0, false,
-		func(IObject, float64) { elasticCalls++ },
-		func(_ IObject, energy float64) {
+		func(aabb.IObject, float64) { elasticCalls++ },
+		func(_ aabb.IObject, energy float64) {
 			inelasticCalls++
 			inelasticEnergy = energy
 		},
@@ -147,7 +147,7 @@ func TestSolverInelasticMultiPointManifoldUsesPeakEnergy(t *testing.T) {
 
 	calls := 0
 	var reportedEnergy float64
-	solver := newConfiguredSolver(obj, floorVol, 0, true, noopCollision, func(_ IObject, energy float64) {
+	solver := newConfiguredSolver(obj, floorVol, 0, true, noopCollision, func(_ aabb.IObject, energy float64) {
 		calls++
 		reportedEnergy = energy
 	})

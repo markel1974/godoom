@@ -27,7 +27,6 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 	rigid_body.SetFps(60)
 	defer rigid_body.SetFps(120)
 
-	coord := NewCoordinator(10, 16)
 	floorObj := newTestUprightObject(0, 0, -5, 400, 400, 10)
 	floor := &solverParentFace{
 		testFace: newTestFace([3]float64{-200, -200, 0}, [3]float64{200, -200, 0}, [3]float64{0, 200, 0}, 0, 0, 1),
@@ -43,12 +42,12 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 
 	clampFloor := func(cage *Cage) {
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-		cage.ClampStaticFace(lAABB, floor)
+		cage.StaticFaceClamp(lAABB, floor)
 		cage.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 	}
 
-	queryStacked := func(cage *Cage, wake func(*Solver)) {
+	queryStacked := func(cage *Cage, wake WakeRunningFn) {
 		if cage == cBot {
 			cage.AddFace(floor, nil)
 			cage.Commit(nil)
@@ -80,12 +79,17 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 		}
 	}
 
+	activeQuery := QueryContactsFn(queryStacked)
+	coord := NewCoordinator(10, 16, func(cage *Cage, wake WakeRunningFn) {
+		activeQuery(cage, wake)
+	}, clampFloor)
+
 	// Run calm steps until both stacked boxes settle and sleep as one connected island.
 	for step := 0; step < 120; step++ {
 		coord.Reset()
 		coord.Stage(sBot)
 		coord.Stage(sTop)
-		coord.Step(queryStacked, clampFloor)
+		coord.Step()
 		if sBot.IsSleeping() && sTop.IsSleeping() {
 			break
 		}
@@ -99,11 +103,7 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 	sStriker.GetEntity().SetV(0, 0, -200)
 
 	wokeBotInSameTick := false
-	coord.Reset()
-	coord.Stage(sBot)
-	coord.Stage(sTop)
-	coord.Stage(sStriker)
-	coord.Step(func(cage *Cage, wake func(*Solver)) {
+	activeQuery = func(cage *Cage, wake WakeRunningFn) {
 		if cage == cStriker && sTop.IsSleeping() {
 			wake(sTop)
 		}
@@ -111,7 +111,12 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 			wokeBotInSameTick = true
 		}
 		queryStacked(cage, wake)
-	}, clampFloor)
+	}
+	coord.Reset()
+	coord.Stage(sBot)
+	coord.Stage(sTop)
+	coord.Stage(sStriker)
+	coord.Step()
 
 	if sTop.IsSleeping() || sBot.IsSleeping() || !wokeBotInSameTick {
 		t.Fatalf("expected wake cascade from top to bottom in same tick, topSleep=%v botSleep=%v botRun=%v",
@@ -120,7 +125,7 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 }
 
 func TestCoordinatorTracksRemovables(t *testing.T) {
-	coord := NewCoordinator(4, 4)
+	coord := NewCoordinator(4, 4, func(*Cage, WakeRunningFn) {}, func(*Cage) {})
 	sActive, _ := newDynamicCoordinatorSolver(0, 0, 10, 20, 20, 20, false)
 	sDead, _ := newDynamicCoordinatorSolver(50, 0, 10, 20, 20, 20, false)
 	sDead.SetActive(false)
@@ -128,15 +133,14 @@ func TestCoordinatorTracksRemovables(t *testing.T) {
 	coord.Reset()
 	coord.Stage(sActive)
 	coord.Stage(sDead)
-	coord.Step(func(*Cage, func(*Solver)) {}, func(*Cage) {})
+	coord.Step()
 
-	rem := coord.Removables()
-	if len(rem) != 1 || rem[0] != sDead {
-		t.Fatalf("expected inactive solver in Removables(), got %v", rem)
+	if coord.RemovablesLen() != 1 || coord.RemovablesAt(0) != sDead {
+		t.Fatalf("expected inactive solver in Removables, got len=%d", coord.RemovablesLen())
 	}
 	coord.ClearRemovables()
-	if len(coord.Removables()) != 0 {
-		t.Fatalf("expected empty Removables() after ClearRemovables()")
+	if coord.RemovablesLen() != 0 {
+		t.Fatalf("expected empty Removables after ClearRemovables(), got len=%d", coord.RemovablesLen())
 	}
 }
 
@@ -144,23 +148,23 @@ func TestCoordinatorStepZeroAllocs(t *testing.T) {
 	rigid_body.SetFps(60)
 	defer rigid_body.SetFps(120)
 
-	coord := NewCoordinator(6, 16)
 	s1, _ := newDynamicCoordinatorSolver(0, 0, 10, 20, 20, 20, false)
 	floorObj := newTestUprightObject(0, 0, -5, 400, 400, 10)
 	floor := &solverParentFace{
 		testFace: newTestFace([3]float64{-200, -200, 0}, [3]float64{200, -200, 0}, [3]float64{0, 200, 0}, 0, 0, 1),
 		parent:   floorObj.solver,
 	}
-	queryFn := func(cage *Cage, _ func(*Solver)) {
+	queryFn := func(cage *Cage, _ WakeRunningFn) {
 		cage.AddFace(floor, nil)
 		cage.Commit(nil)
 	}
 	clampFn := func(*Cage) {}
+	coord := NewCoordinator(6, 16, queryFn, clampFn)
 
 	allocs := testing.AllocsPerRun(50, func() {
 		coord.Reset()
 		coord.Stage(s1)
-		coord.Step(queryFn, clampFn)
+		coord.Step()
 	})
 	if allocs != 0 {
 		t.Fatalf("expected 0 allocations per Coordinator.Step, got %v", allocs)

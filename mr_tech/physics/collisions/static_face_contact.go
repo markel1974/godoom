@@ -6,6 +6,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+type flatWallPlane struct {
+	nX, nY, nZ float64
+	pX, pY, pZ float64
+}
+
+// StaticFaceContact stores evaluated collision contact data for a static face against an AABB.
 type StaticFaceContact struct {
 	bucket                 BucketType
 	dist                   float64
@@ -24,19 +30,25 @@ type StaticFaceContact struct {
 	minZ, maxZ             float64
 	cornerHit              bool
 	hasContact             bool
+
+	flatWalls    [32]flatWallPlane
+	flatWallsLen int
 }
 
+// NewStaticFaceContact creates and returns a new StaticFaceContact instance.
 func NewStaticFaceContact() *StaticFaceContact {
 	return &StaticFaceContact{}
 }
 
-// StaticFacesCommit evaluates accumulated static world triangles and inserts single-point or clipped multi-point contacts.
-func (s *Cage) StaticFacesCommit(lAABB *aabb.AABB) {
+func (fc *StaticFaceContact) Reset() {
+	fc.flatWallsLen = 0
+}
+
+// Commit evaluates solid static faces against the cage AABB and records resulting volume, floor, wall, and step contacts.
+func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 	baseZ := s.GetBaseZ()
 	minBaseZ := math.Min(baseZ, baseZ+s.dZ)
 	stepZ := baseZ + s.maxStep
-
-	fc := s.staticContact
 	for x := 0; x < s.facesIdx; x++ {
 		rFace := s.faces[x].rFace
 		if rFace == nil || !rFace.IsSolid() {
@@ -75,17 +87,17 @@ func (s *Cage) StaticFacesCommit(lAABB *aabb.AABB) {
 
 		if fc.bucket.IsWall() {
 			if iMode == ImpactStep {
-				if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) ||
+				if fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) ||
 					s.hasCoplanarInelasticSlot(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 					continue
 				}
 			} else {
-				if fc.cornerHit && s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				if fc.cornerHit && fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 					continue
 				}
 				s.pruneCoplanarStepSlots(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 				if !fc.cornerHit {
-					s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+					fc.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 					s.pruneCoplanarCornerHits(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 				}
 			}
@@ -99,21 +111,21 @@ func (s *Cage) StaticFacesCommit(lAABB *aabb.AABB) {
 	}
 }
 
-// StaticFaceFlushClamp resolves deferred wall corner contacts not overridden by a coplanar flat wall in the same pass.
-func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
+// FlushClamp applies queued corner clamp contacts against static faces and reports whether the cage moved.
+// FlushClamp clears the queued clamp corners after processing.
+func (fc *StaticFaceContact) FlushClamp(s *Cage, lAABB *aabb.AABB) bool {
 	moved := false
-	fc := s.staticContact
 	for i := 0; i < s.clampCornersLen; i++ {
 		if !s.evaluateStaticFace(lAABB, s.clampCorners[i], fc) || fc.pen <= 0.0 {
 			continue
 		}
 		if fc.bucket.IsWall() {
-			if s.staticFaceClampWallShouldSkip(fc) ||
-				s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+			if fc.clampWallShouldSkip(s) ||
+				fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 				continue
 			}
 		}
-		if s.staticFaceClampApplyContact(fc) {
+		if fc.clampApplyContact(s) {
 			moved = true
 		}
 	}
@@ -121,13 +133,12 @@ func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
 	return moved
 }
 
-// StaticFaceClamp tests one static face against the entity sweep [clamp -> cur] and immediately projects out
-// any wall, floor, or ceiling penetration without modifying bucket warm-start buffers.
-func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
+// Clamp evaluates a solid face against the cage AABB and applies penetration correction when needed.
+// It marks floor contact, defers corner wall contacts, and reports whether the cage moved.
+func (fc *StaticFaceContact) Clamp(s *Cage, lAABB *aabb.AABB, rFace IFace) bool {
 	if !rFace.IsSolid() {
 		return false
 	}
-	fc := s.staticContact
 	if !s.evaluateStaticFace(lAABB, rFace, fc) {
 		return false
 	}
@@ -143,11 +154,11 @@ func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
 		s.entity.SetOnGround(true)
 	}
 	if fc.bucket.IsWall() {
-		if s.staticFaceClampWallShouldSkip(fc) {
+		if fc.clampWallShouldSkip(s) {
 			return false
 		}
 		if fc.cornerHit {
-			if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+			if fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 				return false
 			}
 			if s.clampCornersLen < len(s.clampCorners) {
@@ -156,14 +167,14 @@ func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
 				return false
 			}
 		} else {
-			s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+			fc.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 		}
 	}
-	return s.staticFaceClampApplyContact(fc)
+	return fc.clampApplyContact(s)
 }
 
-// clampStaticWallShouldSkip reports whether a wall contact is low enough to be ignored during static clamping.
-func (s *Cage) staticFaceClampWallShouldSkip(fc *StaticFaceContact) bool {
+// clampWallShouldSkip reports whether a wall contact should be ignored because it is step-height or ground-adjacent.
+func (fc *StaticFaceContact) clampWallShouldSkip(s *Cage) bool {
 	curBaseZ := s.tZ - s.eRadZ
 	preBaseZ := s.GetBaseZ()
 	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
@@ -172,8 +183,9 @@ func (s *Cage) staticFaceClampWallShouldSkip(fc *StaticFaceContact) bool {
 	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
 }
 
-// staticClampApplyContact clamps velocity, resolves penetration, updates cage displacement, and reports whether it moved.
-func (s *Cage) staticFaceClampApplyContact(fc *StaticFaceContact) bool {
+// clampApplyContact records the contact normal, clamps velocity, and resolves positive penetration on the cage.
+// It returns true when the resolution moves the entity.
+func (fc *StaticFaceContact) clampApplyContact(s *Cage) bool {
 	ent := s.entity
 	s.addClampNormal(fc.nX, fc.nY, fc.nZ)
 	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
@@ -189,4 +201,42 @@ func (s *Cage) staticFaceClampApplyContact(fc *StaticFaceContact) bool {
 	s.dY = s.tY - s.cY
 	s.dZ = s.tZ - s.cZ
 	return true
+}
+
+// hasCoplanarFlatWall reports whether a recorded flat wall has the same normal and coplanar point.
+func (fc *StaticFaceContact) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64) bool {
+	for i := 0; i < fc.flatWallsLen; i++ {
+		w := &fc.flatWalls[i]
+		if nX*w.nX+nY*w.nY+nZ*w.nZ > 0.999 &&
+			math.Abs((ax-w.pX)*w.nX+(ay-w.pY)*w.nY+(az-w.pZ)*w.nZ) < planeEpsilon {
+			return true
+		}
+	}
+	return false
+}
+
+func (fc *StaticFaceContact) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
+	if fc.hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az) || fc.flatWallsLen >= len(fc.flatWalls) {
+		return
+	}
+	fc.flatWalls[fc.flatWallsLen] = flatWallPlane{
+		nX: nX, nY: nY, nZ: nZ,
+		pX: ax, pY: ay, pZ: az,
+	}
+	fc.flatWallsLen++
+}
+
+func (s *Cage) addClampNormal(nX, nY, nZ float64) {
+	for i := 0; i < s.clampNormalsLen; i++ {
+		c := &s.clampNormals[i]
+		if c[0]*nX+c[1]*nY+c[2]*nZ > 0.999 {
+			return
+		}
+	}
+	if s.clampNormalsLen < len(s.clampNormals) {
+		s.clampNormals[s.clampNormalsLen][0] = nX
+		s.clampNormals[s.clampNormalsLen][1] = nY
+		s.clampNormals[s.clampNormalsLen][2] = nZ
+		s.clampNormalsLen++
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_multi_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
@@ -86,10 +87,10 @@ func (t *Detached) applyRagdollStress(force float64) {
 	}
 }
 
-func (t *Detached) onPartElasticCollision(other collisions.IObject, energy float64) {
+func (t *Detached) onPartElasticCollision(other aabb.IObject, energy float64) {
 	if !t.IsPhysicsFree() && t.owner != nil {
 		if b, ok := t.owner.(interface {
-			onElasticCollision(other collisions.IObject, energy float64)
+			onElasticCollision(other aabb.IObject, energy float64)
 		}); ok {
 			b.onElasticCollision(other, energy)
 		}
@@ -112,7 +113,7 @@ func (t *Detached) onPartElasticCollision(other collisions.IObject, energy float
 	}
 }
 
-func (t *Detached) onPartInelasticCollision(_ collisions.IObject, energy float64) {
+func (t *Detached) onPartInelasticCollision(_ aabb.IObject, energy float64) {
 	if t.IsPhysicsFree() && energy >= 400.0 {
 		t.applyRagdollStress(energy * 1000.0)
 	}

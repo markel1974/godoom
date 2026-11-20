@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
-	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -244,7 +244,7 @@ func (d *Door) advanceDoor(ent *rigid_body.Entity, dt float64, dir float64, next
 }
 
 // onDoorCollision activates the door for key holders on touch or while closing, then applies elastic collision handling.
-func (d *Door) onDoorCollision(other collisions.IObject, energy float64) {
+func (d *Door) onDoorCollision(other aabb.IObject, energy float64) {
 	if otherThing, ok := other.(ithing.IThing); ok {
 		if _, isHolder := other.(IKeyHolder); isHolder {
 			state := d.state

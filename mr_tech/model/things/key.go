@@ -8,7 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
-	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // IKeyHolder is implemented by actors (such as Player) that can collect and carry keys.
@@ -104,7 +104,7 @@ func (k *Key) HasThinking() bool {
 func (k *Key) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }
 
-func (k *Key) onKeyCollision(other collisions.IObject, energy float64) {
+func (k *Key) onKeyCollision(other aabb.IObject, energy float64) {
 	if holder, ok := other.(IKeyHolder); ok {
 		if k.collected.CompareAndSwap(false, true) {
 			holder.GiveKey(k.keyId)

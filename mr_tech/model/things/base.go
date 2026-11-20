@@ -488,14 +488,14 @@ func (t *Base) Impact(other config.IThingConfig, id string, force, closestDist, 
 	t.onImpact(other, id, force, closestDist, dirX, dirY, dirZ)
 }
 
-func (t *Base) onElasticCollision(other collisions.IObject, energy float64) {
+func (t *Base) onElasticCollision(other aabb.IObject, energy float64) {
 	z, ok := other.(ithing.IThing)
 	if ok {
 		t.onCollision(z, energy)
 	}
 }
 
-func (t *Base) onInelasticCollision(other collisions.IObject, energy float64) {
+func (t *Base) onInelasticCollision(other aabb.IObject, energy float64) {
 	//TODO
 }
 

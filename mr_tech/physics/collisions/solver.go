@@ -3,10 +3,11 @@ package collisions
 import (
 	"fmt"
 
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-type CollisionT func(other IObject, energy float64)
+type CollisionT func(other aabb.IObject, energy float64)
 
 type HookT func()
 
@@ -16,9 +17,9 @@ func noopHook() {}
 type Solver struct {
 	maxStep              float64
 	cage                 *Cage
-	object               IObject
+	object               aabb.IObject
 	entity               *rigid_body.Entity
-	location             IObject
+	location             aabb.IObject
 	isActive             bool
 	ignoreStatic         bool
 	canSleep             bool
@@ -52,7 +53,7 @@ func NewSolver(dynamic bool, mass, restitution, friction float64, restCombine, f
 }
 
 // Setup initializes the solver with the given object and stores its entity.
-func (t *Solver) Setup(object IObject) error {
+func (t *Solver) Setup(object aabb.IObject) error {
 	if object == nil {
 		return fmt.Errorf("nil object in solver")
 	}
@@ -128,17 +129,17 @@ func (t *Solver) GetEntity() *rigid_body.Entity {
 }
 
 // GetObject returns the object associated with the solver.
-func (t *Solver) GetObject() IObject {
+func (t *Solver) GetObject() aabb.IObject {
 	return t.object
 }
 
 // GetLocation returns the current static container location recorded for this solver.
-func (t *Solver) GetLocation() IObject {
+func (t *Solver) GetLocation() aabb.IObject {
 	return t.location
 }
 
 // SetLocation sets the location object for the solver.
-func (t *Solver) SetLocation(location IObject) {
+func (t *Solver) SetLocation(location aabb.IObject) {
 	t.location = location
 }
 

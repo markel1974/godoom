@@ -11,12 +11,6 @@ import (
 // ImpactMode identifies how a collision impact should be resolved and prioritized.
 type ImpactMode int
 
-type IObject interface {
-	GetAABB() *aabb.AABB
-
-	//GetEntity() *rigid_body.Entity
-}
-
 const (
 	// EdgeABActive marks triangle edge v0->v1 as an active convex or boundary collision edge.
 	EdgeABActive uint8 = 1 << 0
@@ -101,7 +95,7 @@ type Cage struct {
 	seen                []uint64
 	session             uint64
 	id                  uint64
-	object              IObject
+	object              aabb.IObject
 	entity              *rigid_body.Entity
 	buckets             [BucketSize]*Bucket
 	ellipsoid           *rigid_body.Entity
@@ -110,7 +104,7 @@ type Cage struct {
 	dX, dY, dZ          float64
 	tX, tY, tZ          float64
 	eRadX, eRadY, eRadZ float64
-	volumeObj           IObject
+	volumeObj           aabb.IObject
 	distance            float64
 	slots               []*Entry
 	slotsLen            int
@@ -248,7 +242,7 @@ func (s *Cage) OnAABBChanged(ab *aabb.AABB) {
 }
 
 // GetObject returns the object associated with the cage.[cite: 6]
-func (s *Cage) GetObject() IObject {
+func (s *Cage) GetObject() aabb.IObject {
 	return s.object
 }
 
@@ -854,7 +848,7 @@ func (s *Cage) GetSlotsLen() int { return s.slotsLen }
 func (s *Cage) GetSlot(i int) *Entry { return s.slots[i] }
 
 // GetVolumeObject returns the cage volume object, or nil if no volume object is set.
-func (s *Cage) GetVolumeObject() IObject { return s.volumeObj }
+func (s *Cage) GetVolumeObject() aabb.IObject { return s.volumeObj }
 
 // GetRad retrieves the ellipsoid radii along the X, Y, and Z axes.[cite: 6]
 func (s *Cage) GetRad() (float64, float64, float64) { return s.eRadX, s.eRadY, s.eRadZ }

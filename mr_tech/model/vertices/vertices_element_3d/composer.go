@@ -22,7 +22,7 @@ func NewComposer(volume *volumes.Volume) *Composer {
 }
 
 // Setup initializes the collision solver with the provided object.
-func (vm *Composer) Setup(object collisions.IObject) error {
+func (vm *Composer) Setup(object aabb.IObject) error {
 	return vm.solver.Setup(object)
 }
 

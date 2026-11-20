@@ -8,7 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
-	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 const defaultTeleportCooldown = 500 * time.Millisecond
@@ -115,7 +115,7 @@ func (tp *Teleport) HasThinking() bool {
 func (tp *Teleport) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }
 
-func (tp *Teleport) onTeleportCollision(other collisions.IObject, energy float64) {
+func (tp *Teleport) onTeleportCollision(other aabb.IObject, energy float64) {
 	actor, ok := other.(ithing.IThing)
 	if !ok {
 		return

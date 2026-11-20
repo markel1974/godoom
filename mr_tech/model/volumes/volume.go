@@ -59,7 +59,7 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 }
 
 // Setup initializes the volume's collision solver and returns any setup error.
-func (v *Volume) Setup(object collisions.IObject) error {
+func (v *Volume) Setup(object aabb.IObject) error {
 	if err := v.solver.Setup(object); err != nil {
 		return err
 	}

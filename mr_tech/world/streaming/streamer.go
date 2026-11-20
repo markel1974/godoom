@@ -1,8 +1,6 @@
 package streaming
 
 import (
-	"math"
-
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )

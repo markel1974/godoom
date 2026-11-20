@@ -3,10 +3,12 @@ COMPLETATI:
 - [x] Modello veicolare RaycastVehicle (sospensioni molla-smorzatore, cerchio di attrito, barre antirollio, drift).
 - [x] Linearizzazione del percorso collisioni in cage.go: unificato il clipping statico multi-punto (Sutherland-Hodgman fino a 4 contatti) con la logica dei manifold dinamici sia per corpi liberi che per corpi keepUpright.
 - [x] Regola di mixing simmetrica per restituzione e attrito in PhysicsMaterial e Cinematic.ResolveImpact (commutativa, min/max/average/multiply indipendente dall'ordine dei corpi con nil-safety).
+- [x] World Streaming per la Città Aperta (Open-World): griglia di settori, anelli di attivazione e isteresi anti-thrashing, skyline proxy LOD, e time-slicing per frame.
+- [x] Integrazione Streaming in Volumes ed Engine: aggancio trasparente in Volumes (EnableStreaming, AutoSectorize, UpdateStreaming, ForceSyncStreaming) e dispatch automatico da Engine.Compute a ogni frame.
 
-PUNTI RIMANENTI PER PROSSIME EVOLUZIONI:
-- Rotazioni di bilanciamento AVL in aabb.Tree: aggiungere le rotazioni stile b2DynamicTree per evitare che l'albero si sbilanci sotto carichi dinamici prolungati con molti oggetti in movimento.
+PUNTI RIMANENTI PER PROSSIME EVOLUZIONI (Roadmap Mafia 2/3):
+- Telecamera in Terza Persona con Anti-Clip (Spring Arm): telecamera ad inseguimento orbitale con smorzamento fluido (spring lag) per player a piedi e veicoli, con accorciamento automatico anti-clip via Volumes.QueryRay verso la triangle soup dell'ambiente.
+- Rotazioni di bilanciamento AVL in aabb.Tree: aggiungere le rotazioni stile b2DynamicTree per evitare che l'albero si sbilanci sotto carichi dinamici prolungati e streaming rapido.
 - Disaccoppiamento aabb vs math3d/obb (eventuale riorganizzazione estetica/architetturale dei file matematici).
 - Integrazione temporale (unificazione dt fisso indipendente dal framerate del rendering).
-
 

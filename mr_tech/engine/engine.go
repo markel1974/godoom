@@ -82,6 +82,9 @@ func (e *Engine) Setup(cfg *config.Root) error {
 func (e *Engine) Compute(player *things.Player, vi *ViewMatrix) {
 	// AI & External Forces: Wake up things BEFORE physics calculation
 	pX, pY, pZ := player.GetEntity().GetCenter()
+	if e.volumes != nil {
+		e.volumes.UpdateStreaming(pX, pY, pZ)
+	}
 	// Dynamic Solver
 	e.things.Compute(pX, pY, pZ)
 	// Post-Sync ViewMatrix

@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/world/streaming"
 )
 
 // Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
@@ -13,6 +14,7 @@ type Volumes struct {
 	container []*volumes.Volume
 	tree      *aabb.Tree
 	cache     map[string]*volumes.Volume
+	streamer  *streaming.WorldStreamer
 }
 
 // NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
@@ -37,7 +39,9 @@ func (s *Volumes) Setup() error {
 			return err
 		}
 		if volume.Rebuild() {
-			s.tree.InsertObject(volume)
+			if s.streamer == nil {
+				s.tree.InsertObject(volume)
+			}
 		}
 	}
 	return nil
@@ -196,4 +200,91 @@ func (s *Volumes) QueryAABB(targetObj aabb.IObject, callback func(vol *volumes.V
 		}
 		return false
 	})
+}
+
+// EnableStreaming attaches an active WorldStreamer managing dynamic sector loading and unloading in this Volumes instance.
+// If the internal spatial tree was already populated with all volumes, it is cleared so that the streamer has exclusive control.
+func (s *Volumes) EnableStreaming(gridSize float64, loadRadius, unloadRadius, distantRadius int) *streaming.WorldStreamer {
+	if s.streamer != nil {
+		return s.streamer
+	}
+	s.tree.Clear()
+	ws := streaming.NewWorldStreamer(s.tree, gridSize, loadRadius, unloadRadius, distantRadius)
+	s.streamer = ws
+	return ws
+}
+
+// SetStreamer explicitly assigns a custom WorldStreamer instance to this Volumes collection.
+func (s *Volumes) SetStreamer(ws *streaming.WorldStreamer) {
+	s.streamer = ws
+	if ws != nil && ws.GetTree() != nil {
+		s.tree = ws.GetTree()
+	}
+}
+
+// GetStreamer returns the active WorldStreamer, or nil if open-world streaming is not enabled.
+func (s *Volumes) GetStreamer() *streaming.WorldStreamer {
+	return s.streamer
+}
+
+// HasStreamer returns true if world streaming is currently active.
+func (s *Volumes) HasStreamer() bool {
+	return s.streamer != nil
+}
+
+// GetTree returns the underlying active spatial tree used for broad-phase queries.
+func (s *Volumes) GetTree() *aabb.Tree {
+	return s.tree
+}
+
+// RegisterSector registers a configured sector directly into the active WorldStreamer.
+func (s *Volumes) RegisterSector(sector *streaming.Sector) {
+	if s.streamer != nil && sector != nil {
+		s.streamer.RegisterSector(sector)
+	}
+}
+
+// AutoSectorize automatically clusters all volumes in this collection into grid sectors of size cellSize
+// and registers them with the WorldStreamer. If streaming is not yet active, it is enabled with default radii.
+func (s *Volumes) AutoSectorize(cellSize float64) {
+	if cellSize <= 0.0 {
+		cellSize = 256.0
+	}
+	if s.streamer == nil {
+		s.EnableStreaming(cellSize, 2, 3, 5)
+	}
+
+	for _, vol := range s.container {
+		if vol == nil {
+			continue
+		}
+		box := vol.GetAABB()
+		if box == nil {
+			continue
+		}
+		midX, midY, _ := box.GetCentroid()
+
+		coord := streaming.WorldToSector(midX, midY, cellSize)
+		sec := s.streamer.GetSector(coord)
+		if sec == nil {
+			sec = streaming.NewSector(coord, cellSize)
+			s.streamer.RegisterSector(sec)
+		}
+		sec.AddVolume(vol)
+	}
+}
+
+// UpdateStreaming updates the streaming horizon around the specified viewer coordinates.
+// If streaming is not enabled, this is a zero-cost no-op.
+func (s *Volumes) UpdateStreaming(viewerX, viewerY, viewerZ float64) {
+	if s.streamer != nil {
+		s.streamer.Update(viewerX, viewerY, viewerZ)
+	}
+}
+
+// ForceSyncStreaming synchronously updates the active streaming tree around the viewer coordinates.
+func (s *Volumes) ForceSyncStreaming(viewerX, viewerY, viewerZ float64) {
+	if s.streamer != nil {
+		s.streamer.ForceSync(viewerX, viewerY, viewerZ)
+	}
 }

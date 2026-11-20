@@ -89,6 +89,11 @@ func (a *AABB) GetMinMax() (float64, float64, float64, float64, float64, float64
 	return a.minX, a.minY, a.minZ, a.maxX, a.maxY, a.maxZ
 }
 
+// GetBounds returns the minimum and maximum coordinates (minX, minY, minZ, maxX, maxY, maxZ) of the AABB.
+func (a *AABB) GetBounds() (float64, float64, float64, float64, float64, float64) {
+	return a.minX, a.minY, a.minZ, a.maxX, a.maxY, a.maxZ
+}
+
 // GetIndex returns the current index value of the AABB instance as an int64.
 func (a *AABB) GetIndex() int64 {
 	return a.index

@@ -130,24 +130,21 @@ type Cage struct {
 	prevQW              float64
 	prevKeepUpright     bool
 	forceStaticClamp    bool
-	clampNormals        [16][3]float64
-	clampNormalsLen     int
-	clampCorners        [16]IFace
-	clampCornersLen     int
-	passDX              float64
-	passDY              float64
-	passDZ              float64
-	stepDX              float64
-	stepDY              float64
-	stepDZ              float64
-	hasSpawnOrigin      bool
-	spawnX              float64
-	spawnY              float64
-	spawnZ              float64
-	pendingStepZ        float64
-	collisionGroup      uint64
-	solverIdx           int
-	solver              *Solver
+
+	passDX         float64
+	passDY         float64
+	passDZ         float64
+	stepDX         float64
+	stepDY         float64
+	stepDZ         float64
+	hasSpawnOrigin bool
+	spawnX         float64
+	spawnY         float64
+	spawnZ         float64
+	pendingStepZ   float64
+	collisionGroup uint64
+	solverIdx      int
+	solver         *Solver
 }
 
 var _counter atomic.Uint64
@@ -260,9 +257,8 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.hasFloor = false
 	s.applied = false
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
-	s.clampNormalsLen = 0
+
 	s.staticContact.Reset()
-	s.clampCornersLen = 0
 
 	//clear(s.seen)
 	s.maxStep = maxStep
@@ -425,6 +421,8 @@ func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dis
 	return nil
 }
 
+// hasCoplanarInelasticSlot reports whether the cage has an inelastic wall slot
+// on the original plane defined by the given normal and anchor.
 func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
 	for i := 0; i < s.slotsLen; i++ {
 		slot := s.slots[i]
@@ -435,6 +433,7 @@ func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
 	return false
 }
 
+// pruneCoplanarStepSlots removes wall step slots whose original plane matches the given normal and anchor.
 func (s *Cage) pruneCoplanarStepSlots(nX, nY, nZ, ax, ay, az float64) {
 	for i := 0; i < s.slotsLen; {
 		slot := s.slots[i]
@@ -565,7 +564,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		}
 	}
 
-	for pi := 0; pi < count; pi++ {
+	for pi := range count {
 		ptX, ptY, ptZ, ptPen := m.GetPoint(pi)
 		if ptPen <= 0 {
 			continue
@@ -797,11 +796,8 @@ func (s *Cage) CommitStaticClamp() {
 // pushes into any active or clamped static world face.
 func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
 	const wallBlockDotThreshold = -0.05
-	for i := 0; i < s.clampNormalsLen; i++ {
-		c := &s.clampNormals[i]
-		if dirX*c[0]+dirY*c[1]+dirZ*c[2] < wallBlockDotThreshold {
-			return true
-		}
+	if s.staticContact.IsBlockedAlong(dirX, dirY, dirZ, wallBlockDotThreshold) {
+		return true
 	}
 	for i := 0; i < s.slotsLen; i++ {
 		slot := s.slots[i]
@@ -853,8 +849,8 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	minZ := s.cZ - sz + math.Min(0.0, s.dZ)
 	maxZ := s.cZ + sz + math.Max(0.0, s.dZ)
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
-	s.staticContact.Reset()
-	s.clampCornersLen = 0
+	s.staticContact.ResetFlatWalls()
+	s.staticContact.ResetClampCorners()
 	return origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
 }
 

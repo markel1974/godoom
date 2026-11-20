@@ -6,12 +6,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
+// flatWallPlane represents a planar wall contact defined by a normal and a point on the plane.
 type flatWallPlane struct {
 	nX, nY, nZ float64
 	pX, pY, pZ float64
 }
 
-// StaticFaceContact stores evaluated collision contact data for a static face against an AABB.
+// StaticFaceContact stores reusable contact data for resolving collisions between a moving cage and static faces.
 type StaticFaceContact struct {
 	bucket                 BucketType
 	dist                   float64
@@ -33,18 +34,48 @@ type StaticFaceContact struct {
 
 	flatWalls    [32]flatWallPlane
 	flatWallsLen int
+
+	clampNormals    [16][3]float64
+	clampNormalsLen int
+
+	clampCorners    [16]IFace
+	clampCornersLen int
 }
 
-// NewStaticFaceContact creates and returns a new StaticFaceContact instance.
+// NewStaticFaceContact creates a new StaticFaceContact with zeroed contact state.
 func NewStaticFaceContact() *StaticFaceContact {
 	return &StaticFaceContact{}
 }
 
+// Reset clears cached clamp normals, flat walls, and clamp corners.
 func (fc *StaticFaceContact) Reset() {
+	fc.clampNormalsLen = 0
+	fc.flatWallsLen = 0
+	fc.clampCornersLen = 0
+}
+
+// ResetFlatWalls clears the recorded flat wall planes for the contact.
+func (fc *StaticFaceContact) ResetFlatWalls() {
 	fc.flatWallsLen = 0
 }
 
-// Commit evaluates solid static faces against the cage AABB and records resulting volume, floor, wall, and step contacts.
+// ResetClampCorners clears the queued clamp corner contacts.
+func (fc *StaticFaceContact) ResetClampCorners() {
+	fc.clampCornersLen = 0
+}
+
+// IsBlockedAlong reports whether the direction is blocked by any stored clamp normal below threshold.
+func (fc *StaticFaceContact) IsBlockedAlong(dirX, dirY, dirZ float64, threshold float64) bool {
+	for i := 0; i < fc.clampNormalsLen; i++ {
+		c := &fc.clampNormals[i]
+		if dirX*c[0]+dirY*c[1]+dirZ*c[2] < threshold {
+			return true
+		}
+	}
+	return false
+}
+
+// Commit evaluates static face contacts for the cage and records valid collision manifolds, steps, floors, and volume hits.
 func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 	baseZ := s.GetBaseZ()
 	minBaseZ := math.Min(baseZ, baseZ+s.dZ)
@@ -111,12 +142,12 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 	}
 }
 
-// FlushClamp applies queued corner clamp contacts against static faces and reports whether the cage moved.
-// FlushClamp clears the queued clamp corners after processing.
+// FlushClamp resolves queued corner clamp contacts against the cage and returns whether any contact moved it.
+// It clears the queued clamp corners after processing.
 func (fc *StaticFaceContact) FlushClamp(s *Cage, lAABB *aabb.AABB) bool {
 	moved := false
-	for i := 0; i < s.clampCornersLen; i++ {
-		if !s.evaluateStaticFace(lAABB, s.clampCorners[i], fc) || fc.pen <= 0.0 {
+	for i := 0; i < fc.clampCornersLen; i++ {
+		if !s.evaluateStaticFace(lAABB, fc.clampCorners[i], fc) || fc.pen <= 0.0 {
 			continue
 		}
 		if fc.bucket.IsWall() {
@@ -129,12 +160,12 @@ func (fc *StaticFaceContact) FlushClamp(s *Cage, lAABB *aabb.AABB) bool {
 			moved = true
 		}
 	}
-	s.clampCornersLen = 0
+	fc.clampCornersLen = 0
 	return moved
 }
 
 // Clamp evaluates a solid face against the cage AABB and applies penetration correction when needed.
-// It marks floor contact, defers corner wall contacts, and reports whether the cage moved.
+// Clamp marks floor contact as grounded, skips invalid wall clamps, and defers corner wall contacts.
 func (fc *StaticFaceContact) Clamp(s *Cage, lAABB *aabb.AABB, rFace IFace) bool {
 	if !rFace.IsSolid() {
 		return false
@@ -161,9 +192,9 @@ func (fc *StaticFaceContact) Clamp(s *Cage, lAABB *aabb.AABB, rFace IFace) bool 
 			if fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
 				return false
 			}
-			if s.clampCornersLen < len(s.clampCorners) {
-				s.clampCorners[s.clampCornersLen] = rFace
-				s.clampCornersLen++
+			if fc.clampCornersLen < len(fc.clampCorners) {
+				fc.clampCorners[fc.clampCornersLen] = rFace
+				fc.clampCornersLen++
 				return false
 			}
 		} else {
@@ -173,7 +204,7 @@ func (fc *StaticFaceContact) Clamp(s *Cage, lAABB *aabb.AABB, rFace IFace) bool 
 	return fc.clampApplyContact(s)
 }
 
-// clampWallShouldSkip reports whether a wall contact should be ignored because it is step-height or ground-adjacent.
+// clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
 func (fc *StaticFaceContact) clampWallShouldSkip(s *Cage) bool {
 	curBaseZ := s.tZ - s.eRadZ
 	preBaseZ := s.GetBaseZ()
@@ -183,11 +214,10 @@ func (fc *StaticFaceContact) clampWallShouldSkip(s *Cage) bool {
 	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
 }
 
-// clampApplyContact records the contact normal, clamps velocity, and resolves positive penetration on the cage.
-// It returns true when the resolution moves the entity.
+// clampApplyContact clamps velocity, resolves penetration, updates cage position, and reports whether movement occurred.
 func (fc *StaticFaceContact) clampApplyContact(s *Cage) bool {
 	ent := s.entity
-	s.addClampNormal(fc.nX, fc.nY, fc.nZ)
+	fc.addClampNormal(fc.nX, fc.nY, fc.nZ)
 	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
 	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
 	if !ok || p <= 0.0 {
@@ -203,7 +233,7 @@ func (fc *StaticFaceContact) clampApplyContact(s *Cage) bool {
 	return true
 }
 
-// hasCoplanarFlatWall reports whether a recorded flat wall has the same normal and coplanar point.
+// hasCoplanarFlatWall reports whether a recorded flat wall shares the given normal and plane within tolerance.
 func (fc *StaticFaceContact) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64) bool {
 	for i := 0; i < fc.flatWallsLen; i++ {
 		w := &fc.flatWalls[i]
@@ -215,6 +245,8 @@ func (fc *StaticFaceContact) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64)
 	return false
 }
 
+// recordFlatWall stores a flat wall plane unless an equivalent coplanar wall is already tracked.
+// It ignores new walls when the fixed wall buffer is full.
 func (fc *StaticFaceContact) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
 	if fc.hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az) || fc.flatWallsLen >= len(fc.flatWalls) {
 		return
@@ -226,17 +258,19 @@ func (fc *StaticFaceContact) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
 	fc.flatWallsLen++
 }
 
-func (s *Cage) addClampNormal(nX, nY, nZ float64) {
-	for i := 0; i < s.clampNormalsLen; i++ {
-		c := &s.clampNormals[i]
+// addClampNormal stores a clamp normal if no nearly identical normal is already recorded.
+// It silently ignores duplicates and additions beyond the fixed clamp-normal capacity.
+func (fc *StaticFaceContact) addClampNormal(nX, nY, nZ float64) {
+	for i := 0; i < fc.clampNormalsLen; i++ {
+		c := &fc.clampNormals[i]
 		if c[0]*nX+c[1]*nY+c[2]*nZ > 0.999 {
 			return
 		}
 	}
-	if s.clampNormalsLen < len(s.clampNormals) {
-		s.clampNormals[s.clampNormalsLen][0] = nX
-		s.clampNormals[s.clampNormalsLen][1] = nY
-		s.clampNormals[s.clampNormalsLen][2] = nZ
-		s.clampNormalsLen++
+	if fc.clampNormalsLen < len(fc.clampNormals) {
+		fc.clampNormals[fc.clampNormalsLen][0] = nX
+		fc.clampNormals[fc.clampNormalsLen][1] = nY
+		fc.clampNormals[fc.clampNormalsLen][2] = nZ
+		fc.clampNormalsLen++
 	}
 }

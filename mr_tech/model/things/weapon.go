@@ -5,7 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -50,7 +50,7 @@ func NewWeapon(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) 
 }
 
 // IsEqual reports whether other is the same Weapon instance.
-func (w *Weapon) IsEqual(other vertices.IThing) bool {
+func (w *Weapon) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Weapon); ok && w == v {
 		return true
 	}
@@ -73,7 +73,7 @@ func (w *Weapon) LaunchObject(throwableIndex int, onCollision config.CollisionFu
 }
 
 // PostMessage sends a ThingEvent to the Weapon inbox channel.
-func (w *Weapon) PostMessage(ec *vertices.ThingEvent) {
+func (w *Weapon) PostMessage(ec *ithing.ThingEvent) {
 	w.inbox <- ec
 }
 
@@ -84,11 +84,11 @@ func (w *Weapon) StartLoop() {
 			select {
 			case evt := <-w.inbox:
 				switch evt.GetKind() {
-				case vertices.StageThinking:
+				case ithing.StageThinking:
 					w.StageThinking(evt.GetCoords())
-				case vertices.StageResolve:
+				case ithing.StageResolve:
 					w.StageResolve()
-				case vertices.StageApply:
+				case ithing.StageApply:
 					w.StageApply()
 				}
 				evt.Done()

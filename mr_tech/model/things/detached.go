@@ -5,7 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -16,7 +16,7 @@ import (
 type Detached struct {
 	*Base
 	partVerts      *vertices_3d.Part
-	owner          vertices.IThing
+	owner          ithing.IThing
 	ragdollJoint   *collisions.JointConstraint
 	breakThreshold float64
 	damage         float64
@@ -28,7 +28,7 @@ func noopDetachedImpact(other config.IThingConfig, id string, force, closestDist
 }
 
 // NewAttachedPart creates a tree-resident segment Thing bound to owner until detached or switched to ragdoll.
-func NewAttachedPart(things IThingHandler, owner vertices.IThing, location *volumes.Volume, id string, verts *vertices_3d.Part) *Detached {
+func NewAttachedPart(things IThingHandler, owner ithing.IThing, location *volumes.Volume, id string, verts *vertices_3d.Part) *Detached {
 	ent := verts.GetSolver().GetEntity()
 	cfg := config.NewConfigThing(id, geometry.XYZ{}, 0, config.ThingItemDef, ent.GetMass(), 1, 1, 0)
 	cfg.OnCollision = noopDetachedCollision
@@ -49,7 +49,7 @@ func NewAttachedPart(things IThingHandler, owner vertices.IThing, location *volu
 }
 
 // GetOwner returns the owning parent IThing while this segment belongs to it, or nil once detached.
-func (t *Detached) GetOwner() vertices.IThing {
+func (t *Detached) GetOwner() ithing.IThing {
 	return t.owner
 }
 
@@ -96,7 +96,7 @@ func (t *Detached) onPartElasticCollision(other collisions.IObject, energy float
 		if energy >= 200.0 {
 			sx, sy, sz := t.GetEntity().GetCenter()
 			dx, dy, dz := 1.0, 0.0, 0.0
-			if oThing, ok := other.(vertices.IThing); ok {
+			if oThing, ok := other.(ithing.IThing); ok {
 				ox, oy, oz := oThing.GetEntity().GetCenter()
 				dx, dy, dz = sx-ox, sy-oy, sz-oz
 			}
@@ -137,7 +137,7 @@ func (t *Detached) Impact(other config.IThingConfig, id string, force, closestDi
 }
 
 // IsEqual reports whether other is the same Detached instance.
-func (t *Detached) IsEqual(other vertices.IThing) bool {
+func (t *Detached) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Detached); ok && t == v {
 		return true
 	}
@@ -163,7 +163,7 @@ func (t *Detached) LaunchObject(throwableIndex int, onCollision config.Collision
 }
 
 // PostMessage is a no-op because detached limbs do not spawn a thinker goroutine.
-func (t *Detached) PostMessage(ec *vertices.ThingEvent) {}
+func (t *Detached) PostMessage(ec *ithing.ThingEvent) {}
 
 // StartLoop is a no-op because detached limbs do not run AI thinking.
 func (t *Detached) StartLoop() {}

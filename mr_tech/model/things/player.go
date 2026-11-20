@@ -7,8 +7,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -92,7 +92,7 @@ func (pr *Player) IsVisible() bool {
 }
 
 // IsEqual reports whether other is the same Player instance.
-func (pr *Player) IsEqual(other vertices.IThing) bool {
+func (pr *Player) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Player); ok && pr == v {
 		return true
 	}
@@ -119,7 +119,7 @@ func (pr *Player) LaunchObject(throwableIndex int, onCollision config.CollisionF
 }
 
 // PostMessage sends the provided ThingEvent to the Player's inbox channel for processing.
-func (pr *Player) PostMessage(ec *vertices.ThingEvent) {
+func (pr *Player) PostMessage(ec *ithing.ThingEvent) {
 	pr.inbox <- ec
 }
 
@@ -146,13 +146,13 @@ func (pr *Player) StartLoop() {
 			select {
 			case evt := <-pr.inbox:
 				switch evt.GetKind() {
-				case vertices.StageThinking:
+				case ithing.StageThinking:
 					pr.StageThinking(evt.GetCoords())
-				case vertices.StageCompute:
+				case ithing.StageCompute:
 					//p.StageCompute()
-				case vertices.StageResolve:
+				case ithing.StageResolve:
 					pr.StageResolve()
-				case vertices.StageApply:
+				case ithing.StageApply:
 					pr.StageApply()
 				}
 				evt.Done()
@@ -449,13 +449,13 @@ func (pr *Player) Use() bool {
 	dirY := pr.angleSin * math.Cos(pitchRad)
 	dirZ := math.Sin(pitchRad)
 
-	var closestThing vertices.IThing
+	var closestThing ithing.IThing
 	pr.things.QueryRay(camX, camY, camZ, dirX, dirY, dirZ, useDistance, func(object aabb.IObject, distance float64) (float64, bool) {
-		other, ok := object.(vertices.IThing)
+		other, ok := object.(ithing.IThing)
 		if !ok || pr.IsEqual(other) {
 			return useDistance, false
 		}
-		if sub, ok := other.(vertices.ISubPart); ok && !sub.IsPhysicsFree() {
+		if sub, ok := other.(ithing.ISubPart); ok && !sub.IsPhysicsFree() {
 			if owner := sub.GetOwner(); owner != nil && pr.IsEqual(owner) {
 				return useDistance, false
 			}

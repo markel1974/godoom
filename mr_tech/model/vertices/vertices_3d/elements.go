@@ -7,8 +7,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -76,7 +76,7 @@ func NewElements(cfg *config.Thing, materials *materials.Materials) *Elements {
 }
 
 // Setup binds the owner locomotion Volume solver to thing.
-func (v *Elements) Setup(thing vertices.IThing) error {
+func (v *Elements) Setup(thing ithing.IThing) error {
 	return v.ownerVol.Setup(thing)
 }
 

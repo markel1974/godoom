@@ -6,9 +6,9 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/things"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -25,19 +25,19 @@ type Things struct {
 	materials         *materials.Materials
 	tree              *aabb.Tree
 	player            *things.Player
-	entities          map[uint64]vertices.IThing
-	pending           []vertices.IThing
-	thinkers          []vertices.IThing
-	statics           []vertices.IThing
+	entities          map[uint64]ithing.IThing
+	pending           []ithing.IThing
+	thinkers          []ithing.IThing
+	statics           []ithing.IThing
 	thinkersLen       int
 	pendingLen        atomic.Int32
 	hasPending        bool
-	pendingStage      []vertices.IThing
+	pendingStage      []ithing.IThing
 	pendingStageLen   int
-	pendingRemove     []vertices.IThing
+	pendingRemove     []ithing.IThing
 	pendingRemoveLen  int
 	stageEpoch        uint64
-	event             *vertices.ThingEvent
+	event             *ithing.ThingEvent
 	cfg               []*config.Thing
 	maxOverlapsWorld  int
 	maxOverlapsThings int
@@ -56,18 +56,18 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 		maxOverlapsThings: maxOverlaps / 2,
 		cfg:               cfg,
 		tree:              aabb.NewTree(uint(len(cfg)*2), 4.0),
-		entities:          make(map[uint64]vertices.IThing),
-		thinkers:          make([]vertices.IThing, defaultLen),
-		pending:           make([]vertices.IThing, defaultLen),
-		pendingStage:      make([]vertices.IThing, 128),
-		pendingRemove:     make([]vertices.IThing, 128),
+		entities:          make(map[uint64]ithing.IThing),
+		thinkers:          make([]ithing.IThing, defaultLen),
+		pending:           make([]ithing.IThing, defaultLen),
+		pendingStage:      make([]ithing.IThing, 128),
+		pendingRemove:     make([]ithing.IThing, 128),
 		thinkersLen:       0,
 		hasPending:        false,
 		config:            cfg,
 		volumes:           vols,
 		materials:         materials,
-		event:             vertices.NewThingEvent(0, solverJitter),
-		statics:           make([]vertices.IThing, 0, 16),
+		event:             ithing.NewThingEvent(0, solverJitter),
+		statics:           make([]ithing.IThing, 0, 16),
 	}
 	e.coordinator = collisions.NewCoordinator(solverIterations, defaultLen, e.querySolverContacts, vols.ClampStaticCage)
 	e.pendingLen.Store(0)
@@ -132,9 +132,9 @@ func (th *Things) querySolverContacts(cage *collisions.Cage, wake collisions.Wak
 }
 
 func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wake collisions.WakeRunningFn) {
-	lThing := lCage.GetObject().(vertices.IThing)
+	lThing := lCage.GetObject().(ithing.IThing)
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
-		rThing := object.(vertices.IThing)
+		rThing := object.(ithing.IThing)
 		if lThing == rThing {
 			return false
 		}
@@ -209,7 +209,7 @@ func (th *Things) SetPlayer(p *things.Player) {
 	th.addThing(p)
 }
 
-func (th *Things) GetThing(id string) vertices.IThing {
+func (th *Things) GetThing(id string) ithing.IThing {
 	for _, thing := range th.entities {
 		if thing.GetId() == id {
 			return thing
@@ -270,7 +270,7 @@ func (th *Things) resolveTeleportTargets() {
 }
 
 // Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
-func (th *Things) create(ct *config.Thing, volume *volumes.Volume) vertices.IThing {
+func (th *Things) create(ct *config.Thing, volume *volumes.Volume) ithing.IThing {
 	if ct.OnCollision == nil {
 		fmt.Println("onCollision is nil for thing:" + ct.Id)
 		ct.OnCollision = func(other config.IThingConfig, energy float64) {}
@@ -290,7 +290,7 @@ func (th *Things) create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 			ct.Kind = config.ThingItemDef
 		}
 	}
-	var thing vertices.IThing
+	var thing ithing.IThing
 	switch ct.Kind {
 	case config.ThingEnemyDef:
 		thing = things.NewEnemy(th, ct, volume)
@@ -324,7 +324,7 @@ func (th *Things) create(ct *config.Thing, volume *volumes.Volume) vertices.IThi
 }
 
 // CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
-func (th *Things) CreateThrowable(self vertices.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64) {
+func (th *Things) CreateThrowable(self ithing.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64) {
 	if len(th.throwable) <= throwableIndex {
 		return
 	}
@@ -358,12 +358,12 @@ func (th *Things) AddJoint(joint *collisions.JointConstraint) {
 }
 
 // StagePart queues a newly released 6-DoF segment for immediate staging in the current physics tick.
-func (th *Things) StagePart(part vertices.IThing) {
+func (th *Things) StagePart(part ithing.IThing) {
 	if part == nil {
 		return
 	}
 	if th.pendingStageLen >= len(th.pendingStage) {
-		n := make([]vertices.IThing, len(th.pendingStage)*2)
+		n := make([]ithing.IThing, len(th.pendingStage)*2)
 		copy(n, th.pendingStage)
 		th.pendingStage = n
 	}
@@ -372,12 +372,12 @@ func (th *Things) StagePart(part vertices.IThing) {
 }
 
 // StageRemove queues a deactivated Thing for safe removal from Things.tree and Things.entities.
-func (th *Things) StageRemove(thing vertices.IThing) {
+func (th *Things) StageRemove(thing ithing.IThing) {
 	if thing == nil {
 		return
 	}
 	if th.pendingRemoveLen >= len(th.pendingRemove) {
-		n := make([]vertices.IThing, len(th.pendingRemove)*2)
+		n := make([]ithing.IThing, len(th.pendingRemove)*2)
 		copy(n, th.pendingRemove)
 		th.pendingRemove = n
 	}
@@ -395,7 +395,7 @@ func (th *Things) flushPendingRemovals() {
 	if removablesLen := th.coordinator.RemovablesLen(); removablesLen > 0 {
 		for x := 0; x < removablesLen; x++ {
 			s := th.coordinator.RemovablesAt(x)
-			th.removeThing(s.GetCage().GetObject().(vertices.IThing))
+			th.removeThing(s.GetCage().GetObject().(ithing.IThing))
 		}
 		th.coordinator.ClearRemovables()
 	}
@@ -409,8 +409,8 @@ func (th *Things) StagePrepare() {
 }
 
 // StageAdd queues t2 as ready (or routes attached sub-parts to their owning Thing) and avoids duplicate per-tick staging.
-func (th *Things) StageAdd(t2 vertices.IThing) {
-	if sub, ok := t2.(vertices.ISubPart); ok && !sub.IsPhysicsFree() {
+func (th *Things) StageAdd(t2 ithing.IThing) {
+	if sub, ok := t2.(ithing.ISubPart); ok && !sub.IsPhysicsFree() {
 		if owner := sub.GetOwner(); owner != nil {
 			th.stageOne(owner)
 		}
@@ -419,7 +419,7 @@ func (th *Things) StageAdd(t2 vertices.IThing) {
 	th.stageOne(t2)
 }
 
-func (th *Things) stageOne(t2 vertices.IThing) {
+func (th *Things) stageOne(t2 ithing.IThing) {
 	if t2 == nil || !t2.IsActive() {
 		return
 	}
@@ -459,7 +459,7 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 
 	// Apply Thinking
 	if th.thinkersLen > 0 {
-		th.event.SetStage(vertices.StageThinking)
+		th.event.SetStage(ithing.StageThinking)
 		th.event.SetCoords(pX, pY, pZ)
 		for x := 0; x < th.thinkersLen; x++ {
 			t2 := th.thinkers[x]
@@ -495,13 +495,13 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 		for rIdx := 0; rIdx < runningLen; rIdx++ {
 			s := th.coordinator.RunningAt(rIdx)
 			obj := s.GetCage().GetObject()
-			if owner, ok := obj.(vertices.IPartOwner); ok {
+			if owner, ok := obj.(ithing.IPartOwner); ok {
 				parts := owner.GetPartLen()
 				if parts > 0 {
 					owner.SyncAttachedParts()
 					for x := 0; x < parts; x++ {
 						p := owner.GetPartAt(x)
-						if sub, sOk := p.(vertices.ISubPart); sOk && !sub.IsPhysicsFree() {
+						if sub, sOk := p.(ithing.ISubPart); sOk && !sub.IsPhysicsFree() {
 							th.tree.UpdateObject(p)
 						}
 					}
@@ -514,23 +514,23 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 }
 
 // AddStaticThing adds a static object to the scene without physics or spatial partitioning.
-func (th *Things) AddStaticThing(ent vertices.IThing) {
+func (th *Things) AddStaticThing(ent ithing.IThing) {
 	th.statics = append(th.statics, ent)
 }
 
 // addThing registers ent in entities and inserts either all articulated segment sub-things or ent itself into tree.
-func (th *Things) addThing(ent vertices.IThing) {
+func (th *Things) addThing(ent ithing.IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
 	var parts int
-	owner, ok := ent.(vertices.IPartOwner)
+	owner, ok := ent.(ithing.IPartOwner)
 	if ok {
 		parts = owner.GetPartLen()
 	}
 	needed := len(th.entities) + parts
 	if needed > cap(th.pending) {
 		newCap := needed * 4
-		th.thinkers = make([]vertices.IThing, newCap)
-		th.pending = make([]vertices.IThing, newCap)
+		th.thinkers = make([]ithing.IThing, newCap)
+		th.pending = make([]ithing.IThing, newCap)
 		th.coordinator.EnsureCapacity(newCap)
 	}
 	if parts > 0 {
@@ -547,7 +547,7 @@ func (th *Things) addThing(ent vertices.IThing) {
 }
 
 // removeThing removes an IThing instance from the spatial tree (when tree-resident) and the entities map.
-func (th *Things) removeThing(ent vertices.IThing) {
+func (th *Things) removeThing(ent ithing.IThing) {
 	if ent == nil {
 		return
 	}
@@ -555,7 +555,7 @@ func (th *Things) removeThing(ent vertices.IThing) {
 	if _, ok := th.entities[id]; !ok {
 		return
 	}
-	if owner, ok := ent.(vertices.IPartOwner); !ok || owner.GetPartLen() == 0 {
+	if owner, ok := ent.(ithing.IPartOwner); !ok || owner.GetPartLen() == 0 {
 		th.tree.RemoveObject(ent)
 	}
 	delete(th.entities, id)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -177,7 +178,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 }
 
 // Setup initializes the entry with the given thing and stores its solver and entity references.
-func (v *Vertices3DEntry) Setup(thing vertices.IThing) error {
+func (v *Vertices3DEntry) Setup(thing ithing.IThing) error {
 	//for _, f := range v.volumes {
 	//	f.SetThing(thing)
 	//}

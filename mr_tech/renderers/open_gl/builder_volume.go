@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
@@ -247,7 +248,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	//counter := 0
 	things.StagePrepare()
 
-	pushPassThing := func(thing vertices.IThing) {
+	pushPassThing := func(thing ithing.IThing) {
 		thing.Compile(textures.GlobalTick())
 		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 		if pFaces == nil || pFaces.Len() == 0 {
@@ -327,7 +328,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	qOcclusion := func(object aabb.IObject) bool {
-		thing := object.(vertices.IThing)
+		thing := object.(ithing.IThing)
 		if !thing.IsVisible() {
 			return false
 		}
@@ -350,7 +351,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	qStatic := func(object aabb.IObject) bool {
-		pushPassThing(object.(vertices.IThing))
+		pushPassThing(object.(ithing.IThing))
 		return false
 	}
 

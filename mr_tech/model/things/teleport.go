@@ -6,7 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
@@ -54,7 +54,7 @@ func NewTeleport(things IThingHandler, cfg *config.Thing, volume *volumes.Volume
 }
 
 // IsEqual reports whether other is the same Teleport instance.
-func (tp *Teleport) IsEqual(other vertices.IThing) bool {
+func (tp *Teleport) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Teleport); ok && tp == v {
 		return true
 	}
@@ -80,7 +80,7 @@ func (tp *Teleport) LaunchObject(throwableIndex int, onCollision config.Collisio
 }
 
 // PostMessage sends a ThingEvent to the Teleport's inbox channel.
-func (tp *Teleport) PostMessage(ec *vertices.ThingEvent) {
+func (tp *Teleport) PostMessage(ec *ithing.ThingEvent) {
 	tp.inbox <- ec
 }
 
@@ -91,11 +91,11 @@ func (tp *Teleport) StartLoop() {
 			select {
 			case evt := <-tp.inbox:
 				switch evt.GetKind() {
-				case vertices.StageThinking:
+				case ithing.StageThinking:
 					tp.StageThinking(evt.GetCoords())
-				case vertices.StageResolve:
+				case ithing.StageResolve:
 					tp.StageResolve()
-				case vertices.StageApply:
+				case ithing.StageApply:
 					tp.StageApply()
 				}
 				evt.Done()
@@ -116,7 +116,7 @@ func (tp *Teleport) StageThinking(playerX float64, playerY float64, playerZ floa
 }
 
 func (tp *Teleport) onTeleportCollision(other collisions.IObject, energy float64) {
-	actor, ok := other.(vertices.IThing)
+	actor, ok := other.(ithing.IThing)
 	if !ok {
 		return
 	}

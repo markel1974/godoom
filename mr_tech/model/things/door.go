@@ -7,7 +7,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -15,7 +15,7 @@ import (
 
 // IActivatable represents an object that can be activated by another thing.
 type IActivatable interface {
-	Activate(by vertices.IThing) bool
+	Activate(by ithing.IThing) bool
 }
 
 // doorState represents the current phase of a door's movement and waiting behavior.
@@ -90,7 +90,7 @@ func NewDoor(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *D
 }
 
 // IsEqual reports whether other is the same Door instance.
-func (d *Door) IsEqual(other vertices.IThing) bool {
+func (d *Door) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Door); ok && d == v {
 		return true
 	}
@@ -99,7 +99,7 @@ func (d *Door) IsEqual(other vertices.IThing) bool {
 
 // Activate attempts to open the door for the given thing, requiring any configured key.
 // Activate returns true when activation succeeds or refreshes an open door's wait timer.
-func (d *Door) Activate(by vertices.IThing) bool {
+func (d *Door) Activate(by ithing.IThing) bool {
 	if d.requiredKey != "" {
 		holder, ok := by.(IKeyHolder)
 		if !ok || !holder.HasKey(d.requiredKey) {
@@ -147,7 +147,7 @@ func (d *Door) LaunchObject(throwableIndex int, onCollision config.CollisionFunc
 }
 
 // PostMessage queues the given thing event for asynchronous door processing.
-func (d *Door) PostMessage(ec *vertices.ThingEvent) {
+func (d *Door) PostMessage(ec *ithing.ThingEvent) {
 	d.inbox <- ec
 }
 
@@ -158,11 +158,11 @@ func (d *Door) StartLoop() {
 			select {
 			case evt := <-d.inbox:
 				switch evt.GetKind() {
-				case vertices.StageThinking:
+				case ithing.StageThinking:
 					d.StageThinking(evt.GetCoords())
-				case vertices.StageResolve:
+				case ithing.StageResolve:
 					d.StageResolve()
-				case vertices.StageApply:
+				case ithing.StageApply:
 					d.StageApply()
 				}
 				evt.Done()
@@ -245,7 +245,7 @@ func (d *Door) advanceDoor(ent *rigid_body.Entity, dt float64, dir float64, next
 
 // onDoorCollision activates the door for key holders on touch or while closing, then applies elastic collision handling.
 func (d *Door) onDoorCollision(other collisions.IObject, energy float64) {
-	if otherThing, ok := other.(vertices.IThing); ok {
+	if otherThing, ok := other.(ithing.IThing); ok {
 		if _, isHolder := other.(IKeyHolder); isHolder {
 			state := d.state
 			activation := d.activation

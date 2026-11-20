@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -101,7 +102,7 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 }
 
 // Setup assigns the thing to all volumes, refreshes bounds and compiled state, and initializes collision solving.
-func (v *MultiSprite) Setup(thing vertices.IThing) error {
+func (v *MultiSprite) Setup(thing ithing.IThing) error {
 	for _, volume := range v.volumes {
 		//volume.SetThing(thing)
 		if v.renderMode == vertices.RenderModeBillboard {

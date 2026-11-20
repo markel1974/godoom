@@ -7,10 +7,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	geometry "github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/compilers"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	materials2 "github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/things"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -25,7 +25,7 @@ type Compiler struct {
 	player      *things.Player
 	lights      *Lights
 	things      *Things
-	ui          []vertices.IThing
+	ui          []ithing.IThing
 	calibration *Calibration
 }
 
@@ -139,7 +139,7 @@ func (r *Compiler) GetThings() *Things {
 }
 
 // GetUI returns the list of UI-related IThing instances managed by the Compiler.
-func (r *Compiler) GetUI() []vertices.IThing {
+func (r *Compiler) GetUI() []ithing.IThing {
 	return r.ui
 }
 

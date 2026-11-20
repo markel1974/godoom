@@ -3,6 +3,7 @@ package vertices_sprite
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -99,7 +100,7 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 }
 
 // Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
-func (v *VerticesSprite) Setup(thing vertices.IThing) error {
+func (v *VerticesSprite) Setup(thing ithing.IThing) error {
 	vol := v.volume
 	if err := vol.Setup(thing); err != nil {
 		return err

@@ -1,4 +1,4 @@
-package vertices
+package ithing
 
 import "sync"
 

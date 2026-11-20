@@ -5,8 +5,8 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -27,11 +27,11 @@ type IThingHandler interface {
 
 	QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool))
 
-	CreateThrowable(t vertices.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
+	CreateThrowable(t ithing.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64)
 
-	StagePart(part vertices.IThing)
+	StagePart(part ithing.IThing)
 
-	StageRemove(thing vertices.IThing)
+	StageRemove(thing ithing.IThing)
 
 	AddJoint(joint *collisions.JointConstraint)
 
@@ -40,7 +40,7 @@ type IThingHandler interface {
 
 // Base represents the fundamental attributes and behaviors of an object in the system.
 type Base struct {
-	vertices.IVertices
+	ithing.IVertices
 	solver         *collisions.Solver
 	ent            *rigid_body.Entity
 	id             string
@@ -52,7 +52,7 @@ type Base struct {
 	acceleration   float64
 	jumpForce      float64
 	things         IThingHandler
-	inbox          chan *vertices.ThingEvent
+	inbox          chan *ithing.ThingEvent
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
 	maxStepFactor  float64
@@ -65,7 +65,7 @@ func NewBase(things IThingHandler, cfg *config.Thing) *Base {
 }
 
 // NewBaseWithVertices creates a Base instance using a caller-supplied IVertices implementation.
-func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts vertices.IVertices) *Base {
+func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts ithing.IVertices) *Base {
 	if cfg.Mass == 0 {
 		panic("mass is zero for thing:" + cfg.Id)
 	}
@@ -81,7 +81,7 @@ func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts vertices
 		acceleration:   cfg.Acceleration,
 		maxStepFactor:  cfg.MaxStepFactor,
 		things:         things,
-		inbox:          make(chan *vertices.ThingEvent, 16),
+		inbox:          make(chan *ithing.ThingEvent, 16),
 		done:           make(chan struct{}),
 		onImpact:       cfg.OnImpact,
 		onCollision:    cfg.OnCollision,
@@ -90,20 +90,20 @@ func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts vertices
 }
 
 // Prepare initializes the volume thing, configures its solver, applies location and movement limits, and resets state.
-func (t *Base) Prepare(thing vertices.IThing, location *volumes.Volume) error {
+func (t *Base) Prepare(thing ithing.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
 	}
 	if pv, ok := t.IVertices.(vertices_3d.IPartedVertices); ok {
 		pv.SetupParts(
-			func(partVerts vertices.IVertices, collisionGroup uint64) vertices.IThing {
+			func(partVerts ithing.IVertices, collisionGroup uint64) ithing.IThing {
 				pv3d := partVerts.(*vertices_3d.Part)
 				return NewAttachedPart(t.things, thing, location, t.id+"_part", pv3d)
 			},
-			func(part vertices.IThing) {
+			func(part ithing.IThing) {
 				t.things.StagePart(part)
 			},
-			func(joint *collisions.JointConstraint, childThing vertices.IThing, canDetach bool, breakThreshold float64) {
+			func(joint *collisions.JointConstraint, childThing ithing.IThing, canDetach bool, breakThreshold float64) {
 				t.things.AddJoint(joint)
 				if canDetach {
 					if binder, ok := childThing.(*Detached); ok {
@@ -207,7 +207,7 @@ func (t *Base) IsActive() bool {
 func (t *Base) SetActive(active bool) {
 	t.solver.SetActive(active)
 	if !active && t.things != nil {
-		if selfThing, ok := t.solver.GetObject().(vertices.IThing); ok {
+		if selfThing, ok := t.solver.GetObject().(ithing.IThing); ok {
 			t.things.StageRemove(selfThing)
 		}
 	}
@@ -260,15 +260,15 @@ func (t *Base) GetSolverIndex() int {
 
 // GetPartLen returns the number of parts from the vertex owner, or 0 if parts are unsupported.
 func (t *Base) GetPartLen() int {
-	if owner, ok := t.IVertices.(vertices.IPartOwner); ok {
+	if owner, ok := t.IVertices.(ithing.IPartOwner); ok {
 		return owner.GetPartLen()
 	}
 	return 0
 }
 
 // GetPartAt returns the part at the given index, or nil if no part owner is available.
-func (t *Base) GetPartAt(idx int) vertices.IThing {
-	if owner, ok := t.IVertices.(vertices.IPartOwner); ok {
+func (t *Base) GetPartAt(idx int) ithing.IThing {
+	if owner, ok := t.IVertices.(ithing.IPartOwner); ok {
 		return owner.GetPartAt(idx)
 	}
 	return nil
@@ -276,7 +276,7 @@ func (t *Base) GetPartAt(idx int) vertices.IThing {
 
 // SyncAttachedParts synchronizes all still-attached segment poses and tree bounds after owner locomotion.
 func (t *Base) SyncAttachedParts() {
-	if owner, ok := t.IVertices.(vertices.IPartOwner); ok {
+	if owner, ok := t.IVertices.(ithing.IPartOwner); ok {
 		owner.SyncAttachedParts()
 	}
 }
@@ -329,7 +329,7 @@ func (t *Base) MoveTowards(dirX, dirY, speed, accelForce float64) {
 }
 
 // Jump applies an upward force to the entity based on its mass, jump force, and a given factor if it is on the ground.
-func (t *Base) Jump(self vertices.IThing, leapX float64, leapY float64, zFactor float64) bool {
+func (t *Base) Jump(self ithing.IThing, leapX float64, leapY float64, zFactor float64) bool {
 	entity := t.ent
 	if !entity.IsOnGround() {
 		return false
@@ -341,11 +341,11 @@ func (t *Base) Jump(self vertices.IThing, leapX float64, leapY float64, zFactor 
 }
 
 // FireHitscan performs a raycast to detect the first intersecting object within a specified direction and range.
-func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
+func (t *Base) FireHitscan(self ithing.IThing, id string, pos geometry.XYZ, force float64, dirX, dirY, dirZ float64) {
 	const maxDistance = 4096.0
 
 	var closestDistThing = maxDistance
-	var closestThing vertices.IThing
+	var closestThing ithing.IThing
 	var closestThingNormal geometry.XYZ
 	var hasThingNormal bool
 
@@ -353,14 +353,14 @@ func (t *Base) FireHitscan(self vertices.IThing, id string, pos geometry.XYZ, fo
 	// QueryRay richiede invDir (1.0/dir) che viene calcolato internamente.
 	t.things.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, maxDistance, func(object aabb.IObject, distance float64) (float64, bool) {
 		// Self-hit culling: l'entità che spara non deve colpire se stessa
-		other, ok := object.(vertices.IThing)
+		other, ok := object.(ithing.IThing)
 		if !ok {
 			return maxDistance, false
 		}
 		if self.IsEqual(other) {
 			return maxDistance, false
 		}
-		if sub, sOk := other.(vertices.ISubPart); sOk && !sub.IsPhysicsFree() {
+		if sub, sOk := other.(ithing.ISubPart); sOk && !sub.IsPhysicsFree() {
 			if owner := sub.GetOwner(); owner != nil && self.IsEqual(owner) {
 				return maxDistance, false
 			}
@@ -489,7 +489,7 @@ func (t *Base) Impact(other config.IThingConfig, id string, force, closestDist, 
 }
 
 func (t *Base) onElasticCollision(other collisions.IObject, energy float64) {
-	z, ok := other.(vertices.IThing)
+	z, ok := other.(ithing.IThing)
 	if ok {
 		t.onCollision(z, energy)
 	}

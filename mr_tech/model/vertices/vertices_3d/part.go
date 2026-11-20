@@ -2,6 +2,7 @@ package vertices_3d
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -35,7 +36,7 @@ func NewPart(parent *Vertices3D, entry *vertices_3d_entry.Vertices3DEntry, partI
 }
 
 // Setup binds the segment's Volume Solver to thing and places it in kinematic attached mode.
-func (v *Part) Setup(thing vertices.IThing) error {
+func (v *Part) Setup(thing ithing.IThing) error {
 	if err := v.entry.Setup(thing); err != nil {
 		return err
 	}

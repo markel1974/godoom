@@ -3,7 +3,7 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -25,7 +25,7 @@ func NewItem(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *I
 }
 
 // IsEqual reports whether other is the same Item instance.
-func (t *Item) IsEqual(other vertices.IThing) bool {
+func (t *Item) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Item); ok && t == v {
 		return true
 	}
@@ -46,7 +46,7 @@ func (t *Item) LaunchObject(throwableIndex int, onCollision config.CollisionFunc
 }
 
 // PostMessage sends an ThingEvent instance to the Item's inbox channel for processing.
-func (t *Item) PostMessage(ec *vertices.ThingEvent) {
+func (t *Item) PostMessage(ec *ithing.ThingEvent) {
 	t.inbox <- ec
 }
 
@@ -57,13 +57,13 @@ func (t *Item) StartLoop() {
 			select {
 			case evt := <-t.inbox:
 				switch evt.GetKind() {
-				case vertices.StageThinking:
+				case ithing.StageThinking:
 					t.StageThinking(evt.GetCoords())
-				case vertices.StageCompute:
+				case ithing.StageCompute:
 					//t.StageCompute()
-				case vertices.StageResolve:
+				case ithing.StageResolve:
 					t.StageResolve()
-				case vertices.StageApply:
+				case ithing.StageApply:
 					t.StageApply()
 				}
 				evt.Done()

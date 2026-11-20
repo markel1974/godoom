@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -16,13 +17,13 @@ import (
 )
 
 // PartSpawnFunc creates a thing for a separated part using its vertices and collision group.
-type PartSpawnFunc func(partVerts vertices.IVertices, collisionGroup uint64) vertices.IThing
+type PartSpawnFunc func(partVerts ithing.IVertices, collisionGroup uint64) ithing.IThing
 
 // PartReleaseFunc is called when a part is released.
-type PartReleaseFunc func(part vertices.IThing)
+type PartReleaseFunc func(part ithing.IThing)
 
 // RagdollJointAddFunc handles registration of a ragdoll joint for a child thing, including detachment rules.
-type RagdollJointAddFunc func(joint *collisions.JointConstraint, childThing vertices.IThing, canDetach bool, breakThreshold float64)
+type RagdollJointAddFunc func(joint *collisions.JointConstraint, childThing ithing.IThing, canDetach bool, breakThreshold float64)
 
 // IPartedVertices supports spawning, releasing, and jointing detachable vertex parts for composite bodies.
 type IPartedVertices interface {
@@ -33,7 +34,7 @@ type IPartedVertices interface {
 type Vertices3D struct {
 	id            string
 	mass          float64
-	owner         vertices.IThing
+	owner         ithing.IThing
 	solver        *collisions.Solver
 	ent           *rigid_body.Entity
 	actions       *Actions
@@ -42,7 +43,7 @@ type Vertices3D struct {
 	elements      *Elements
 	joints        *articulated_dynamics.Joints
 	partViews     []*Part
-	partThings    []vertices.IThing
+	partThings    []ithing.IThing
 	partScratchQ  *aabb.Quaternion
 	onPartRelease PartReleaseFunc
 	onAddJoint    RagdollJointAddFunc
@@ -118,7 +119,7 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 }
 
 // Setup initializes the vertices for thing, caches solver state, and assigns the entity collision group.
-func (v *Vertices3D) Setup(thing vertices.IThing) error {
+func (v *Vertices3D) Setup(thing ithing.IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFu
 	v.onPartRelease = onRelease
 	v.onAddJoint = addJoint
 	numParts := len(v.partViews)
-	v.partThings = make([]vertices.IThing, numParts)
+	v.partThings = make([]ithing.IThing, numParts)
 	groupID := v.ent.GetId()
 	for i, pv := range v.partViews {
 		pv.groupID = groupID
@@ -153,7 +154,7 @@ func (v *Vertices3D) GetPartLen() int {
 
 // GetPartAt returns the part thing at idx.
 // idx must be within the range of configured parts.
-func (v *Vertices3D) GetPartAt(idx int) vertices.IThing {
+func (v *Vertices3D) GetPartAt(idx int) ithing.IThing {
 	return v.partThings[idx]
 }
 

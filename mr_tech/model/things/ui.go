@@ -3,6 +3,7 @@ package things
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
@@ -26,7 +27,7 @@ func NewUI(things IThingHandler, cfg *config.Thing) *UI {
 }
 
 // IsEqual reports whether other is the same UI instance.
-func (t *UI) IsEqual(other vertices.IThing) bool {
+func (t *UI) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*UI); ok && t == v {
 		return true
 	}
@@ -47,7 +48,7 @@ func (t *UI) LaunchObject(throwableIndex int, onCollision config.CollisionFunc, 
 }
 
 // PostMessage ignores the provided thing event and performs no action.
-func (t *UI) PostMessage(_ *vertices.ThingEvent) {
+func (t *UI) PostMessage(_ *ithing.ThingEvent) {
 }
 
 // StartLoop starts the UI processing loop.

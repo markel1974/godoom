@@ -657,3 +657,85 @@ func TestActiveEdgeMaskSuppressesSeamDeflection(t *testing.T) {
 		t.Fatalf("subcase C: expected 0 backface seam contacts for !KeepUpright body on inactive diagonal, got %d", n)
 	}
 }
+
+func TestKeepUprightDynamicColliderSwitching(t *testing.T) {
+	floor := newTestFace(
+		[3]float64{-200, -200, 0},
+		[3]float64{600, -200, 0},
+		[3]float64{100, 600, 0},
+		0, 0, 1,
+	)
+
+	// Start upright: ignores yaw rotation and external render GetAABB() bloat/offset,
+	// emitting a single closest contact point on static faces.
+	obj := newTestDynamicObject(100.0, 100.0, 29.0, 40.0, 40.0, 60.0)
+	obj.ent.SetKeepUpright(true)
+	obj.ent.SetRotationAngleZ(math.Pi / 4.0)
+	obj.ent.GetAABB().Rebuild(100.0-35.0, 100.0-10.0, 29.0-5.0, 100.0+65.0, 100.0+90.0, 29.0+75.0)
+
+	cage := newTestCage(200, obj)
+	cage.Rebuild(0.0, 1)
+
+	cx, cy, cz := cage.GetC()
+	if math.Abs(cx-100.0) > 1e-6 || math.Abs(cy-100.0) > 1e-6 || math.Abs(cz-29.0) > 1e-6 {
+		t.Fatalf("upright phase: expected center (100,100,29) ignoring render AABB offset, got (%v,%v,%v)", cx, cy, cz)
+	}
+	rx, ry, rz := cage.GetRad()
+	if math.Abs(rx-20.0) > 1e-6 || math.Abs(ry-20.0) > 1e-6 || math.Abs(rz-30.0) > 1e-6 {
+		t.Fatalf("upright phase: expected upright half-extents (20,20,30) ignoring yaw and render AABB bloat, got (%v,%v,%v)", rx, ry, rz)
+	}
+
+	cage.AddFace(floor, nil)
+	cage.Commit(nil)
+	if n := cage.GetSlotsLen(); n != 1 {
+		t.Fatalf("upright phase: expected 1 closest contact while KeepUpright=true, got %d", n)
+	}
+	if !cage.HasFloor() {
+		t.Fatalf("upright phase: expected HasFloor() while grounded")
+	}
+	cage.CommitStaticClamp()
+
+	// Disable KeepUpright dynamically mid-tick (before Rebuild): NeedsStaticClamp triggers
+	// and BeginStaticClamp immediately refreshes extents to the rotated OBB.
+	obj.ent.SetKeepUpright(false)
+	if !cage.NeedsStaticClamp() {
+		t.Fatalf("mid-tick disable: expected NeedsStaticClamp() after SetKeepUpright(false)")
+	}
+	oCX, oCY, oCZ, oDX, oDY, oDZ, oTX, oTY, oTZ, _ := cage.BeginStaticClamp()
+	if clx, cly, clz := cage.GetRad(); clx <= 28.0 || cly <= 28.0 || math.Abs(clz-30.0) > 1e-6 {
+		t.Fatalf("mid-tick disable: expected BeginStaticClamp to refresh rotated OBB half-extents (~28.28,~28.28,30), got (%v,%v,%v)", clx, cly, clz)
+	}
+	cage.EndStaticClamp(oCX, oCY, oCZ, oDX, oDY, oDZ, oTX, oTY, oTZ)
+	cage.CommitStaticClamp()
+
+	// Next tick with KeepUpright=false: uses rotated OBB extents and multi-point OBBManifold.
+	cage.Rebuild(0.0, 2)
+	if orx, ory, orz := cage.GetRad(); orx <= 28.0 || ory <= 28.0 || math.Abs(orz-30.0) > 1e-6 {
+		t.Fatalf("OBB phase: expected rotated OBB half-extents (~28.28,~28.28,30), got (%v,%v,%v)", orx, ory, orz)
+	}
+	cage.AddFace(floor, nil)
+	cage.Commit(nil)
+	if n := cage.GetSlotsLen(); n <= 1 {
+		t.Fatalf("OBB phase: expected multi-point OBBManifold (>1 contacts) after SetKeepUpright(false), got %d", n)
+	}
+	if !cage.HasFloor() {
+		t.Fatalf("OBB phase: expected HasFloor() for grounded OBB")
+	}
+	for i := 0; i < cage.GetSlotsLen(); i++ {
+		slot := cage.GetSlot(i)
+		_, _, nz := slot.GetNormal()
+		if nz < 0.999 || slot.GetPenetration() < 0.99 {
+			t.Fatalf("OBB phase: unexpected slot %d normalZ=%v pen=%v", i, nz, slot.GetPenetration())
+		}
+	}
+
+	// Re-enable KeepUpright dynamically: returns to yaw-invariant upright collider extents.
+	obj.ent.SetKeepUpright(true)
+	if !cage.NeedsStaticClamp() {
+		t.Fatalf("re-enable: expected NeedsStaticClamp() after SetKeepUpright(true)")
+	}
+	cage.Rebuild(18.0, 3)
+	if brx, bry, brz := cage.GetRad(); math.Abs(brx-20.0) > 1e-6 || math.Abs(bry-20.0) > 1e-6 || math.Abs(brz-30.0) > 1e-6 {
+		t.Fatalf("re-enable phase: expected upright half-extents (20,20,30) restored, got (%v,%v,%v)", brx, bry, brz)
+	}
+}

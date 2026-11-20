@@ -80,23 +80,27 @@ Se invece continui ad aggiungere feature sopra l'attuale cage.go + cinematic.go 
 
 Quindi sì: il fatto che il mondo statico resti una mesh triangolare (organizzata in Volume spaziali tramite Compiler2d/Compiler3d + Clusters) ha perfettamente senso per il tipo di engine ibrido che stai costruendo (da Wolf/Doom fino a Q3/Doom3/Open-World).
 
-Quello che volevo dire — espresso meglio alla luce della tua precisazione — è che anche lavorando su triangle mesh aperte, il modo in cui i motori reali (PhysX, Jolt, Bullet) eliminano alla radice il casino di cage.go non è costruendo solidi convessi chiusi, ma con 2–3 strumenti molto più semplici:
 
-Bitmask degli spigoli interni precalcolata sui singoli triangoli (stile Internal Edge Utility di Bullet / Active Edges di Jolt)
+Una sola primitiva rigida reale (OBB / ellissoide su triangoli): non c'è una narrowphase generica su forme convesse arbitrarie (sfere, capsule orientate, convessi via GJK/EPA + clipping generico) né forme composte gerarchiche. Tutto è costruito attorno all'OBB (BoundingBox) e al supporto ellissoidale per i KeepUpright.
 
-Non serve un poliedro chiuso: ogni Face ha 3 spigoli.
-A compile time (e tra l’altro in compiler_3d.go avevi già preparato facesTree e fixFaces esattamente in quella direzione!), per ogni triangolo verifichi gli adiacenti su ciascuno dei 3 lati tramite AABB/vertici condivisi:
-Se lo spigolo unisce due triangoli coplanari o concavi (es. il classico quad diviso in 2 triangoli, o una curva/rampa continua), lo marchi con 1 bit (edgeMask uint8) come spigolo interno/inattivo.
-Resta attivo solo se è un vero spigolo convesso o un bordo aperto.
-A runtime, se un contatto cade su uno spigolo marcato interno, forzi la normale lungo la normale della faccia (o lo scarti se la normale spinge lungo lo spigolo): funziona su qualsiasi mesh aperta, elimina i micro-intoppi sulle cuciture e ti permette di buttare via centinaia di righe di euristica runtime in cage.go (pruneCoplanarCornerHits, hasCoplanarInelasticSlot, pruneCoplanarStepSlots, flatWalls, clampCorners).
+Character controller e rigid-body 6-DoF ancora fusi nello stesso posto: anche dopo il taglio di oggi a 1707 righe in cage.go, nello stesso flusso convivono logiche da FPS idTech/Quake (BucketWallNorth/South/..., ApplySafeStepUp, maxStep, evaKeepUprightFace) e fisica rigida 6-DoF (ComputeSweptAtOffset, manifold multi-punto). In un motore di fascia top il character controller è uno strato sopra query/sweep del motore, non dentro lo stesso valutatore di collisione.
 
-Capsula dedicata per i KeepUpright contro triangolo
+Bucket direzionali a capacità fissa e clamp sequenziale per faccia: in bucket.go ogni direzione ha FacesPerBucket = 16 e in cage.go clampNormals, clampCorners, flatWalls hanno cap fissi ([16]/[32]). In geometrie molto fitte gli slot extra vengono scartati/rimpiazzati, e ClampStaticFace proietta i vincoli statici sequenzialmente invece di risolvere un sistema posizionale simultaneo sui multi-contatti statici.
 
-Un ellissoide scalato + OBB per i manifold statici ti obbliga oggi a fare proiezioni asimmetriche e clipping complessi come refineKeepUprightWall (centinaia di righe solo per gli spigoli laterali).
-Una capsula verticale (un semplice segmento [base+R .. top-R] con raggio R) contro un triangolo ha una distanza segmento-triangolo esatta in forma chiusa in ~40 righe, è isotropa in XY (niente gonfiaggi dell'AABB quando l'entità ruota!), gestisce pendenze e gradini in modo liscio e non dipende dai bounds animati della mesh.
+Asimmetria tra collisioni statiche e dinamico-dinamico: contro il mondo un KeepUpright è un ellissoide 3D con un contatto; contro un altro corpo dinamico in commitDynamicManifold torna ad essere un OBB con gli spigoli secondo lo yaw.
 
-Un’unica raccolta dei triangoli statici vicini per tick
+Infatti non lo sono affatto: la base in coordinator.go, bucket.go, rigid_body e la topologia ActiveEdgeMask ti permettono di risolverli per gradi, senza buttare nulla.
 
-Invece di re-interrogare Volumes.tree → vol.tree in StagePrepare, poi in ApplySafeStepUp e poi dentro il loop di solverIterations di Coordinator.Step (ClampStaticCage), puoi raccogliere una volta sola i triangoli candidati nell’AABB espanso dello step del Cage e far lavorare tutta la risoluzione statica/clamp su quel piccolo buffer locale.
+In ordine di fattibilità pratica:
 
-Quindi la scelta della mesh triangolare è validissima; il vero punto dolente è che oggi tutta la compensazione topologica è fatta a runtime frame-per-frame dentro Cage invece di essere pre-etichettata una volta sola su Face a tempo di compilazione.
+Subito risolvibile (effort basso, alto payoff): simmetria dinamica dei KeepUpright (commitDynamicManifold)
+Quando almeno uno dei due corpi ha KeepUpright() == true, invece di passare sempre da ComputeSweptAtOffset tra due OBB ruotati puoi gestire KeepUpright vs KeepUpright (cilindro/ellissoide vs cilindro/ellissoide) e KeepUpright vs OBB. Elimina subito gli spigoli a 45° nei contatti tra player, nemici ed entità dinamiche.
+
+Effort basso-medio: togliere i cap fissi silenti (cage.go, bucket.go)
+Sostituire clampNormals [16], flatWalls [32], clampCorners [16] (e volendo i FacesPerBucket = 16) con slice preallocate a crescita lazy mantiene 0 allocs a regime — come già fai per seen e faces — ma evita di perdere contatti in geometrie fitte.
+
+Effort medio (molto pulito): separare character controller e rigid body 6-DoF
+In coordinator.go le fasi (StagePrepare, StageResolve, StageApply, StageResolvePosition, ClampStatic) sono già ben isolate. Estrarre maxStep, ApplySafeStepUp, i bucket cardinali e evaKeepUprightFace in un layer/file dedicato lascia Cage snello e focalizzato solo su broadphase e manifold.
+
+Effort alto (unico vero investimento pesante): GJK/EPA + manifold generico su convessi/compound
+È l'unico punto davvero costoso, non perché sia impossibile ma per la robustezza numerica: implementare GJK/EPA + clipping poligonale + swept CCD zero-alloc su qualsiasi coppia convessa (sfere, capsule, convex hull, compound) e sganciare Bucket dai 6 bucket cardinali fissi richiede poi una batteria seria di stress-test per evitare regressioni. Prima conviene chiederti se in godoom ti servano davvero forme oltre a OBB + ellissoide/capsula + triangoli.

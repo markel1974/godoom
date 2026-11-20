@@ -115,6 +115,8 @@ func (tp *Teleport) HasThinking() bool {
 func (tp *Teleport) StageThinking(playerX float64, playerY float64, playerZ float64) {
 }
 
+// onTeleportCollision teleports a colliding thing to the target destination when type, player, and cooldown checks pass.
+// onTeleportCollision may reset velocity, apply the target angle, and update the thing's solver volume.
 func (tp *Teleport) onTeleportCollision(other aabb.IObject, energy float64) {
 	actor, ok := other.(ithing.IThing)
 	if !ok {

@@ -31,8 +31,18 @@ func ComputeOrthonormalBasis(nx, ny, nz float64) (float64, float64, float64, flo
 }
 
 // AnchorWorld computes world-space anchor coordinates and lever arm from center of mass for e.
-func (e *Entity) AnchorWorld(localX, localY, localZ float64) (px, py, pz, rx, ry, rz float64) {
+func (e *Entity) AnchorWorld(localX, localY, localZ float64) (float64, float64, float64, float64, float64, float64) {
 	return e.anchorWorld(localX, localY, localZ)
+}
+
+// ApplyWorldInvInertia multiplies a world-space torque vector by the 3x3 world inverse inertia tensor.
+func (e *Entity) ApplyWorldInvInertia(tx, ty, tz float64) (float64, float64, float64) {
+	return e.Cinematic.applyWorldInvInertia(tx, ty, tz)
+}
+
+// ApplyClampedAngularDelta applies an angular velocity increment clamped against maximum tilt/yaw limits.
+func (e *Entity) ApplyClampedAngularDelta(dwx, dwy, dwz float64) {
+	e.applyClampedAngularDelta(dwx, dwy, dwz)
 }
 
 // ApplyLinearImpulse applies a 1D bilateral/unilateral impulse j along world axis n between e (A) and other (B).

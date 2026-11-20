@@ -391,8 +391,8 @@ func (t *Solver) StageResolvePosition() {
 		alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
 		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ, sPushZ)
 		if pen > 0 {
-			otherMovable := slot.Penetrable(0) && !rCage.IsBlockedAlong(-nX, -nY, -nZ)
-			selfMovable := t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rCage.GetEntity().GetId()) && !t.cage.IsBlockedAlong(nX, nY, nZ)
+			otherMovable := !rCage.IsBlockedAlong(-nX, -nY, -nZ) && slot.Penetrable(0)
+			selfMovable := !t.cage.IsBlockedAlong(nX, nY, nZ) && t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rCage.GetEntity().GetId())
 			t.entity.ResolveElasticPenetrationConstrained(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen, selfMovable, otherMovable)
 			if !otherMovable && selfMovable {
 				t.entity.ClampNormalVelocity(nX, nY, nZ)

@@ -133,15 +133,7 @@ func (s *Entry) Penetrable(depth int) bool {
 	if depth == 0 && s.penetrableCached != 0 {
 		return s.penetrableCached == 1
 	}
-	var visited [maxPushDepth]uint64
-	var visitedLen int
-	if s.lCage != nil {
-		if ent := s.lCage.GetEntity(); ent != nil {
-			visited[0] = ent.GetId()
-			visitedLen = 1
-		}
-	}
-	res := s.penetrableInternal(depth, visited, visitedLen)
+	res := s.evalPenetrable(depth)
 	if depth == 0 {
 		if res {
 			s.penetrableCached = 1
@@ -152,10 +144,12 @@ func (s *Entry) Penetrable(depth int) bool {
 	return res
 }
 
-// penetrableInternal reports whether this entry can yield along a push chain without hitting inelastic or cyclic contacts.
-func (s *Entry) penetrableInternal(depth int, visited [maxPushDepth]uint64, visitedLen int) bool {
-	if s.iMode == ImpactInelastic || s.rCage == nil {
+func (s *Entry) evalPenetrable(depth int) bool {
+	if s.iMode == ImpactInelastic {
 		return false
+	}
+	if s.rCage == nil {
+		return s.iMode == ImpactStep
 	}
 	if depth >= maxPushDepth {
 		return true
@@ -165,23 +159,34 @@ func (s *Entry) penetrableInternal(depth int, visited [maxPushDepth]uint64, visi
 		return false
 	}
 	rId := rEnt.GetId()
-
-	// Check if this remote entity is already in the visited chain (cycle detection)
-	for i := 0; i < visitedLen; i++ {
-		if visited[i] == rId {
-			return false // Closed loop in push direction cannot yield freely
+	lId := noEntityId
+	if s.lCage != nil {
+		if lEnt := s.lCage.GetEntity(); lEnt != nil {
+			lId = lEnt.GetId()
+			if lId == rId {
+				return false
+			}
 		}
 	}
 
-	if visitedLen < maxPushDepth {
-		visited[visitedLen] = rId
-		visitedLen++
+	nextDepth := depth + 1
+	if nextDepth >= maxPushDepth {
+		return true
 	}
-
-	// Pass control to remote entity's bucket along the SAME push direction
 	v := s.rCage.buckets[s.bucket]
 	if v == nil {
 		return true
 	}
-	return v.doPenetrable(depth+1, visited, visitedLen)
+	if v.inelasticCount > 0 {
+		return false
+	}
+	if v.dynamicCount == 0 {
+		return true
+	}
+	if ok, val := v.cache.Check(lId, nextDepth); ok {
+		return val
+	}
+	res := v.doPenetrable(nextDepth, lId, rId)
+	v.cache.Store(lId, nextDepth, res)
+	return res
 }

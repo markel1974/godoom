@@ -6,90 +6,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// BucketType represents a categorized type for spatial partitioning or collision detection in 3D environments.
-type BucketType int
-
-// BucketWallWest represents the west (-X) wall bucket type.
-// BucketWallEast represents the east (+X) wall bucket type.
-// BucketWallNorth represents the north (-Y) wall bucket type.
-// BucketWallSouth represents the south (+Y) wall bucket type.
-// BucketCeiling represents the ceiling (-Z) bucket type.
-// BucketFloor represents the floor (+Z) bucket type.
-const (
-	BucketWallWest  = BucketType(0) // -X
-	BucketWallEast  = BucketType(1) // +X
-	BucketWallNorth = BucketType(2) // -Y
-	BucketWallSouth = BucketType(3) // +Y
-	BucketCeiling   = BucketType(4) // -Z
-	BucketFloor     = BucketType(5) // +Z
-)
-
-// Normal2BucketType returns the bucket matching the dominant signed axis of the given normal vector.
-func Normal2BucketType(nX, nY, nZ float64) BucketType {
-	nAbsX, nAbsY, nAbsZ := math.Abs(nX), math.Abs(nY), math.Abs(nZ)
-	if nAbsX > nAbsY && nAbsX > nAbsZ {
-		if nX < 0 {
-			return BucketWallWest
-		}
-		return BucketWallEast
-	}
-	if nAbsY > nAbsZ {
-		if nY < 0 {
-			return BucketWallNorth
-		}
-		return BucketWallSouth
-	}
-	if nZ > 0 {
-		return BucketFloor
-	}
-	return BucketCeiling
-}
-
-// String returns the string representation of the BucketType value.
-func (p BucketType) String() string {
-	switch p {
-	case BucketWallWest:
-		return "BucketWallWest"
-	case BucketWallEast:
-		return "BucketWallEast"
-	case BucketWallNorth:
-		return "BucketWallNorth"
-	case BucketWallSouth:
-		return "BucketWallSouth"
-	case BucketCeiling:
-		return "BucketCeiling"
-	case BucketFloor:
-		return "BucketFloor"
-	default:
-		return "BucketUnknown"
-	}
-}
-
-// IsWall determines if the BucketType value represents a wall (west, east, north, or south).
-func (p BucketType) IsWall() bool {
-	return p == BucketWallWest || p == BucketWallEast || p == BucketWallNorth || p == BucketWallSouth
-}
-
-// Opposite returns the opposite directional BucketType.
-func (p BucketType) Opposite() BucketType {
-	switch p {
-	case BucketWallWest:
-		return BucketWallEast
-	case BucketWallEast:
-		return BucketWallWest
-	case BucketWallNorth:
-		return BucketWallSouth
-	case BucketWallSouth:
-		return BucketWallNorth
-	case BucketCeiling:
-		return BucketFloor
-	case BucketFloor:
-		return BucketCeiling
-	default:
-		return p
-	}
-}
-
 // BucketSize defines the size of a single bucket, calculated as BucketFloor + 1.
 const BucketSize = BucketFloor + 1
 
@@ -98,6 +14,12 @@ const FacesPerBucket = 16
 
 // warmStartFactor controls the fraction of previous-frame impulses carried over to persistent contacts.
 const warmStartFactor = 0.80
+
+// maxPushQueue caps unique remote cages expanded during a single iterative BFS push-chain check.
+const maxPushQueue = 64
+
+// noEntityId marks an absent entity ID in push-chain tracking (valid entity IDs start at 0).
+const noEntityId = ^uint64(0)
 
 // Bucket holds collision data for a specific bucket, using double-buffered Entry pointer pools for zero-copy warm starting.
 type Bucket struct {
@@ -108,8 +30,9 @@ type Bucket struct {
 	prevPool         *[FacesPerBucket]*Entry
 	containerCounter int
 	prevCount        int
-	cachedPenetrable int8
-	cachedFrom       uint64
+	inelasticCount   int8
+	dynamicCount     int8
+	cache            BucketCache
 }
 
 // NewBucket creates a new Bucket for a given BucketType, preallocating its double-buffered Entry pools.
@@ -131,8 +54,9 @@ func (b *Bucket) Rebuild() {
 	b.currPool, b.prevPool = b.prevPool, b.currPool
 	b.prevCount = b.containerCounter
 	b.containerCounter = 0
-	b.cachedPenetrable = 0
-	b.cachedFrom = 0
+	b.inelasticCount = 0
+	b.dynamicCount = 0
+	b.cache.Reset()
 }
 
 // Count returns the total number of entries currently stored in the Bucket.
@@ -144,6 +68,8 @@ func (b *Bucket) Count() int {
 func (b *Bucket) RemoveEntry(target *Entry) bool {
 	for i := 0; i < b.containerCounter; i++ {
 		if b.currPool[i] == target {
+			b.countEntry(target, -1)
+			b.cache.ClearPenetrable()
 			last := b.containerCounter - 1
 			b.currPool[i], b.currPool[last] = b.currPool[last], b.currPool[i]
 			b.containerCounter = last
@@ -151,6 +77,25 @@ func (b *Bucket) RemoveEntry(target *Entry) bool {
 		}
 	}
 	return false
+}
+
+// countEntry adjusts the bucket's inelastic or dynamic entry counters by delta based on the entry impact type.
+func (b *Bucket) countEntry(e *Entry, delta int8) {
+	if e.iMode == ImpactInelastic {
+		b.inelasticCount += delta
+	} else if e.rCage != nil {
+		b.dynamicCount += delta
+	} else if e.iMode != ImpactStep {
+		b.inelasticCount += delta
+	}
+}
+
+// rebuildEntry rebuilds an entry, updates bucket counters for its impact type, and clears cached penetrability.
+func (b *Bucket) rebuildEntry(target *Entry, bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) {
+	b.countEntry(target, -1)
+	target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+	b.countEntry(target, 1)
+	b.cache.ClearPenetrable()
 }
 
 // HasEntryFor reports whether the Bucket currently holds an active dynamic entry for entityId.
@@ -163,82 +108,171 @@ func (b *Bucket) HasEntryFor(entityId uint64) bool {
 	return false
 }
 
+// extractDynamicRemoteId returns the remote dynamic entity ID for entry.
+// It reports blocked for inelastic impacts or non-step static impacts, and ok when an ID was found.
+func extractDynamicRemoteId(entry *Entry) (rId uint64, blocked bool, ok bool) {
+	if entry == nil {
+		return 0, false, false
+	}
+	if entry.iMode == ImpactInelastic {
+		return 0, true, false
+	}
+	if entry.rCage == nil {
+		return 0, entry.iMode != ImpactStep, false
+	}
+	rEnt := entry.rCage.GetEntity()
+	if rEnt == nil {
+		return 0, false, false
+	}
+	return rEnt.GetId(), false, true
+}
+
 // Penetrable reports whether this bucket can yield to a push from the given entity within the recursion depth.
 func (b *Bucket) Penetrable(from uint64, depth int) bool {
-	if depth == 0 && b.cachedPenetrable != 0 && b.cachedFrom == from {
-		return b.cachedPenetrable == 1
+	if b.inelasticCount > 0 {
+		return false
 	}
-	var visited [maxPushDepth]uint64
-	var visitedLen int
-	if from != 0 {
-		visited[0] = from
-		visitedLen = 1
+	if b.dynamicCount == 0 || depth >= maxPushDepth {
+		return true
 	}
-	res := b.doPenetrable(depth, visited, visitedLen)
-	if depth == 0 {
-		b.cachedFrom = from
-		if res {
-			b.cachedPenetrable = 1
-		} else {
-			b.cachedPenetrable = -1
+	if ok, val := b.cache.Check(from, depth); ok {
+		return val
+	}
+	selfId := noEntityId
+	if e := b.currPool[0]; e != nil && e.lCage != nil {
+		if ent := e.lCage.GetEntity(); ent != nil {
+			selfId = ent.GetId()
 		}
 	}
+	res := b.doPenetrable(depth, from, selfId)
+	b.cache.Store(from, depth, res)
 	return res
 }
 
 // doPenetrable reports whether this bucket and chained remote buckets can yield within the push depth limit.
-// It returns false when an inelastic contact blocks movement and avoids revisiting entities during recursion.
-func (b *Bucket) doPenetrable(depth int, visited [maxPushDepth]uint64, visitedLen int) bool {
-	if depth >= maxPushDepth {
+// It runs a zero-allocation shallow scan first and falls back to an iterative BFS only for deeper multi-body chains.
+func (b *Bucket) doPenetrable(depth int, seen1, seen2 uint64) bool {
+	if b.inelasticCount > 0 {
+		return false
+	}
+	if b.dynamicCount == 0 || depth >= maxPushDepth {
 		return true
 	}
-	// Deduplicate remote entities within this bucket pass:
-	// contact manifold generation creates multiple points for the exact same remote cage.
-	var checked [FacesPerBucket]uint64
-	checkedCount := 0
+
+	hasDeep := false
+	nextDepth := depth + 1
+	checkGrandchildren := nextDepth+1 < maxPushDepth
+	prevRId := noEntityId
+
 	for i := 0; i < b.containerCounter; i++ {
 		entry := b.currPool[i]
-		if entry == nil {
+		rId, blocked, ok := extractDynamicRemoteId(entry)
+		if blocked {
+			return false
+		}
+		if !ok || rId == prevRId || rId == seen1 || rId == seen2 {
 			continue
 		}
-		// Directly touching an inelastic static wall or immovable geometry -> immovable
-		if entry.iMode == ImpactInelastic || entry.rCage == nil {
+		prevRId = rId
+		if nextDepth >= maxPushDepth {
+			continue
+		}
+		nextB := entry.rCage.buckets[entry.bucket]
+		if nextB == nil {
+			continue
+		}
+		if nextB.inelasticCount > 0 {
 			return false
 		}
-		rEnt := entry.rCage.GetEntity()
-		if rEnt == nil {
+		if checkGrandchildren && nextB.dynamicCount > 0 {
+			hasDeep = true
+		}
+	}
+	if !hasDeep {
+		return true
+	}
+	return b.bfsPenetrable(depth, seen1, seen2)
+}
+
+func (b *Bucket) bfsPenetrable(startDepth int, seen1, seen2 uint64) bool {
+	var queue [maxPushQueue]*Bucket
+	var depths [maxPushQueue]uint8
+	var seen [maxPushQueue]uint64
+
+	seenCount := 0
+	if seen1 != noEntityId {
+		seen[seenCount] = seen1
+		seenCount++
+	}
+	if seen2 != noEntityId && seen2 != seen1 {
+		seen[seenCount] = seen2
+		seenCount++
+	}
+
+	queue[0] = b
+	depths[0] = uint8(startDepth)
+	head := 0
+	tail := 1
+
+	for head < tail {
+		curr := queue[head]
+		nextDepth := int(depths[head]) + 1
+		head++
+
+		if curr.inelasticCount > 0 {
 			return false
 		}
-		rId := rEnt.GetId()
-		// Skip if remote entity is already in the visited caller chain
-		isVisited := false
-		for v := 0; v < visitedLen; v++ {
-			if visited[v] == rId {
-				isVisited = true
-				break
+		if nextDepth >= maxPushDepth {
+			continue
+		}
+
+		expandChildren := nextDepth+1 < maxPushDepth
+		prevRId := noEntityId
+
+		for i := 0; i < curr.containerCounter; i++ {
+			entry := curr.currPool[i]
+			rId, blocked, ok := extractDynamicRemoteId(entry)
+			if blocked {
+				return false
 			}
-		}
-		if isVisited {
-			continue
-		}
-		// Deduplicate within this bucket pass so we evaluate each remote entity at most once
-		alreadyChecked := false
-		for c := 0; c < checkedCount; c++ {
-			if checked[c] == rId {
-				alreadyChecked = true
-				break
+			if !ok || rId == prevRId {
+				continue
 			}
-		}
-		if alreadyChecked {
-			continue
-		}
-		if checkedCount < len(checked) {
-			checked[checkedCount] = rId
-			checkedCount++
-		}
-		// Recursively evaluate the remote entity
-		if !entry.penetrableInternal(depth, visited, visitedLen) {
-			return false
+			prevRId = rId
+
+			alreadySeen := false
+			for s := 0; s < seenCount; s++ {
+				if seen[s] == rId {
+					alreadySeen = true
+					break
+				}
+			}
+			if alreadySeen {
+				continue
+			}
+
+			nextB := entry.rCage.buckets[entry.bucket]
+			if nextB == nil {
+				continue
+			}
+			if nextB.inelasticCount > 0 {
+				return false
+			}
+			if !expandChildren || nextB.dynamicCount == 0 {
+				if seenCount < maxPushQueue {
+					seen[seenCount] = rId
+					seenCount++
+				}
+				continue
+			}
+			if seenCount >= maxPushQueue || tail >= maxPushQueue {
+				continue
+			}
+			seen[seenCount] = rId
+			seenCount++
+			queue[tail] = nextB
+			depths[tail] = uint8(nextDepth)
+			tail++
 		}
 	}
 	return true
@@ -317,6 +351,8 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	if b.containerCounter < FacesPerBucket {
 		target := b.currPool[b.containerCounter]
 		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.countEntry(target, 1)
+		b.cache.ClearPenetrable()
 		b.matchWarmStart(target)
 		b.containerCounter++
 		return target
@@ -338,7 +374,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	inPrio := iMode.Priority()
 	if inPrio > minPrio || (inPrio == minPrio && penetration > minPen) {
 		target := b.currPool[minIdx]
-		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.rebuildEntry(target, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 	}
 	return nil
@@ -357,7 +393,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 	}
 	if penetration > minPen+1e-4 {
 		target := b.currPool[minPenIdx]
-		target.Rebuild(bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.rebuildEntry(target, bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 		return
 	}
@@ -406,7 +442,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 	}
 	if candMinDistSq > worstMinDistSq*(1.0+1e-3) {
 		target := b.currPool[coplanar[worstSlot]]
-		target.Rebuild(bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+		b.rebuildEntry(target, bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 	}
 }
@@ -415,7 +451,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 func (b *Bucket) rebuildKeepingWarm(entry *Entry, bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {
 	wN, wTx, wTy, wTz := entry.GetWarmImpulse()
 	wasWarmEligible := entry.warmEligible
-	entry.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+	b.rebuildEntry(entry, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 	if iMode == ImpactStep {
 		return
 	}

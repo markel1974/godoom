@@ -20,12 +20,18 @@ func flatFloorRaycast(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (f
 }
 
 func newTestVehicleChassis(mass, cx, cy, cz, w, h, d float64) *rigid_body.Entity {
-	ent := rigid_body.NewEntity(true, mass, 0.0, 0.5, 0, 0, 490.0)
+	ent := rigid_body.NewEntity(mass, 0.0, 0.5, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 9.81)
 	ent.Rebuild(cx-w*0.5, cy-h*0.5, cz-d*0.5, w, h, d)
 	ent.SetKeepUpright(false)
 	ent.SetOnGround(false)
 	ent.WakeUp()
 	return ent
+}
+
+func stepTestChassis(ent *rigid_body.Entity) {
+	ent.Update()
+	dx, dy, dz := ent.GetFrameDisplacement()
+	ent.AddTo(dx, dy, dz)
 }
 
 func TestVehicleSuspensionSettling(t *testing.T) {
@@ -35,7 +41,7 @@ func TestVehicleSuspensionSettling(t *testing.T) {
 	// Sedan chassis with COM at Z = 0.8m above ground
 	chassis := newTestVehicleChassis(1500.0, 0, 0, 0.8, 1.8, 4.2, 1.4)
 	veh := NewRaycastVehicle(chassis, flatFloorRaycast)
-	veh.SetupMafiaSedanDefault(0.9, 1.4, 1.4, -0.2)
+	veh.SetupDefault(0.9, 1.4, 1.4, -0.2)
 
 	dt := 1.0 / 60.0
 	chassis.SetDt(dt)
@@ -43,7 +49,7 @@ func TestVehicleSuspensionSettling(t *testing.T) {
 	// Simulate 120 frames (2 seconds) of resting on suspension
 	for step := 0; step < 120; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	// All 4 wheels must be contacting ground with positive suspension support force
@@ -70,7 +76,7 @@ func TestVehicleDriveAndBraking(t *testing.T) {
 
 	chassis := newTestVehicleChassis(1500.0, 0, 0, 0.6, 1.8, 4.2, 1.4)
 	veh := NewRaycastVehicle(chassis, flatFloorRaycast)
-	veh.SetupMafiaSedanDefault(0.9, 1.4, 1.4, -0.2)
+	veh.SetupDefault(0.9, 1.4, 1.4, -0.2)
 
 	dt := 1.0 / 60.0
 	chassis.SetDt(dt)
@@ -78,14 +84,14 @@ func TestVehicleDriveAndBraking(t *testing.T) {
 	// 1. Settle on ground for 30 ticks
 	for step := 0; step < 30; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	// 2. Full throttle forward along Y axis for 60 ticks (1 second)
 	veh.SetThrottle(1.0)
 	for step := 0; step < 60; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	_, vyAccel, _ := chassis.GetVelocity()
@@ -98,7 +104,7 @@ func TestVehicleDriveAndBraking(t *testing.T) {
 	veh.SetBrake(1.0)
 	for step := 0; step < 60; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	_, vyBrake, _ := chassis.GetVelocity()
@@ -113,7 +119,7 @@ func TestVehicleSteeringAndCornering(t *testing.T) {
 
 	chassis := newTestVehicleChassis(1500.0, 0, 0, 0.6, 1.8, 4.2, 1.4)
 	veh := NewRaycastVehicle(chassis, flatFloorRaycast)
-	veh.SetupMafiaSedanDefault(0.9, 1.4, 1.4, -0.2)
+	veh.SetupDefault(0.9, 1.4, 1.4, -0.2)
 
 	dt := 1.0 / 60.0
 	chassis.SetDt(dt)
@@ -122,14 +128,14 @@ func TestVehicleSteeringAndCornering(t *testing.T) {
 	veh.SetThrottle(1.0)
 	for step := 0; step < 60; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	// Apply left steer while driving
 	veh.SetSteer(1.0)
 	for step := 0; step < 40; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	// Vehicle must develop yaw rate (turning around Z axis)
@@ -145,7 +151,7 @@ func TestVehicleHandbrakeDrift(t *testing.T) {
 
 	chassis := newTestVehicleChassis(1500.0, 0, 0, 0.6, 1.8, 4.2, 1.4)
 	veh := NewRaycastVehicle(chassis, flatFloorRaycast)
-	veh.SetupMafiaSedanDefault(0.9, 1.4, 1.4, -0.2)
+	veh.SetupDefault(0.9, 1.4, 1.4, -0.2)
 
 	dt := 1.0 / 60.0
 	chassis.SetDt(dt)
@@ -154,7 +160,7 @@ func TestVehicleHandbrakeDrift(t *testing.T) {
 	veh.SetThrottle(1.0)
 	for step := 0; step < 80; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	// Turn and rip handbrake!
@@ -162,7 +168,7 @@ func TestVehicleHandbrakeDrift(t *testing.T) {
 	veh.SetHandbrake(true)
 	for step := 0; step < 20; step++ {
 		veh.Update(dt)
-		chassis.StepPosition(dt)
+		stepTestChassis(chassis)
 	}
 
 	// Rear wheels must have high skid factor indicating drift
@@ -177,7 +183,7 @@ func TestVehicleHandbrakeDrift(t *testing.T) {
 func TestVehicleZeroHeapAllocations(t *testing.T) {
 	chassis := newTestVehicleChassis(1500.0, 0, 0, 0.6, 1.8, 4.2, 1.4)
 	veh := NewRaycastVehicle(chassis, flatFloorRaycast)
-	veh.SetupMafiaSedanDefault(0.9, 1.4, 1.4, -0.2)
+	veh.SetupDefault(0.9, 1.4, 1.4, -0.2)
 
 	dt := 1.0 / 60.0
 	veh.SetThrottle(0.8)

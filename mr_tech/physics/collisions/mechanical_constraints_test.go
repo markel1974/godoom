@@ -83,17 +83,26 @@ func TestSliderConstraintPrismaticLimitsAndZeroAllocs(t *testing.T) {
 		slider.ResolveVelocity()
 	}
 
+	avx, avy, avz := sA.GetEntity().GetVelocity()
 	bvx, bvy, bvz := sB.GetEntity().GetVelocity()
+	awx, awy, awz := sA.GetEntity().GetAngularVelocity()
 	bwx, bwy, bwz := sB.GetEntity().GetAngularVelocity()
 
-	if math.Abs(bvy) > 0.5 || math.Abs(bvz) > 0.5 {
-		t.Fatalf("slider failed to lock lateral velocities: vy=%.4f, vz=%.4f", bvy, bvz)
+	relVx := bvx - avx
+	relVy := bvy - avy
+	relVz := bvz - avz
+	relWx := bwx - awx
+	relWy := bwy - awy
+	relWz := bwz - awz
+
+	if math.Abs(relVy) > 0.5 || math.Abs(relVz) > 0.5 {
+		t.Fatalf("slider failed to lock lateral relative velocities: relVy=%.4f, relVz=%.4f", relVy, relVz)
 	}
-	if math.Abs(bvx) < 1.0 {
-		t.Fatalf("slider erroneously blocked motion along slide axis X: vx=%.4f", bvx)
+	if math.Abs(relVx) < 1.0 {
+		t.Fatalf("slider erroneously blocked motion along slide axis X: relVx=%.4f", relVx)
 	}
-	if math.Abs(bwx) > 0.5 || math.Abs(bwy) > 0.5 || math.Abs(bwz) > 0.5 {
-		t.Fatalf("slider failed to lock angular orientation: w=(%.4f, %.4f, %.4f)", bwx, bwy, bwz)
+	if math.Abs(relWx) > 0.5 || math.Abs(relWy) > 0.5 || math.Abs(relWz) > 0.5 {
+		t.Fatalf("slider failed to lock relative angular orientation: relW=(%.4f, %.4f, %.4f)", relWx, relWy, relWz)
 	}
 }
 
@@ -130,17 +139,28 @@ func TestFixedConstraintWeldAndZeroAllocs(t *testing.T) {
 		fixed.ResolveVelocity()
 	}
 
-	avx, avy, avz := sA.GetEntity().GetVelocity()
-	bvx, bvy, bvz := sB.GetEntity().GetVelocity()
-	awx, awy, awz := sA.GetEntity().GetAngularVelocity()
-	bwx, bwy, bwz := sB.GetEntity().GetAngularVelocity()
+	entA := sA.GetEntity()
+	entB := sB.GetEntity()
+	avx, avy, avz := entA.GetVelocity()
+	bvx, bvy, bvz := entB.GetVelocity()
+	awx, awy, awz := entA.GetAngularVelocity()
+	bwx, bwy, bwz := entB.GetAngularVelocity()
+	_, _, _, rAx, rAy, rAz := entA.AnchorWorld(10, 0, 0)
+	_, _, _, rBx, rBy, rBz := entB.AnchorWorld(-10, 0, 0)
 
-	// Relative velocity and relative angular velocity must converge towards zero
-	relV := math.Sqrt((bvx-avx)*(bvx-avx) + (bvy-avy)*(bvy-avy) + (bvz-avz)*(bvz-avz))
+	pAvx := avx + (awy*rAz - awz*rAy)
+	pAvy := avy + (awz*rAx - awx*rAz)
+	pAvz := avz + (awx*rAy - awy*rAx)
+	pBvx := bvx + (bwy*rBz - bwz*rBy)
+	pBvy := bvy + (bwz*rBx - bwx*rBz)
+	pBvz := bvz + (bwx*rBy - bwy*rBx)
+
+	// Anchor relative velocity and relative angular velocity must converge towards zero.
+	relV := math.Sqrt((pBvx-pAvx)*(pBvx-pAvx) + (pBvy-pAvy)*(pBvy-pAvy) + (pBvz-pAvz)*(pBvz-pAvz))
 	relW := math.Sqrt((bwx-awx)*(bwx-awx) + (bwy-awy)*(bwy-awy) + (bwz-awz)*(bwz-awz))
 
 	if relV > 1.0 {
-		t.Fatalf("fixed joint relative velocity did not lock: relV=%.4f", relV)
+		t.Fatalf("fixed joint relative anchor velocity did not lock: relV=%.4f", relV)
 	}
 	if relW > 0.5 {
 		t.Fatalf("fixed joint relative angular velocity did not lock: relW=%.4f", relW)

@@ -170,8 +170,11 @@ func (b *Bucket) doPenetrable(depth int, seen1, seen2 uint64) bool {
 		if blocked {
 			return false
 		}
-		if !ok || rId == prevRId || rId == seen1 || rId == seen2 {
+		if !ok || rId == prevRId {
 			continue
+		}
+		if rId == seen1 || rId == seen2 {
+			return false
 		}
 		prevRId = rId
 		if nextDepth >= maxPushDepth {
@@ -191,90 +194,141 @@ func (b *Bucket) doPenetrable(depth int, seen1, seen2 uint64) bool {
 	if !hasDeep {
 		return true
 	}
-	return b.bfsPenetrable(depth, seen1, seen2)
+	return b.dfsPenetrable(depth, seen1, seen2)
 }
 
-// bfsPenetrable reports whether the bucket's dynamic push chain can yield within the configured depth limit.
-func (b *Bucket) bfsPenetrable(startDepth int, seen1, seen2 uint64) bool {
-	var queue [maxPushQueue]*Bucket
-	var depths [maxPushQueue]uint8
-	var seen [maxPushQueue]uint64
+// dfsPenetrable reports whether the bucket's dynamic push chain can yield within maxPushDepth without cycles or blocking surfaces.
+func (b *Bucket) dfsPenetrable(startDepth int, seen1, seen2 uint64) bool {
+	if b.inelasticCount > 0 {
+		return false
+	}
+	if startDepth+1 >= maxPushDepth {
+		return true
+	}
 
-	seenCount := 0
+	const (
+		visActive uint8 = 1
+		visSafe   uint8 = 2
+	)
+
+	var visId [maxPushQueue]uint64
+	var visState [maxPushQueue]uint8
+	var visDepth [maxPushQueue]uint8
+	visCount := 0
 	if seen1 != noEntityId {
-		seen[seenCount] = seen1
-		seenCount++
+		visId[visCount] = seen1
+		visState[visCount] = visActive
+		visCount++
 	}
 	if seen2 != noEntityId && seen2 != seen1 {
-		seen[seenCount] = seen2
-		seenCount++
+		visId[visCount] = seen2
+		visState[visCount] = visActive
+		visCount++
 	}
 
-	queue[0] = b
-	depths[0] = uint8(startDepth)
-	head := 0
-	tail := 1
+	var stackBucket [maxPushDepth]*Bucket
+	var stackDepth [maxPushDepth]uint8
+	var stackIdx [maxPushDepth]int
+	var stackPrevRId [maxPushDepth]uint64
+	var stackNodeId [maxPushDepth]uint64
+	var stackVisSlot [maxPushDepth]int8
 
-	for head < tail {
-		curr := queue[head]
-		nextDepth := int(depths[head]) + 1
-		head++
+	sp := 0
+	stackBucket[0] = b
+	stackDepth[0] = uint8(startDepth)
+	stackIdx[0] = 0
+	stackPrevRId[0] = noEntityId
+	stackNodeId[0] = seen2
+	stackVisSlot[0] = -1
 
-		if curr.inelasticCount > 0 {
+	for sp >= 0 {
+		curr := stackBucket[sp]
+		i := stackIdx[sp]
+		if i >= curr.containerCounter {
+			if slot := stackVisSlot[sp]; slot >= 0 {
+				visState[slot] = visSafe
+				visDepth[slot] = stackDepth[sp]
+			}
+			sp--
+			continue
+		}
+		stackIdx[sp] = i + 1
+
+		entry := curr.currPoolPtr[i]
+		rId, blocked, ok := extractDynamicRemoteId(entry)
+		if blocked {
 			return false
+		}
+		if !ok || rId == stackPrevRId[sp] {
+			continue
+		}
+		stackPrevRId[sp] = rId
+
+		if rId == seen1 {
+			return false
+		}
+		for f := 0; f <= sp; f++ {
+			if stackNodeId[f] == rId {
+				return false
+			}
+		}
+
+		visIdx := -1
+		for s := 0; s < visCount; s++ {
+			if visId[s] == rId {
+				if visState[s] == visActive {
+					return false
+				}
+				visIdx = s
+				break
+			}
+		}
+		nextDepth := int(stackDepth[sp]) + 1
+		if visIdx >= 0 && int(visDepth[visIdx]) <= nextDepth {
+			continue
 		}
 		if nextDepth >= maxPushDepth {
 			continue
 		}
 
-		expandChildren := nextDepth+1 < maxPushDepth
-		prevRId := noEntityId
-
-		for i := 0; i < curr.containerCounter; i++ {
-			entry := curr.currPoolPtr[i]
-			rId, blocked, ok := extractDynamicRemoteId(entry)
-			if blocked {
-				return false
-			}
-			if !ok || rId == prevRId {
-				continue
-			}
-			prevRId = rId
-
-			alreadySeen := false
-			for s := 0; s < seenCount; s++ {
-				if seen[s] == rId {
-					alreadySeen = true
-					break
-				}
-			}
-			if alreadySeen {
-				continue
-			}
-
-			nextB := entry.rCage.buckets[entry.bucket]
-			if nextB == nil {
-				continue
-			}
-			if nextB.inelasticCount > 0 {
-				return false
-			}
-			if !expandChildren || nextB.dynamicCount == 0 {
-				if seenCount < maxPushQueue {
-					seen[seenCount] = rId
-					seenCount++
-				}
-				continue
-			}
-			if seenCount >= maxPushQueue || tail >= maxPushQueue {
-				continue
-			}
-			seen[seenCount] = rId
-			seenCount++
-			queue[tail] = nextB
-			depths[tail] = uint8(nextDepth)
-			tail++
+		nextB := entry.rCage.buckets[entry.bucket]
+		if nextB == nil {
+			continue
 		}
+		if nextB.inelasticCount > 0 {
+			return false
+		}
+		if nextB.dynamicCount == 0 || nextDepth+1 >= maxPushDepth || sp+1 >= maxPushDepth {
+			if visIdx >= 0 {
+				visState[visIdx] = visSafe
+				visDepth[visIdx] = uint8(nextDepth)
+			} else if visCount < maxPushQueue {
+				visId[visCount] = rId
+				visState[visCount] = visSafe
+				visDepth[visCount] = uint8(nextDepth)
+				visCount++
+			}
+			continue
+		}
+
+		var childSlot int8 = -1
+		if visIdx >= 0 {
+			visState[visIdx] = visActive
+			childSlot = int8(visIdx)
+		} else if visCount < maxPushQueue {
+			visId[visCount] = rId
+			visState[visCount] = visActive
+			childSlot = int8(visCount)
+			visCount++
+		}
+
+		sp++
+		stackBucket[sp] = nextB
+		stackDepth[sp] = uint8(nextDepth)
+		stackIdx[sp] = 0
+		stackPrevRId[sp] = noEntityId
+		stackNodeId[sp] = rId
+		stackVisSlot[sp] = childSlot
 	}
 	return true
 }

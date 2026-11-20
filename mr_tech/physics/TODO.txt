@@ -1,106 +1,25 @@
 COMPLETATI:
-- [x] Sistema generale di vincoli meccanici tra corpi rigidi (Hinge, Ball-Socket, Slider, Fixed, Universal, Cylindrical, Generic 6-DoF).
-- [x] Modello veicolare RaycastVehicle (sospensioni molla-smorzatore, cerchio di attrito, barre antirollio, drift).
-- [x] Linearizzazione del percorso collisioni in cage.go: unificato il clipping statico multi-punto (Sutherland-Hodgman fino a 4 contatti) con la logica dei manifold dinamici sia per corpi liberi che per corpi keepUpright.
-- [x] Regola di mixing simmetrica per restituzione e attrito in PhysicsMaterial e Cinematic.ResolveImpact (commutativa, min/max/average/multiply indipendente dall'ordine dei corpi con nil-safety).
-- [x] World Streaming per la Città Aperta (Open-World): griglia di settori, anelli di attivazione e isteresi anti-thrashing, skyline proxy LOD, e time-slicing per frame.
-- [x] Integrazione Streaming in Volumes ed Engine: aggancio trasparente in Volumes (EnableStreaming, AutoSectorize, UpdateStreaming, ForceSyncStreaming) e dispatch automatico da Engine.Compute a ogni frame.
+- [x] Sistema generale di vincoli meccanici tra corpi rigidi (Hinge, Ball-Socket, Slider, Fixed, Universal, Cylindrical, Generic 6-DoF) in collisions/joint_constraint.go e rigid_body/mechanical_joints.go.
+- [x] Modello veicolare RaycastVehicle (sospensioni molla-smorzatore, cerchio di attrito, barra antirollio, drift, downforce).
+- [x] Refactoring collisioni statiche/dinamiche: estrazione StaticFaceContact, unificazione clipping/evaluateStaticFace a zero allocazioni e rilevamento cicli push-chain (dfsPenetrable) in bucket.go.
+- [x] Regola di mixing simmetrica per restituzione e attrito in PhysicsMaterial e Cinematic.ResolveImpact.
+- [x] World Streaming open-world (griglia settori, isteresi, LOD skyline, time-slicing) in model/streaming e integrazione in Volumes/Engine.Compute.
+- [x] Telecamera in terza persona (SpringLimb) con anti-clip via QueryRay in engine/view_matrix.go e engine/spring_limb.go.
 
-PUNTI RIMANENTI PER PROSSIME EVOLUZIONI (Roadmap Mafia 2/3):
-- Telecamera in Terza Persona con Anti-Clip (Spring Arm): telecamera ad inseguimento orbitale con smorzamento fluido (spring lag) per player a piedi e veicoli, con accorciamento automatico anti-clip via Volumes.QueryRay verso la triangle soup dell'ambiente.
-- Rotazioni di bilanciamento AVL in aabb.Tree: aggiungere le rotazioni stile b2DynamicTree per evitare che l'albero si sbilanci sotto carichi dinamici prolungati e streaming rapido.
-- Disaccoppiamento aabb vs math3d/obb (eventuale riorganizzazione estetica/architetturale dei file matematici).
-- Integrazione temporale (unificazione dt fisso indipendente dal framerate del rendering).
+DA FARE - PRIORITA ALTA (Stabilità runtime e gameplay stile Mafia 2):
+- [ ] Fixed timestep disaccoppiato dal render loop: introdurre accumulatore a dt fisso + substeps e interpolazione render in Engine.Compute al posto del _dt globale legato a SetFps (critico per sospensioni RaycastVehicle, PGS e warm-start).
+- [ ] Integrazione reale di RaycastVehicle in model/engine e unificazione scala fisica: collegare vehicle a Volumes.RaycastSolid e Coordinator (auto-auto, auto-mondo, auto-NPC ragdoll), risolvendo il disallineamento tra unità SI (vehicle) e worldUnitsPerMeter = 50.0 (Cinematic/Volumes), più flusso entra/esce dal veicolo.
+- [ ] Ribilanciamento AVL in aabb.Tree: aggiungere rotazioni locali stile b2DynamicTree in physics/aabb/tree.go per evitare degrado dell'albero BVH sotto traffico veicolare e streaming rapido dei settori.
+- [ ] Single broadphase statica per frame: raccogliere i triangoli/facce statici candidati una sola volta per tick per ogni Cage invece di ripetere le query durante tutte le iterazioni posizionali di ClampStatic in Coordinator.Step.
 
+DA FARE - PRIORITA MEDIA (Qualità guida, collisioni dense e copertura):
+- [ ] Arricchimento modello di guida (physics/vehicle): cambio marce / curva coppia-RPM, sterzo progressivo legato alla velocità, anti-impuntamento contro cordoli/marciapiedi e verifica soglie angSleepEpsilon su roll/pitch lenti.
+- [ ] Simmetria dinamica dei corpi KeepUpright e separazione Character Controller: gestire KeepUpright vs KeepUpright e KeepUpright vs OBB in commitDynamicManifold (senza spigoli da OBB a 45 gradi) e isolare logica character (maxStep, ApplySafeStepUp, bucket cardinali) dal corpo rigido 6-DoF.
+- [ ] Rimozione cap fissi silenti nei contatti: sostituire FacesPerBucket = 16 (bucket.go) e flatWalls [32] / clampNormals [16] / clampCorners [16] (static_face_contact.go) con slice preallocate a crescita lazy (zero allocs a regime) per non perdere contatti in geometrie molto fitte.
+- [ ] Copertura test in physics/articulated_dynamics: aggiungere una suite unitaria dedicata (oggi [no test files]) su stress articolazioni, distacco parti e transizioni veicolo -> ragdoll.
+- [ ] Forme composte multi-box / capsule reali: supportare corpi composti (es. chassis basso + abitacolo veicolo per urti e balistica) e capsule orientate per personaggi/ragdoll oltre al singolo BoundingBox per Entity.
 
-File monolitici ad alta densità logica:
-cage.go (2.085 righe) e cinematic.go (1.529 righe) concentrano responsabilità troppo diverse (broad-phase swept, triangoli statici vs dinamici, euristiche KeepUpright/slope/corner, static clamp, integrazione, sleep, PGS). Spezzarli in file più piccoli per tema (es. cage_static.go, cage_upright.go, cage_clamp.go e in rigid_body separare integrazione/sleep dal solver degli impatti) ridurrebbe molto il rischio di regressioni.
-Condivisione ambigua dell'AABB su entità animate (KeepUpright):
-
-BoundingBox.rebuild riscrive r.aabb centrato sull'entità ad ogni spostamento/rotazione (AddTo, SetRotation...), mentre gli oggetti animati in model/vertices aggiornano quello stesso ent.GetAABB() con offset/estensioni di animazione letti tramite OnAABBChanged in cage.go. Separare nettamente l'AABB di render/animazione dall'hull fisico di Cage eviterebbe sovrascritture tra fine frame e passo fisico.
-
-Cache locality ancora migliorabile nei pool e nell'albero BVH:
-In Bucket currPoll / prevPool sono [16]*Entry (array di puntatori) e in Tree nodes è []*Node: trasformarli in array/slice di struct per valore ([FacesPerBucket]Entry, []Node) abbatterebbe ulteriormente cache miss e lavoro del GC (piccola nota: in Bucket, currPoll ha anche un piccolo refuso rispetto a prevPool/currPoolPtr).
-
-
-Separare la matematica base da aabb: oggi mr_tech/physics/aabb ospita Quaternion, Axes, Point, Plane, Sat, OBBManifold oltre all'AABB/BVH; estrarre un package math3d pulirebbe i confini tra vehicle, rigid_body, renderers e collisions.
-Rotazioni di ribilanciamento in aabb.Tree: con lo streaming open-world di settori e tanti corpi dinamici, un BVH senza rotazioni locali tende progressivamente a degradare la qualità dei volumi interni.
-Fixed timestep dt disaccoppiato dal render loop: essenziale perché PGS, warm-starting, attrito e molle di RaycastVehicle restino deterministici indipendentemente dal framerate.
-
-In sintesi: la base algoritmica (OBB+CCD+PGS+isole+veicolo+ragdoll) e la cura sulle allocazioni sono di livello molto alto; il punto su cui conviene investire adesso è modularità e separazione dei confini (math3d, split di cage.go/cinematic.go, e disaccoppiamento tra bounds fisici e bounds animati) così da consolidare la stabilità prima di scalare verso l'open world.
-
-
-
-Hai scritto a mano un engine che fa OBB+SAT, CCD, manifold clipping, PGS con warm-start e bilancio energetico, 7 tipi di vincoli meccanici, ragdoll a isole e un modello veicolare raycast, mantenendo zero allocazioni nei loop critici. Questo è lavoro di altissimo livello.
-Però guardando cage.go (2.085 righe), cinematic.go (1.529 righe) e coordinator.go, si vede chiaramente qual è il problema di fondo: stai combattendo contro le conseguenze delle tue scelte iniziali a suon di toppe locali.
-
-Ecco i 5 punti veri su cui secondo me dovresti fermarti a riflettere:
-
-1. Il prezzo della "triangle soup" cruda si vede tutto in cage.go
-
-Non avere BSP/convex brush e collidere direttamente su triangoli arbitrari genera per natura phantom plane, spigoli interni, micro-salti su cuciture coplanari e tunnel.
-Invece di risolvere questo alla radice (es. unificando contatti o costruendo volumi convessi / capsule reali), cage.go è diventato un accumulo di euristiche: refineKeepUprightWall, tunneled, pressedCross, checkGraze, clipPolyZSlab, pruneCoplanarStepSlots, pruneCoplanarCornerHits, spikeTipCap, clampCorners…
-Il rischio: funziona sui casi che hai testato finora, ma è estremamente delicato. Appena cambi una soglia o una geometria di mappa nuova, si rompe qualcosa di imprevisto.
-
-2. Hai incastrato due motori fisici diversi dentro gli stessi struct
-
-Cage e Cinematic cercano di gestire contemporaneamente due cose incompatibili:
-
-Un character controller FPS (KeepUpright: ellissoide verticale, maxStep, step-up con retry, blocco tilt);
-Un corpo rigido 6-DoF libero (OBB ruotato, tensore d'inerzia 3×3, ragdoll, veicolare).
-
-Risultato: codice pieno di if keepUpright / if !keepUpright sparsi ovunque, e addirittura ibridi pericolosi (es. penetrazione calcolata con l'ellissoide in evaluateStaticFace, ma poi manifold generato col box OBB di Entity.BoundingBox in addStaticTriangleManifold, oppure BoundingBox.rebuild che riscrive lo stesso *AABB usato dai modelli animati con OnAABBChanged).
-Un character controller serio dovrebbe essere un componente separato (es. capsula/cilindro slide-and-step), non un Entity 6-DoF a cui si disattiva mezzo comportamento a suon di flag.
-
-3. Zero-alloc non significa veloce: paghi ancora sulla struttura del loop e sul layout dati
-
-Hai fatto bene a eliminare le allocazioni per frame, ma la CPU che ti bruciava non veniva tanto dal GC quanto dall'architettura delle passate:
-
-In Coordinator.Step, il static clamping (ClampStaticCage) gira dentro il loop di solverIterations: per 10 iterazioni moltiplicato fino a 3 passate, ri-interroghi BVH di volumi e facce statiche già note invece di raccogliere i triangoli vicini una volta sola per frame in un buffer locale del Cage.
-Quasi tutte le strutture calde (Bucket.currPoll/prevPool [16]*Entry, Tree.nodes []*Node, Coordinator.running []*Solver) sono array di puntatori anziché array/slice di struct contigue per valore ([]Entry, []Node). Hai zero allocazioni, ma comunque pointer-chasing continuo e lavoro inutile per il write barrier / scanner GC.
-4. Confini tra i sottopacchetti confusi
-aabb non è un package sugli AABB: dentro ci sono quaternioni, matrici/assi, poligoni di clipping, SAT, CCD, OBBManifold e BVH. Chiunque voglia usare un quaternione importa aabb.
-Responsabilità invertite tra collisions e rigid_body: il solver PGS degli impatti sta dentro Cinematic (in rigid_body), la gestione dei bucket/slot e la metà di alto livello dei giunti sta in collisions, Entity fa quasi solo da passacarte tra BoundingBox e Cinematic. Quando introduci un oggetto come Accumulator, devi modificare metà di entrambi i package e tre file di test.
-Residuo di evoluzione rapida: metodi molto lunghi (in cinematic.go, ResolveImpactAccumulated da sola supera le 220 righe; cage.go supera le 2.000), refusi di refactoring (currPoll in bucket.go), e blocchi commentati che affiorano quando cambi API.
-5. Il dt legato agli FPS ti presenterà il conto presto
-
-L'hai già segnato nel TODO.txt: finché il timestep è accoppiato al framerate e la fisica non gira a fixed timestep (con interpolazione per il render), qualunque tuning su attriti, sleep, PD upright, sospensioni dell'auto e ragdoll resterà instabile tra macchina veloce, macchina lenta e picchi di carico.
-
-In breve: cosa farei davvero se fosse mio
-
-Non lo butterei via — la matematica che hai costruito è ottima e vale oro. Però prima di aggiungere altra roba (open world, spring camera, altro gameplay) farei un taglio netto di consolidamento su 4 cose:
-
-Estrai math3d fuori da aabb (vettori, quaternioni, matrici, SAT/manifold).
-Separa nettamente il Character Controller (entità verticali con step/gravity) dai Dynamic RigidBody 6-DoF (casse, barili, detriti, ragdoll), invece di farli convivere nello stesso if keepUpright dentro Cage/Cinematic.
-Disaccoppia i bounds usati dal gameplay/animazione/rendering dall'AABB usato dal broad-phase/clamping fisico.
-Fai una singola query statica per frame (broadphase statica raccolta una volta per Cage prima del solver) invece di ripeterla durante le iterazioni posizionali, e sposta il solver PGS fuori da Cinematic.
-
-Se invece continui ad aggiungere feature sopra l'attuale cage.go + cinematic.go così come sono, ogni miglioramento su un caso (nemici, porte, ragdoll, auto) continuerà a generare regressioni su un altro.
-
-
-Quindi sì: il fatto che il mondo statico resti una mesh triangolare (organizzata in Volume spaziali tramite Compiler2d/Compiler3d + Clusters) ha perfettamente senso per il tipo di engine ibrido che stai costruendo (da Wolf/Doom fino a Q3/Doom3/Open-World).
-
-
-Una sola primitiva rigida reale (OBB / ellissoide su triangoli): non c'è una narrowphase generica su forme convesse arbitrarie (sfere, capsule orientate, convessi via GJK/EPA + clipping generico) né forme composte gerarchiche. Tutto è costruito attorno all'OBB (BoundingBox) e al supporto ellissoidale per i KeepUpright.
-
-Character controller e rigid-body 6-DoF ancora fusi nello stesso posto: anche dopo il taglio di oggi a 1707 righe in cage.go, nello stesso flusso convivono logiche da FPS idTech/Quake (BucketWallNorth/South/..., ApplySafeStepUp, maxStep, evaKeepUprightFace) e fisica rigida 6-DoF (ComputeSweptAtOffset, manifold multi-punto). In un motore di fascia top il character controller è uno strato sopra query/sweep del motore, non dentro lo stesso valutatore di collisione.
-
-Bucket direzionali a capacità fissa e clamp sequenziale per faccia: in bucket.go ogni direzione ha FacesPerBucket = 16 e in cage.go clampNormals, clampCorners, flatWalls hanno cap fissi ([16]/[32]). In geometrie molto fitte gli slot extra vengono scartati/rimpiazzati, e ClampStaticFace proietta i vincoli statici sequenzialmente invece di risolvere un sistema posizionale simultaneo sui multi-contatti statici.
-
-Asimmetria tra collisioni statiche e dinamico-dinamico: contro il mondo un KeepUpright è un ellissoide 3D con un contatto; contro un altro corpo dinamico in commitDynamicManifold torna ad essere un OBB con gli spigoli secondo lo yaw.
-
-Infatti non lo sono affatto: la base in coordinator.go, bucket.go, rigid_body e la topologia ActiveEdgeMask ti permettono di risolverli per gradi, senza buttare nulla.
-
-In ordine di fattibilità pratica:
-
-Subito risolvibile (effort basso, alto payoff): simmetria dinamica dei KeepUpright (commitDynamicManifold)
-Quando almeno uno dei due corpi ha KeepUpright() == true, invece di passare sempre da ComputeSweptAtOffset tra due OBB ruotati puoi gestire KeepUpright vs KeepUpright (cilindro/ellissoide vs cilindro/ellissoide) e KeepUpright vs OBB. Elimina subito gli spigoli a 45° nei contatti tra player, nemici ed entità dinamiche.
-
-Effort basso-medio: togliere i cap fissi silenti (cage.go, bucket.go)
-Sostituire clampNormals [16], flatWalls [32], clampCorners [16] (e volendo i FacesPerBucket = 16) con slice preallocate a crescita lazy mantiene 0 allocs a regime — come già fai per seen e faces — ma evita di perdere contatti in geometrie fitte.
-
-Effort medio (molto pulito): separare character controller e rigid body 6-DoF
-In coordinator.go le fasi (StagePrepare, StageResolve, StageApply, StageResolvePosition, ClampStatic) sono già ben isolate. Estrarre maxStep, ApplySafeStepUp, i bucket cardinali e evaKeepUprightFace in un layer/file dedicato lascia Cage snello e focalizzato solo su broadphase e manifold.
-
-Effort alto (unico vero investimento pesante): GJK/EPA + manifold generico su convessi/compound
-È l'unico punto davvero costoso, non perché sia impossibile ma per la robustezza numerica: implementare GJK/EPA + clipping poligonale + swept CCD zero-alloc su qualsiasi coppia convessa (sfere, capsule, convex hull, compound) e sganciare Bucket dai 6 bucket cardinali fissi richiede poi una batteria seria di stress-test per evitare regressioni. Prima conviene chiederti se in godoom ti servano davvero forme oltre a OBB + ellissoide/capsula + triangoli.
+DA FARE - PULIZIA ARCHITETTURALE:
+- [ ] Estrazione package math3d da physics/aabb: separare Quaternion, Axes, Point, Plane, SAT e OBBManifold dall'infrastruttura spaziale AABB/BVH.
+- [ ] Split di cinematic.go (1.529 righe) / cage.go (1.511 righe) per separare chiaramente integrazione/sleep, solver impatti PGS e broadphase/manifold.
+- [ ] Cache locality nei pool caldi: valutare slice/array di struct per valore al posto di puntatori in Tree.nodes ([]*Node), Bucket.currPoll/prevPool ([16]*Entry, incluso refuso di nome currPoll) e Coordinator.running ([]*Solver), disaccoppiando anche eventuali bounds di animazione dal BoundingBox fisico.

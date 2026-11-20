@@ -22,10 +22,10 @@ type Coordinator struct {
 	jointSupported   []bool
 	joints           []*JointConstraint
 	jointsLen        int
-	//wakeRunningFn    WakeRunningFn
-	queryContactsFn QueryContactsFn
-	clampStaticFn   ClampStaticFn
-	commonCap       int
+	wakeRunningFn    WakeRunningFn
+	queryContactsFn  QueryContactsFn
+	clampStaticFn    ClampStaticFn
+	commonCap        int
 }
 
 // NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
@@ -51,7 +51,7 @@ func NewCoordinator(solverIterations, initialCap int, queryContactsFn QueryConta
 		queryContactsFn:  queryContactsFn,
 		clampStaticFn:    clampStaticFn,
 	}
-	//c.wakeRunningFn = c.wakeRunningIsland
+	c.wakeRunningFn = c.wakeRunningIsland
 	return c
 }
 
@@ -263,7 +263,7 @@ func (c *Coordinator) Step() {
 	}
 
 	for cursor := 0; cursor < c.runningLen; cursor++ {
-		c.queryContactsFn(c.running[cursor].cage, c.wakeRunningIsland)
+		c.queryContactsFn(c.running[cursor].cage, c.wakeRunningFn)
 	}
 
 	// Compact broken or inactive joints once per step before solving.

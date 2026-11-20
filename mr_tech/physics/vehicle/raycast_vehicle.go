@@ -410,10 +410,13 @@ func (v *RaycastVehicle) Update(dt float64) {
 	}
 
 	// Aerodynamic Downforce (prevents high-speed takeoff over crests)
-	speedSq := vx*vx + vy*vy + vz*vz
+	curVx, curVy, curVz := v.entity.GetVelocity()
+	speedSq := curVx*curVx + curVy*curVy + curVz*curVz
 	if speedSq > 25.0 && v.downforceCoeff > 0.0 {
-		downforceImp := v.downforceCoeff * speedSq * dt
-		v.entity.SetV(vx, vy, vz-downforceImp*v.entity.GetMass()*0.00005)
+		if mass := v.entity.GetMass(); mass > 0.0 {
+			downforceImp := v.downforceCoeff * speedSq * dt
+			v.entity.SetV(curVx, curVy, curVz-downforceImp/mass)
+		}
 	}
 }
 

@@ -2,6 +2,12 @@ package aabb
 
 import "math"
 
+type OnChangeT func(a *AABB)
+
+var _onChange = func(a *AABB) {
+
+}
+
 // IObject represents an interface defining objects that can provide an Axes-Aligned Bounding Box (AABB).
 // GetAABB retrieves the AABB associated with the object implementing the IAABB interface.
 type IObject interface {
@@ -17,31 +23,30 @@ type AABB struct {
 	maxX     float64
 	maxY     float64
 	maxZ     float64
-	onChange func(a *AABB)
+	onChange OnChangeT
 }
 
 // NewAABB creates and returns a new axis-aligned bounding box (AABB) with default uninitialized properties.
 func NewAABB() *AABB {
 	a := &AABB{
-		index: -1,
+		index:    -1,
+		onChange: _onChange,
 	}
 	return a
 }
 
 // SetOnChange registers a callback function invoked whenever the AABB boundaries change.
-func (a *AABB) SetOnChange(fn func(a *AABB)) {
+func (a *AABB) SetOnChange(fn OnChangeT) {
+	if fn == nil {
+		a.onChange = _onChange
+		return
+	}
 	a.onChange = fn
-}
-
-// GetOnChange returns the current on-change callback function.
-func (a *AABB) GetOnChange() func(a *AABB) {
-	return a.onChange
 }
 
 // Rebuild recalculates and sets the bounds of the AABB using the specified minimum and maximum coordinates.
 func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
-	if a.minX == minX && a.minY == minY && a.minZ == minZ &&
-		a.maxX == maxX && a.maxY == maxY && a.maxZ == maxZ {
+	if a.minX == minX && a.minY == minY && a.minZ == minZ && a.maxX == maxX && a.maxY == maxY && a.maxZ == maxZ {
 		return
 	}
 	a.minX = minX
@@ -50,9 +55,8 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxX = maxX
 	a.maxY = maxY
 	a.maxZ = maxZ
-	if a.onChange != nil {
-		a.onChange(a)
-	}
+
+	a.onChange(a)
 }
 
 // Translate shifts the AABB by the specified displacement.
@@ -66,9 +70,8 @@ func (a *AABB) Translate(dx, dy, dz float64) {
 	a.maxY += dy
 	a.minZ += dz
 	a.maxZ += dz
-	if a.onChange != nil {
-		a.onChange(a)
-	}
+
+	a.onChange(a)
 }
 
 // GetMinMax returns the minimum and maximum coordinates (minX, minY, minZ, maxX, maxY, maxZ) of the AABB.

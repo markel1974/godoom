@@ -16,7 +16,7 @@ type Node struct {
 // NewNode creates and returns a new instance of an Node with default uninitialized values.
 func NewNode() *Node {
 	node := &Node{
-		aabb:            &AABB{},
+		aabb:            NewAABB(),
 		object:          nil,
 		parentNodeIndex: NullNode,
 		leftNodeIndex:   NullNode,

@@ -31,6 +31,10 @@ type AABBTest struct {
 	State *OcclusionState
 }
 
+func NewAABBTest() *AABBTest {
+	return &AABBTest{}
+}
+
 // OcclusionHW manages hardware-based occlusion queries using OpenGL-like graphics operations.
 type OcclusionHW struct {
 	ctx            api.IContext
@@ -71,7 +75,7 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 	hw.allVerticesPtr = ctx.Ptr(hw.allVertices)
 
 	for idx := range hw.tests {
-		hw.tests[idx] = &AABBTest{}
+		hw.tests[idx] = NewAABBTest()
 	}
 
 	// Allocate HW queries in batch
@@ -167,7 +171,7 @@ func (hw *OcclusionHW) Add(aabb *aabb.AABB, state *OcclusionState) {
 		hw.tests = make([]*AABBTest, newLen)
 		copy(hw.tests, t)
 		for i := oldLen; i < newLen; i++ {
-			hw.tests[i] = &AABBTest{}
+			hw.tests[i] = NewAABBTest()
 		}
 	}
 	test := hw.tests[hw.testsLen]

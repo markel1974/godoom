@@ -187,6 +187,11 @@ func (a *AABB) MergeInPlace(src, other *AABB) {
 	a.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 }
 
+// MergeSelf updates a to encompass both its current volume and other.
+func (a *AABB) MergeSelf(other *AABB) {
+	a.MergeInPlace(a, other)
+}
+
 // ExpandInPlace recalculates and updates the AABB by expanding it in all directions by the specified margin.
 func (a *AABB) ExpandInPlace(src *AABB, margin float64) {
 	minX := src.minX - margin

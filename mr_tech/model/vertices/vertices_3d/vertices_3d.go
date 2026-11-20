@@ -1,4 +1,4 @@
-package vertices
+package vertices_3d
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
@@ -15,13 +16,13 @@ import (
 )
 
 // PartSpawnFunc creates a thing for a separated part using its vertices and collision group.
-type PartSpawnFunc func(partVerts IVertices, collisionGroup uint64) IThing
+type PartSpawnFunc func(partVerts vertices.IVertices, collisionGroup uint64) vertices.IThing
 
 // PartReleaseFunc is called when a part is released.
-type PartReleaseFunc func(part IThing)
+type PartReleaseFunc func(part vertices.IThing)
 
 // RagdollJointAddFunc handles registration of a ragdoll joint for a child thing, including detachment rules.
-type RagdollJointAddFunc func(joint *collisions.JointConstraint, childThing IThing, canDetach bool, breakThreshold float64)
+type RagdollJointAddFunc func(joint *collisions.JointConstraint, childThing vertices.IThing, canDetach bool, breakThreshold float64)
 
 // IPartedVertices supports spawning, releasing, and jointing detachable vertex parts for composite bodies.
 type IPartedVertices interface {
@@ -32,16 +33,16 @@ type IPartedVertices interface {
 type Vertices3D struct {
 	id            string
 	mass          float64
-	owner         IThing
+	owner         vertices.IThing
 	solver        *collisions.Solver
 	ent           *rigid_body.Entity
-	actions       *Vertices3DActions
+	actions       *Actions
 	currentAction int
 	links         *articulated_dynamics.Links
-	elements      *Vertices3DElements
+	elements      *Elements
 	joints        *articulated_dynamics.Joints
-	partViews     []*Vertices3DPart
-	partThings    []IThing
+	partViews     []*Part
+	partThings    []vertices.IThing
 	partScratchQ  *aabb.Quaternion
 	onPartRelease PartReleaseFunc
 	onAddJoint    RagdollJointAddFunc
@@ -70,8 +71,8 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 		mass:          cfg.Mass,
 		links:         articulated_dynamics.NewLinks(),
 		joints:        articulated_dynamics.NewJoints(),
-		elements:      NewVertices3DElements(cfg, materials),
-		actions:       NewVertices3DActions(),
+		elements:      NewElements(cfg, materials),
+		actions:       NewActions(),
 		currentAction: -1,
 		partScratchQ:  aabb.NewQuaternionIdentity(),
 	}
@@ -94,9 +95,9 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 	}
 
 	numParts := v.elements.Len()
-	v.partViews = make([]*Vertices3DPart, numParts)
+	v.partViews = make([]*Part, numParts)
 	for i := 0; i < numParts; i++ {
-		v.partViews[i] = NewVertices3DPart(v, v.elements.GetEntry(i), i, 0)
+		v.partViews[i] = NewPart(v, v.elements.GetEntry(i), i, 0)
 	}
 
 	v.ent = v.elements.GetSolver().GetEntity()
@@ -117,7 +118,7 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 }
 
 // Setup initializes the vertices for thing, caches solver state, and assigns the entity collision group.
-func (v *Vertices3D) Setup(thing IThing) error {
+func (v *Vertices3D) Setup(thing vertices.IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}
@@ -133,7 +134,7 @@ func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFu
 	v.onPartRelease = onRelease
 	v.onAddJoint = addJoint
 	numParts := len(v.partViews)
-	v.partThings = make([]IThing, numParts)
+	v.partThings = make([]vertices.IThing, numParts)
 	groupID := v.ent.GetId()
 	for i, pv := range v.partViews {
 		pv.groupID = groupID
@@ -152,7 +153,7 @@ func (v *Vertices3D) GetPartLen() int {
 
 // GetPartAt returns the part thing at idx.
 // idx must be within the range of configured parts.
-func (v *Vertices3D) GetPartAt(idx int) IThing {
+func (v *Vertices3D) GetPartAt(idx int) vertices.IThing {
 	return v.partThings[idx]
 }
 
@@ -561,23 +562,24 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 		pv.ent.MoveCenterTo(cx+relX, cy+relY, cz+relZ)
 		pv.ent.SetRotationQuaternion(pqx, pqy, pqz, pqw)
 		pv.GetAABB()
+		entryMinX, entryMinY, entryMinZ, entryMaxX, entryMaxY, entryMaxZ := entry.GetMinMax()
 
-		if pMinX := relX + entry.minX; pMinX < minX {
+		if pMinX := relX + entryMinX; pMinX < minX {
 			minX = pMinX
 		}
-		if pMinY := relY + entry.minY; pMinY < minY {
+		if pMinY := relY + entryMinY; pMinY < minY {
 			minY = pMinY
 		}
-		if pMinZ := relZ + entry.minZ; pMinZ < minZ {
+		if pMinZ := relZ + entryMinZ; pMinZ < minZ {
 			minZ = pMinZ
 		}
-		if pMaxX := relX + entry.maxX; pMaxX > maxX {
+		if pMaxX := relX + entryMaxX; pMaxX > maxX {
 			maxX = pMaxX
 		}
-		if pMaxY := relY + entry.maxY; pMaxY > maxY {
+		if pMaxY := relY + entryMaxY; pMaxY > maxY {
 			maxY = pMaxY
 		}
-		if pMaxZ := relZ + entry.maxZ; pMaxZ > maxZ {
+		if pMaxZ := relZ + entryMaxZ; pMaxZ > maxZ {
 			maxZ = pMaxZ
 		}
 	}
@@ -593,7 +595,7 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 
 // GetUIFaces returns empty UI face sets with zero depth and the 3D model render mode.
 func (v *Vertices3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
-	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, RenderModeModel3D
+	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, vertices.RenderModeModel3D
 }
 
 // Deform applies an impulse-based deformation to all part views within radius of impact.
@@ -621,7 +623,7 @@ func (v *Vertices3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth,
 
 // createConfigJoints builds articulated joints for each configured model part.
 // It initializes local centers from element geometry and applies root or configured joint limits.
-func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Vertices3DElements) ([]*articulated_dynamics.Joint, error) {
+func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Elements) ([]*articulated_dynamics.Joint, error) {
 	numParts := len(cfg.Parts)
 	joints := make([]*articulated_dynamics.Joint, numParts)
 	for i := 0; i < numParts; i++ {

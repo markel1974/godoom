@@ -1,4 +1,4 @@
-package vertices
+package vertices_3d
 
 import (
 	"fmt"
@@ -8,15 +8,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-// Vertices3DElements manages per-part 3D entries, per-frame active volumes, and the living owner's Volume collider.
-type Vertices3DElements struct {
-	entries    []*Vertices3DEntry
+// Elements manages per-part 3D entries, per-frame active volumes, and the living owner's Volume collider.
+type Elements struct {
+	entries    []*vertices_3d_entry.Vertices3DEntry
 	ownerVol   *volumes.Volume
 	volsA      []*volumes.Volume
 	volsB      []*volumes.Volume
@@ -25,10 +27,10 @@ type Vertices3DElements struct {
 	emptyFaces *volumes.Faces
 }
 
-// NewVertices3DElements builds centered per-part entries and a real Volume + Solver for owner locomotion.
-func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *Vertices3DElements {
+// NewElements builds centered per-part entries and a real Volume + Solver for owner locomotion.
+func NewElements(cfg *config.Thing, materials *materials.Materials) *Elements {
 	ownerVol := volumes.NewVolumeDynamic(0, cfg.Id+"_owner", "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
-	v := &Vertices3DElements{
+	v := &Elements{
 		ownerVol:   ownerVol,
 		ent:        ownerVol.GetSolver().GetEntity(),
 		emptyFaces: volumes.NewFaces(0, false),
@@ -38,7 +40,7 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 	if numParts == 0 {
 		panic(fmt.Sprintf("no parts found in vertices_3d"))
 	}
-	v.entries = make([]*Vertices3DEntry, numParts)
+	v.entries = make([]*vertices_3d_entry.Vertices3DEntry, numParts)
 	v.volsA = make([]*volumes.Volume, numParts)
 	v.volsB = make([]*volumes.Volume, numParts)
 
@@ -57,8 +59,8 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 		c := cfg.Clone()
 		c.Model3DEntry = part
 		c.Model3D = nil
-		entry := NewVertices3DEntry(c, materials)
-		entry.salt = salt
+		entry := vertices_3d_entry.NewVertices3DEntry(c, materials)
+		entry.SetSalt(salt)
 		partMass := cfg.Mass
 		if i > 0 {
 			partMass = math.Max(cfg.Mass*0.25, 10.0)
@@ -74,17 +76,17 @@ func NewVertices3DElements(cfg *config.Thing, materials *materials.Materials) *V
 }
 
 // Setup binds the owner locomotion Volume solver to thing.
-func (v *Vertices3DElements) Setup(thing IThing) error {
+func (v *Elements) Setup(thing vertices.IThing) error {
 	return v.ownerVol.Setup(thing)
 }
 
 // QueryOverlaps queries face overlaps against the owner's local-space bounding Volume.
-func (v *Vertices3DElements) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+func (v *Elements) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.ownerVol.QueryOverlaps(object, callback)
 }
 
 // Bind advances animation frames for entry i at tick and caches its active volumes and lerpT.
-func (v *Vertices3DElements) Bind(i int, tick uint64) {
+func (v *Elements) Bind(i int, tick uint64) {
 	element := v.entries[i]
 	element.AdvanceAnimation(tick)
 	volA, volB, lerpT := element.GetVolumes()
@@ -96,17 +98,17 @@ func (v *Vertices3DElements) Bind(i int, tick uint64) {
 }
 
 // Len returns the number of 3D vertex elements.
-func (v *Vertices3DElements) Len() int {
+func (v *Elements) Len() int {
 	return len(v.entries)
 }
 
 // GetSolver returns the collision solver associated with the owner locomotion Volume.
-func (v *Vertices3DElements) GetSolver() *collisions.Solver {
+func (v *Elements) GetSolver() *collisions.Solver {
 	return v.ownerVol.GetSolver()
 }
 
 // GetEntry returns the vertices entry at index i, or nil if i is out of range.
-func (v *Vertices3DElements) GetEntry(i int) *Vertices3DEntry {
+func (v *Elements) GetEntry(i int) *vertices_3d_entry.Vertices3DEntry {
 	if i >= 0 && i < len(v.entries) {
 		return v.entries[i]
 	}
@@ -114,7 +116,7 @@ func (v *Vertices3DElements) GetEntry(i int) *Vertices3DEntry {
 }
 
 // UpdateEntityBounds rebuilds the owner locomotion box Volume and entity dimensions from compiled model bounds.
-func (v *Vertices3DElements) UpdateEntityBounds(minX, minY, minZ, maxX, maxY, maxZ float64) {
+func (v *Elements) UpdateEntityBounds(minX, minY, minZ, maxX, maxY, maxZ float64) {
 	if minX > maxX {
 		return
 	}

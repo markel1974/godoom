@@ -1,18 +1,20 @@
-package vertices
+package vertices_3d
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
-// Vertices3DPart adapts one skeletal segment (Vertices3DEntry) as a standalone IVertices backed by its own Volume and Solver.
+// Part adapts one skeletal segment (Vertices3DEntry) as a standalone IVertices backed by its own Volume and Solver.
 // While attached to its owner it tracks keyframe/tag poses kinematically; on detach or ragdoll it switches directly to 6-DoF rigid physics.
-type Vertices3DPart struct {
+type Part struct {
 	parent      *Vertices3D
-	entry       *Vertices3DEntry
+	entry       *vertices_3d_entry.Vertices3DEntry
 	partIdx     int
 	solver      *collisions.Solver
 	ent         *rigid_body.Entity
@@ -20,9 +22,9 @@ type Vertices3DPart struct {
 	physicsFree bool
 }
 
-// NewVertices3DPart creates an IVertices wrapper for segment partIdx of parent.
-func NewVertices3DPart(parent *Vertices3D, entry *Vertices3DEntry, partIdx int, collisionGroup uint64) *Vertices3DPart {
-	return &Vertices3DPart{
+// NewPart creates an IVertices wrapper for segment partIdx of parent.
+func NewPart(parent *Vertices3D, entry *vertices_3d_entry.Vertices3DEntry, partIdx int, collisionGroup uint64) *Part {
+	return &Part{
 		parent:  parent,
 		entry:   entry,
 		partIdx: partIdx,
@@ -33,7 +35,7 @@ func NewVertices3DPart(parent *Vertices3D, entry *Vertices3DEntry, partIdx int, 
 }
 
 // Setup binds the segment's Volume Solver to thing and places it in kinematic attached mode.
-func (v *Vertices3DPart) Setup(thing IThing) error {
+func (v *Part) Setup(thing vertices.IThing) error {
 	if err := v.entry.Setup(thing); err != nil {
 		return err
 	}
@@ -47,12 +49,12 @@ func (v *Vertices3DPart) Setup(thing IThing) error {
 }
 
 // IsPhysicsFree reports whether this segment has transitioned from kinematic animation to autonomous 6-DoF physics.
-func (v *Vertices3DPart) IsPhysicsFree() bool {
+func (v *Part) IsPhysicsFree() bool {
 	return v.physicsFree
 }
 
 // ReleasePhysics transitions this segment in-place to autonomous 6-DoF rigid-body simulation.
-func (v *Vertices3DPart) ReleasePhysics(collisionGroup uint64, vx, vy, vz, wx, wy, wz float64) {
+func (v *Part) ReleasePhysics(collisionGroup uint64, vx, vy, vz, wx, wy, wz float64) {
 	cx, cy, cz := v.ent.GetCenter()
 	qx, qy, qz, qw := v.ent.GetQRotation().Get()
 
@@ -73,12 +75,12 @@ func (v *Vertices3DPart) ReleasePhysics(collisionGroup uint64, vx, vy, vz, wx, w
 		ox, oy, oz := v.parent.ent.GetCenter()
 		v.solver.GetCage().SetSpawnOrigin(ox, oy, oz)
 	}
-	v.entry.lastRotVolA = nil
+	v.entry.UnsetLastRolVolA()
 	v.entry.CompileDetached()
 }
 
 // Compile updates the owner animation pose when attached, or rotates the frozen rigid mesh when detached/ragdoll.
-func (v *Vertices3DPart) Compile(tick uint64) bool {
+func (v *Part) Compile(tick uint64) bool {
 	if v.physicsFree {
 		v.entry.CompileDetached()
 		return false
@@ -88,38 +90,41 @@ func (v *Vertices3DPart) Compile(tick uint64) bool {
 }
 
 // GetAABB returns this segment's current world-space bounding box.
-func (v *Vertices3DPart) GetAABB() *aabb.AABB {
+func (v *Part) GetAABB() *aabb.AABB {
+	//TODO BETTER IMPLEMENTATION
 	b := v.ent.GetAABB()
 	cx, cy, cz := v.ent.GetCenter()
-	b.Rebuild(cx+v.entry.minX, cy+v.entry.minY, cz+v.entry.minZ, cx+v.entry.maxX, cy+v.entry.maxY, cz+v.entry.maxZ)
+	entryMinX, entryMinY, entryMinZ, entryMaxX, entryMaxY, entryMaxZ := v.entry.GetMinMax()
+	b.Rebuild(cx+entryMinX, cy+entryMinY, cz+entryMinZ, cx+entryMaxX, cy+entryMaxY, cz+entryMaxZ)
 	return b
 }
 
 // GetSolver returns this segment's dedicated collision solver.
-func (v *Vertices3DPart) GetSolver() *collisions.Solver {
+func (v *Part) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
 // QueryOverlaps queries face overlaps against the segment's current centered collision volume.
-func (v *Vertices3DPart) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+func (v *Part) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.entry.QueryOverlaps(object, callback)
 }
 
 // GetUIFaces returns this segment's render faces and interpolation weight.
-func (v *Vertices3DPart) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
+func (v *Part) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	if v.physicsFree {
-		return v.entry.facesA, v.entry.facesA, 0.0, RenderModeModel3D
+		faces := v.entry.GetFacesA()
+		return faces, faces, 0.0, vertices.RenderModeModel3D
 	}
-	return v.entry.facesA, v.entry.facesB, v.entry.lerpT, RenderModeModel3D
+	return v.entry.GetFacesA(), v.entry.GetFacesB(), v.entry.GetLerpT(), vertices.RenderModeModel3D
 }
 
 // SetAction delegates action selection on this entry.
-func (v *Vertices3DPart) SetAction(idx int) {
+func (v *Part) SetAction(idx int) {
 	v.entry.SetAction(idx)
 }
 
 // HandleImpactEvent forwards an emerging impact event on this attached segment to its owning model's joint chain.
-func (v *Vertices3DPart) HandleImpactEvent(force, dirX, dirY, dirZ float64) {
+func (v *Part) HandleImpactEvent(force, dirX, dirY, dirZ float64) {
 	if v.physicsFree {
 		return
 	}
@@ -127,16 +132,19 @@ func (v *Vertices3DPart) HandleImpactEvent(force, dirX, dirY, dirZ float64) {
 }
 
 // SetRagdollMode is handled at the owning Vertices3D level.
-func (v *Vertices3DPart) SetRagdollMode() {}
+func (v *Part) SetRagdollMode() {}
 
-func (v *Vertices3DPart) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+// Deform applies an impulse-based deformation to this part within radius of impact.
+// It returns true if the underlying entry was deformed.
+func (v *Part) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if v.entry != nil {
 		return v.entry.Deform(impact, impulse, radius)
 	}
 	return false
 }
 
-func (v *Vertices3DPart) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+// DeformDent applies a dent deformation at impact along normal with the given depth and radius.
+func (v *Part) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	if v.entry != nil {
 		return v.entry.DeformDent(impact, normal, depth, radius)
 	}

@@ -1,4 +1,4 @@
-package vertices
+package vertices_multi_sprite
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -13,56 +14,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// VerticeMultiSpriteComposed represents an entity composed of multiple sprites linked to a physics entity and volume system.
-type VerticeMultiSpriteComposed struct {
-	volume *volumes.Volume
-	solver *collisions.Solver
-}
-
-// NewVerticeMultiSpriteComposed creates a new VerticeMultiSpriteEntity instance using the provided Volume.
-func NewVerticeMultiSpriteComposed(volume *volumes.Volume) *VerticeMultiSpriteComposed {
-	return &VerticeMultiSpriteComposed{
-		solver: volume.GetSolver(),
-		volume: volume,
-	}
-}
-
-// Setup initializes the composed multi-sprite volume's collision solver with object.
-func (vm *VerticeMultiSpriteComposed) Setup(object collisions.IObject) error {
-	return vm.solver.Setup(object)
-}
-
-// QueryOverlaps checks for overlaps between the entity's volume and the given object, invoking the callback for each match.
-func (vm *VerticeMultiSpriteComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
-	vm.volume.QueryOverlaps(object, callback)
-}
-
-// GetSolver returns the collision solver associated with this composed multi-sprite entity.
-func (vm *VerticeMultiSpriteComposed) GetSolver() *collisions.Solver {
-	return vm.solver
-}
-
-// GetFaces retrieves the collection of faces associated with the entity's current volume.
-func (vm *VerticeMultiSpriteComposed) GetFaces() *volumes.Faces {
-	return vm.volume.GetFaces()
-}
-
-// SetVolume updates the current volume of the entity.
-func (vm *VerticeMultiSpriteComposed) SetVolume(activeVolume *volumes.Volume) {
-	if activeVolume == vm.volume {
-		return
-	}
-	vm.volume = activeVolume
-}
-
-// VerticesMultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
-type VerticesMultiSprite struct {
+// MultiSprite manages multiple sprite volumes for view selection, physics, actions, and rendering state.
+type MultiSprite struct {
 	solver        *collisions.Solver
 	ent           *rigid_body.Entity
 	cfg           *config.Thing
 	materials     *materials.Materials
 	volumes       []*volumes.Volume
-	comp          *VerticeMultiSpriteComposed
+	comp          *Composer
 	renderMode    float64
 	debug         bool
 	clampAnim     []bool
@@ -76,17 +35,17 @@ type VerticesMultiSprite struct {
 	//currentAngle  int
 }
 
-// NewVerticesMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
+// NewMultiSprite creates a multi-sprite vertex set for thing using the configured views and materials.
 // It initializes per-view volumes, rendering mode, animation clamps, and binds each volume to thing.
 // It panics if a view is nil, has no textures, or face creation fails
-func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *VerticesMultiSprite {
-	v := &VerticesMultiSprite{
+func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSprite {
+	v := &MultiSprite{
 		cfg:       cfg,
 		materials: materials,
 		solver:    nil,
 		volumes:   make([]*volumes.Volume, len(cfg.MultiSprite.Views)),
 		//currentAngle:  0,
-		renderMode: RenderModeBillboard,
+		renderMode: vertices.RenderModeBillboard,
 		clampAnim:  make([]bool, len(cfg.MultiSprite.Views)),
 		debug:      false,
 	}
@@ -104,7 +63,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 		v.standingHalfH = 28.0
 	}
 	if v.debug {
-		v.renderMode = RenderModeModel3D
+		v.renderMode = vertices.RenderModeModel3D
 	}
 	for viewIdx, view := range v.cfg.MultiSprite.Views {
 		if view == nil {
@@ -128,7 +87,7 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 		v.volumes[viewIdx] = volume
 	}
 
-	v.comp = NewVerticeMultiSpriteComposed(v.volumes[0])
+	v.comp = NewComposer(v.volumes[0])
 	//f.ent = f.volumes[0].entity
 	//f.actionVolume = f.volumes[0]
 
@@ -142,10 +101,10 @@ func NewVerticesMultiSprite(cfg *config.Thing, materials *materials.Materials) *
 }
 
 // Setup assigns the thing to all volumes, refreshes bounds and compiled state, and initializes collision solving.
-func (v *VerticesMultiSprite) Setup(thing IThing) error {
+func (v *MultiSprite) Setup(thing vertices.IThing) error {
 	for _, volume := range v.volumes {
 		//volume.SetThing(thing)
-		if v.renderMode == RenderModeBillboard {
+		if v.renderMode == vertices.RenderModeBillboard {
 			volume.GetSolver().GetEntity().LockUpright()
 		}
 	}
@@ -160,12 +119,12 @@ func (v *VerticesMultiSprite) Setup(thing IThing) error {
 }
 
 // GetSolver returns the collision solver associated with the multi-sprite.
-func (v *VerticesMultiSprite) GetSolver() *collisions.Solver {
+func (v *MultiSprite) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
-func (v *VerticesMultiSprite) updateBounds() {
+func (v *MultiSprite) updateBounds() {
 	ent := v.ent
 	w, _, d := ent.GetSize()
 	halfW := w * 0.5
@@ -178,12 +137,12 @@ func (v *VerticesMultiSprite) updateBounds() {
 }
 
 // QueryOverlaps checks for overlaps between the entry's active volume and object, invoking callback for each match.
-func (v *VerticesMultiSprite) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+func (v *MultiSprite) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.comp.QueryOverlaps(object, callback)
 }
 
 // GetAABB returns the axis-aligned bounding box of the physics volume's entity.
-func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
+func (v *MultiSprite) GetAABB() *aabb.AABB {
 	ent := v.ent
 	cx, cy, cz := ent.GetCenter()
 	b := ent.GetAABB()
@@ -192,7 +151,7 @@ func (v *VerticesMultiSprite) GetAABB() *aabb.AABB {
 }
 
 // Compile updates the view volume to the current action volume and refreshes the enclosing AABB.
-func (v *VerticesMultiSprite) Compile(tick uint64) bool {
+func (v *MultiSprite) Compile(tick uint64) bool {
 	ent := v.ent
 	v.updateBounds()
 	cx, cy, cz := ent.GetCenter()
@@ -201,13 +160,13 @@ func (v *VerticesMultiSprite) Compile(tick uint64) bool {
 }
 
 // GetUIFaces returns the current view volume faces twice, a zero value, and the active render mode.
-func (v *VerticesMultiSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
+func (v *MultiSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	f := v.comp.GetFaces()
 	return f, f, 0.0, v.renderMode
 }
 
 // SetAction switches to the action volume at idx and restarts its face material animations.
-func (v *VerticesMultiSprite) SetAction(idx int) {
+func (v *MultiSprite) SetAction(idx int) {
 	if idx < 0 {
 		return
 	}
@@ -233,12 +192,12 @@ func (v *VerticesMultiSprite) SetAction(idx int) {
 }
 
 // SetRagdollMode is a no-op for multi-sprite volumes without ragdoll state.
-func (v *VerticesMultiSprite) SetRagdollMode() {
+func (v *MultiSprite) SetRagdollMode() {
 }
 
 // computeAction selects the action volume for action and reports whether the active volume changed.
 // Invalid actions fall back to the default volume; angle is currently unused.
-func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
+func (v *MultiSprite) computeAction(action int, angle int) bool {
 	if action < 0 || action >= len(v.volumes) {
 		action = 0
 	}
@@ -251,7 +210,7 @@ func (v *VerticesMultiSprite) computeAction(action int, angle int) bool {
 
 // createFaces builds render and physics faces from the material's head frame texture.
 // It returns an error when the material or texture is nil.
-func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*volumes.Face, error) {
+func (v *MultiSprite) createFaces(material *textures.Material) ([]*volumes.Face, error) {
 	if material == nil {
 		return nil, fmt.Errorf("material is nil")
 	}
@@ -312,10 +271,10 @@ func (v *VerticesMultiSprite) createFaces(material *textures.Material) ([]*volum
 	return faces, nil
 }
 
-func (v *VerticesMultiSprite) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+func (v *MultiSprite) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	return false
 }
 
-func (v *VerticesMultiSprite) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+func (v *MultiSprite) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	return false
 }

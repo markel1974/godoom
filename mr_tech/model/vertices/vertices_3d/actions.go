@@ -1,4 +1,4 @@
-package vertices
+package vertices_3d
 
 import (
 	"fmt"
@@ -6,18 +6,18 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
-// Vertices3DActions stores per-part mappings from composite model actions to each part's animation actions.
-type Vertices3DActions struct {
+// Actions stores per-part mappings from composite model actions to each part's animation actions.
+type Actions struct {
 	actions [][]int
 }
 
-// NewVertices3DActions creates an empty Vertices3DActions instance.
-func NewVertices3DActions() *Vertices3DActions {
-	return &Vertices3DActions{}
+// NewActions creates an empty Actions instance.
+func NewActions() *Actions {
+	return &Actions{}
 }
 
 // Setup initializes per-part action maps from the model config, validating entries and defaulting invalid mappings to 0.
-func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DElements) error {
+func (v *Actions) Setup(cfg *config.Model3D, elements *Elements) error {
 	numParts := elements.Len()
 	v.actions = make([][]int, numParts)
 
@@ -35,7 +35,7 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DEleme
 	} else if len(rawActions) > 0 && len(rawActions[0]) > 0 {
 		expectedActions = len(rawActions[0])
 	} else {
-		expectedActions = len(elements.entries[0].actions)
+		expectedActions = elements.entries[0].GetActionsLen()
 	}
 
 	for i := 0; i < numParts; i++ {
@@ -55,7 +55,7 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DEleme
 		}
 
 		if element := elements.GetEntry(i); element != nil {
-			numActions := len(element.actions)
+			numActions := element.GetActionsLen()
 			for actionIdx, targetIdx := range action {
 				if targetIdx < 0 || (numActions > 0 && targetIdx >= numActions) {
 					fmt.Printf("[warning] Vertices3D: part %d action %d maps to invalid sub-action %d (max %d), falling back to action 0\n", i, actionIdx, targetIdx, numActions-1)
@@ -68,7 +68,8 @@ func (v *Vertices3DActions) Setup(cfg *config.Model3D, elements *Vertices3DEleme
 	return nil
 }
 
-func (v *Vertices3DActions) Get(i, idx int) (int, bool) {
+// Get returns the mapped action for part i and action idx, reporting whether the mapping exists.
+func (v *Actions) Get(i, idx int) (int, bool) {
 	if i < len(v.actions) && idx < len(v.actions[i]) {
 		return v.actions[i][idx], true
 	}

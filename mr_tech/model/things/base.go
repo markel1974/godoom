@@ -7,6 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -59,7 +61,7 @@ type Base struct {
 
 // NewBase creates a new Base instance with specified configuration, material, sector, world, and things.
 func NewBase(things IThingHandler, cfg *config.Thing) *Base {
-	return NewBaseWithVertices(things, cfg, vertices.CreateVertices(cfg, things.GetMaterials()))
+	return NewBaseWithVertices(things, cfg, CreateVertices(cfg, things.GetMaterials()))
 }
 
 // NewBaseWithVertices creates a Base instance using a caller-supplied IVertices implementation.
@@ -92,10 +94,10 @@ func (t *Base) Prepare(thing vertices.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
 	}
-	if pv, ok := t.IVertices.(vertices.IPartedVertices); ok {
+	if pv, ok := t.IVertices.(vertices_3d.IPartedVertices); ok {
 		pv.SetupParts(
 			func(partVerts vertices.IVertices, collisionGroup uint64) vertices.IThing {
-				pv3d := partVerts.(*vertices.Vertices3DPart)
+				pv3d := partVerts.(*vertices_3d.Part)
 				return NewAttachedPart(t.things, thing, location, t.id+"_part", pv3d)
 			},
 			func(part vertices.IThing) {
@@ -542,7 +544,7 @@ func (t *Base) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (floa
 	if t.ent == nil || t.IVertices == nil {
 		return maxDist, geometry.XYZ{}, false
 	}
-	v3d, ok := t.IVertices.(*vertices.Vertices3DEntry)
+	v3d, ok := t.IVertices.(*vertices_3d_entry.Vertices3DEntry)
 	if !ok {
 		return maxDist, geometry.XYZ{}, false
 	}

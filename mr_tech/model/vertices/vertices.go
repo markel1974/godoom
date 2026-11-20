@@ -1,9 +1,7 @@
 package vertices
 
 import (
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
-	"github.com/markel1974/godoom/mr_tech/model/materials"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -55,19 +53,4 @@ type ISubPart interface {
 	GetOwner() IThing
 
 	IsPhysicsFree() bool
-}
-
-// CreateVertices returns an implementation of IVertices based on the provided Thing configuration and material.
-func CreateVertices(cfg *config.Thing, materials *materials.Materials) IVertices {
-	var out IVertices
-	if cfg.Model3D != nil {
-		out = NewVertices3D(cfg, materials)
-	} else if cfg.Model3DEntry != nil {
-		out = NewVertices3DEntry(cfg, materials)
-	} else if cfg.MultiSprite != nil {
-		out = NewVerticesMultiSprite(cfg, materials)
-	} else {
-		out = NewVerticesSprite(cfg, materials)
-	}
-	return out
 }

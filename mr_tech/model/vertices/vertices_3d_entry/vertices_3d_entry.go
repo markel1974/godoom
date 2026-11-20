@@ -1,4 +1,4 @@
-package vertices
+package vertices_3d_entry
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/articulated_dynamics"
@@ -17,94 +18,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Vertices3DEntryComposed links a volume with its collision solver for composed 3D vertex processing.
-type Vertices3DEntryComposed struct {
-	volume *volumes.Volume
-	solver *collisions.Solver
-}
-
-// NewVertices3DEntryComposed creates a composed 3D vertices entry for volume using its collision solver.
-func NewVertices3DEntryComposed(volume *volumes.Volume) *Vertices3DEntryComposed {
-	return &Vertices3DEntryComposed{
-		solver: volume.GetSolver(),
-		volume: volume,
-	}
-}
-
-// Setup initializes the collision solver with the provided object.
-func (vm *Vertices3DEntryComposed) Setup(object collisions.IObject) error {
-	return vm.solver.Setup(object)
-}
-
-// QueryOverlaps searches the active volume for objects whose AABB overlaps object's AABB, invoking callback for each.
-func (vm *Vertices3DEntryComposed) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
-	vm.volume.QueryOverlaps(object, callback)
-}
-
-// GetSolver returns the collision solver associated with the composed 3D vertices entry.
-func (vm *Vertices3DEntryComposed) GetSolver() *collisions.Solver {
-	return vm.solver
-}
-
-// GetFaces returns the face collection for the current volume.
-func (vm *Vertices3DEntryComposed) GetFaces() *volumes.Faces {
-	return vm.volume.GetFaces()
-}
-
-// SetVolume assigns the active volume used by the composed entry.
-func (vm *Vertices3DEntryComposed) SetVolume(activeVolume *volumes.Volume) {
-	vm.volume = activeVolume
-}
-
-// Deform applies an impulse to the volume around impact within radius and reports whether it changed.
-func (vm *Vertices3DEntryComposed) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	if vm.volume != nil {
-		return vm.volume.Deform(impact, impulse, radius)
-	}
-	return false
-}
-
-// DeformDent applies an inward dent at impact along the opposite normal, scaled by depth within radius.
-func (vm *Vertices3DEntryComposed) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{
-		X: -normal.X * depth,
-		Y: -normal.Y * depth,
-		Z: -normal.Z * depth,
-	}
-	return vm.Deform(impact, impulse, radius)
-}
-
-// VAction describes a named vertex animation frame range and whether playback should clamp at its end.
-type VAction struct {
-	Name  string
-	Start int
-	End   int
-	Clamp bool
-}
-
-// NewVAction creates a VAction with the given name and frame interval, with clamping disabled.
-func NewVAction(name string, start int, end int) *VAction {
-	return &VAction{
-		Name:  name,
-		Start: start,
-		End:   end,
-		Clamp: false,
-	}
-}
-
 // Vertices3DEntry stores runtime state for a 3D vertex-based entity with animation, volumes, and physics data.
 type Vertices3DEntry struct {
 	solver        *collisions.Solver
 	ent           *rigid_body.Entity
 	cfg           *config.Thing
 	materials     *materials.Materials
-	comp          *Vertices3DEntryComposed
+	comp          *Composer
 	vols          *volumes.Volumes //[]*volumes.Volume
 	startFrame    int
 	endFrame      int
 	startTick     uint64
 	currentAction int
-	actions       []*VAction
+	actions       []*Action
 	clampAnim     bool
 	tagMap        map[string]int
 	volA          *volumes.Volume
@@ -154,10 +80,10 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 		panic(fmt.Sprintf("groupSize must be greater than 0"))
 	}
 
-	actions := make([]*VAction, len(model.ActionDefinitions))
+	actions := make([]*Action, len(model.ActionDefinitions))
 	for idx, name := range model.ActionDefinitions {
 		nameC := v3dCleanString(name)
-		actions[idx] = NewVAction(nameC, model.ActionIntervals[idx][0], model.ActionIntervals[idx][1])
+		actions[idx] = NewAction(nameC, model.ActionIntervals[idx][0], model.ActionIntervals[idx][1])
 		for _, z := range model.ActionClamp {
 			if strings.Contains(nameC, v3dCleanString(z)) {
 				actions[idx].Clamp = true
@@ -230,7 +156,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 
 	v.volA = refVol
 	v.volB = refVol
-	v.comp = NewVertices3DEntryComposed(refVol)
+	v.comp = NewComposer(refVol)
 	v.lerpT = 0.0
 	v.lastVolA = nil
 	v.salt = uint64(rand.Intn(len(model.Frames)))
@@ -251,7 +177,7 @@ func NewVertices3DEntry(cfg *config.Thing, materials *materials.Materials) *Vert
 }
 
 // Setup initializes the entry with the given thing and stores its solver and entity references.
-func (v *Vertices3DEntry) Setup(thing IThing) error {
+func (v *Vertices3DEntry) Setup(thing vertices.IThing) error {
 	//for _, f := range v.volumes {
 	//	f.SetThing(thing)
 	//}
@@ -263,6 +189,56 @@ func (v *Vertices3DEntry) Setup(thing IThing) error {
 	return nil
 }
 
+// GetSalt returns the salt value associated with the entry.
+func (v *Vertices3DEntry) GetSalt() uint64 {
+	return v.salt
+}
+
+// SetSalt sets the salt value for the Vertices3DEntry.
+func (v *Vertices3DEntry) SetSalt(salt uint64) {
+	v.salt = salt
+}
+
+// GetFacesA returns the faces collection associated with side A.
+func (v *Vertices3DEntry) GetFacesA() *volumes.Faces {
+	return v.facesA
+}
+
+// GetFacesB returns the secondary Faces collection associated with the entry.
+func (v *Vertices3DEntry) GetFacesB() *volumes.Faces {
+	return v.facesB
+}
+
+// GetLerpT returns the interpolation parameter for this 3D vertices entry.
+func (v *Vertices3DEntry) GetLerpT() float64 {
+	return v.lerpT
+}
+
+// GetLastRolVolA returns the last recorded rotation volume A.
+func (v *Vertices3DEntry) GetLastRolVolA() *volumes.Volume {
+	return v.lastRotVolA
+}
+
+// GetLastRolVolB returns the last rotated volume B associated with the entry.
+func (v *Vertices3DEntry) GetLastRolVolB() *volumes.Volume {
+	return v.lastRotVolB
+}
+
+// UnsetLastRolVolA clears the stored last rotation volume A value.
+func (v *Vertices3DEntry) UnsetLastRolVolA() {
+	v.lastRotVolA = nil
+}
+
+// UnsetLastRolVolB clears the stored last rotational volume B reference.
+func (v *Vertices3DEntry) UnsetLastRolVolB() {
+	v.lastRotVolB = nil
+}
+
+// GetMinMax returns the local minimum and maximum bounds as minX, minY, minZ, maxX, maxY, and maxZ.
+func (v *Vertices3DEntry) GetMinMax() (float64, float64, float64, float64, float64, float64) {
+	return v.minX, v.minY, v.minZ, v.maxX, v.maxY, v.maxZ
+}
+
 // GetVolume returns the volume at the specified index.
 func (v *Vertices3DEntry) GetVolume(idx int) *volumes.Volume {
 	return v.vols.Get(idx)
@@ -271,6 +247,11 @@ func (v *Vertices3DEntry) GetVolume(idx int) *volumes.Volume {
 // GetVolumesLen returns the number of volumes associated with the entry.
 func (v *Vertices3DEntry) GetVolumesLen() int {
 	return v.vols.Len()
+}
+
+// GetActionsLen returns the number of actions associated with the entry.
+func (v *Vertices3DEntry) GetActionsLen() int {
+	return len(v.actions)
 }
 
 // GetSolver returns the collision solver associated with the vertices entry.
@@ -559,7 +540,7 @@ func (v *Vertices3DEntry) Compile(tick uint64) bool {
 
 // GetUIFaces returns the face sets, interpolation value, and render mode for UI rendering.
 func (v *Vertices3DEntry) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
-	return v.facesA, v.facesB, v.lerpT, RenderModeModel3D
+	return v.facesA, v.facesB, v.lerpT, vertices.RenderModeModel3D
 }
 
 // GetVolumes returns the entry's source and target volumes along with the interpolation factor.

@@ -1,9 +1,10 @@
-package vertices
+package vertices_sprite
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
+	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -98,7 +99,7 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 }
 
 // Setup initializes the sprite volume geometry, material, physics properties, UVs, and entity state.
-func (v *VerticesSprite) Setup(thing IThing) error {
+func (v *VerticesSprite) Setup(thing vertices.IThing) error {
 	vol := v.volume
 	if err := vol.Setup(thing); err != nil {
 		return err
@@ -141,7 +142,7 @@ func (v *VerticesSprite) Compile(tick uint64) bool {
 // GetUIFaces returns the view volume faces for both face sets, zero offset, and the render mode.
 func (v *VerticesSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	f := v.volume.GetFaces()
-	return f, f, 0.0, RenderModeBillboard
+	return f, f, 0.0, vertices.RenderModeBillboard
 }
 
 // SetAction applies the vertex action identified by idx.

@@ -169,5 +169,5 @@ func (s *Entry) penetrableInternal(depth int, visited *[maxPushDepth]uint64, vis
 	if v == nil {
 		return true
 	}
-	return v.penetrableInternal(depth+1, visited, visitedLen)
+	return v.doPenetrable(depth+1, visited, visitedLen)
 }

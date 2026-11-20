@@ -159,12 +159,6 @@ func (b *Bucket) HasEntryFor(entityId uint64) bool {
 	return false
 }
 
-// Penetrable determines if the Bucket can be penetrated starting from a specified entity ID.
-// Returns false if any entity in the bucket provides infinite inelastic resistance or cannot be recursively pushed.
-//func (b *Bucket) Penetrable(from uint64) bool {
-//	return b.penetrable(from, 0)
-//}
-
 // Penetrable reports whether this bucket can yield to a push from the given entity within the recursion depth.
 func (b *Bucket) Penetrable(from uint64, depth int) bool {
 	var visited [maxPushDepth]uint64
@@ -173,19 +167,19 @@ func (b *Bucket) Penetrable(from uint64, depth int) bool {
 		visited[0] = from
 		visitedLen = 1
 	}
-	return b.penetrableInternal(depth, &visited, visitedLen)
+	return b.doPenetrable(depth, &visited, visitedLen)
 }
 
-func (b *Bucket) penetrableInternal(depth int, visited *[maxPushDepth]uint64, visitedLen int) bool {
+// penetrableInternal reports whether this bucket and chained remote buckets can yield within the push depth limit.
+// It returns false when an inelastic contact blocks movement and avoids revisiting entities during recursion.
+func (b *Bucket) doPenetrable(depth int, visited *[maxPushDepth]uint64, visitedLen int) bool {
 	if depth >= maxPushDepth {
 		return true
 	}
-
 	// Deduplicate remote entities within this bucket pass:
 	// contact manifold generation creates up to maxPushDepth points for the exact same remote cage.
 	var checked [maxPushDepth]uint64
 	checkedCount := 0
-
 	for i := 0; i < b.containerCounter; i++ {
 		entry := b.currPool[i]
 		if entry == nil {
@@ -203,7 +197,6 @@ func (b *Bucket) penetrableInternal(depth int, visited *[maxPushDepth]uint64, vi
 			continue
 		}
 		rId := rEnt.GetId()
-
 		// Skip if remote entity is already in the visited caller chain
 		isVisited := false
 		for v := 0; v < visitedLen; v++ {
@@ -215,7 +208,6 @@ func (b *Bucket) penetrableInternal(depth int, visited *[maxPushDepth]uint64, vi
 		if isVisited {
 			continue
 		}
-
 		// Deduplicate within this bucket pass so we evaluate each remote entity at most once
 		alreadyChecked := false
 		for c := 0; c < checkedCount; c++ {
@@ -231,7 +223,6 @@ func (b *Bucket) penetrableInternal(depth int, visited *[maxPushDepth]uint64, vi
 			checked[checkedCount] = rId
 			checkedCount++
 		}
-
 		// Recursively evaluate the remote entity
 		if !entry.penetrableInternal(depth, visited, visitedLen) {
 			return false

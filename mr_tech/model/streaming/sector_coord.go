@@ -20,7 +20,7 @@ func WorldToSector(x, y, cellSize float64) SectorCoord {
 }
 
 // SectorToWorldBounds returns the 2D bounding min and max coordinates (minX, minY, maxX, maxY) for this sector.
-func (c SectorCoord) SectorToWorldBounds(cellSize float64) (minX, minY, maxX, maxY float64) {
+func (c *SectorCoord) SectorToWorldBounds(cellSize float64) (minX, minY, maxX, maxY float64) {
 	if cellSize <= 0.0 {
 		cellSize = 256.0
 	}
@@ -32,7 +32,7 @@ func (c SectorCoord) SectorToWorldBounds(cellSize float64) (minX, minY, maxX, ma
 }
 
 // ChebyshevDistance returns the maximum coordinate distance (grid ring radius) between c and other.
-func (c SectorCoord) ChebyshevDistance(other SectorCoord) int {
+func (c *SectorCoord) ChebyshevDistance(other SectorCoord) int {
 	dx := c.X - other.X
 	if dx < 0 {
 		dx = -dx
@@ -48,7 +48,7 @@ func (c SectorCoord) ChebyshevDistance(other SectorCoord) int {
 }
 
 // ManhattanDistance returns the grid Manhattan distance |dx| + |dy| between c and other.
-func (c SectorCoord) ManhattanDistance(other SectorCoord) int {
+func (c *SectorCoord) ManhattanDistance(other SectorCoord) int {
 	dx := c.X - other.X
 	if dx < 0 {
 		dx = -dx
@@ -61,7 +61,7 @@ func (c SectorCoord) ManhattanDistance(other SectorCoord) int {
 }
 
 // DistanceSq returns the squared Euclidean grid distance between c and other.
-func (c SectorCoord) DistanceSq(other SectorCoord) int {
+func (c *SectorCoord) DistanceSq(other SectorCoord) int {
 	dx := c.X - other.X
 	dy := c.Y - other.Y
 	return dx*dx + dy*dy

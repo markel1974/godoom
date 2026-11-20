@@ -88,7 +88,11 @@ func (e *Engine) Compute(player *things.Player, vi *ViewMatrix) {
 	// Dynamic Solver
 	e.things.Compute(pX, pY, pZ)
 	// Post-Sync ViewMatrix
-	vi.Update(player)
+	if vi.GetSpringArm() != nil && e.volumes != nil {
+		vi.UpdateThirdPerson(player, e.volumes, 1.0/60.0)
+	} else {
+		vi.Update(player)
+	}
 	// Update Textures
 	textures.Tick()
 }

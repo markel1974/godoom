@@ -3,10 +3,10 @@ package model
 import (
 	"math"
 
+	"github.com/markel1974/godoom/mr_tech/model/streaming"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/world/streaming"
 )
 
 // Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
@@ -160,6 +160,47 @@ func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(obj
 // It invokes the callback for each intersected object, passing the object and intersection distance as arguments.
 func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool)) {
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
+}
+
+// RaycastSolid tests a 3D ray against all solid triangle faces in the active spatial tree up to maxDistance.
+// It returns the closest intersection distance, the face normal (nx, ny, nz), and true if a solid face was struck.
+func (s *Volumes) RaycastSolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool) {
+	closest := maxDist + 1.0
+
+	s.tree.QueryRay(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist, func(obj aabb.IObject, d float64) (float64, bool) {
+		vol, ok := obj.(*volumes.Volume)
+		if !ok || vol == nil {
+			return closest, false
+		}
+
+		facesTree := vol.GetFacesTree()
+		if facesTree == nil {
+			return closest, false
+		}
+
+		facesTree.QueryRay(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist, func(face aabb.IObject, fDist float64) (float64, bool) {
+			fc, okFc := face.(*volumes.Face)
+			if !okFc || fc == nil || !fc.IsSolid() {
+				return closest, false
+			}
+			tHit, okHit := fc.IntersectRay(fromX, fromY, fromZ, dirX, dirY, dirZ, closest)
+			if okHit && tHit < closest {
+				closest = tHit
+				fnx, fny, fnz := fc.GetNormal()
+				nx, ny, nz = fnx, fny, fnz
+				hit = true
+				return closest, true
+			}
+			return closest, false
+		})
+
+		return closest, hit
+	})
+
+	if hit && closest <= maxDist {
+		return closest, nx, ny, nz, true
+	}
+	return 0, 0, 0, 1, false
 }
 
 // QueryPoint identifies the 3D location and specific face at the given point (px, py, pz) in world coordinates.

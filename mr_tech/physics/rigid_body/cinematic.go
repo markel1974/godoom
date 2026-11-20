@@ -617,6 +617,11 @@ func (e *Cinematic) GetVelocity() (float64, float64, float64) {
 	return e.vx, e.vy, e.vz
 }
 
+// GetV returns the current velocity components (vx, vy, vz) of the cinematic object, matching SetV.
+func (e *Cinematic) GetV() (float64, float64, float64) {
+	return e.vx, e.vy, e.vz
+}
+
 // GetFrameDisplacement calculates and returns the displacement in the x, y, and z directions based on velocity and time step.
 func (e *Cinematic) GetFrameDisplacement() (float64, float64, float64) {
 	return e.vx * e.dt, e.vy * e.dt, e.vz * e.dt

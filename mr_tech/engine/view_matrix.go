@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
@@ -15,6 +17,22 @@ const (
 	VFov  = 0.2
 	NearZ = 1e-4
 )
+
+// IRaycaster defines the interface for testing line-of-sight rays against solid triangle soup faces.
+type IRaycaster interface {
+	RaycastSolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool)
+}
+
+// ShortestAngleDelta computes the shortest angular difference from angle 'from' to angle 'to' in [-pi, pi].
+func ShortestAngleDelta(from, to float64) float64 {
+	diff := math.Mod(to-from, 2*math.Pi)
+	if diff < -math.Pi {
+		diff += 2 * math.Pi
+	} else if diff > math.Pi {
+		diff -= 2 * math.Pi
+	}
+	return diff
+}
 
 // ViewMatrix represents a view configuration with position, orientation, zoom level, and lighting intensity for rendering.
 type ViewMatrix struct {
@@ -31,6 +49,7 @@ type ViewMatrix struct {
 	swaySensitivity float64
 	front           *aabb.Frustum
 	rear            *aabb.Frustum
+	arm             *SpringLimb
 }
 
 // NewViewMatrix creates and returns a new instance of ViewMatrix with default values.
@@ -39,6 +58,30 @@ func NewViewMatrix() *ViewMatrix {
 		front: aabb.NewFrustum(),
 		rear:  aabb.NewFrustum(),
 	}
+}
+
+// SetSpringArm attaches or detaches a SpringLimb camera controller.
+func (vi *ViewMatrix) SetSpringArm(arm *SpringLimb) {
+	vi.arm = arm
+}
+
+// GetSpringArm returns the currently attached SpringLimb, or nil if none is configured.
+func (vi *ViewMatrix) GetSpringArm() *SpringLimb {
+	return vi.arm
+}
+
+// UpdateThirdPerson updates the view matrix using the attached SpringLimb against the world triangle soup.
+func (vi *ViewMatrix) UpdateThirdPerson(player *things.Player, raycaster IRaycaster, dt float64) {
+	if vi.arm == nil {
+		vi.Update(player)
+		return
+	}
+	vi.location = player.GetLocation()
+	vi.lightIntensity = player.GetLightIntensity()
+	vi.swayX, vi.swayY, vi.swaySensitivity = player.GetSway()
+
+	vi.arm.UpdateFromPlayer(dt, player, raycaster)
+	vi.arm.ApplyToViewMatrix(vi)
 }
 
 // Update updates the ViewMatrix's position, orientation, sector, and lighting based on the given ThingPlayer's state.
@@ -124,20 +167,3 @@ func (vi *ViewMatrix) GetFrontFrustum(f [16]float32) *aabb.Frustum {
 func (vi *ViewMatrix) GetRearFrustum(r [16]float32) *aabb.Frustum {
 	return vi.rear.Rebuild(r)
 }
-
-/*
-// GetForwardVector calculates and returns the forward direction vector of the ViewMatrix in 3D space as (x, y, z).
-func (vi *ViewMatrix) GetForwardVector() (float32, float32, float32) {
-	// Calcoliamo il seno e coseno del pitch (inclinazione verticale)
-	pitchCos := math.Cos(vi.pitch)
-	pitchSin := math.Sin(vi.pitch)
-	// Conversione da coordinate sferiche a cartesiane 3D.
-	// Assumendo che Y sia l'asse verticale (Up) nello shader:
-	dirX := pitchCos * vi.angleCos
-	dirY := pitchSin
-	dirZ := pitchCos * vi.angleSin
-	// Nota: potrei avere la necessita di invertire il segno [Right-Handed o Left-Handed] di uno degli assi (es. -dirZ o -dirX)
-	// per allinearlo perfettamente con il Frustum.
-	return float32(dirX), float32(dirY), float32(dirZ)
-}
-*/

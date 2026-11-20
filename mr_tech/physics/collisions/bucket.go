@@ -194,6 +194,7 @@ func (b *Bucket) doPenetrable(depth int, seen1, seen2 uint64) bool {
 	return b.bfsPenetrable(depth, seen1, seen2)
 }
 
+// bfsPenetrable reports whether the bucket's dynamic push chain can yield within the configured depth limit.
 func (b *Bucket) bfsPenetrable(startDepth int, seen1, seen2 uint64) bool {
 	var queue [maxPushQueue]*Bucket
 	var depths [maxPushQueue]uint8

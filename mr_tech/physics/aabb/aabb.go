@@ -1,6 +1,8 @@
 package aabb
 
-import "math"
+import (
+	"math"
+)
 
 type OnChangeT func(a *AABB)
 
@@ -46,7 +48,15 @@ func (a *AABB) SetOnChange(fn OnChangeT) {
 
 // Rebuild recalculates and sets the bounds of the AABB using the specified minimum and maximum coordinates.
 func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, maxY float64, maxZ float64) {
-	if a.minX == minX && a.minY == minY && a.minZ == minZ && a.maxX == maxX && a.maxY == maxY && a.maxZ == maxZ {
+	//if a.minX == minX && a.minY == minY && a.minZ == minZ && a.maxX == maxX && a.maxY == maxY && a.maxZ == maxZ {
+	//	return
+	//}
+	if diff := (math.Float64bits(a.minX) ^ math.Float64bits(minX)) |
+		(math.Float64bits(a.minY) ^ math.Float64bits(minY)) |
+		(math.Float64bits(a.minZ) ^ math.Float64bits(minZ)) |
+		(math.Float64bits(a.maxX) ^ math.Float64bits(maxX)) |
+		(math.Float64bits(a.maxY) ^ math.Float64bits(maxY)) |
+		(math.Float64bits(a.maxZ) ^ math.Float64bits(maxZ)); diff == 0 {
 		return
 	}
 	a.minX = minX

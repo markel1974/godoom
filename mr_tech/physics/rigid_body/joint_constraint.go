@@ -6,7 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// anchorWorld computes world-space anchor coordinates and lever arm from center of mass.
+// anchorWorld returns the world-space anchor point and its offset from the entity's center of mass.
 func (e *Entity) anchorWorld(localX, localY, localZ float64) (px, py, pz, rx, ry, rz float64) {
 	gx, gy, gz := e.BoundingBox.GetCenter()
 	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := e.BoundingBox.GetAxes()
@@ -20,13 +20,8 @@ func (e *Entity) anchorWorld(localX, localY, localZ float64) (px, py, pz, rx, ry
 	return px, py, pz, rx, ry, rz
 }
 
-// WarmStartJoint re-applies persisted ball-socket linear impulses from the previous frame with gentle
-// decay so articulated chains resist steady gravity without drifting or ringing across PGS sweeps.
-func (e *Entity) WarmStartJoint(
-	other *Entity,
-	ax, ay, az, bx, by, bz float64,
-	accJx, accJy, accJz *float64,
-) {
+// WarmStartJoint reapplies accumulated ball-socket joint impulses between two entities at their local anchors.
+func (e *Entity) WarmStartJoint(other *Entity, ax, ay, az, bx, by, bz float64, accJx, accJy, accJz *float64) {
 	invMassA := e.Cinematic.invMass
 	invMassB := other.Cinematic.invMass
 	if (invMassA == 0.0 && invMassB == 0.0) || e.Cinematic.GetDt() <= 0.0 {
@@ -45,8 +40,8 @@ func (e *Entity) WarmStartJoint(
 	e.applyBallSocketImpulse(other, rAx, rAy, rAz, rBx, rBy, rBz, 0, 0, 1, *accJz, invMassA, invMassB)
 }
 
-// ResolveJointVelocity applies bilateral PGS impulses to keep anchorA on e and anchorB on other
-// coincident in velocity space, plus viscous joint damping and unilateral cone-limit stops.
+// ResolveJointVelocity applies velocity-level joint constraints between two entities at their local anchor points.
+// It enforces ball-socket motion, optional angular damping, and an optional cone limit relative to restQ.
 func (e *Entity) ResolveJointVelocity(
 	other *Entity,
 	ax, ay, az, bx, by, bz float64,
@@ -130,11 +125,9 @@ func (e *Entity) ResolveJointVelocity(
 	}
 }
 
-func (e *Entity) applyBallSocketImpulse(
-	other *Entity,
-	rAx, rAy, rAz, rBx, rBy, rBz float64,
-	nx, ny, nz, j, invMassA, invMassB float64,
-) {
+// applyBallSocketImpulse applies a scalar ball-socket constraint impulse to both entities along the given axis.
+// It updates linear velocity and clamped angular velocity deltas using each body's inverse mass.
+func (e *Entity) applyBallSocketImpulse(other *Entity, rAx, rAy, rAz, rBx, rBy, rBz float64, nx, ny, nz, j, invMassA, invMassB float64) {
 	if j == 0.0 {
 		return
 	}
@@ -154,12 +147,9 @@ func (e *Entity) applyBallSocketImpulse(
 	}
 }
 
-func (e *Entity) solveBallSocketAxis(
-	other *Entity,
-	rAx, rAy, rAz, rBx, rBy, rBz float64,
-	nx, ny, nz, invMassA, invMassB float64,
-	accJ *float64,
-) {
+// solveBallSocketAxis applies an impulse along one axis to cancel relative velocity at a ball-socket joint.
+// It updates linear and angular velocities for both entities and accumulates the applied impulse.
+func (e *Entity) solveBallSocketAxis(other *Entity, rAx, rAy, rAz, rBx, rBy, rBz float64, nx, ny, nz, invMassA, invMassB float64, accJ *float64) {
 	vAx := e.Cinematic.vx + (e.Cinematic.wy*rAz - e.Cinematic.wz*rAy)
 	vAy := e.Cinematic.vy + (e.Cinematic.wz*rAx - e.Cinematic.wx*rAz)
 	vAz := e.Cinematic.vz + (e.Cinematic.wx*rAy - e.Cinematic.wy*rAx)
@@ -201,6 +191,7 @@ func (e *Entity) solveBallSocketAxis(
 	}
 }
 
+// applyClampedAngularDelta adds angular velocity deltas while respecting upright locks and axis velocity limits.
 func (e *Entity) applyClampedAngularDelta(dwx, dwy, dwz float64) {
 	if e.Cinematic.keepUpright {
 		return
@@ -210,15 +201,8 @@ func (e *Entity) applyClampedAngularDelta(dwx, dwy, dwz float64) {
 	e.Cinematic.wz = math.Max(-maxYawVel, math.Min(maxYawVel, e.Cinematic.wz+dwz))
 }
 
-// ResolveJointPosition projects linear anchor separation between e and other directly in position space
-// during the PGS positional relaxation phase so articulated skeletons do not stretch under impact or gravity.
-func (e *Entity) ResolveJointPosition(
-	other *Entity,
-	ax, ay, az, bx, by, bz float64,
-	restQ *aabb.Quaternion,
-	maxAngle float64,
-	qErrScratch, qTargetScratch *aabb.Quaternion,
-) {
+// ResolveJointPosition projects a joint constraint between two entities toward its rest anchors and angular limit.
+func (e *Entity) ResolveJointPosition(other *Entity, ax, ay, az, bx, by, bz float64, restQ *aabb.Quaternion, maxAngle float64, qErrScratch, qTargetScratch *aabb.Quaternion) {
 	invMassA := e.Cinematic.invMass
 	invMassB := other.Cinematic.invMass
 	totalInvMass := invMassA + invMassB
@@ -317,6 +301,8 @@ func (e *Entity) ResolveJointPosition(
 	}
 }
 
+// applyClampedPosRotation applies a bounded position-solver rotation around the entity center of mass.
+// It ignores near-zero corrections and clamps larger angular steps to a safe maximum.
 func (e *Entity) applyClampedPosRotation(dpx, dpy, dpz float64) {
 	const maxStepAng = 0.15
 	magSq := dpx*dpx + dpy*dpy + dpz*dpz
@@ -332,6 +318,7 @@ func (e *Entity) applyClampedPosRotation(dpx, dpy, dpz float64) {
 	e.rotateAroundCOM(dpx, dpy, dpz)
 }
 
+// rotateAroundCOM applies an angular rotation while keeping the entity's center of mass fixed.
 func (e *Entity) rotateAroundCOM(ax, ay, az float64) {
 	if e.Cinematic.keepUpright {
 		return

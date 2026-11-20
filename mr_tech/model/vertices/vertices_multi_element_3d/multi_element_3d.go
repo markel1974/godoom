@@ -170,9 +170,6 @@ func (v *MultiElement3D) QueryOverlaps(object aabb.IObject, callback func(object
 
 // GetAABB returns the entity's axis-aligned bounding box.
 func (v *MultiElement3D) GetAABB() *aabb.AABB {
-	if v.ent == nil {
-		return nil
-	}
 	return v.ent.GetAABB()
 }
 

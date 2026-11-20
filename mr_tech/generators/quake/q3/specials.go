@@ -10,6 +10,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const heavyMass = 1000.0
+
 // q3KeyId returns the key identifier for a Quake 3 key classname, or an empty string if none matches.
 func q3KeyId(classname string) string {
 	switch classname {
@@ -191,7 +193,7 @@ func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ,
 		height = 32.0
 	}
 
-	thingCfg := common.NewTeleport(id, pos, radius, height, &config.TeleportSpec{
+	thingCfg := common.NewTeleport(id, pos, heavyMass, radius, height, &config.TeleportSpec{
 		Destination:   dest.Pos,
 		TargetAngle:   dest.Angle,
 		ResetVelocity: true,
@@ -203,7 +205,7 @@ func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ,
 
 // CreateConfigThing creates a thing at pos, centering its model and selecting enemy, key, or item config.
 func CreateConfigThing(classname string, category string, pos geometry.XYZ, cModel *config.Model3DEntry, ent *lumps.Entity) *config.Thing {
-	const heavyMass = 1000.0
+
 	if strings.HasPrefix(classname, "func_door") {
 		center, size := cModel.CenterWithBounds([]string{"default"})
 		worldPos := geometry.XYZ{X: pos.X + center.X, Y: pos.Y + center.Y, Z: pos.Z + center.Z}

@@ -12,8 +12,8 @@ type Teleport struct {
 }
 
 // NewTeleport creates a Teleport and assigns its bind, collision, and impact handlers.
-func NewTeleport(id string, pos geometry.XYZ, radius, height float64, spec *config.TeleportSpec) *Teleport {
-	return NewTeleportFromConfig(config.NewConfigTeleport(id, pos, radius, height, spec))
+func NewTeleport(id string, pos geometry.XYZ, mass, radius, height float64, spec *config.TeleportSpec) *Teleport {
+	return NewTeleportFromConfig(config.NewConfigTeleport(id, pos, mass, radius, height, spec))
 }
 
 // NewTeleportFromConfig wraps an existing teleport Thing configuration.

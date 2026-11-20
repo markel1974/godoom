@@ -15,8 +15,8 @@ type TeleportSpec struct {
 }
 
 // NewConfigTeleport creates a teleport Thing configuration with the provided TeleportSpec and dimensions.
-func NewConfigTeleport(id string, pos geometry.XYZ, radius, height float64, spec *TeleportSpec) *Thing {
-	c := NewConfigThing(id, pos, 0, ThingTeleportDef, 1000.0, radius, height, 0)
+func NewConfigTeleport(id string, pos geometry.XYZ, mass, radius, height float64, spec *TeleportSpec) *Thing {
+	c := NewConfigThing(id, pos, 0, ThingTeleportDef, mass, radius, height, 0)
 	c.Teleport = spec
 	return c
 }

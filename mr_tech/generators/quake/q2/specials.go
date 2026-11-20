@@ -185,7 +185,7 @@ func CreateConfigTeleport(id string, points []geometry.XYZ, offset geometry.XYZ,
 		height = 32.0
 	}
 
-	thingCfg := common.NewTeleport(id, pos, radius, height, &config.TeleportSpec{Destination: dest.Pos, TargetAngle: dest.Angle, ResetVelocity: true, Cooldown: 0.5})
+	thingCfg := common.NewTeleport(id, pos, heavyMass, radius, height, &config.TeleportSpec{Destination: dest.Pos, TargetAngle: dest.Angle, ResetVelocity: true, Cooldown: 0.5})
 	thingCfg.GForce = 0
 	return thingCfg.Thing
 }

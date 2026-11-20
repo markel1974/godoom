@@ -11,6 +11,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+const heavyMass = 1000.0
+
 // d3KeyId returns the normalized key identifier for a Doom 3 key classname, or an empty string if unknown.
 func d3KeyId(classname string) string {
 	switch classname {
@@ -436,7 +438,7 @@ func CreateConfigTeleport(ent *proc.MapEntity, procModels map[string]*proc.Model
 	if id == "" {
 		id = classname
 	}
-	thingCfg := common.NewTeleport(id, pos, radius, height, &config.TeleportSpec{
+	thingCfg := common.NewTeleport(id, pos, heavyMass, radius, height, &config.TeleportSpec{
 		Destination:   dest.Pos,
 		TargetAngle:   dest.Angle,
 		ResetVelocity: true,
@@ -448,7 +450,6 @@ func CreateConfigTeleport(ent *proc.MapEntity, procModels map[string]*proc.Model
 
 // CreateConfigThing creates a configured thing at pos, centering its model and selecting enemy, key, weapon, door, platform, or item behavior.
 func CreateConfigThing(classname string, category string, pos geometry.XYZ, cModel *config.Model3DEntry, ent *proc.MapEntity) *config.Thing {
-	const heavyMass = 1000.0
 	checkClass := classname
 	if ent != nil {
 		if c, ok := ent.GetProperty("classname"); ok && c != "" {

@@ -51,21 +51,19 @@ func (b *BucketCache) Store(from uint64, depth int, res bool) {
 		}
 	}
 	if b.count < bucketCacheSlots {
-		b.entries[b.count] = bucketCacheEntry{
-			from:       from,
-			penetrable: p,
-			depth:      d,
-		}
+		ptr := &b.entries[b.count]
+		ptr.from = from
+		ptr.penetrable = p
+		ptr.depth = d
 		b.count++
 		return
 	}
 	idx := b.next
 	b.next = (idx + 1) & (bucketCacheSlots - 1)
-	b.entries[idx] = bucketCacheEntry{
-		from:       from,
-		penetrable: p,
-		depth:      d,
-	}
+	ptr := &b.entries[idx]
+	ptr.from = from
+	ptr.penetrable = p
+	ptr.depth = d
 }
 
 // Check reports whether a penetrability result is cached for from at depth.

@@ -59,7 +59,7 @@ func TestStreamingRingActivationAndHysteresis(t *testing.T) {
 		}
 	}
 
-	// 1. Initial player placement at origin (0, 0)
+	// Initial player placement at origin (0, 0)
 	streamer.ForceSync(0, 0, 0)
 
 	// With loadRadius = 2, a 5x5 window around (0, 0) must be active = 25 sectors
@@ -67,13 +67,13 @@ func TestStreamingRingActivationAndHysteresis(t *testing.T) {
 		t.Fatalf("expected 25 active sectors, got %d", active)
 	}
 
-	// 2. Small movement within cell (100, 100) -> same sector (0, 0)
+	// Small movement within cell (100, 100) -> same sector (0, 0)
 	streamer.Update(100.0, 100.0, 0)
 	if active := streamer.GetActiveSectorCount(); active != 25 {
 		t.Fatalf("expected 25 active sectors after small move, got %d", active)
 	}
 
-	// 3. Move east to sector (1, 0) -> World X = 300.0
+	// Move east to sector (1, 0) -> World X = 300.0
 	// Load radius = 2 around (1, 0) activates X in [-1..3], Y in [-2..2]
 	streamer.ForceSync(300.0, 0, 0)
 
@@ -83,7 +83,7 @@ func TestStreamingRingActivationAndHysteresis(t *testing.T) {
 		t.Fatalf("hysteresis buffer failed, expected >= 25 active sectors, got %d", active)
 	}
 
-	// 4. Large vehicle drive to sector (4, 0) -> World X = 1100.0
+	// Large vehicle drive to sector (4, 0) -> World X = 1100.0
 	streamer.ForceSync(1100.0, 0, 0)
 
 	// Origin sector (0, 0) is now distance 4 > unloadRadius (3) -> MUST BE EVICTED

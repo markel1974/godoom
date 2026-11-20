@@ -139,7 +139,7 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 					nearVolsLen++
 				}
 				vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-					if cage.ClampStaticFace(lAABB, otherEnt.(*volumes.Face)) {
+					if cage.StaticFaceClamp(lAABB, otherEnt.(*volumes.Face)) {
 						moved = true
 					}
 					return false
@@ -149,14 +149,14 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 		} else {
 			for v := 0; v < nearVolsLen; v++ {
 				nearVols[v].QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-					if cage.ClampStaticFace(lAABB, otherEnt.(*volumes.Face)) {
+					if cage.StaticFaceClamp(lAABB, otherEnt.(*volumes.Face)) {
 						moved = true
 					}
 					return false
 				})
 			}
 		}
-		if cage.FlushStaticClamp(lAABB) {
+		if cage.StaticFaceFlushClamp(lAABB) {
 			moved = true
 		}
 		cage.EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ)

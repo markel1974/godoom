@@ -44,7 +44,7 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 	clampFloor := func(cage *Cage) {
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
 		cage.ClampStaticFace(lAABB, floor)
-		cage.FlushStaticClamp(lAABB)
+		cage.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 	}
 

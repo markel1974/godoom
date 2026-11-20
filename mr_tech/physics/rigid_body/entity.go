@@ -324,6 +324,16 @@ func (e *Entity) ResolveInelasticPenetration(nx, ny, nz float64, pen float64) {
 	e.AddTo(nx*p, ny*p, nz*p)
 }
 
+// HalfExtents returns the collision half-extents for the entity's current upright state and orientation.
+func (e *Entity) HalfExtents() (float64, float64, float64) {
+	if e.KeepUpright() {
+		w, h, d := e.GetSize()
+		r := 0.25 * (w + h)
+		return r, r, d * 0.5
+	}
+	return e.GetOrientedHalfExtents()
+}
+
 // getCenterOfMass returns the entity's world-space center of mass.
 // It returns the bounding box center when no custom centroid is set.
 func (e *Entity) getCenterOfMass() (float64, float64, float64) {

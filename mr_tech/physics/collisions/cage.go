@@ -132,6 +132,7 @@ type Cage struct {
 	faces               []*Faces
 	facesIdx            int
 	manifold            *aabb.OBBManifold
+	staticContact       *staticFaceContact
 	hasFloor            bool
 	applied             bool
 	appliedX            float64
@@ -187,18 +188,19 @@ func NewCageSequence() *Cage {
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
 func NewCage(id uint64) *Cage {
 	c := &Cage{
-		id:        id,
-		seen:      make([]uint64, max(id*2, 1024)),
-		solver:    nil,
-		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
-		volumeObj: nil,
-		slots:     make([]*Entry, totalSlots),
-		slotsLen:  0,
-		faces:     make([]*Faces, 8),
-		facesIdx:  0,
-		hasFloor:  false,
-		manifold:  aabb.NewOBBManifold(),
-		solverIdx: -1,
+		id:            id,
+		seen:          make([]uint64, max(id*2, 1024)),
+		solver:        nil,
+		ellipsoid:     rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
+		volumeObj:     nil,
+		slots:         make([]*Entry, totalSlots),
+		slotsLen:      0,
+		faces:         make([]*Faces, 8),
+		facesIdx:      0,
+		hasFloor:      false,
+		manifold:      aabb.NewOBBManifold(),
+		solverIdx:     -1,
+		staticContact: &staticFaceContact{},
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
@@ -225,20 +227,6 @@ func (s *Cage) GetObject() aabb.IObject {
 	return s.object
 }
 
-func halfExtentsForEntity(ent *rigid_body.Entity) (float64, float64, float64) {
-	if ent.KeepUpright() {
-		w, h, d := ent.GetSize()
-		r := 0.25 * (w + h)
-		return r, r, d * 0.5
-	}
-	return ent.GetOrientedHalfExtents()
-}
-
-// syncHalfExtents recomputes the collision half-extents for ent's current KeepUpright state and orientation.
-func (s *Cage) syncHalfExtents(ent *rigid_body.Entity) {
-	s.eRadX, s.eRadY, s.eRadZ = halfExtentsForEntity(ent)
-}
-
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.[cite: 6]
 func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.session = session
@@ -249,7 +237,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 
 	entCX, entCY, entCZ := lEnt.GetCenter()
 	s.cX, s.cY, s.cZ = entCX, entCY, entCZ
-	s.syncHalfExtents(lEnt)
+	s.eRadX, s.eRadY, s.eRadZ = lEnt.HalfExtents()
 
 	keepUpright := lEnt.KeepUpright()
 	qx, qy, qz, qw := lEnt.GetQRotation().Get()
@@ -331,24 +319,24 @@ func (s *Cage) Commit(rCage *Cage) {
 		s.facesIdx = 0
 		return
 	}
-	s.commitStaticFaces(s.ellipsoid.GetAABB())
+	s.StaticFacesCommit(s.ellipsoid.GetAABB())
 	s.facesIdx = 0
 }
 
-// commitStaticFaces evaluates accumulated static world triangles and inserts single-point or clipped multi-point contacts.
-func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
+// StaticFacesCommit evaluates accumulated static world triangles and inserts single-point or clipped multi-point contacts.
+func (s *Cage) StaticFacesCommit(lAABB *aabb.AABB) {
 	baseZ := s.GetBaseZ()
 	minBaseZ := math.Min(baseZ, baseZ+s.dZ)
 	stepZ := baseZ + s.maxStep
 
+	fc := s.staticContact
 	for x := 0; x < s.facesIdx; x++ {
 		rFace := s.faces[x].rFace
 		if rFace == nil || !rFace.IsSolid() {
 			continue // Skybox or non-solid surface: ignore collision and volume tracking[cite: 6]
 		}
 
-		fc, ok := s.evaluateStaticFace(lAABB, rFace)
-		if !ok {
+		if !s.evaluateStaticFace(lAABB, rFace, fc) {
 			continue
 		}
 
@@ -396,12 +384,75 @@ func (s *Cage) commitStaticFaces(lAABB *aabb.AABB) {
 			}
 		}
 
-		s.addStaticTriangleManifold(rFace, &fc, iMode)
+		s.addStaticTriangleManifold(rFace, fc, iMode)
 
 		if fc.bucket == BucketFloor {
 			s.hasFloor = true
 		}
 	}
+}
+
+// StaticFaceFlushClamp resolves deferred wall corner contacts not overridden by a coplanar flat wall in the same pass.
+func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
+	moved := false
+	fc := s.staticContact
+	for i := 0; i < s.clampCornersLen; i++ {
+		if !s.evaluateStaticFace(lAABB, s.clampCorners[i], fc) || fc.pen <= 0.0 {
+			continue
+		}
+		if fc.bucket.IsWall() {
+			if s.clampStaticWallShouldSkip(fc) ||
+				s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				continue
+			}
+		}
+		if s.staticClampApplyContact(fc) {
+			moved = true
+		}
+	}
+	s.clampCornersLen = 0
+	return moved
+}
+
+// StaticFaceClamp tests one static face against the entity sweep [clamp -> cur] and immediately projects out
+// any wall, floor, or ceiling penetration without modifying bucket warm-start buffers.
+func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
+	if !rFace.IsSolid() {
+		return false
+	}
+	fc := s.staticContact
+	if !s.evaluateStaticFace(lAABB, rFace, fc) {
+		return false
+	}
+	if fc.pen <= 0.0 {
+		if fc.bucket == BucketFloor && fc.dist <= floorGroundTolerance {
+			s.hasFloor = true
+			s.entity.SetOnGround(true)
+		}
+		return false
+	}
+	if fc.bucket == BucketFloor {
+		s.hasFloor = true
+		s.entity.SetOnGround(true)
+	}
+	if fc.bucket.IsWall() {
+		if s.clampStaticWallShouldSkip(fc) {
+			return false
+		}
+		if fc.cornerHit {
+			if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				return false
+			}
+			if s.clampCornersLen < len(s.clampCorners) {
+				s.clampCorners[s.clampCornersLen] = rFace
+				s.clampCornersLen++
+				return false
+			}
+		} else {
+			s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+		}
+	}
+	return s.staticClampApplyContact(fc)
 }
 
 // addStaticTriangleManifold emits either the single closest contact for KeepUpright entities or a clipped OBB
@@ -602,7 +653,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 	rEnt := rCage.GetEntity()
 	lUpright := lEnt.KeepUpright()
 	rUpright := rEnt.KeepUpright()
-	s.syncHalfExtents(lEnt)
+	s.eRadX, s.eRadY, s.eRadZ = lEnt.HalfExtents()
 
 	rEntDX, rEntDY, rEntDZ := rEnt.GetFrameDisplacement()
 	rCX, rCY, rCZ := rEnt.GetCenter()
@@ -612,7 +663,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		rDX, rDY, rDZ = rCage.dX, rCage.dY, rCage.dZ
 	}
 	rTx, rTy, rTz := rCX+rDX, rCY+rDY, rCZ+rDZ
-	rRadX, rRadY, rRadZ := halfExtentsForEntity(rEnt)
+	rRadX, rRadY, rRadZ := rEnt.HalfExtents()
 
 	m := s.manifold
 	switch {
@@ -972,7 +1023,7 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	origDX, origDY, origDZ = s.dX, s.dY, s.dZ
 	origTX, origTY, origTZ = s.tX, s.tY, s.tZ
 	ent := s.entity
-	s.syncHalfExtents(ent)
+	s.eRadX, s.eRadY, s.eRadZ = ent.HalfExtents()
 	curX, curY, curZ := ent.GetCenter()
 	s.cX, s.cY, s.cZ = s.clampX, s.clampY, s.clampZ
 	s.tX, s.tY, s.tZ = curX, curY, curZ
@@ -989,6 +1040,14 @@ func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origD
 	s.flatWallsLen = 0
 	s.clampCornersLen = 0
 	return origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, s.ellipsoid.GetAABB()
+}
+
+// EndStaticClamp restores the pre-clamp cage center, displacement, and target fields after post-push static clamping.
+func (s *Cage) EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64) {
+	s.cX, s.cY, s.cZ = origCX, origCY, origCZ
+	s.dX, s.dY, s.dZ = origDX, origDY, origDZ
+	s.passDX, s.passDY, s.passDZ = origDX, origDY, origDZ
+	s.tX, s.tY, s.tZ = origTX, origTY, origTZ
 }
 
 // clampStaticWallShouldSkip reports whether a wall contact is low enough to be ignored during static clamping.
@@ -1018,77 +1077,6 @@ func (s *Cage) staticClampApplyContact(fc *staticFaceContact) bool {
 	s.dY = s.tY - s.cY
 	s.dZ = s.tZ - s.cZ
 	return true
-}
-
-// ClampStaticFace tests one static face against the entity sweep [clamp -> cur] and immediately projects out
-// any wall, floor, or ceiling penetration without modifying bucket warm-start buffers.
-func (s *Cage) ClampStaticFace(lAABB *aabb.AABB, rFace IFace) bool {
-	if !rFace.IsSolid() {
-		return false
-	}
-	fc, ok := s.evaluateStaticFace(lAABB, rFace)
-	if !ok {
-		return false
-	}
-	if fc.pen <= 0.0 {
-		if fc.bucket == BucketFloor && fc.dist <= floorGroundTolerance {
-			s.hasFloor = true
-			s.entity.SetOnGround(true)
-		}
-		return false
-	}
-	if fc.bucket == BucketFloor {
-		s.hasFloor = true
-		s.entity.SetOnGround(true)
-	}
-	if fc.bucket.IsWall() {
-		if s.clampStaticWallShouldSkip(&fc) {
-			return false
-		}
-		if fc.cornerHit {
-			if s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
-				return false
-			}
-			if s.clampCornersLen < len(s.clampCorners) {
-				s.clampCorners[s.clampCornersLen] = rFace
-				s.clampCornersLen++
-				return false
-			}
-		} else {
-			s.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
-		}
-	}
-	return s.staticClampApplyContact(&fc)
-}
-
-// FlushStaticClamp resolves deferred wall corner contacts not overridden by a coplanar flat wall in the same pass.
-func (s *Cage) FlushStaticClamp(lAABB *aabb.AABB) bool {
-	moved := false
-	for i := 0; i < s.clampCornersLen; i++ {
-		fc, ok := s.evaluateStaticFace(lAABB, s.clampCorners[i])
-		if !ok || fc.pen <= 0.0 {
-			continue
-		}
-		if fc.bucket.IsWall() {
-			if s.clampStaticWallShouldSkip(&fc) ||
-				s.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
-				continue
-			}
-		}
-		if s.staticClampApplyContact(&fc) {
-			moved = true
-		}
-	}
-	s.clampCornersLen = 0
-	return moved
-}
-
-// EndStaticClamp restores the pre-clamp cage center, displacement, and target fields after post-push static clamping.
-func (s *Cage) EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64) {
-	s.cX, s.cY, s.cZ = origCX, origCY, origCZ
-	s.dX, s.dY, s.dZ = origDX, origDY, origDZ
-	s.passDX, s.passDY, s.passDZ = origDX, origDY, origDZ
-	s.tX, s.tY, s.tZ = origTX, origTY, origTZ
 }
 
 // overlapsTargetXY reports whether the target XY footprint at tX, tY overlaps [minX, maxX] x [minY, maxY].
@@ -1227,14 +1215,13 @@ func (s *Cage) GetPushOffset() (float64, float64, float64) {
 }
 
 // evaluateStaticFace evaluates a static world triangle against the cage sweep (bucket, plane normal,
-// signed separation distance, anti-phantom-plane filtered penetration, and world face bounds) without computing
-// stabilized single-point contact projections until actually needed.
-func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceContact, bool) {
-	var out staticFaceContact
+// signed separation distance, anti-phantom-plane filtered penetration, and world face bounds) into out
+// without heap allocation or large value copies in the hot path.
+func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace, out *staticFaceContact) bool {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
-		return out, false
+		return false
 	}
 
 	solidWE := nAbsX > nAbsY && nAbsX > nAbsZ
@@ -1250,13 +1237,13 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 		if distStart < -satFilterEpsilon {
 			if rFace.IsSingleSided() {
 				if distStart < -rayEff {
-					return out, false
+					return false
 				}
 				if !s.entity.KeepUpright() {
 					impDotOrig := s.passDX*nX + s.passDY*nY + s.passDZ*nZ
 					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 					if distStart <= -0.5*rayEff || impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT, false) {
-						return out, false
+						return false
 					}
 				}
 			} else {
@@ -1268,7 +1255,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 				} else if !s.entity.KeepUpright() {
 					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
 					if impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT, false) {
-						return out, false
+						return false
 					}
 				}
 			}
@@ -1321,7 +1308,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	oX := math.Max(0.0, math.Min(lAABB.GetMaxX()-rMinX, rMaxX-lAABB.GetMinX()))
 	oY := math.Max(0.0, math.Min(lAABB.GetMaxY()-rMinY, rMaxY-lAABB.GetMinY()))
 	if oX <= 0 || oY <= 0 {
-		return out, false
+		return false
 	}
 
 	out.bucket = bucket
@@ -1333,6 +1320,8 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	out.minX, out.maxX = rMinX, rMaxX
 	out.minY, out.maxY = rMinY, rMaxY
 	out.minZ, out.maxZ = rMinZ, rMaxZ
+	out.cornerHit = false
+	out.hasContact = false
 
 	if penetration <= 0 {
 		if bucket == BucketFloor && dist <= floorGroundTolerance {
@@ -1341,22 +1330,22 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 				!s.overlapsTargetXY(rMinX, rMaxX, rMinY, rMaxY) ||
 				rMaxZ < tBaseZ-floorGroundTolerance-satFilterEpsilon ||
 				rMinZ > s.tZ+satFilterEpsilon {
-				return out, false
+				return false
 			}
 		}
 		out.pen = 0
-		return out, true
+		return true
 	}
 
 	oZ := math.Max(0.0, math.Min(lAABB.GetMaxZ()-rMinZ, rMaxZ-lAABB.GetMinZ()))
 	if oZ <= 0 {
-		return out, false
+		return false
 	}
 
 	if s.entity.KeepUpright() {
-		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW, hasPt := s.evaKeepUprightFace(rFace, bucket, solidWE, solidNS, nX, nY, nZ, distStart, distTarget, penetration)
+		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW, hasPt := s.evalKeepUprightFace(rFace, bucket, solidWE, solidNS, nX, nY, nZ, distStart, distTarget, penetration)
 		if !valid || ((solidWE || solidNS) && !cornerHit && !flipped && distStart < -satFilterEpsilon) {
-			return out, false
+			return false
 		}
 		if hasPt {
 			out.contactX, out.contactY, out.contactZ = qxW, qyW, qzW
@@ -1391,19 +1380,19 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 
 	tEnter, tExit, _, _, _, ok := computeTOI(s.cX-rCx, s.cY-rCy, s.cZ-rCz, s.eRadX+rRadX, s.eRadY+rRadY, s.eRadZ+rRadZ, s.dX, s.dY, s.dZ)
 	if !ok {
-		return out, false
+		return false
 	}
 
 	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
 	tPlaneEnter, tPlaneExit, okPlane := sweptAxisInterval(distStart, rayEff, impDot)
 	if !okPlane {
-		return out, false
+		return false
 	}
 
 	overlapStart := math.Max(tEnter, tPlaneEnter)
 	overlapEnd := math.Min(math.Min(1.0, tExit), tPlaneExit)
 	if overlapStart > overlapEnd+toiTieEpsilon || overlapEnd < -toiTieEpsilon || overlapStart > 1.0+toiTieEpsilon {
-		return out, false
+		return false
 	}
 
 	// Separazione tra la compenetrazione già presente a t = 0 (pen0) e l'affondamento prodotto dal moto nel frame (deltaPen).
@@ -1473,7 +1462,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 			// Preserve full penetration when tunneling through a validated finite 3D triangle.
 		} else if penetration > minOverlap+satFilterEpsilon {
 			if !s.intersectsFiniteTriangle3D(rFace, distStart, distTarget, true) {
-				return out, false
+				return false
 			}
 		} else {
 			penetration = minOverlap
@@ -1481,7 +1470,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	}
 
 	out.pen = penetration
-	return out, true
+	return true
 }
 
 // intersectsFiniteTriangle3D reports whether the cage's scaled ellipsoid at target t, plane-crossing point,
@@ -1542,9 +1531,9 @@ func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget flo
 	return allowInactiveEdge || pierced || !isInactiveTriangleFeature(segFeat, activeMask)
 }
 
-// evaKeepUprightFace resolves static triangle contacts for KeepUpright entities using exact
+// evalKeepUprightFace resolves static triangle contacts for KeepUpright entities using exact
 // 3D ellipsoid-triangle proximity and sweep checks while suppressing corner deflection on inactive seam edges.
-func (s *Cage) evaKeepUprightFace(rFace IFace, bucket BucketType, solidWE, solidNS bool, nX, nY, nZ, distStart, distTarget, penetration float64) (valid, adjusted, cornerHit bool, cNX, cNY, cNZ, cPen, qxW, qyW, qzW float64, hasPt bool) {
+func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, solidNS bool, nX, nY, nZ, distStart, distTarget, penetration float64) (valid, adjusted, cornerHit bool, cNX, cNY, cNZ, cPen, qxW, qyW, qzW float64, hasPt bool) {
 	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
 		return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
 	}

@@ -1,10 +1,10 @@
-package vertices_3d
+package vertices_multi_element_3d
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
-	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -14,8 +14,8 @@ import (
 // Part adapts one skeletal segment (Vertices3DEntry) as a standalone IVertices backed by its own Volume and Solver.
 // While attached to its owner it tracks keyframe/tag poses kinematically; on detach or ragdoll it switches directly to 6-DoF rigid physics.
 type Part struct {
-	parent      *Vertices3D
-	entry       *vertices_3d_entry.Vertices3DEntry
+	parent      *MultiElement3D
+	entry       *vertices_element_3d.Element3D
 	partIdx     int
 	solver      *collisions.Solver
 	ent         *rigid_body.Entity
@@ -24,7 +24,7 @@ type Part struct {
 }
 
 // NewPart creates an IVertices wrapper for segment partIdx of parent.
-func NewPart(parent *Vertices3D, entry *vertices_3d_entry.Vertices3DEntry, partIdx int, collisionGroup uint64) *Part {
+func NewPart(parent *MultiElement3D, entry *vertices_element_3d.Element3D, partIdx int, collisionGroup uint64) *Part {
 	return &Part{
 		parent:  parent,
 		entry:   entry,
@@ -132,7 +132,7 @@ func (v *Part) HandleImpactEvent(force, dirX, dirY, dirZ float64) {
 	v.parent.HandlePartImpact(v.partIdx, force, dirX, dirY, dirZ)
 }
 
-// SetRagdollMode is handled at the owning Vertices3D level.
+// SetRagdollMode is handled at the owning MultiElement3D level.
 func (v *Part) SetRagdollMode() {}
 
 // Deform applies an impulse-based deformation to this part within radius of impact.

@@ -225,7 +225,7 @@ func (bld *Builder) buildSectorDoorThing(
 	radius := math.Max(hw, hd)
 	cfgThing := config.NewConfigThing(id, geometry.XYZ{X: cx, Y: cy, Z: cz}, 0, config.ThingDoorDef, heavyMass, radius, height, 0)
 	cfgThing.GForce = 0
-	cfgThing.Model3DEntry = model3d
+	cfgThing.Element3D = model3d
 	cfgThing.Door = spec
 	_ = common.NewItemFromConfig(cfgThing)
 	return cfgThing

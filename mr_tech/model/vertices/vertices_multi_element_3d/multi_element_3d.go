@@ -1,4 +1,4 @@
-package vertices_3d
+package vertices_multi_element_3d
 
 import (
 	"fmt"
@@ -30,8 +30,8 @@ type IPartedVertices interface {
 	SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc)
 }
 
-// Vertices3D represents a 3D vertex-based physical entity with articulated parts, collision solving, and bounds tracking.
-type Vertices3D struct {
+// MultiElement3D represents a 3D vertex-based physical entity with articulated parts, collision solving, and bounds tracking.
+type MultiElement3D struct {
 	id            string
 	mass          float64
 	owner         ithing.IThing
@@ -64,10 +64,10 @@ type Vertices3D struct {
 	compiledCZ    float64
 }
 
-// NewVertices3D creates and initializes a 3D vertices model from the provided thing configuration and materials.
+// NewMultiElement3D creates and initializes a 3D vertices model from the provided thing configuration and materials.
 // It sets up elements, links, joints, actions, part views, compiled bounds, and base offset.
-func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3D {
-	v := &Vertices3D{
+func NewMultiElement3D(cfg *config.Thing, materials *materials.Materials) *MultiElement3D {
+	v := &MultiElement3D{
 		id:            cfg.Id,
 		mass:          cfg.Mass,
 		links:         articulated_dynamics.NewLinks(),
@@ -77,21 +77,21 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 		currentAction: -1,
 		partScratchQ:  aabb.NewQuaternionIdentity(),
 	}
-	configLinks, cErr := v.createConfigLinks(cfg.Model3D)
+	configLinks, cErr := v.createConfigLinks(cfg.MultiElement3D)
 	if cErr != nil {
 		panic(cErr)
 	}
 	if err := v.links.Setup(configLinks); err != nil {
 		panic(err)
 	}
-	configJoints, cErr := v.createConfigJoints(cfg.Model3D, v.elements)
+	configJoints, cErr := v.createConfigJoints(cfg.MultiElement3D, v.elements)
 	if cErr != nil {
 		panic(cErr)
 	}
 	if err := v.joints.Setup(configJoints, v.links); err != nil {
 		panic(err)
 	}
-	if err := v.actions.Setup(cfg.Model3D, v.elements); err != nil {
+	if err := v.actions.Setup(cfg.MultiElement3D, v.elements); err != nil {
 		panic(err)
 	}
 
@@ -119,7 +119,7 @@ func NewVertices3D(cfg *config.Thing, materials *materials.Materials) *Vertices3
 }
 
 // Setup initializes the vertices for thing, caches solver state, and assigns the entity collision group.
-func (v *Vertices3D) Setup(thing ithing.IThing) error {
+func (v *MultiElement3D) Setup(thing ithing.IThing) error {
 	if err := v.elements.Setup(thing); err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (v *Vertices3D) Setup(thing ithing.IThing) error {
 }
 
 // SetupParts registers part lifecycle callbacks, spawns part things, assigns their collision group, and recompiles.
-func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc) {
+func (v *MultiElement3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFunc, addJoint RagdollJointAddFunc) {
 	v.onPartRelease = onRelease
 	v.onAddJoint = addJoint
 	numParts := len(v.partViews)
@@ -148,28 +148,28 @@ func (v *Vertices3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartReleaseFu
 }
 
 // GetPartLen returns the number of part things associated with the vertices.
-func (v *Vertices3D) GetPartLen() int {
+func (v *MultiElement3D) GetPartLen() int {
 	return len(v.partThings)
 }
 
 // GetPartAt returns the part thing at idx.
 // idx must be within the range of configured parts.
-func (v *Vertices3D) GetPartAt(idx int) ithing.IThing {
+func (v *MultiElement3D) GetPartAt(idx int) ithing.IThing {
 	return v.partThings[idx]
 }
 
-// GetSolver returns the collision solver associated with the Vertices3D instance.
-func (v *Vertices3D) GetSolver() *collisions.Solver {
+// GetSolver returns the collision solver associated with the MultiElement3D instance.
+func (v *MultiElement3D) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
 // QueryOverlaps finds element objects overlapping object and calls callback for each until it returns false.
-func (v *Vertices3D) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
+func (v *MultiElement3D) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.elements.QueryOverlaps(object, callback)
 }
 
 // GetAABB returns the entity's axis-aligned bounding box, rebuilding it from cached vertex extents when available.
-func (v *Vertices3D) GetAABB() *aabb.AABB {
+func (v *MultiElement3D) GetAABB() *aabb.AABB {
 	ent := v.ent
 	ab := ent.GetAABB()
 	if v.minX <= v.maxX {
@@ -180,7 +180,7 @@ func (v *Vertices3D) GetAABB() *aabb.AABB {
 }
 
 // HandlePartImpact applies an impact to a part, records the hit, adds knockback, and may detach stressed joints.
-func (v *Vertices3D) HandlePartImpact(partIdx int, force, dirX, dirY, dirZ float64) {
+func (v *MultiElement3D) HandlePartImpact(partIdx int, force, dirX, dirY, dirZ float64) {
 	if force <= 1e-6 {
 		return
 	}
@@ -237,7 +237,7 @@ func (v *Vertices3D) HandlePartImpact(partIdx int, force, dirX, dirY, dirZ float
 }
 
 // releaseSubtree detaches partIdx and eligible descendants, releases their physics, and recreates joints within the group.
-func (v *Vertices3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag float64) {
+func (v *MultiElement3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag float64) {
 	v.compiled = false
 	v.Compile(v.compiledTick)
 
@@ -304,7 +304,7 @@ func (v *Vertices3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag float64)
 
 // SetRagdollMode switches the articulated model into ragdoll physics.
 // It releases attached parts, applies inherited and hit impulse motion, and creates ragdoll joint constraints.
-func (v *Vertices3D) SetRagdollMode() {
+func (v *MultiElement3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
 	}
@@ -385,7 +385,7 @@ func (v *Vertices3D) SetRagdollMode() {
 
 // buildJointConstraint creates a ragdoll joint constraint between parent and child part solvers.
 // It derives anchors from frame centers and vertex tags, then applies the joint rest rotation and limits.
-func (v *Vertices3D) buildJointConstraint(pIdx, i int) *collisions.JointConstraint {
+func (v *MultiElement3D) buildJointConstraint(pIdx, i int) *collisions.JointConstraint {
 	pEntry := v.elements.GetEntry(pIdx)
 	cEntry := v.elements.GetEntry(i)
 	mcP := pEntry.FrameCenterA()
@@ -423,7 +423,7 @@ func (v *Vertices3D) buildJointConstraint(pIdx, i int) *collisions.JointConstrai
 
 // SetAction changes the active action and applies mapped actions to attached parts.
 // SetAction may enter ragdoll mode if a mapped part action is clamped.
-func (v *Vertices3D) SetAction(idx int) {
+func (v *MultiElement3D) SetAction(idx int) {
 	if idx < 0 || v.currentAction == idx || v.joints.IsRagdoll() {
 		return
 	}
@@ -454,7 +454,7 @@ func (v *Vertices3D) SetAction(idx int) {
 
 // SyncAttachedParts updates non-free part entities to match the parent entity transform.
 // It recompiles when the parent rotation changes and skips synchronization in ragdoll mode.
-func (v *Vertices3D) SyncAttachedParts() {
+func (v *MultiElement3D) SyncAttachedParts() {
 	if v.joints.IsRagdoll() || v.ent == nil {
 		return
 	}
@@ -483,7 +483,7 @@ func (v *Vertices3D) SyncAttachedParts() {
 }
 
 // Compile updates part transforms and bounds for the given tick unless ragdoll or cached state is current.
-func (v *Vertices3D) Compile(tick uint64) bool {
+func (v *MultiElement3D) Compile(tick uint64) bool {
 	if v.joints.IsRagdoll() {
 		return false
 	}
@@ -595,13 +595,13 @@ func (v *Vertices3D) Compile(tick uint64) bool {
 }
 
 // GetUIFaces returns empty UI face sets with zero depth and the 3D model render mode.
-func (v *Vertices3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
+func (v *MultiElement3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, vertices.RenderModeModel3D
 }
 
 // Deform applies an impulse-based deformation to all part views within radius of impact.
 // It returns true if any part was deformed.
-func (v *Vertices3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+func (v *MultiElement3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	deformed := false
 	for _, part := range v.partViews {
 		if part != nil && part.Deform(impact, impulse, radius) {
@@ -613,7 +613,7 @@ func (v *Vertices3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius fl
 
 // DeformDent dents vertices around impact by pushing them opposite the normal by depth within radius.
 // It returns true if any part was deformed.
-func (v *Vertices3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+func (v *MultiElement3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{
 		X: -normal.X * depth,
 		Y: -normal.Y * depth,
@@ -624,7 +624,7 @@ func (v *Vertices3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth,
 
 // createConfigJoints builds articulated joints for each configured model part.
 // It initializes local centers from element geometry and applies root or configured joint limits.
-func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Elements) ([]*articulated_dynamics.Joint, error) {
+func (v *MultiElement3D) createConfigJoints(cfg *config.Model3D, elements *Elements) ([]*articulated_dynamics.Joint, error) {
 	numParts := len(cfg.Parts)
 	joints := make([]*articulated_dynamics.Joint, numParts)
 	for i := 0; i < numParts; i++ {
@@ -664,7 +664,7 @@ func (v *Vertices3D) createConfigJoints(cfg *config.Model3D, elements *Elements)
 
 // createConfigLinks builds articulated links from the model configuration.
 // It resolves parent tag indices when available and warns when parent or tag data is missing.
-func (v *Vertices3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dynamics.Link, error) {
+func (v *MultiElement3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dynamics.Link, error) {
 	numParts := len(cfg.Parts)
 	links := make([]*articulated_dynamics.Link, numParts)
 	for i := 0; i < numParts; i++ {

@@ -1,4 +1,4 @@
-package vertices_3d_entry
+package vertices_element_3d
 
 import (
 	"github.com/markel1974/godoom/mr_tech/geometry"

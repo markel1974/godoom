@@ -7,8 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d"
-	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_element_3d"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_multi_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -94,10 +94,10 @@ func (t *Base) Prepare(thing ithing.IThing, location *volumes.Volume) error {
 	if err := t.IVertices.Setup(thing); err != nil {
 		return err
 	}
-	if pv, ok := t.IVertices.(vertices_3d.IPartedVertices); ok {
+	if pv, ok := t.IVertices.(vertices_multi_element_3d.IPartedVertices); ok {
 		pv.SetupParts(
 			func(partVerts ithing.IVertices, collisionGroup uint64) ithing.IThing {
-				pv3d := partVerts.(*vertices_3d.Part)
+				pv3d := partVerts.(*vertices_multi_element_3d.Part)
 				return NewAttachedPart(t.things, thing, location, t.id+"_part", pv3d)
 			},
 			func(part ithing.IThing) {
@@ -544,7 +544,7 @@ func (t *Base) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (floa
 	if t.ent == nil || t.IVertices == nil {
 		return maxDist, geometry.XYZ{}, false
 	}
-	v3d, ok := t.IVertices.(*vertices_3d_entry.Vertices3DEntry)
+	v3d, ok := t.IVertices.(*vertices_element_3d.Element3D)
 	if !ok {
 		return maxDist, geometry.XYZ{}, false
 	}

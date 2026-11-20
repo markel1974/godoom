@@ -291,8 +291,8 @@ func (b *Things) createConfigThing(classname string, pos geometry.XYZ, kind conf
 	thingCfg.GForce = GForce
 	if thingCfg.Kind == config.ThingEnemyDef {
 		actions := config.NewEnemyAnimations()
-		if thingCfg.Model3DEntry != nil {
-			ConvertAnimation(actions, thingCfg.Model3DEntry.ActionDefinitions, thingCfg.Model3DEntry.ActionIntervals)
+		if thingCfg.Element3D != nil {
+			ConvertAnimation(actions, thingCfg.Element3D.ActionDefinitions, thingCfg.Element3D.ActionIntervals)
 		}
 		_ = common.NewEnemyFromConfig(thingCfg, actions)
 		thingCfg.WakeupDistance = 400
@@ -365,7 +365,7 @@ func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geom
 	cModel.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
 	cThing := b.createConfigThing(id, pos, kind, 0, 40, 10, 50, 0)
-	cThing.Model3DEntry = cModel
+	cThing.Element3D = cModel
 	return cThing, nil
 }
 

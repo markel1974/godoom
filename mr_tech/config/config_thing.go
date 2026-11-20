@@ -54,14 +54,14 @@ type Thing struct {
 	GForce             float64      `json:"gForce"`
 	MaxStepFactor      float64      `json:"maxStep"`
 
-	Model3DEntry *Model3DEntry `json:"md1"`
-	Model3D      *Model3D      `json:"md3"`
-	MultiSprite  *MultiSprite  `json:"multiSprite"`
-	Sprite       *Sprite       `json:"sprite"`
-	Door         *DoorSpec     `json:"door,omitempty"`
-	Key          *KeySpec      `json:"key,omitempty"`
-	Teleport     *TeleportSpec `json:"teleport,omitempty"`
-	Weapon       *Weapon       `json:"weapon,omitempty"`
+	MultiElement3D *Model3D      `json:"multiElement3D"`
+	Element3D      *Model3DEntry `json:"element3D"`
+	MultiSprite    *MultiSprite  `json:"multiSprite"`
+	Sprite         *Sprite       `json:"sprite"`
+	Door           *DoorSpec     `json:"door,omitempty"`
+	Key            *KeySpec      `json:"key,omitempty"`
+	Teleport       *TeleportSpec `json:"teleport,omitempty"`
+	Weapon         *Weapon       `json:"weapon,omitempty"`
 
 	OnBind      BindFunc
 	OnThinking  ThinkingFunc
@@ -125,30 +125,30 @@ func (t *Thing) Scale(scale geometry.XYZ) {
 // Clone creates and returns a deep copy of the Thing instance, replicating all its fields and values.
 func (t *Thing) Clone() *Thing {
 	return &Thing{
-		Id:           t.Id,
-		Position:     t.Position,
-		Kind:         t.Kind,
-		Angle:        t.Angle,
-		Mass:         t.Mass,
-		Restitution:  t.Restitution,
-		Friction:     t.Friction,
-		Radius:       t.Radius,
-		Height:       t.Height,
-		Speed:        t.Speed,
-		JumpForce:    t.JumpForce,
-		Pitch:        t.Pitch,
-		GForce:       t.GForce,
-		Model3DEntry: t.Model3DEntry,
-		Model3D:      t.Model3D,
-		MultiSprite:  t.MultiSprite,
-		Sprite:       t.Sprite,
-		Door:         t.Door,
-		Key:          t.Key,
-		Teleport:     t.Teleport,
-		Weapon:       t.Weapon,
-		OnBind:       t.OnBind,
-		OnThinking:   t.OnThinking,
-		OnCollision:  t.OnCollision,
-		OnImpact:     t.OnImpact,
+		Id:             t.Id,
+		Position:       t.Position,
+		Kind:           t.Kind,
+		Angle:          t.Angle,
+		Mass:           t.Mass,
+		Restitution:    t.Restitution,
+		Friction:       t.Friction,
+		Radius:         t.Radius,
+		Height:         t.Height,
+		Speed:          t.Speed,
+		JumpForce:      t.JumpForce,
+		Pitch:          t.Pitch,
+		GForce:         t.GForce,
+		Element3D:      t.Element3D,
+		MultiElement3D: t.MultiElement3D,
+		MultiSprite:    t.MultiSprite,
+		Sprite:         t.Sprite,
+		Door:           t.Door,
+		Key:            t.Key,
+		Teleport:       t.Teleport,
+		Weapon:         t.Weapon,
+		OnBind:         t.OnBind,
+		OnThinking:     t.OnThinking,
+		OnCollision:    t.OnCollision,
+		OnImpact:       t.OnImpact,
 	}
 }

@@ -1,4 +1,4 @@
-package vertices_3d
+package vertices_multi_element_3d
 
 import (
 	"fmt"

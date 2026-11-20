@@ -6,7 +6,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
-	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_multi_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
@@ -15,7 +15,7 @@ import (
 // (tracking keyframe/tag poses kinematically) and transitioning in-place to free/ragdoll 6-DoF with an optional JointConstraint.
 type Detached struct {
 	*Base
-	partVerts      *vertices_3d.Part
+	partVerts      *vertices_multi_element_3d.Part
 	owner          ithing.IThing
 	ragdollJoint   *collisions.JointConstraint
 	breakThreshold float64
@@ -28,7 +28,7 @@ func noopDetachedImpact(other config.IThingConfig, id string, force, closestDist
 }
 
 // NewAttachedPart creates a tree-resident segment Thing bound to owner until detached or switched to ragdoll.
-func NewAttachedPart(things IThingHandler, owner ithing.IThing, location *volumes.Volume, id string, verts *vertices_3d.Part) *Detached {
+func NewAttachedPart(things IThingHandler, owner ithing.IThing, location *volumes.Volume, id string, verts *vertices_multi_element_3d.Part) *Detached {
 	ent := verts.GetSolver().GetEntity()
 	cfg := config.NewConfigThing(id, geometry.XYZ{}, 0, config.ThingItemDef, ent.GetMass(), 1, 1, 0)
 	cfg.OnCollision = noopDetachedCollision

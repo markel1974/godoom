@@ -1,4 +1,4 @@
-package vertices_3d
+package vertices_multi_element_3d
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_3d_entry"
+	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
@@ -18,7 +18,7 @@ import (
 
 // Elements manages per-part 3D entries, per-frame active volumes, and the living owner's Volume collider.
 type Elements struct {
-	entries    []*vertices_3d_entry.Vertices3DEntry
+	entries    []*vertices_element_3d.Element3D
 	ownerVol   *volumes.Volume
 	volsA      []*volumes.Volume
 	volsB      []*volumes.Volume
@@ -36,11 +36,11 @@ func NewElements(cfg *config.Thing, materials *materials.Materials) *Elements {
 		emptyFaces: volumes.NewFaces(0, false),
 	}
 
-	numParts := len(cfg.Model3D.Parts)
+	numParts := len(cfg.MultiElement3D.Parts)
 	if numParts == 0 {
 		panic(fmt.Sprintf("no parts found in vertices_3d"))
 	}
-	v.entries = make([]*vertices_3d_entry.Vertices3DEntry, numParts)
+	v.entries = make([]*vertices_element_3d.Element3D, numParts)
 	v.volsA = make([]*volumes.Volume, numParts)
 	v.volsB = make([]*volumes.Volume, numParts)
 
@@ -52,14 +52,14 @@ func NewElements(cfg *config.Thing, materials *materials.Materials) *Elements {
 		gForce = 9.8 * 50.0
 	}
 
-	for i, part := range cfg.Model3D.Parts {
+	for i, part := range cfg.MultiElement3D.Parts {
 		if part == nil {
 			panic(fmt.Sprintf("nil part found in vertices_3d"))
 		}
 		c := cfg.Clone()
-		c.Model3DEntry = part
-		c.Model3D = nil
-		entry := vertices_3d_entry.NewVertices3DEntry(c, materials)
+		c.Element3D = part
+		c.MultiElement3D = nil
+		entry := vertices_element_3d.NewElement3D(c, materials)
 		entry.SetSalt(salt)
 		partMass := cfg.Mass
 		if i > 0 {
@@ -108,7 +108,7 @@ func (v *Elements) GetSolver() *collisions.Solver {
 }
 
 // GetEntry returns the vertices entry at index i, or nil if i is out of range.
-func (v *Elements) GetEntry(i int) *vertices_3d_entry.Vertices3DEntry {
+func (v *Elements) GetEntry(i int) *vertices_element_3d.Element3D {
 	if i >= 0 && i < len(v.entries) {
 		return v.entries[i]
 	}

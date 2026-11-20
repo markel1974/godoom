@@ -1,4 +1,4 @@
-package vertices_3d_entry
+package vertices_element_3d
 
 // Action describes a named vertex animation frame range and whether playback should clamp at its end.
 type Action struct {

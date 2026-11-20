@@ -90,6 +90,26 @@ const floorGroundTolerance = 0.25
 // floorNormalThreshold matches the rigid-body floor normal threshold for valid ground support.
 const floorNormalThreshold = 0.7
 
+type staticFaceContact struct {
+	bucket                 BucketType
+	dist                   float64
+	pen                    float64
+	nX, nY, nZ             float64
+	anchorX                float64
+	anchorY                float64
+	anchorZ                float64
+	origNX, origNY, origNZ float64
+	origAX, origAY, origAZ float64
+	contactX               float64
+	contactY               float64
+	contactZ               float64
+	minX, maxX             float64
+	minY, maxY             float64
+	minZ, maxZ             float64
+	cornerHit              bool
+	hasContact             bool
+}
+
 // Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
 	seen                []uint64
@@ -205,15 +225,18 @@ func (s *Cage) GetObject() aabb.IObject {
 	return s.object
 }
 
-// syncHalfExtents recomputes the collision half-extents for ent's current KeepUpright state and orientation.
-func (s *Cage) syncHalfExtents(ent *rigid_body.Entity) {
+func halfExtentsForEntity(ent *rigid_body.Entity) (float64, float64, float64) {
 	if ent.KeepUpright() {
 		w, h, d := ent.GetSize()
 		r := 0.25 * (w + h)
-		s.eRadX, s.eRadY, s.eRadZ = r, r, d*0.5
-	} else {
-		s.eRadX, s.eRadY, s.eRadZ = ent.GetOrientedHalfExtents()
+		return r, r, d * 0.5
 	}
+	return ent.GetOrientedHalfExtents()
+}
+
+// syncHalfExtents recomputes the collision half-extents for ent's current KeepUpright state and orientation.
+func (s *Cage) syncHalfExtents(ent *rigid_body.Entity) {
+	s.eRadX, s.eRadY, s.eRadZ = halfExtentsForEntity(ent)
 }
 
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.[cite: 6]
@@ -299,26 +322,6 @@ func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 	f.rFace = rFace
 	f.lFace = lFace
 	s.facesIdx++
-}
-
-type staticFaceContact struct {
-	bucket                 BucketType
-	dist                   float64
-	pen                    float64
-	nX, nY, nZ             float64
-	anchorX                float64
-	anchorY                float64
-	anchorZ                float64
-	origNX, origNY, origNZ float64
-	origAX, origAY, origAZ float64
-	contactX               float64
-	contactY               float64
-	contactZ               float64
-	minX, maxX             float64
-	minY, maxY             float64
-	minZ, maxZ             float64
-	cornerHit              bool
-	hasContact             bool
 }
 
 // Commit processes pending face overlaps in this Cage against either another dynamic Cage or static world geometry.
@@ -540,16 +543,10 @@ func (s *Cage) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
 	s.flatWallsLen++
 }
 
-func slotMatchesOrigPlane(slot *Entry, nX, nY, nZ, ax, ay, az float64) bool {
-	return slot.rCage == nil &&
-		slot.origNX*nX+slot.origNY*nY+slot.origNZ*nZ > 0.999 &&
-		math.Abs((slot.origAX-ax)*nX+(slot.origAY-ay)*nY+(slot.origAZ-az)*nZ) < planeEpsilon
-}
-
 func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
 	for i := 0; i < s.slotsLen; i++ {
 		slot := s.slots[i]
-		if slot.iMode == ImpactInelastic && slot.bucket.IsWall() && slotMatchesOrigPlane(slot, nX, nY, nZ, ax, ay, az) {
+		if slot.iMode == ImpactInelastic && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			return true
 		}
 	}
@@ -559,7 +556,7 @@ func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
 func (s *Cage) pruneCoplanarStepSlots(nX, nY, nZ, ax, ay, az float64) {
 	for i := 0; i < s.slotsLen; {
 		slot := s.slots[i]
-		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slotMatchesOrigPlane(slot, nX, nY, nZ, ax, ay, az) {
+		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			s.slotsLen--
 			s.slots[i] = s.slots[s.slotsLen]
@@ -572,7 +569,7 @@ func (s *Cage) pruneCoplanarStepSlots(nX, nY, nZ, ax, ay, az float64) {
 func (s *Cage) pruneCoplanarCornerHits(nX, nY, nZ, ax, ay, az float64) {
 	for i := 0; i < s.slotsLen; {
 		slot := s.slots[i]
-		if slot.isCorner && slotMatchesOrigPlane(slot, nX, nY, nZ, ax, ay, az) {
+		if slot.isCorner && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			s.slotsLen--
 			s.slots[i] = s.slots[s.slotsLen]
@@ -582,8 +579,8 @@ func (s *Cage) pruneCoplanarCornerHits(nX, nY, nZ, ax, ay, az float64) {
 	}
 }
 
-// commitDynamicManifold resolves an overlapping or swept-colliding OBB pair using 15-axis SAT (faces + edge-edge)
-// with angular+linear conservative advancement CCD and up to 4 clipped manifold contact points.
+// commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
+// geometry when KeepUpright is active and 15-axis OBB SAT + conservative advancement otherwise.
 func (s *Cage) commitDynamicManifold(rCage *Cage) {
 	var rFace, recipFace IFace
 	for i := 0; i < s.facesIdx; i++ {
@@ -603,16 +600,51 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 
 	lEnt := s.entity
 	rEnt := rCage.GetEntity()
-	rDX, rDY, rDZ := rEnt.GetFrameDisplacement()
-	m := s.manifold
-	m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rDX, rDY, rDZ)
+	lUpright := lEnt.KeepUpright()
+	rUpright := rEnt.KeepUpright()
+	s.syncHalfExtents(lEnt)
 
-	rTx, rTy, rTz := rCage.GetT()
-	rRadX, rRadY, rRadZ := rCage.GetRad()
+	rEntDX, rEntDY, rEntDZ := rEnt.GetFrameDisplacement()
+	rCX, rCY, rCZ := rEnt.GetCenter()
+	rDX, rDY, rDZ := rEntDX, rEntDY, rEntDZ
+	if rCage.session == s.session {
+		rCX, rCY, rCZ = rCage.cX, rCage.cY, rCage.cZ
+		rDX, rDY, rDZ = rCage.dX, rCage.dY, rCage.dZ
+	}
+	rTx, rTy, rTz := rCX+rDX, rCY+rDY, rCZ+rDZ
+	rRadX, rRadY, rRadZ := halfExtentsForEntity(rEnt)
+
+	m := s.manifold
+	switch {
+	case lUpright && rUpright:
+		m.ComputeCylinderSweptAtOffset(
+			s.cX, s.cY, s.cZ, s.dX, s.dY, s.dZ, s.eRadX, s.eRadZ,
+			rCX, rCY, rCZ, rDX, rDY, rDZ, rRadX, rRadZ,
+		)
+	case lUpright:
+		m.ComputeCylinderOBBSweptAtOffset(
+			s.cX, s.cY, s.cZ, s.dX, s.dY, s.dZ, s.eRadX, s.eRadZ,
+			rEnt.BoundingBox, rEntDX, rEntDY, rEntDZ,
+		)
+	case rUpright:
+		m.ComputeOBBCylinderSweptAtOffset(
+			lEnt.BoundingBox, s.dX, s.dY, s.dZ,
+			rCX, rCY, rCZ, rDX, rDY, rDZ, rRadX, rRadZ,
+		)
+	default:
+		m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rEntDX, rEntDY, rEntDZ)
+	}
+
 	mNormalX, mNormalY, mNormalZ := m.GetNormal()
 	b := Normal2BucketType(mNormalX, mNormalY, mNormalZ)
 	if !m.GetHit() {
-		if m.GetGap() <= floorGroundTolerance && s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY) {
+		xyOverlap := s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY)
+		if lUpright && rUpright {
+			sumR := s.eRadX + rRadX
+			dx, dy := s.tX-rTx, s.tY-rTy
+			xyOverlap = dx*dx+dy*dy < sumR*sumR
+		}
+		if m.GetGap() <= floorGroundTolerance && xyOverlap {
 			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
 				s.hasFloor = true
 			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {

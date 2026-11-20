@@ -739,3 +739,159 @@ func TestKeepUprightDynamicColliderSwitching(t *testing.T) {
 		t.Fatalf("re-enable phase: expected upright half-extents (20,20,30) restored, got (%v,%v,%v)", brx, bry, brz)
 	}
 }
+
+func TestDynamicKeepUprightSymmetricCollision(t *testing.T) {
+	rigid_body.SetFps(120)
+	solidFace := newTestFace([3]float64{-1, -1, -1}, [3]float64{1, -1, -1}, [3]float64{0, 1, -1}, 0, 0, 1)
+
+	// Subcase A: Two KeepUpright bodies collide horizontally as yaw-invariant cylinders,
+	// avoiding OBB square-corner hits at diagonal offsets.
+	objGapA := newTestUprightObject(0.0, 0.0, 30.0, 40.0, 40.0, 60.0)
+	objGapB := newTestUprightObject(29.0, 29.0, 30.0, 40.0, 40.0, 60.0)
+	cageGapA := newTestCage(300, objGapA)
+	cageGapB := newTestCage(301, objGapB)
+	cageGapA.Rebuild(18.0, 1)
+	cageGapB.Rebuild(18.0, 1)
+	cageGapA.AddFace(solidFace, solidFace)
+	cageGapA.Commit(cageGapB)
+	if n := cageGapA.GetSlotsLen(); n != 0 {
+		t.Fatalf("subcase A (separated corners): expected 0 cylindrical contacts at dist=41.01 > sumR=40, got %d", n)
+	}
+
+	objCylA := newTestUprightObject(0.0, 0.0, 30.0, 40.0, 40.0, 60.0)
+	objCylB := newTestUprightObject(28.0, 28.0, 30.0, 40.0, 40.0, 60.0)
+	objCylA.ent.SetRotationAngleZ(math.Pi / 4.0)
+	objCylB.ent.SetRotationAngleZ(math.Pi / 6.0)
+	cageCylA := newTestCage(302, objCylA)
+	cageCylB := newTestCage(303, objCylB)
+	cageCylA.Rebuild(18.0, 2)
+	cageCylB.Rebuild(18.0, 2)
+	cageCylA.AddFace(solidFace, solidFace)
+	cageCylA.Commit(cageCylB)
+	if n := cageCylA.GetSlotsLen(); n != 1 {
+		t.Fatalf("subcase A (diagonal overlap): expected 1 radial contact, got %d", n)
+	}
+	slotA := cageCylA.GetSlot(0)
+	nxA, nyA, nzA := slotA.GetNormal()
+	expectedPen := 40.0 - math.Hypot(28.0, 28.0)
+	if math.Abs(nxA+math.Sqrt(0.5)) > 1e-4 || math.Abs(nyA+math.Sqrt(0.5)) > 1e-4 || math.Abs(nzA) > 1e-6 || math.Abs(slotA.GetPenetration()-expectedPen) > 1e-4 {
+		t.Fatalf("subcase A: expected radial normal (-0.707,-0.707,0) and pen=%.4f, got (%v,%v,%v) pen=%v", expectedPen, nxA, nyA, nzA, slotA.GetPenetration())
+	}
+	if cageCylB.GetSlotsLen() != 1 {
+		t.Fatalf("subcase A: expected reciprocal slot on cageCylB, got %d", cageCylB.GetSlotsLen())
+	}
+	nxB, nyB, _ := cageCylB.GetSlot(0).GetNormal()
+	if math.Abs(nxB+nxA) > 1e-6 || math.Abs(nyB+nyA) > 1e-6 {
+		t.Fatalf("subcase A: expected reciprocal opposite normal on B, got A=(%v,%v) B=(%v,%v)", nxA, nyA, nxB, nyB)
+	}
+
+	// Subcase B: Mixed KeepUpright cylinder vs rotated 6-DoF OBB produces smooth rounded corner contact
+	// in both evaluation orders (cylinder->OBB and OBB->cylinder).
+	objBox := newTestDynamicObject(0.0, 0.0, 30.0, 40.0, 40.0, 60.0)
+	objBox.ent.SetRotationAngleZ(math.Pi / 4.0)
+	objCyl := newTestUprightObject(47.0, 1.0, 30.0, 40.0, 40.0, 60.0)
+	cageBox := newTestCage(304, objBox)
+	cageCyl := newTestCage(305, objCyl)
+	cageBox.Rebuild(0.0, 3)
+	cageCyl.Rebuild(18.0, 3)
+	cageCyl.AddFace(solidFace, solidFace)
+	cageCyl.Commit(cageBox)
+	if cageCyl.GetSlotsLen() != 1 || cageBox.GetSlotsLen() != 1 {
+		t.Fatalf("subcase B: expected 1 mutual contact between cylinder and rotated OBB corner, got cyl=%d box=%d", cageCyl.GetSlotsLen(), cageBox.GetSlotsLen())
+	}
+	cSlot := cageCyl.GetSlot(0)
+	cnx, cny, _ := cSlot.GetNormal()
+	cornerX := 20.0 * math.Sqrt2
+	expDist := math.Hypot(47.0-cornerX, 1.0)
+	expNX := (47.0 - cornerX) / expDist
+	expNY := 1.0 / expDist
+	if math.Abs(cnx-expNX) > 1e-4 || math.Abs(cny-expNY) > 1e-4 || math.Abs(cSlot.GetPenetration()-(20.0-expDist)) > 1e-4 {
+		t.Fatalf("subcase B (cyl->OBB): expected rounded corner normal (%v,%v) pen=%v, got (%v,%v) pen=%v",
+			expNX, expNY, 20.0-expDist, cnx, cny, cSlot.GetPenetration())
+	}
+
+	// Reverse evaluation order (OBB->cyl) must yield exact opposite normal and matching penetration.
+	cageBox.Rebuild(0.0, 4)
+	cageCyl.Rebuild(18.0, 4)
+	cageBox.AddFace(solidFace, solidFace)
+	cageBox.Commit(cageCyl)
+	if cageBox.GetSlotsLen() != 1 {
+		t.Fatalf("subcase B (OBB->cyl): expected 1 contact on box, got %d", cageBox.GetSlotsLen())
+	}
+	bnx, bny, _ := cageBox.GetSlot(0).GetNormal()
+	if math.Abs(bnx+expNX) > 1e-4 || math.Abs(bny+expNY) > 1e-4 {
+		t.Fatalf("subcase B (OBB->cyl): expected negated radial normal (%v,%v), got (%v,%v)", -expNX, -expNY, bnx, bny)
+	}
+
+	// Subcase C: Dynamic 6-DoF box resting flat atop a KeepUpright cylinder receives multi-point cap support and hasFloor.
+	objPillar := newTestUprightObject(0.0, 0.0, 10.0, 40.0, 40.0, 20.0)
+	objCrate := newTestDynamicObject(0.0, 0.0, 29.5, 30.0, 30.0, 20.0)
+	cagePillar := newTestCage(306, objPillar)
+	cageCrate := newTestCage(307, objCrate)
+	cagePillar.Rebuild(0.0, 5)
+	cageCrate.Rebuild(0.0, 5)
+	cageCrate.AddFace(solidFace, solidFace)
+	cageCrate.Commit(cagePillar)
+	if !cageCrate.HasFloor() || cageCrate.GetSlotsLen() <= 1 {
+		t.Fatalf("subcase C: expected multi-point Z-cap support (>1 slots) and HasFloor() on crate atop cylinder, got slots=%d hasFloor=%v",
+			cageCrate.GetSlotsLen(), cageCrate.HasFloor())
+	}
+
+	// Subcase D: High-speed swept KeepUpright tunneling check + 0 heap allocations.
+	objBullet := newTestUprightObject(-25.0, 0.0, 30.0, 4.0, 4.0, 4.0)
+	objBullet.ent.SetV(60.0*120.0, 0.0, 0.0)
+	objTarget := newTestUprightObject(0.0, 0.0, 30.0, 40.0, 40.0, 60.0)
+	cageBullet := newTestCage(308, objBullet)
+	cageTarget := newTestCage(309, objTarget)
+	cageBullet.Rebuild(0.0, 6)
+	cageTarget.Rebuild(18.0, 6)
+	cageBullet.AddFace(solidFace, solidFace)
+	cageBullet.Commit(cageTarget)
+	if cageBullet.GetSlotsLen() != 1 {
+		t.Fatalf("subcase D: expected swept KeepUpright tunneling hit, got %d slots", cageBullet.GetSlotsLen())
+	}
+	sweptNX, _, _ := cageBullet.GetSlot(0).GetNormal()
+	if sweptNX > -0.999 {
+		t.Fatalf("subcase D: expected entry-side -X normal preventing forward tunnel, got nx=%v", sweptNX)
+	}
+
+	session := uint64(10)
+	allocs := testing.AllocsPerRun(100, func() {
+		cageCyl.Rebuild(18.0, session)
+		cageBox.Rebuild(0.0, session)
+		cageCyl.AddFace(solidFace, solidFace)
+		cageCyl.Commit(cageBox)
+		cageCylA.Rebuild(18.0, session)
+		cageCylB.Rebuild(18.0, session)
+		cageCylA.AddFace(solidFace, solidFace)
+		cageCylA.Commit(cageCylB)
+		session++
+	})
+	if allocs != 0 {
+		t.Fatalf("subcase D: expected 0 heap allocs in dynamic KeepUpright manifold evaluation, got %v", allocs)
+	}
+
+	// Subcase E: Dynamic runtime SetKeepUpright toggle switches collider behavior immediately.
+	objDynA := newTestDynamicObject(0.0, 0.0, 30.0, 40.0, 40.0, 60.0)
+	objDynB := newTestDynamicObject(29.0, 29.0, 30.0, 40.0, 40.0, 60.0)
+	objDynA.ent.SetKeepUpright(true)
+	objDynB.ent.SetKeepUpright(true)
+	cageDynA := newTestCage(310, objDynA)
+	cageDynB := newTestCage(311, objDynB)
+	cageDynA.Rebuild(18.0, 200)
+	cageDynB.Rebuild(18.0, 200)
+	cageDynA.AddFace(solidFace, solidFace)
+	cageDynA.Commit(cageDynB)
+	if cageDynA.GetSlotsLen() != 0 {
+		t.Fatalf("subcase E (upright): expected 0 cylindrical contacts before SetKeepUpright(false), got %d", cageDynA.GetSlotsLen())
+	}
+	objDynA.ent.SetKeepUpright(false)
+	objDynB.ent.SetKeepUpright(false)
+	cageDynA.Rebuild(0.0, 201)
+	cageDynB.Rebuild(0.0, 201)
+	cageDynA.AddFace(solidFace, solidFace)
+	cageDynA.Commit(cageDynB)
+	if cageDynA.GetSlotsLen() == 0 {
+		t.Fatalf("subcase E (OBB after toggle): expected OBB box overlap after disabling KeepUpright, got 0 contacts")
+	}
+}

@@ -1,6 +1,10 @@
 package collisions
 
-import "github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+import (
+	"math"
+
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+)
 
 const maxPushDepth = 8
 
@@ -115,6 +119,13 @@ func (s *Entry) SetCornerOrigin(isCorner bool, nx, ny, nz, ax, ay, az float64) {
 	s.isCorner = isCorner
 	s.origNX, s.origNY, s.origNZ = nx, ny, nz
 	s.origAX, s.origAY, s.origAZ = ax, ay, az
+}
+
+// MatchesOrigPlane reports whether a static entry matches the stored original plane within tolerance.
+func (s *Entry) MatchesOrigPlane(nX, nY, nZ, ax, ay, az float64) bool {
+	return s.rCage == nil &&
+		s.origNX*nX+s.origNY*nY+s.origNZ*nZ > 0.999 &&
+		math.Abs((s.origAX-ax)*nX+(s.origAY-ay)*nY+(s.origAZ-az)*nZ) < planeEpsilon
 }
 
 // Penetrable reports whether this entry can be penetrated or pushed, following remote cages up to depth.

@@ -128,15 +128,46 @@ func (s *Entry) SetCornerOrigin(isCorner bool, nx, ny, nz, ax, ay, az float64) {
 
 // Penetrable reports whether this entry can be penetrated or pushed, following remote cages up to depth.
 func (s *Entry) Penetrable(depth int) bool {
+	var visited [maxPushDepth]uint64
+	var visitedLen int
+	if s.lCage != nil {
+		if ent := s.lCage.GetEntity(); ent != nil {
+			visited[0] = ent.GetId()
+			visitedLen = 1
+		}
+	}
+	return s.penetrableInternal(depth, &visited, visitedLen)
+}
+
+func (s *Entry) penetrableInternal(depth int, visited *[maxPushDepth]uint64, visitedLen int) bool {
 	if s.iMode == ImpactInelastic {
 		return false
 	}
 	if s.rCage == nil || depth >= maxPushDepth {
 		return true
 	}
-	// Passiamo il controllo al bucket dell'entità remota nella STESSA direzione.
+	rEnt := s.rCage.GetEntity()
+	if rEnt == nil {
+		return true
+	}
+	rId := rEnt.GetId()
+
+	// Check if this remote entity is already in the visited chain (cycle detection)
+	for i := 0; i < visitedLen; i++ {
+		if visited[i] == rId {
+			return false // Closed loop in push direction cannot yield freely
+		}
+	}
+
+	if visitedLen < maxPushDepth {
+		visited[visitedLen] = rId
+		visitedLen++
+	}
+
+	// Pass control to remote entity's bucket along the SAME push direction
 	v := s.rCage.buckets[s.bucket]
-	// Se il bucket remoto non è penetrabile (bloccato da muri o da altre casse bloccate)
-	// allora questa specifica faccia non può essere penetrata/spinta.
-	return v.Penetrable(s.lCage.GetEntity().GetId(), depth+1)
+	if v == nil {
+		return true
+	}
+	return v.penetrableInternal(depth+1, visited, visitedLen)
 }

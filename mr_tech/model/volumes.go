@@ -11,30 +11,45 @@ import (
 
 // Volumes represents a collection of 3D or 2D world, utilizing a hierarchical spatial structure and caching for efficiency.
 type Volumes struct {
-	container []*volumes.Volume
+	container *volumes.Volumes
 	tree      *aabb.Tree
 	cache     map[string]*volumes.Volume
 	streamer  *streaming.WorldStreamer
 }
 
 // NewVolumes initializes a Volumes structure with a container of Volume instances and a cache for quick access by ID.
-func NewVolumes(container []*volumes.Volume) *Volumes {
+func NewVolumes(container *volumes.Volumes) *Volumes {
+	if container == nil {
+		container = volumes.NewVolumes(0)
+	}
 	cache := make(map[string]*volumes.Volume)
-	for _, sec := range container {
-		cache[sec.GetId()] = sec
+	for i := 0; i < container.Len(); i++ {
+		sec := container.Get(i)
+		if sec != nil {
+			cache[sec.GetId()] = sec
+		}
 	}
 	const fatMargin = 2.0
 	vs := &Volumes{
 		container: container,
 		cache:     cache,
-		tree:      aabb.NewTree(uint(len(container)), fatMargin),
+		tree:      aabb.NewTree(uint(container.Len()), fatMargin),
 	}
 	return vs
 }
 
+// NewVolumesFromSlice initializes a Volumes structure from a slice of Volume instances.
+func NewVolumesFromSlice(container []*volumes.Volume) *Volumes {
+	return NewVolumes(volumes.NewVolumesFromSlice(container))
+}
+
 // Setup constructs a new AABB tree based on the current container and populates it with rebuilt location objects.
 func (s *Volumes) Setup() error {
-	for _, volume := range s.container {
+	for i := 0; i < s.container.Len(); i++ {
+		volume := s.container.Get(i)
+		if volume == nil {
+			continue
+		}
 		if err := volume.Setup(volume); err != nil {
 			return err
 		}
@@ -57,13 +72,16 @@ func (s *Volumes) GetVolume(id string) *volumes.Volume {
 }
 
 // GetVolumes returns all Volume objects managed by the Volumes instance.
-func (s *Volumes) GetVolumes() []*volumes.Volume {
+func (s *Volumes) GetVolumes() *volumes.Volumes {
 	return s.container
 }
 
 // Len returns the number of Volume objects contained within the Volumes container.
 func (s *Volumes) Len() int {
-	return len(s.container)
+	if s.container == nil {
+		return 0
+	}
+	return s.container.Len()
 }
 
 // Query retrieves a list of world that overlap with the specified axis-aligned bounding box (AABB).
@@ -254,7 +272,11 @@ func (s *Volumes) AutoSectorize(cellSize float64) {
 		s.EnableStreaming(cellSize, 2, 3, 5)
 	}
 
-	for _, vol := range s.container {
+	if s.container == nil {
+		return
+	}
+	for i := 0; i < s.container.Len(); i++ {
+		vol := s.container.Get(i)
 		if vol == nil {
 			continue
 		}

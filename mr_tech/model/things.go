@@ -83,8 +83,8 @@ func (th *Things) Setup() error {
 		}
 		volume, _ := th.volumes.QueryPoint(ct.Position.X, ct.Position.Y, ct.Position.Z)
 		if volume == nil && ct.Kind == config.ThingDoorDef {
-			if vols := th.volumes.GetVolumes(); len(vols) > 0 {
-				volume = vols[0]
+			if vols := th.volumes.GetVolumes(); vols != nil && vols.Len() > 0 {
+				volume = vols.Get(0)
 			}
 		}
 		if volume == nil {

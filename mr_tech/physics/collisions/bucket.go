@@ -167,27 +167,76 @@ func (b *Bucket) HasEntryFor(entityId uint64) bool {
 
 // Penetrable reports whether this bucket can yield to a push from the given entity within the recursion depth.
 func (b *Bucket) Penetrable(from uint64, depth int) bool {
+	var visited [maxPushDepth]uint64
+	var visitedLen int
+	if from != 0 {
+		visited[0] = from
+		visitedLen = 1
+	}
+	return b.penetrableInternal(depth, &visited, visitedLen)
+}
+
+func (b *Bucket) penetrableInternal(depth int, visited *[maxPushDepth]uint64, visitedLen int) bool {
 	if depth >= maxPushDepth {
 		return true
 	}
-	// Scorriamo TUTTE le entità in questo bucket (multi-pushing)
+
+	// Deduplicate remote entities within this bucket pass:
+	// contact manifold generation creates up to maxPushDepth points for the exact same remote cage.
+	var checked [maxPushDepth]uint64
+	checkedCount := 0
+
 	for i := 0; i < b.containerCounter; i++ {
 		entry := b.currPool[i]
-		// Se tocchiamo direttamente un muro, il bucket è bloccato
+		if entry == nil {
+			continue
+		}
+		// Directly touching an inelastic static wall -> immovable
 		if entry.iMode == ImpactInelastic {
 			return false
 		}
-		if entry.rCage != nil && entry.rCage.GetEntity().GetId() == from {
+		if entry.rCage == nil {
 			continue
 		}
-		// Altrimenti, verifichiamo se l'entità dinamica che stiamo toccando
-		// può essere spinta a sua volta (Attraversamento Ricorsivo del Grafo).
-		// Se anche UNA SOLA entità è bloccata, tutto il nostro fronte di spinta è bloccato!
-		if !entry.Penetrable(depth) {
+		rEnt := entry.rCage.GetEntity()
+		if rEnt == nil {
+			continue
+		}
+		rId := rEnt.GetId()
+
+		// Skip if remote entity is already in the visited caller chain
+		isVisited := false
+		for v := 0; v < visitedLen; v++ {
+			if visited[v] == rId {
+				isVisited = true
+				break
+			}
+		}
+		if isVisited {
+			continue
+		}
+
+		// Deduplicate within this bucket pass so we evaluate each remote entity at most once
+		alreadyChecked := false
+		for c := 0; c < checkedCount; c++ {
+			if checked[c] == rId {
+				alreadyChecked = true
+				break
+			}
+		}
+		if alreadyChecked {
+			continue
+		}
+		if checkedCount < len(checked) {
+			checked[checkedCount] = rId
+			checkedCount++
+		}
+
+		// Recursively evaluate the remote entity
+		if !entry.penetrableInternal(depth, visited, visitedLen) {
 			return false
 		}
 	}
-	// Se nessuna entità oppone resistenza anelastica infinita, il bucket cede.
 	return true
 }
 

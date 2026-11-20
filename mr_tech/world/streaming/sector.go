@@ -23,8 +23,7 @@ type Sector struct {
 	State SectorState
 
 	// Detailed volumes for high-detail geometry, physics collision, and full rendering
-	Volumes    []*volumes.Volume
-	volumesLen int
+	Volumes *volumes.Volumes
 
 	// Optional low-poly proxy volume used for distant skyline rendering
 	ProxyVolume *volumes.Volume
@@ -42,7 +41,7 @@ func NewSector(coord SectorCoord, cellSize float64) *Sector {
 	return &Sector{
 		Coord:   coord,
 		State:   SectorStateUnloaded,
-		Volumes: make([]*volumes.Volume, 0, 16),
+		Volumes: volumes.NewVolumes(0),
 		bounds:  box,
 	}
 }
@@ -52,8 +51,7 @@ func (s *Sector) AddVolume(vol *volumes.Volume) {
 	if vol == nil {
 		return
 	}
-	s.Volumes = append(s.Volumes, vol)
-	s.volumesLen = len(s.Volumes)
+	s.Volumes.Add(vol)
 
 	volBox := vol.GetAABB()
 	if volBox != nil {
@@ -73,5 +71,8 @@ func (s *Sector) GetAABB() *aabb.AABB {
 
 // VolumesLen returns the count of detailed volumes in this sector.
 func (s *Sector) VolumesLen() int {
-	return s.volumesLen
+	if s.Volumes == nil {
+		return 0
+	}
+	return s.Volumes.Len()
 }

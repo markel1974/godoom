@@ -103,7 +103,7 @@ func TestDetachedLimbAutonomousSixDoFRigidBodyPhysics(t *testing.T) {
 	enemyCfg.OnBind = func(other config.IThingConfig) {}
 
 	th := NewThings(256, 10, nil, vols, mats)
-	enemy := th.Create(enemyCfg, vols.GetVolumes()[0]).(*things.Enemy)
+	enemy := th.Create(enemyCfg, vols.GetVolumes().Get(0)).(*things.Enemy)
 	th.addThing(enemy)
 
 	// Run one frame so transforms settle and head center is up to date.
@@ -247,7 +247,7 @@ func TestMultiBodyRagdollPGSSimulationAndJointBreak(t *testing.T) {
 	enemyCfg.OnBind = func(other config.IThingConfig) {}
 
 	th := NewThings(256, 10, nil, vols, mats)
-	enemy := th.Create(enemyCfg, vols.GetVolumes()[0]).(*things.Enemy)
+	enemy := th.Create(enemyCfg, vols.GetVolumes().Get(0)).(*things.Enemy)
 	th.addThing(enemy)
 
 	// Compile alive pose once, then trigger multi-body ragdoll collapse.

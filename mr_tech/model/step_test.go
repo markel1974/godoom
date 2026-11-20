@@ -55,7 +55,7 @@ func newSolidVolume(faces [][3]geometry.XYZ) *Volumes {
 		f := volumes.NewFace(tri, "solid", mat)
 		vol.AddFace(f)
 	}
-	vs := NewVolumes([]*volumes.Volume{vol})
+	vs := NewVolumesFromSlice([]*volumes.Volume{vol})
 	if err := vs.Setup(); err != nil {
 		panic(err)
 	}
@@ -142,7 +142,7 @@ func TestStaticVolumeLocationAndInelasticCallback(t *testing.T) {
 		{{X: 100, Y: 200, Z: 0}, {X: 100, Y: -200, Z: 0}, {X: 100, Y: -200, Z: 200}},
 		{{X: 100, Y: 200, Z: 0}, {X: 100, Y: -200, Z: 200}, {X: 100, Y: 200, Z: 200}},
 	})
-	vol := vols.GetVolumes()[0]
+	vol := vols.GetVolumes().Get(0)
 
 	solver, obj := newStepTestObject(75.0, 0.0, 50.0, 40.0, 40.0, 60.0)
 	obj.ent.SetOnGround(false)

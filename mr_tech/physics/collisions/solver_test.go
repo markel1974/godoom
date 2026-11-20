@@ -3,6 +3,7 @@ package collisions
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -202,5 +203,57 @@ func TestSolverPipelineZeroAllocs(t *testing.T) {
 	})
 	if allocs != 0 {
 		t.Fatalf("expected 0 allocations per solver tick, got %v", allocs)
+	}
+}
+
+func TestPenetrableCycleAndCluster(t *testing.T) {
+	// Set up 3 bodies in a cyclic contact configuration along BucketRight
+	objA := newTestUprightObject(0, 0, 20, 20, 20, 40)
+	objB := newTestUprightObject(30, 0, 20, 20, 20, 40)
+	objC := newTestUprightObject(60, 0, 20, 20, 20, 40)
+
+	solverA := newConfiguredSolver(objA, nil, 0, true, noopCollision, noopCollision)
+	solverB := newConfiguredSolver(objB, nil, 0, true, noopCollision, noopCollision)
+	solverC := newConfiguredSolver(objC, nil, 0, true, noopCollision, noopCollision)
+
+	cageA := solverA.GetCage()
+	cageB := solverB.GetCage()
+	cageC := solverC.GetCage()
+
+	solverA.StagePrepare(1)
+	solverB.StagePrepare(1)
+	solverC.StagePrepare(1)
+
+	// A -> B (with 4 manifold points to test deduplication)
+	for p := 0; p < 4; p++ {
+		cageA.buckets[BucketRight].Add(BucketRight, cageA, cageB, nil, -0.1, 0.1, -1, 0, 0, 20, float64(p*5), 20, 40, ImpactElastic)
+	}
+	// B -> C (with 4 manifold points)
+	for p := 0; p < 4; p++ {
+		cageB.buckets[BucketRight].Add(BucketRight, cageB, cageC, nil, -0.1, 0.1, -1, 0, 0, 50, float64(p*5), 20, 40, ImpactElastic)
+	}
+	// C -> A (cycle back to A!)
+	for p := 0; p < 4; p++ {
+		cageC.buckets[BucketRight].Add(BucketRight, cageC, cageA, nil, -0.1, 0.1, -1, 0, 0, 80, float64(p*5), 20, 40, ImpactElastic)
+	}
+
+	entryA := cageA.buckets[BucketRight].currPool[0]
+
+	// Cycle detection must immediately return without hanging or blowing up stack/CPU
+	done := make(chan bool, 1)
+	var res bool
+	go func() {
+		res = entryA.Penetrable(0)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Successfully terminated in time. Since it's a closed loop mutual cycle, it cannot yield freely.
+		if res != false {
+			t.Fatalf("expected cyclic push chain to not be freely penetrable, got %v", res)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("Penetrable timed out / hung due to cycle in graph!")
 	}
 }

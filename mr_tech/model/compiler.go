@@ -67,7 +67,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 		compilers.NewCompilerLights(cfg.Lights),
 	}
 
-	var allVolumes []*volumes.Volume
+	allVolumes := volumes.NewVolumes(0)
 	var allLights []*lights.Light
 
 	for _, compiler := range pipeline {
@@ -76,7 +76,7 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 			return err
 		}
 		if len(vs) > 0 {
-			allVolumes = append(allVolumes, vs...)
+			allVolumes.Append(vs...)
 		}
 		if len(ls) > 0 {
 			allLights = append(allLights, ls...)

@@ -216,8 +216,10 @@ func (ws *WorldStreamer) executeActivation(coord SectorCoord) {
 		}
 
 		if s.State != SectorStateActive {
-			for i := 0; i < s.volumesLen; i++ {
-				ws.tree.InsertObject(s.Volumes[i])
+			if s.Volumes != nil {
+				for i := 0; i < s.Volumes.Len(); i++ {
+					ws.tree.InsertObject(s.Volumes.Get(i))
+				}
 			}
 			s.State = SectorStateActive
 			ws.activeSectors[coord] = s
@@ -225,8 +227,10 @@ func (ws *WorldStreamer) executeActivation(coord SectorCoord) {
 	} else if dist <= ws.distantRadius && s.ProxyVolume != nil {
 		// Activate distant skyline proxy
 		if s.State == SectorStateActive {
-			for i := 0; i < s.volumesLen; i++ {
-				ws.tree.RemoveObject(s.Volumes[i])
+			if s.Volumes != nil {
+				for i := 0; i < s.Volumes.Len(); i++ {
+					ws.tree.RemoveObject(s.Volumes.Get(i))
+				}
 			}
 			delete(ws.activeSectors, coord)
 		}
@@ -247,8 +251,10 @@ func (ws *WorldStreamer) executeEviction(coord SectorCoord) {
 	}
 
 	if s.State == SectorStateActive {
-		for i := 0; i < s.volumesLen; i++ {
-			ws.tree.RemoveObject(s.Volumes[i])
+		if s.Volumes != nil {
+			for i := 0; i < s.Volumes.Len(); i++ {
+				ws.tree.RemoveObject(s.Volumes.Get(i))
+			}
 		}
 		delete(ws.activeSectors, coord)
 	} else if s.State == SectorStateDistant && s.ProxyVolume != nil {

@@ -65,7 +65,7 @@ func TestKeyedDoorRequiresKeyOpensAndAutoCloses(t *testing.T) {
 	pCfg.Thing.OnBind = noopBind
 	pCfg.Thing.OnCollision = noopCollision
 	pCfg.Thing.OnImpact = noopImpact
-	player := things.NewPlayer(th, pCfg, vols.GetVolumes()[0], false)
+	player := things.NewPlayer(th, pCfg, vols.GetVolumes().Get(0), false)
 	if err := player.Initialize(); err != nil {
 		t.Fatalf("player.Initialize: %v", err)
 	}

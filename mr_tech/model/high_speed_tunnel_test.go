@@ -96,7 +96,7 @@ func TestHighSpeedWallTunneling(t *testing.T) {
 	volWall.AddFace(volumes.NewFace([3]geometry.XYZ{
 		{X: 250, Y: 200, Z: 0}, {X: 250, Y: -200, Z: 200}, {X: 250, Y: 200, Z: 200},
 	}, "w", mat))
-	volsBusy := NewVolumes([]*volumes.Volume{volFloor, volWall})
+	volsBusy := NewVolumesFromSlice([]*volumes.Volume{volFloor, volWall})
 	if err := volsBusy.Setup(); err != nil {
 		t.Fatal(err)
 	}

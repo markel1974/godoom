@@ -22,6 +22,15 @@ func NewVolumes(v int) *Volumes {
 	}
 }
 
+// NewVolumesFromSlice creates a Volumes collection wrapping the provided slice of volumes.
+func NewVolumesFromSlice(vols []*Volume) *Volumes {
+	return &Volumes{
+		vols:       vols,
+		centers:    nil,
+		centersLen: 0,
+	}
+}
+
 func (v *Volumes) Len() int {
 	return len(v.vols)
 }
@@ -34,6 +43,30 @@ func (v *Volumes) Set(idx int, vol *Volume) {
 // Get returns the volume at idx.
 func (v *Volumes) Get(idx int) *Volume {
 	return v.vols[idx]
+}
+
+// Add appends a non-nil volume to the collection.
+func (v *Volumes) Add(vol *Volume) {
+	if vol != nil {
+		v.vols = append(v.vols, vol)
+	}
+}
+
+// Append appends multiple volumes to the collection.
+func (v *Volumes) Append(vols ...*Volume) {
+	for _, vol := range vols {
+		if vol != nil {
+			v.vols = append(v.vols, vol)
+		}
+	}
+}
+
+// Slice returns the underlying slice of Volume pointers.
+func (v *Volumes) Slice() []*Volume {
+	if v == nil {
+		return nil
+	}
+	return v.vols
 }
 
 // GetFaceCount returns the maximum face count among the contained volumes.

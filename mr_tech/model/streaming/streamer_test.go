@@ -53,7 +53,7 @@ func TestStreamingRingActivationAndHysteresis(t *testing.T) {
 			coord := SectorCoord{X: x, Y: y}
 			sec := NewSector(coord, cellSize)
 			// Mock volume to test tree insertion
-			vol := volumes.NewVolume("vol_"+string(rune(x+100))+"_"+string(rune(y+100)), nil, nil, nil)
+			vol := volumes.NewVolumeConcrete(0, "vol_"+string(rune(x+100))+"_"+string(rune(y+100)), "test")
 			sec.AddVolume(vol)
 			streamer.RegisterSector(sec)
 		}

@@ -17,6 +17,17 @@ type IObject interface {
 	//GetEntity() *rigid_body.Entity
 }
 
+const (
+	// EdgeABActive marks triangle edge v0->v1 as an active convex or boundary collision edge.
+	EdgeABActive uint8 = 1 << 0
+	// EdgeBCActive marks triangle edge v1->v2 as an active convex or boundary collision edge.
+	EdgeBCActive uint8 = 1 << 1
+	// EdgeCAActive marks triangle edge v2->v0 as an active convex or boundary collision edge.
+	EdgeCAActive uint8 = 1 << 2
+	// EdgeAllActive marks all three triangle edges as active collision edges.
+	EdgeAllActive uint8 = EdgeABActive | EdgeBCActive | EdgeCAActive
+)
+
 type IFace interface {
 	GetAABB() *aabb.AABB
 
@@ -37,6 +48,8 @@ type IFace interface {
 	IsSolid() bool
 
 	IsSingleSided() bool
+
+	ActiveEdgeMask() uint8
 }
 
 // ImpactInelastic represents a collision mode where objects experience infinite resistance to penetration or displacement.
@@ -483,6 +496,19 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *staticFaceContact, iMo
 		}
 		if added > 0 {
 			return
+		}
+	}
+	if !s.entity.KeepUpright() && !fc.cornerHit {
+		if activeMask := rFace.ActiveEdgeMask(); activeMask != EdgeAllActive && s.eRadX > 0 && s.eRadY > 0 && s.eRadZ > 0 {
+			invRX, invRY, invRZ := 1.0/s.eRadX, 1.0/s.eRadY, 1.0/s.eRadZ
+			_, _, _, feat := closestPointOnTriangleFeature(
+				(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
+				(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
+				(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
+			)
+			if isInactiveTriangleFeature(feat, activeMask) {
+				return
+			}
 		}
 	}
 	px, py, pz := s.projectStabilizedStaticContact(fc)
@@ -1231,7 +1257,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 				if !s.entity.KeepUpright() {
 					impDotOrig := s.passDX*nX + s.passDY*nY + s.passDZ*nZ
 					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-					if distStart <= -0.5*rayEff || impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT) {
+					if distStart <= -0.5*rayEff || impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT, false) {
 						return out, false
 					}
 				}
@@ -1243,7 +1269,7 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 					flipped = true
 				} else if !s.entity.KeepUpright() {
 					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-					if impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT) {
+					if impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT, false) {
 						return out, false
 					}
 				}
@@ -1471,10 +1497,10 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 	if !s.entity.KeepUpright() && !slopeAdjusted && penetration > minOverlap {
 		if spikeTipCap && distTarget >= -satFilterEpsilon {
 			penetration = minOverlap
-		} else if distTarget < -satFilterEpsilon && s.intersectsFiniteTriangle3D(rFace, distStart, distTarget) {
+		} else if distTarget < -satFilterEpsilon && s.intersectsFiniteTriangle3D(rFace, distStart, distTarget, true) {
 			// Preserve full penetration when tunneling through a validated finite 3D triangle.
 		} else if penetration > minOverlap+satFilterEpsilon {
-			if !s.intersectsFiniteTriangle3D(rFace, distStart, distTarget) {
+			if !s.intersectsFiniteTriangle3D(rFace, distStart, distTarget, true) {
 				return out, false
 			}
 		} else {
@@ -1487,11 +1513,13 @@ func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace) (staticFaceCont
 }
 
 // intersectsFiniteTriangle3D reports whether the cage's scaled ellipsoid at target t, plane-crossing point,
-// or swept segment [c -> t] intersects the finite 3D triangle rFace.
-func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget float64) bool {
+// or swept segment [c -> t] intersects the finite 3D triangle rFace. When allowInactiveEdge is false,
+// grazes falling exclusively on inactive coplanar/concave seam edges without piercing are ignored.
+func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget float64, allowInactiveEdge bool) bool {
 	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
 		return true
 	}
+	activeMask := rFace.ActiveEdgeMask()
 	v0x, v0y, v0z := rFace.Get0()
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
@@ -1499,13 +1527,15 @@ func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget flo
 	invRY := 1.0 / s.eRadY
 	invRZ := 1.0 / s.eRadZ
 
-	qx, qy, qz, _ := closestPointOnTriangleZero(
+	qx, qy, qz, featT := closestPointOnTriangleFeature(
 		(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
 		(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
 		(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
 	)
 	if qx*qx+qy*qy+qz*qz < 1.0-1e-9 {
-		return true
+		if allowInactiveEdge || !isInactiveTriangleFeature(featT, activeMask) {
+			return true
+		}
 	}
 
 	if distStart >= -satFilterEpsilon && distTarget < 0.0 {
@@ -1516,32 +1546,38 @@ func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget flo
 		px := s.cX + tauPlane*s.dX
 		py := s.cY + tauPlane*s.dY
 		pz := s.cZ + tauPlane*s.dZ
-		qpx, qpy, qpz, _ := closestPointOnTriangleZero(
+		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature(
 			(v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ,
 			(v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ,
 			(v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ,
 		)
 		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 {
-			return true
+			if allowInactiveEdge || !isInactiveTriangleFeature(featPlane, activeMask) {
+				return true
+			}
 		}
 	}
 
-	_, _, _, _, _, _, segSq, _, _ := closestSegmentToTriangleFromOrigin(
+	_, _, _, _, _, _, segSq, _, pierced, segFeat := closestSegmentToTriangleFeature(
 		s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
 		(v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ,
 		(v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ,
 		(v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ,
 	)
-	return segSq < 1.0-1e-9
+	if segSq >= 1.0-1e-9 {
+		return false
+	}
+	return allowInactiveEdge || pierced || !isInactiveTriangleFeature(segFeat, activeMask)
 }
 
 // refineKeepUprightWall clips a wall triangle to the upright body's Z slab and checks its scaled 2D footprint,
 // rejecting phantom infinite-plane hits outside the slab and computing smooth corner pushouts on edge/vertex hits.
 func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, tunneled, pressedCross bool, distStart, distTarget float64) (valid, cornerHit bool, cNX, cNY, cPen, qxW, qyW float64) {
-	clipPolyZSlab := func(in *[6][3]float64, count int, out *[6][3]float64, zBound float64, keepAbove bool) int {
+	clipPolyZSlab := func(in *[6][3]float64, inEdges *[6]uint8, count int, out *[6][3]float64, outEdges *[6]uint8, zBound float64, keepAbove bool) int {
 		outCount := 0
 		for i := 0; i < count; i++ {
 			curr := in[i]
+			edge := inEdges[i]
 			nextIdx := i + 1
 			if nextIdx == count {
 				nextIdx = 0
@@ -1557,12 +1593,14 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 			}
 			if currIn {
 				out[outCount] = curr
+				outEdges[outCount] = edge
 				outCount++
 				if !nextIn {
 					t := (zBound - curr[2]) / (next[2] - curr[2])
 					out[outCount][0] = curr[0] + t*(next[0]-curr[0])
 					out[outCount][1] = curr[1] + t*(next[1]-curr[1])
 					out[outCount][2] = zBound
+					outEdges[outCount] = 0
 					outCount++
 				}
 			} else if nextIn {
@@ -1570,6 +1608,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 				out[outCount][0] = curr[0] + t*(next[0]-curr[0])
 				out[outCount][1] = curr[1] + t*(next[1]-curr[1])
 				out[outCount][2] = zBound
+				outEdges[outCount] = edge
 				outCount++
 			}
 		}
@@ -1577,20 +1616,24 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	}
 
 	var bufA, bufB [6][3]float64
+	var bufEdgesA, bufEdgesB [6]uint8
 	var poly2D [6][2]float64
+	var polyEdges [6]uint8
 
 	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
 		return true, false, 0, 0, 0, 0, 0
 	}
 
+	activeMask := rFace.ActiveEdgeMask()
 	bufA[0][0], bufA[0][1], bufA[0][2] = rFace.Get0()
 	bufA[1][0], bufA[1][1], bufA[1][2] = rFace.Get1()
 	bufA[2][0], bufA[2][1], bufA[2][2] = rFace.Get2()
+	bufEdgesA[0], bufEdgesA[1], bufEdgesA[2] = EdgeABActive, EdgeBCActive, EdgeCAActive
 
 	invRX := 1.0 / s.eRadX
 	invRY := 1.0 / s.eRadY
 	invRZ := 1.0 / s.eRadZ
-	qx3, qy3, qz3, _ := closestPointOnTriangleZero(
+	qx3, qy3, qz3, feat3 := closestPointOnTriangleFeature(
 		(bufA[0][0]-s.tX)*invRX, (bufA[0][1]-s.tY)*invRY, (bufA[0][2]-s.tZ)*invRZ,
 		(bufA[1][0]-s.tX)*invRX, (bufA[1][1]-s.tY)*invRY, (bufA[1][2]-s.tZ)*invRZ,
 		(bufA[2][0]-s.tX)*invRX, (bufA[2][1]-s.tY)*invRY, (bufA[2][2]-s.tZ)*invRZ,
@@ -1612,7 +1655,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 			px := s.cX + tauPlane*s.dX
 			py := s.cY + tauPlane*s.dY
 			pz := s.cZ + tauPlane*s.dZ
-			qpx, qpy, qpz, _ := closestPointOnTriangleZero(
+			qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature(
 				(bufA[0][0]-px)*invRX, (bufA[0][1]-py)*invRY, (bufA[0][2]-pz)*invRZ,
 				(bufA[1][0]-px)*invRX, (bufA[1][1]-py)*invRY, (bufA[1][2]-pz)*invRZ,
 				(bufA[2][0]-px)*invRX, (bufA[2][1]-py)*invRY, (bufA[2][2]-pz)*invRZ,
@@ -1620,7 +1663,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 			planeSq := qpx*qpx + qpy*qpy + qpz*qpz
 			if planeSq < 1.0-1e-9 {
 				resolvedPlane = true
-				if planeSq > 1e-12 {
+				if planeSq > 1e-12 && !isInactiveTriangleFeature(featPlane, activeMask) {
 					rx, ry, rz = qpx, qpy, qpz
 					qxW, qyW = px+qpx*s.eRadX, py+qpy*s.eRadY
 					checkGraze = true
@@ -1633,7 +1676,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 			if s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
 				return false, false, 0, 0, 0, 0, 0
 			}
-			sx, sy, sz, qx, qy, qz, segSq, startSq, pierced := closestSegmentToTriangleFromOrigin(
+			sx, sy, sz, qx, qy, qz, segSq, startSq, pierced, segFeat := closestSegmentToTriangleFeature(
 				s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
 				(bufA[0][0]-s.cX)*invRX, (bufA[0][1]-s.cY)*invRY, (bufA[0][2]-s.cZ)*invRZ,
 				(bufA[1][0]-s.cX)*invRX, (bufA[1][1]-s.cY)*invRY, (bufA[1][2]-s.cZ)*invRZ,
@@ -1642,10 +1685,16 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 			if segSq >= 1.0-1e-9 || (startSq < 1.0-1e-9 && !(pressedCross && pierced)) {
 				return false, false, 0, 0, 0, 0, 0
 			}
-			if !pierced && segSq > 1e-12 {
-				rx, ry, rz = qx-sx, qy-sy, qz-sz
-				qxW, qyW = s.cX+qx*s.eRadX, s.cY+qy*s.eRadY
-				checkGraze = true
+			if !pierced {
+				if isInactiveTriangleFeature(segFeat, activeMask) {
+					if !tunneled && !pressedCross {
+						return false, false, 0, 0, 0, 0, 0
+					}
+				} else if segSq > 1e-12 {
+					rx, ry, rz = qx-sx, qy-sy, qz-sz
+					qxW, qyW = s.cX+qx*s.eRadX, s.cY+qy*s.eRadY
+					checkGraze = true
+				}
 			}
 		}
 		if checkGraze {
@@ -1667,7 +1716,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		return true, false, 0, 0, 0, 0, 0
 	}
 	if !tunneled && !pressedCross {
-		if bestSq3D <= 1e-12 {
+		if bestSq3D <= 1e-12 || isInactiveTriangleFeature(feat3, activeMask) {
 			return true, false, 0, 0, 0, 0, 0
 		}
 		_, _, rNZ := rFace.GetNormal()
@@ -1704,11 +1753,11 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		return true, true, hx, hy, horizPen3D, s.tX + qx3*s.eRadX, s.tY + qy3*s.eRadY
 	}
 
-	n := clipPolyZSlab(&bufA, 3, &bufB, s.tZ-s.eRadZ, true)
+	n := clipPolyZSlab(&bufA, &bufEdgesA, 3, &bufB, &bufEdgesB, s.tZ-s.eRadZ, true)
 	if n < 3 {
 		return true, false, 0, 0, 0, 0, 0
 	}
-	n = clipPolyZSlab(&bufB, n, &bufA, s.tZ+s.eRadZ, false)
+	n = clipPolyZSlab(&bufB, &bufEdgesB, n, &bufA, &bufEdgesA, s.tZ+s.eRadZ, false)
 	if n < 3 {
 		return true, false, 0, 0, 0, 0, 0
 	}
@@ -1716,6 +1765,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	for i := 0; i < n; i++ {
 		poly2D[i][0] = (bufA[i][0] - s.tX) * invRX
 		poly2D[i][1] = (bufA[i][1] - s.tY) * invRY
+		polyEdges[i] = bufEdgesA[i]
 	}
 
 	//point in convexPoly2D
@@ -1747,6 +1797,7 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 
 	bestSq := math.MaxFloat64
 	var qx, qy float64
+	var bestFeat uint8
 	for i := 0; i < n; i++ {
 		j := i + 1
 		if j == n {
@@ -1770,13 +1821,24 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 		if dSq := px*px + py*py; dSq < bestSq {
 			bestSq = dSq
 			qx, qy = px, py
+			if t <= 0.0 {
+				prev := i - 1
+				if prev < 0 {
+					prev = n - 1
+				}
+				bestFeat = polyEdges[prev] | polyEdges[i]
+			} else if t >= 1.0 {
+				bestFeat = polyEdges[i] | polyEdges[j]
+			} else {
+				bestFeat = polyEdges[i]
+			}
 		}
 	}
 
 	if bestSq >= 1.0-1e-9 {
 		return tunneled, false, 0, 0, 0, 0, 0
 	}
-	if bestSq <= 1e-12 {
+	if bestSq <= 1e-12 || isInactiveTriangleFeature(bestFeat, activeMask) {
 		return true, false, 0, 0, 0, 0, 0
 	}
 
@@ -1806,32 +1868,36 @@ func (s *Cage) refineKeepUprightWall(rFace IFace, nX, nY, penetration float64, t
 	return true, true, hx, hy, horizPen, s.tX + qx*s.eRadX, s.tY + qy*s.eRadY
 }
 
-// closestPointOnSegmentZero returns the point on segment AB closest to the origin, returns A when the segment is degenerate.
-func closestPointOnSegmentZero(ax, ay, az, bx, by, bz float64) (float64, float64, float64) {
+func isInactiveTriangleFeature(featureMask, activeMask uint8) bool {
+	return featureMask != 0 && (featureMask&activeMask) == 0
+}
+
+// closestPointOnSegmentFeature returns the point on segment AB closest to the origin and its boundary feature mask.
+func closestPointOnSegmentFeature(ax, ay, az, bx, by, bz float64, edgeBit, startMask, endMask uint8) (float64, float64, float64, uint8) {
 	abx, aby, abz := bx-ax, by-ay, bz-az
 	denom := abx*abx + aby*aby + abz*abz
 	if denom <= 1e-18 {
-		return ax, ay, az
+		return ax, ay, az, startMask
 	}
 	t := -(ax*abx + ay*aby + az*abz) / denom
 	if t <= 0.0 {
-		return ax, ay, az
+		return ax, ay, az, startMask
 	}
 	if t >= 1.0 {
-		return bx, by, bz
+		return bx, by, bz, endMask
 	}
-	return ax + t*abx, ay + t*aby, az + t*abz
+	return ax + t*abx, ay + t*aby, az + t*abz, edgeBit
 }
 
 // closestPointsSegmentOriginSegment returns the closest point pair between segment [0 -> u] and segment [a -> b]
-// along with their squared distance.
-func closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz float64) (sx, sy, sz, qx, qy, qz, distSq float64) {
+// along with their squared distance and clamped segment parameter t in [0, 1] along AB.
+func closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz float64) (sx, sy, sz, qx, qy, qz, distSq, t float64) {
 	a := ux*ux + uy*uy + uz*uz
 	d2x, d2y, d2z := bx-ax, by-ay, bz-az
 	e := d2x*d2x + d2y*d2y + d2z*d2z
 	f := -(d2x*ax + d2y*ay + d2z*az)
 
-	var s, t float64
+	var s float64
 	if a <= 1e-18 && e <= 1e-18 {
 		s, t = 0.0, 0.0
 	} else if a <= 1e-18 {
@@ -1864,17 +1930,29 @@ func closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz float6
 	qx, qy, qz = ax+t*d2x, ay+t*d2y, az+t*d2z
 	dx, dy, dz := sx-qx, sy-qy, sz-qz
 	distSq = dx*dx + dy*dy + dz*dz
-	return sx, sy, sz, qx, qy, qz, distSq
+	return sx, sy, sz, qx, qy, qz, distSq, t
 }
 
-// closestSegmentToTriangleFromOrigin finds the closest point pair between segment [0 -> u] and triangle (a, b, c),
-// returning their squared distance, the start-point squared distance at the origin, and whether the segment pierces the triangle interior.
-func closestSegmentToTriangleFromOrigin(ux, uy, uz, ax, ay, az, bx, by, bz, cx, cy, cz float64) (sx, sy, sz, qx, qy, qz, bestSq, startSq float64, pierced bool) {
-	q0x, q0y, q0z, _ := closestPointOnTriangleZero(ax, ay, az, bx, by, bz, cx, cy, cz)
+func segmentEndpointFeatureMask(t float64, edgeBit, startMask, endMask uint8) uint8 {
+	if t <= 0.0 {
+		return startMask
+	}
+	if t >= 1.0 {
+		return endMask
+	}
+	return edgeBit
+}
+
+// closestSegmentToTriangleFeature finds the closest point pair between segment [0 -> u] and triangle (a, b, c),
+// returning their squared distance, the start-point squared distance at the origin, whether the segment pierces the
+// triangle interior, and the 3-bit triangle feature mask (0 for interior).
+func closestSegmentToTriangleFeature(ux, uy, uz, ax, ay, az, bx, by, bz, cx, cy, cz float64) (sx, sy, sz, qx, qy, qz, bestSq, startSq float64, pierced bool, featureMask uint8) {
+	q0x, q0y, q0z, bestFeat := closestPointOnTriangleFeature(ax, ay, az, bx, by, bz, cx, cy, cz)
 	startSq = q0x*q0x + q0y*q0y + q0z*q0z
 	bestSq = startSq
 	sx, sy, sz = 0.0, 0.0, 0.0
 	qx, qy, qz = q0x, q0y, q0z
+	featureMask = bestFeat
 
 	abx, aby, abz := bx-ax, by-ay, bz-az
 	acx, acy, acz := cx-ax, cy-ay, cz-az
@@ -1890,108 +1968,113 @@ func closestSegmentToTriangleFromOrigin(ux, uy, uz, ax, ay, az, bx, by, bz, cx, 
 				tau = 1.0
 			}
 			px, py, pz := tau*ux, tau*uy, tau*uz
-			dx, dy, dz, onBoundary := closestPointOnTriangleZero(ax-px, ay-py, az-pz, bx-px, by-py, bz-pz, cx-px, cy-py, cz-pz)
+			dx, dy, dz, featPlane := closestPointOnTriangleFeature(ax-px, ay-py, az-pz, bx-px, by-py, bz-pz, cx-px, cy-py, cz-pz)
 			dSq := dx*dx + dy*dy + dz*dz
-			if !onBoundary || dSq <= 1e-18 {
-				return px, py, pz, px, py, pz, 0.0, startSq, true
+			if featPlane == 0 || dSq <= 1e-18 {
+				return px, py, pz, px, py, pz, 0.0, startSq, true, 0
 			}
 			if dSq < bestSq {
 				bestSq = dSq
 				sx, sy, sz = px, py, pz
 				qx, qy, qz = px+dx, py+dy, pz+dz
+				featureMask = featPlane
 			}
 		}
 	}
 
-	q1x, q1y, q1z, _ := closestPointOnTriangleZero(ax-ux, ay-uy, az-uz, bx-ux, by-uy, bz-uz, cx-ux, cy-uy, cz-uz)
+	q1x, q1y, q1z, feat1 := closestPointOnTriangleFeature(ax-ux, ay-uy, az-uz, bx-ux, by-uy, bz-uz, cx-ux, cy-uy, cz-uz)
 	if dSq := q1x*q1x + q1y*q1y + q1z*q1z; dSq < bestSq {
 		bestSq = dSq
 		sx, sy, sz = ux, uy, uz
 		qx, qy, qz = ux+q1x, uy+q1y, uz+q1z
+		featureMask = feat1
 	}
 
-	if csx, csy, csz, cqx, cqy, cqz, dSq := closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz); dSq < bestSq {
+	if csx, csy, csz, cqx, cqy, cqz, dSq, tSeg := closestPointsSegmentOriginSegment(ux, uy, uz, ax, ay, az, bx, by, bz); dSq < bestSq {
 		bestSq = dSq
 		sx, sy, sz = csx, csy, csz
 		qx, qy, qz = cqx, cqy, cqz
+		featureMask = segmentEndpointFeatureMask(tSeg, EdgeABActive, EdgeABActive|EdgeCAActive, EdgeABActive|EdgeBCActive)
 	}
-	if csx, csy, csz, cqx, cqy, cqz, dSq := closestPointsSegmentOriginSegment(ux, uy, uz, bx, by, bz, cx, cy, cz); dSq < bestSq {
+	if csx, csy, csz, cqx, cqy, cqz, dSq, tSeg := closestPointsSegmentOriginSegment(ux, uy, uz, bx, by, bz, cx, cy, cz); dSq < bestSq {
 		bestSq = dSq
 		sx, sy, sz = csx, csy, csz
 		qx, qy, qz = cqx, cqy, cqz
+		featureMask = segmentEndpointFeatureMask(tSeg, EdgeBCActive, EdgeABActive|EdgeBCActive, EdgeBCActive|EdgeCAActive)
 	}
-	if csx, csy, csz, cqx, cqy, cqz, dSq := closestPointsSegmentOriginSegment(ux, uy, uz, cx, cy, cz, ax, ay, az); dSq < bestSq {
+	if csx, csy, csz, cqx, cqy, cqz, dSq, tSeg := closestPointsSegmentOriginSegment(ux, uy, uz, cx, cy, cz, ax, ay, az); dSq < bestSq {
 		bestSq = dSq
 		sx, sy, sz = csx, csy, csz
 		qx, qy, qz = cqx, cqy, cqz
+		featureMask = segmentEndpointFeatureMask(tSeg, EdgeCAActive, EdgeBCActive|EdgeCAActive, EdgeABActive|EdgeCAActive)
 	}
-	return sx, sy, sz, qx, qy, qz, bestSq, startSq, false
+	return sx, sy, sz, qx, qy, qz, bestSq, startSq, false, featureMask
 }
 
-// closestPointOnTriangleZero returns the closest point on 3D triangle (a, b, c) to the origin
-// and reports whether that point lies on a vertex or edge boundary rather than the triangle interior.
-func closestPointOnTriangleZero(ax, ay, az, bx, by, bz, cx, cy, cz float64) (qx, qy, qz float64, onBoundary bool) {
+// closestPointOnTriangleFeature returns the closest point on 3D triangle (a, b, c) to the origin
+// and a 3-bit mask of active triangle edges touched (0 means the triangle interior).
+func closestPointOnTriangleFeature(ax, ay, az, bx, by, bz, cx, cy, cz float64) (qx, qy, qz float64, featureMask uint8) {
 	abx, aby, abz := bx-ax, by-ay, bz-az
 	acx, acy, acz := cx-ax, cy-ay, cz-az
 	apx, apy, apz := -ax, -ay, -az
 	d1 := abx*apx + aby*apy + abz*apz
 	d2 := acx*apx + acy*apy + acz*apz
 	if d1 <= 0.0 && d2 <= 0.0 {
-		return ax, ay, az, true
+		return ax, ay, az, EdgeABActive | EdgeCAActive
 	}
 
 	bpx, bpy, bpz := -bx, -by, -bz
 	d3 := abx*bpx + aby*bpy + abz*bpz
 	d4 := acx*bpx + acy*bpy + acz*bpz
 	if d3 >= 0.0 && d4 <= d3 {
-		return bx, by, bz, true
+		return bx, by, bz, EdgeABActive | EdgeBCActive
 	}
 
 	vc := d1*d4 - d3*d2
 	if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
 		v := d1 / (d1 - d3)
-		return ax + v*abx, ay + v*aby, az + v*abz, true
+		return ax + v*abx, ay + v*aby, az + v*abz, EdgeABActive
 	}
 
 	cpx, cpy, cpz := -cx, -cy, -cz
 	d5 := abx*cpx + aby*cpy + abz*cpz
 	d6 := acx*cpx + acy*cpy + acz*cpz
 	if d6 >= 0.0 && d5 <= d6 {
-		return cx, cy, cz, true
+		return cx, cy, cz, EdgeBCActive | EdgeCAActive
 	}
 
 	vb := d5*d2 - d1*d6
 	if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
 		w := d2 / (d2 - d6)
-		return ax + w*acx, ay + w*acy, az + w*acz, true
+		return ax + w*acx, ay + w*acy, az + w*acz, EdgeCAActive
 	}
 
 	va := d3*d6 - d5*d4
 	if va <= 0.0 && (d4-d3) >= 0.0 && (d5-d6) >= 0.0 {
 		w := (d4 - d3) / ((d4 - d3) + (d5 - d6))
-		return bx + w*(cx-bx), by + w*(cy-by), bz + w*(cz-bz), true
+		return bx + w*(cx-bx), by + w*(cy-by), bz + w*(cz-bz), EdgeBCActive
 	}
 
 	denom := va + vb + vc
 	if denom <= 1e-18 {
-		q0x, q0y, q0z := closestPointOnSegmentZero(ax, ay, az, bx, by, bz)
+		q0x, q0y, q0z, f0 := closestPointOnSegmentFeature(ax, ay, az, bx, by, bz, EdgeABActive, EdgeABActive|EdgeCAActive, EdgeABActive|EdgeBCActive)
 		bestSq := q0x*q0x + q0y*q0y + q0z*q0z
-		q1x, q1y, q1z := closestPointOnSegmentZero(ax, ay, az, cx, cy, cz)
+		q1x, q1y, q1z, f1 := closestPointOnSegmentFeature(ax, ay, az, cx, cy, cz, EdgeCAActive, EdgeABActive|EdgeCAActive, EdgeBCActive|EdgeCAActive)
 		if dSq := q1x*q1x + q1y*q1y + q1z*q1z; dSq < bestSq {
 			bestSq = dSq
-			q0x, q0y, q0z = q1x, q1y, q1z
+			q0x, q0y, q0z, f0 = q1x, q1y, q1z, f1
 		}
-		q2x, q2y, q2z := closestPointOnSegmentZero(bx, by, bz, cx, cy, cz)
+		q2x, q2y, q2z, f2 := closestPointOnSegmentFeature(bx, by, bz, cx, cy, cz, EdgeBCActive, EdgeABActive|EdgeBCActive, EdgeBCActive|EdgeCAActive)
 		if dSq := q2x*q2x + q2y*q2y + q2z*q2z; dSq < bestSq {
-			q0x, q0y, q0z = q2x, q2y, q2z
+			q0x, q0y, q0z, f0 = q2x, q2y, q2z, f2
 		}
-		return q0x, q0y, q0z, true
+		return q0x, q0y, q0z, f0
 	}
 
 	invDenom := 1.0 / denom
 	v := vb * invDenom
 	w := vc * invDenom
-	return ax + abx*v + acx*w, ay + aby*v + acy*w, az + abz*v + acz*w, false
+	return ax + abx*v + acx*w, ay + aby*v + acy*w, az + abz*v + acz*w, 0
 }
 
 // refineKeepUprightSlope validates finite 3D triangle vs ellipsoid contact for floor/ceiling faces
@@ -2004,28 +2087,34 @@ func (s *Cage) refineKeepUprightSlope(rFace IFace, bucket BucketType, nX, nY, nZ
 	invRY := 1.0 / s.eRadY
 	invRZ := 1.0 / s.eRadZ
 
+	activeMask := rFace.ActiveEdgeMask()
 	v0x, v0y, v0z := rFace.Get0()
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
 
-	qx, qy, qz, onBoundary := closestPointOnTriangleZero(
+	qx, qy, qz, feat := closestPointOnTriangleFeature(
 		(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
 		(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
 		(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
 	)
+	onBoundary := feat != 0
+	inactiveEdge := isInactiveTriangleFeature(feat, activeMask)
 
 	bestSq := qx*qx + qy*qy + qz*qz
 	if bestSq >= 1.0-1e-9 {
 		if !tunneled && s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
 			return false, false, false, 0, 0, 0, 0, 0, 0, 0
 		}
-		_, _, _, _, _, _, segSq, startSq, _ := closestSegmentToTriangleFromOrigin(
+		_, _, _, _, _, _, segSq, startSq, pierced, segFeat := closestSegmentToTriangleFeature(
 			s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
 			(v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ,
 			(v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ,
 			(v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ,
 		)
 		if segSq >= 1.0-1e-9 || (!tunneled && startSq < 1.0-1e-9) {
+			return false, false, false, 0, 0, 0, 0, 0, 0, 0
+		}
+		if !tunneled && !pierced && isInactiveTriangleFeature(segFeat, activeMask) {
 			return false, false, false, 0, 0, 0, 0, 0, 0, 0
 		}
 		return true, false, false, 0, 0, 0, 0, 0, 0, 0
@@ -2048,29 +2137,31 @@ func (s *Cage) refineKeepUprightSlope(rFace IFace, bucket BucketType, nX, nY, nZ
 		return false, false, false, 0, 0, 0, 0, 0, 0, 0
 	}
 
-	// Side/edge hits on ledges or sloped bevels should separate horizontally when Z separation fights the floor/ceiling.
-	qXY := math.Hypot(qx, qy)
-	if !tunneled && qXY > 1e-6 && math.Abs(qz) < 1.0-1e-9 {
-		rZ := math.Sqrt(math.Max(0.0, 1.0-qz*qz))
-		if rZ > qXY {
-			scaleH := rZ/qXY - 1.0
-			dxH := -qx * scaleH * s.eRadX
-			dyH := -qy * scaleH * s.eRadY
-			if penHoriz := math.Hypot(dxH, dyH); penHoriz > 1e-12 {
-				wrongSideOfPlane := (bucket == BucketCeiling && qz < 0.0) || (bucket == BucketFloor && qz > 0.0)
-				midBodyEdge := onBoundary && math.Abs(qz) < 0.707 && penHoriz < penetration*0.85
-				if (wrongSideOfPlane && penHoriz <= pen3D*2.0) || midBodyEdge {
-					return true, true, onBoundary, dxH / penHoriz, dyH / penHoriz, 0.0, penHoriz, qxW, qyW, qzW
+	if !inactiveEdge {
+		// Side/edge hits on ledges or sloped bevels should separate horizontally when Z separation fights the floor/ceiling.
+		qXY := math.Hypot(qx, qy)
+		if !tunneled && qXY > 1e-6 && math.Abs(qz) < 1.0-1e-9 {
+			rZ := math.Sqrt(math.Max(0.0, 1.0-qz*qz))
+			if rZ > qXY {
+				scaleH := rZ/qXY - 1.0
+				dxH := -qx * scaleH * s.eRadX
+				dyH := -qy * scaleH * s.eRadY
+				if penHoriz := math.Hypot(dxH, dyH); penHoriz > 1e-12 {
+					wrongSideOfPlane := (bucket == BucketCeiling && qz < 0.0) || (bucket == BucketFloor && qz > 0.0)
+					midBodyEdge := onBoundary && math.Abs(qz) < 0.707 && penHoriz < penetration*0.85
+					if (wrongSideOfPlane && penHoriz <= pen3D*2.0) || midBodyEdge {
+						return true, true, onBoundary, dxH / penHoriz, dyH / penHoriz, 0.0, penHoriz, qxW, qyW, qzW
+					}
 				}
 			}
 		}
-	}
 
-	// For non-flat sloped ceiling/floor edges or oversized infinite-plane penetrations, use exact 3D finite-triangle separation.
-	if math.Abs(nZ) < 0.999 && (onBoundary || pen3D < penetration*0.75) {
-		nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
-		if pen3D < penetration-satFilterEpsilon || (nx3*nX+ny3*nY+nz3*nZ) > 0.0 {
-			return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW
+		// For non-flat sloped ceiling/floor edges or oversized infinite-plane penetrations, use exact 3D finite-triangle separation.
+		if math.Abs(nZ) < 0.999 && (onBoundary || pen3D < penetration*0.75) {
+			nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
+			if pen3D < penetration-satFilterEpsilon || (nx3*nX+ny3*nY+nz3*nZ) > 0.0 {
+				return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW
+			}
 		}
 	}
 

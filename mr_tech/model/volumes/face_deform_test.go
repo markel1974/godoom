@@ -4,7 +4,9 @@ import (
 	"math"
 	"testing"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 func TestFaceDeform(t *testing.T) {
@@ -264,4 +266,171 @@ func TestFacesTessellateMinEdgeAndBuffers(t *testing.T) {
 	}
 
 	_ = countAfterFirst
+}
+
+func TestFacesRebuildActiveEdges(t *testing.T) {
+	t.Run("coplanar_quad", func(t *testing.T) {
+		f1 := NewFace([3]geometry.XYZ{
+			{X: 0, Y: 0, Z: 0},
+			{X: 10, Y: 0, Z: 0},
+			{X: 0, Y: 10, Z: 0},
+		}, "q1", nil)
+		f2 := NewFace([3]geometry.XYZ{
+			{X: 10, Y: 0, Z: 0},
+			{X: 10, Y: 10, Z: 0},
+			{X: 0, Y: 10, Z: 0},
+		}, "q2", nil)
+
+		faces := NewFaces(0, false)
+		faces.Add(f1)
+		faces.Add(f2)
+		faces.Rebuild()
+
+		// Shared diagonal: f1 edge 1 (BC) and f2 edge 2 (CA) must be inactive.
+		if f1.IsEdgeActive(1) {
+			t.Errorf("expected f1 shared diagonal edge 1 (BC) to be inactive, mask=%03b", f1.ActiveEdgeMask())
+		}
+		if f2.IsEdgeActive(2) {
+			t.Errorf("expected f2 shared diagonal edge 2 (CA) to be inactive, mask=%03b", f2.ActiveEdgeMask())
+		}
+		// Outer boundary edges must stay active.
+		if !f1.IsEdgeActive(0) || !f1.IsEdgeActive(2) {
+			t.Errorf("expected f1 boundary edges 0 and 2 to remain active, mask=%03b", f1.ActiveEdgeMask())
+		}
+		if !f2.IsEdgeActive(0) || !f2.IsEdgeActive(1) {
+			t.Errorf("expected f2 boundary edges 0 and 1 to remain active, mask=%03b", f2.ActiveEdgeMask())
+		}
+	})
+
+	t.Run("concave_floor_wall_crease", func(t *testing.T) {
+		// Floor faces +Z (y > 0), wall faces +Y (z > 0), forming an interior concave 90-degree crease at y=0, z=0.
+		floorTri := NewFace([3]geometry.XYZ{
+			{X: 0, Y: 0, Z: 0},
+			{X: 10, Y: 0, Z: 0},
+			{X: 0, Y: 10, Z: 0},
+		}, "floor", nil)
+		wallTri := NewFace([3]geometry.XYZ{
+			{X: 10, Y: 0, Z: 0},
+			{X: 0, Y: 0, Z: 0},
+			{X: 0, Y: 0, Z: 10},
+		}, "wall", nil)
+
+		faces := NewFaces(0, false)
+		faces.Add(floorTri)
+		faces.Add(wallTri)
+		faces.Rebuild()
+
+		if floorTri.IsEdgeActive(0) {
+			t.Errorf("expected concave shared edge 0 on floor to be inactive, mask=%03b", floorTri.ActiveEdgeMask())
+		}
+		if wallTri.IsEdgeActive(0) {
+			t.Errorf("expected concave shared edge 0 on wall to be inactive, mask=%03b", wallTri.ActiveEdgeMask())
+		}
+		if !floorTri.IsEdgeActive(1) || !floorTri.IsEdgeActive(2) || !wallTri.IsEdgeActive(1) || !wallTri.IsEdgeActive(2) {
+			t.Errorf("expected boundary edges to stay active, floor=%03b wall=%03b", floorTri.ActiveEdgeMask(), wallTri.ActiveEdgeMask())
+		}
+	})
+
+	t.Run("convex_step_edge", func(t *testing.T) {
+		// Top faces +Z (y > 0), front riser faces -Y (z < 10), forming an exterior convex 90-degree step edge at y=0, z=10.
+		topTri := NewFace([3]geometry.XYZ{
+			{X: 0, Y: 0, Z: 10},
+			{X: 10, Y: 0, Z: 10},
+			{X: 0, Y: 10, Z: 10},
+		}, "top", nil)
+		frontTri := NewFace([3]geometry.XYZ{
+			{X: 10, Y: 0, Z: 10},
+			{X: 0, Y: 0, Z: 10},
+			{X: 0, Y: 0, Z: 0},
+		}, "front", nil)
+
+		faces := NewFaces(0, false)
+		faces.Add(topTri)
+		faces.Add(frontTri)
+		faces.Rebuild()
+
+		if topTri.ActiveEdgeMask() != EdgeAllActive {
+			t.Errorf("expected all edges active on convex step top, got %03b", topTri.ActiveEdgeMask())
+		}
+		if frontTri.ActiveEdgeMask() != EdgeAllActive {
+			t.Errorf("expected all edges active on convex step front, got %03b", frontTri.ActiveEdgeMask())
+		}
+	})
+}
+
+func TestVolumeDeformUpdatesActiveEdges(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
+
+	// Part A: fixed topology toggling coplanar -> convex ridge -> concave valley.
+	vol := NewVolumeConcrete(1, "deform_edges", "floor")
+	vol.SetAllowTessellate(false)
+
+	f1 := NewFace([3]geometry.XYZ{
+		{X: 0, Y: 0, Z: 0},
+		{X: 10, Y: 0, Z: 0},
+		{X: 0, Y: 10, Z: 0},
+	}, "f1", solidMat)
+	f2 := NewFace([3]geometry.XYZ{
+		{X: 10, Y: 0, Z: 0},
+		{X: 10, Y: 10, Z: 0},
+		{X: 0, Y: 10, Z: 0},
+	}, "f2", solidMat)
+	vol.AddFace(f1)
+	vol.AddFace(f2)
+	vol.Rebuild()
+
+	if f1.IsEdgeActive(1) || f2.IsEdgeActive(2) {
+		t.Fatalf("expected initially coplanar shared diagonal to be inactive, f1=%03b f2=%03b", f1.ActiveEdgeMask(), f2.ActiveEdgeMask())
+	}
+
+	// Push vertex (0,10,0) upward along +Z to form a convex ridge along the shared diagonal.
+	if !vol.Deform(geometry.XYZ{X: 0, Y: 10, Z: 0}, geometry.XYZ{X: 0, Y: 0, Z: 4}, 6.0) {
+		t.Fatalf("expected upward bump deform to succeed")
+	}
+	if !f1.IsEdgeActive(1) || !f2.IsEdgeActive(2) {
+		t.Errorf("expected convex ridge shared diagonal to become active after upward bump, f1=%03b f2=%03b", f1.ActiveEdgeMask(), f2.ActiveEdgeMask())
+	}
+
+	// Push vertex (0,10,4) downward into -Z (to Z=-4) to form a concave crease along the shared diagonal.
+	if !vol.Deform(geometry.XYZ{X: 0, Y: 10, Z: 4}, geometry.XYZ{X: 0, Y: 0, Z: -8}, 6.0) {
+		t.Fatalf("expected downward dent deform to succeed")
+	}
+	if f1.IsEdgeActive(1) || f2.IsEdgeActive(2) {
+		t.Errorf("expected concave crease shared diagonal to become inactive after dent, f1=%03b f2=%03b", f1.ActiveEdgeMask(), f2.ActiveEdgeMask())
+	}
+
+	// Part B: with dynamic tessellation enabled, DeformDent subdivides and reclassifies all shared edges via Rebuild().
+	volTess := NewVolumeConcrete(2, "deform_tess_edges", "floor")
+	t1 := NewFace([3]geometry.XYZ{
+		{X: 0, Y: 0, Z: 0},
+		{X: 40, Y: 0, Z: 0},
+		{X: 0, Y: 40, Z: 0},
+	}, "t1", solidMat)
+	t2 := NewFace([3]geometry.XYZ{
+		{X: 40, Y: 0, Z: 0},
+		{X: 40, Y: 40, Z: 0},
+		{X: 0, Y: 40, Z: 0},
+	}, "t2", solidMat)
+	volTess.AddFace(t1)
+	volTess.AddFace(t2)
+	volTess.Rebuild()
+
+	if !volTess.DeformDent(geometry.XYZ{X: 20, Y: 20, Z: 0}, geometry.XYZ{X: 0, Y: 0, Z: 1}, 3.0, 12.0) {
+		t.Fatalf("expected tessellated DeformDent to succeed")
+	}
+	if volTess.faces.Len() <= 2 {
+		t.Fatalf("expected dynamic tessellation to split faces, got count=%d", volTess.faces.Len())
+	}
+
+	// Verify at least one shared internal edge became inactive (coplanar/concave) after tessellation+dent.
+	inactiveCount := 0
+	for i := 0; i < volTess.faces.Len(); i++ {
+		fc := volTess.faces.At(i)
+		if fc.ActiveEdgeMask() != EdgeAllActive {
+			inactiveCount++
+		}
+	}
+	if inactiveCount == 0 {
+		t.Errorf("expected tessellated volume to classify coplanar/concave shared edges as inactive")
+	}
 }

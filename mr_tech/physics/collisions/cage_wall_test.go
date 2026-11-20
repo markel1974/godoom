@@ -46,6 +46,7 @@ type testFace struct {
 	nx, ny, nz  float64
 	box         *aabb.AABB
 	singleSided bool
+	edgeMask    uint8
 }
 
 func newTestFace(v0, v1, v2 [3]float64, nx, ny, nz float64) *testFace {
@@ -58,13 +59,14 @@ func newTestFace(v0, v1, v2 [3]float64, nx, ny, nz float64) *testFace {
 	box := aabb.NewAABB()
 	box.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
 	return &testFace{
-		v0:  v0,
-		v1:  v1,
-		v2:  v2,
-		nx:  nx,
-		ny:  ny,
-		nz:  nz,
-		box: box,
+		v0:       v0,
+		v1:       v1,
+		v2:       v2,
+		nx:       nx,
+		ny:       ny,
+		nz:       nz,
+		box:      box,
+		edgeMask: EdgeAllActive,
 	}
 }
 
@@ -84,6 +86,7 @@ func (f *testFace) Get1() (float64, float64, float64) { return f.v1[0], f.v1[1],
 func (f *testFace) Get2() (float64, float64, float64) { return f.v2[0], f.v2[1], f.v2[2] }
 func (f *testFace) IsSolid() bool                     { return true }
 func (f *testFace) IsSingleSided() bool               { return f.singleSided }
+func (f *testFace) ActiveEdgeMask() uint8             { return f.edgeMask }
 
 func newTestCage(_ uint64, obj *testObject) *Cage {
 	return obj.solver.GetCage()
@@ -555,5 +558,102 @@ func TestKeepUprightPressedCornerGrazingClamps(t *testing.T) {
 	px, py, _ := obj58.ent.GetCenter()
 	if d := (px-3168.00)*(-0.9807) + (py-3212.00)*0.1955; d < 2.45 {
 		t.Fatalf("expected corner sweep clamped to front +n side (d >= 2.45), got d=%.3f at (%.3f,%.3f)", d, px, py)
+	}
+}
+
+func newTestDynamicObject(cx, cy, cz, w, h, d float64) *testObject {
+	solver := NewSolver(true, 80.0, 0.0, 0.2, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0.0)
+	ent := solver.GetEntity()
+	ent.Rebuild(cx-w*0.5, cy-h*0.5, cz-d*0.5, w, h, d)
+	ent.SetKeepUpright(false)
+	obj := &testObject{
+		solver: solver,
+		ent:    ent,
+		box:    aabb.NewAABB(),
+	}
+	_ = solver.Setup(obj)
+	return obj
+}
+
+func TestActiveEdgeMaskSuppressesSeamDeflection(t *testing.T) {
+	// Subcase A: Single half-quad wall triangle with inactive diagonal CA (edge 2) tested alone
+	// in both 3D proximity and Z-slab crossing must keep flat wall normal (0,-1,0) without X kick.
+	t1 := newTestFace([3]float64{0, 200, 0}, [3]float64{200, 200, 0}, [3]float64{200, 200, 100}, 0, -1, 0)
+	t1.edgeMask = EdgeABActive | EdgeBCActive
+
+	obj3D := newTestUprightObject(115.0, 188.0, 72.0, 40.0, 40.0, 60.0)
+	cage3D := newTestCage(100, obj3D)
+	cage3D.Rebuild(18.0, 1)
+	cage3D.AddFace(t1, nil)
+	cage3D.Commit(nil)
+	if cage3D.GetSlotsLen() == 0 {
+		t.Fatalf("subcase A (3D): expected wall contact on t1")
+	}
+	for i := 0; i < cage3D.GetSlotsLen(); i++ {
+		nx, ny, _ := cage3D.GetSlot(i).GetNormal()
+		if math.Abs(nx) > 1e-6 || ny > -0.999 {
+			t.Fatalf("subcase A (3D): inactive diagonal leaked lateral push (%v, %v)", nx, ny)
+		}
+	}
+
+	objSlab := newTestUprightObject(114.0, 195.0, 88.0, 40.0, 40.0, 60.0)
+	objSlab.ent.SetV(0.0, 5.5*120.0, 0.0)
+	cageSlab := newTestCage(101, objSlab)
+	cageSlab.Rebuild(18.0, 1)
+	cageSlab.AddFace(t1, nil)
+	cageSlab.Commit(nil)
+	if cageSlab.GetSlotsLen() == 0 {
+		t.Fatalf("subcase A (Z-slab): expected wall contact on t1")
+	}
+	for i := 0; i < cageSlab.GetSlotsLen(); i++ {
+		nx, ny, _ := cageSlab.GetSlot(i).GetNormal()
+		if math.Abs(nx) > 1e-6 || ny > -0.999 {
+			t.Fatalf("subcase A (Z-slab): inactive diagonal leaked lateral push (%v, %v)", nx, ny)
+		}
+	}
+
+	// Subcase B: Walkable 30-deg ramp with bottom edge AB (y=100, z=0) marked inactive (concave floor crease)
+	// must keep floor/ramp normal instead of converting into a horizontal -Y wall kick.
+	sin30 := 0.5
+	cos30 := math.Sqrt(3.0) * 0.5
+	rampZ := 100.0 * (sin30 / cos30)
+	ramp := newTestFace(
+		[3]float64{0, 100, 0},
+		[3]float64{200, 100, 0},
+		[3]float64{0, 200, rampZ},
+		0.0, -sin30, cos30,
+	)
+	ramp.edgeMask = EdgeBCActive | EdgeCAActive
+
+	objRamp := newTestUprightObject(50.0, 89.0, 15.0, 40.0, 40.0, 60.0)
+	cageRamp := newTestCage(102, objRamp)
+	cageRamp.Rebuild(18.0, 1)
+	cageRamp.AddFace(ramp, nil)
+	cageRamp.Commit(nil)
+	if cageRamp.GetSlotsLen() == 0 {
+		t.Fatalf("subcase B: expected ramp floor contact")
+	}
+	_, rny, rnz := cageRamp.GetSlot(0).GetNormal()
+	if rnz < 0.8 || rny < -0.55 {
+		t.Fatalf("subcase B: inactive concave ramp crease produced horizontal kick normal (ny=%v, nz=%v)", rny, rnz)
+	}
+	if !cageRamp.HasFloor() {
+		t.Fatalf("subcase B: expected HasFloor() to remain true on walkable ramp")
+	}
+
+	// Subcase C: Dynamic (!KeepUpright) rigid body slightly behind a single-sided wall's inactive diagonal seam
+	// must be ignored rather than triggering a phantom backface seam catch.
+	tBack := newTestFace([3]float64{0, 200, 0}, [3]float64{200, 200, 0}, [3]float64{200, 200, 100}, 0, -1, 0)
+	tBack.singleSided = true
+	tBack.edgeMask = EdgeABActive | EdgeBCActive
+
+	objDyn := newTestDynamicObject(110.0, 202.0, 62.0, 20.0, 20.0, 20.0)
+	objDyn.ent.SetV(0.0, 2.0*120.0, 0.0)
+	cageDyn := newTestCage(103, objDyn)
+	cageDyn.Rebuild(0.0, 1)
+	cageDyn.AddFace(tBack, nil)
+	cageDyn.Commit(nil)
+	if n := cageDyn.GetSlotsLen(); n != 0 {
+		t.Fatalf("subcase C: expected 0 backface seam contacts for !KeepUpright body on inactive diagonal, got %d", n)
 	}
 }

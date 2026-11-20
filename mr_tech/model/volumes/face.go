@@ -10,6 +10,17 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+const (
+	// EdgeABActive marks triangle edge p0->p1 as an active convex/boundary collision edge.
+	EdgeABActive uint8 = 1 << 0
+	// EdgeBCActive marks triangle edge p1->p2 as an active convex/boundary collision edge.
+	EdgeBCActive uint8 = 1 << 1
+	// EdgeCAActive marks triangle edge p2->p0 as an active convex/boundary collision edge.
+	EdgeCAActive uint8 = 1 << 2
+	// EdgeAllActive marks all three triangle edges as active collision edges.
+	EdgeAllActive = EdgeABActive | EdgeBCActive | EdgeCAActive
+)
+
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
 	id          int
@@ -24,15 +35,17 @@ type Face struct {
 	v           [3]float64
 	lockUV      bool
 	singleSided bool
+	activeEdges uint8
 }
 
 func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 	out := &Face{
-		material: material,
-		tri:      geometry.NewTriangle3D([3]geometry.XYZ{}),
-		aabb:     aabb.NewAABB(),
-		u:        u,
-		v:        v,
+		material:    material,
+		tri:         geometry.NewTriangle3D([3]geometry.XYZ{}),
+		aabb:        aabb.NewAABB(),
+		u:           u,
+		v:           v,
+		activeEdges: EdgeAllActive,
 	}
 	return out
 }
@@ -40,10 +53,11 @@ func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
 func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Face {
 	out := &Face{
-		label:    label,
-		material: material,
-		aabb:     aabb.NewAABB(),
-		tri:      geometry.NewTriangle3D(tri),
+		label:       label,
+		material:    material,
+		aabb:        aabb.NewAABB(),
+		tri:         geometry.NewTriangle3D(tri),
+		activeEdges: EdgeAllActive,
 	}
 	out.Rebuild()
 	return out
@@ -333,6 +347,49 @@ func (fc *Face) SetSingleSided(singleSided bool) {
 // IsSingleSided reports whether collisions must ignore approaches behind the face plane.
 func (fc *Face) IsSingleSided() bool {
 	return fc.singleSided
+}
+
+// ActiveEdgeMask returns the 3-bit active edge mask (EdgeABActive, EdgeBCActive, EdgeCAActive).
+func (fc *Face) ActiveEdgeMask() uint8 {
+	return fc.activeEdges
+}
+
+// IsEdgeActive reports whether edgeIdx (0=AB, 1=BC, 2=CA) is marked as an active convex/boundary edge.
+func (fc *Face) IsEdgeActive(edgeIdx int) bool {
+	if edgeIdx < 0 || edgeIdx > 2 {
+		return false
+	}
+	return (fc.activeEdges & (uint8(1) << uint(edgeIdx))) != 0
+}
+
+// SetActiveEdgeMask sets the active edge bitmask for the three triangle edges.
+func (fc *Face) SetActiveEdgeMask(mask uint8) {
+	fc.activeEdges = mask & EdgeAllActive
+}
+
+// SetEdgeActive enables or disables active collision handling on edgeIdx (0=AB, 1=BC, 2=CA).
+func (fc *Face) SetEdgeActive(edgeIdx int, active bool) {
+	if edgeIdx < 0 || edgeIdx > 2 {
+		return
+	}
+	bit := uint8(1) << uint(edgeIdx)
+	if active {
+		fc.activeEdges |= bit
+	} else {
+		fc.activeEdges &^= bit
+	}
+}
+
+func (fc *Face) edgePoints(edgeIdx int) (pA, pB, opp geometry.XYZ) {
+	pts := &fc.tri.Points
+	switch edgeIdx {
+	case 0:
+		return pts[0], pts[1], pts[2]
+	case 1:
+		return pts[1], pts[2], pts[0]
+	default:
+		return pts[2], pts[0], pts[1]
+	}
 }
 
 func (fc *Face) IsSolid() bool {

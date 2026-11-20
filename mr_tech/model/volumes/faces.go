@@ -9,6 +9,16 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
+type edgeFaceRef struct {
+	faceIdx int32
+	edgeIdx uint8
+}
+
+type edgeAdjacency struct {
+	refs  [2]edgeFaceRef
+	count uint8
+}
+
 // Faces stores a collection of Face values and accumulated geometric properties.
 type Faces struct {
 	tree             *aabb.Tree
@@ -21,6 +31,7 @@ type Faces struct {
 	maxX, maxY, maxZ float64
 	w, h, d          float64
 
+	edgeAdj         map[EdgeKey]edgeAdjacency
 	markedEdges     map[EdgeKey]struct{}
 	midpoints       map[EdgeKey]geometry.XYZ
 	displacements   map[VertexKey]geometry.XYZ
@@ -70,14 +81,14 @@ func (f *Faces) TessellateInit() {
 	f.hasTesselation = true
 }
 
-// Rebuild recomputes cached centroid and inertia values from the current faces.
+// Rebuild recomputes cached bounds, normals, active edge masks, and mass properties from the current faces.
 func (f *Faces) Rebuild() {
 	f.tree.Clear()
 	if f.count == 0 {
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = 0, 0, 0, 0, 0, 0
 		f.w, f.h, f.d = 0, 0, 0
 		f.cx, f.cy, f.cz = 0, 0, 0
-		f.ixy, f.ixz, f.iyy, f.iyz, f.izz = 0, 0, 0, 0, 0
+		f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = 0, 0, 0, 0, 0, 0
 		return
 	}
 	f.minX, f.minY, f.minZ = math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
@@ -88,10 +99,110 @@ func (f *Faces) Rebuild() {
 		f.tree.InsertObject(face)
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = face.GetMinMax(f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ)
 	}
+	f.rebuildActiveEdges()
 	f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = f.ComputeMassProperties()
 	f.w = f.maxX - f.minX
 	f.h = f.maxY - f.minY
 	f.d = f.maxZ - f.minZ
+}
+
+// rebuildActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave).
+func (f *Faces) rebuildActiveEdges() {
+	const (
+		coplanarCosThreshold = 0.9995
+		coplanarSinMax       = 0.032
+		concaveSinMin        = 1e-4
+	)
+	for i := 0; i < f.count; i++ {
+		if fc := f.container[i]; fc != nil {
+			fc.activeEdges = EdgeAllActive
+		}
+	}
+	if f.count < 2 {
+		return
+	}
+	if f.edgeAdj == nil {
+		f.edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
+	} else {
+		for k := range f.edgeAdj {
+			delete(f.edgeAdj, k)
+		}
+	}
+
+	canOccludeEdge := func(fc *Face) bool {
+		if fc == nil {
+			return false
+		}
+		if fc.n.X == 0 && fc.n.Y == 0 && fc.n.Z == 0 {
+			return false
+		}
+		// Keep untextured collision/test faces enabled alongside textured solid faces; ignore liquid/sky overlays.
+		return fc.material == nil || fc.IsSolid()
+	}
+
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if !canOccludeEdge(fc) {
+			continue
+		}
+		p := fc.tri.Points
+		keys := [3]EdgeKey{
+			MakeEdgeKey(p[0], p[1]),
+			MakeEdgeKey(p[1], p[2]),
+			MakeEdgeKey(p[2], p[0]),
+		}
+		for eIdx := uint8(0); eIdx < 3; eIdx++ {
+			key := keys[eIdx]
+			adj := f.edgeAdj[key]
+			if adj.count < 2 {
+				adj.refs[adj.count] = edgeFaceRef{faceIdx: int32(i), edgeIdx: eIdx}
+			}
+			if adj.count < 255 {
+				adj.count++
+			}
+			f.edgeAdj[key] = adj
+		}
+	}
+
+	sinToPlane := func(opp, anchor, n geometry.XYZ) float64 {
+		dx := opp.X - anchor.X
+		dy := opp.Y - anchor.Y
+		dz := opp.Z - anchor.Z
+		lenSq := dx*dx + dy*dy + dz*dz
+		if lenSq <= 1e-18 {
+			return 0.0
+		}
+		return (dx*n.X + dy*n.Y + dz*n.Z) / math.Sqrt(lenSq)
+	}
+
+	for _, adj := range f.edgeAdj {
+		if adj.count != 2 {
+			continue
+		}
+		refA := adj.refs[0]
+		refB := adj.refs[1]
+		fa := f.container[refA.faceIdx]
+		fb := f.container[refB.faceIdx]
+		if fa == fb {
+			continue
+		}
+		if (fa.material == nil) != (fb.material == nil) {
+			continue
+		}
+		pA, _, oppA := fa.edgePoints(int(refA.edgeIdx))
+		_, _, oppB := fb.edgePoints(int(refB.edgeIdx))
+
+		cosAngle := fa.n.X*fb.n.X + fa.n.Y*fb.n.Y + fa.n.Z*fb.n.Z
+		sinB := sinToPlane(oppB, pA, fa.n)
+		sinA := sinToPlane(oppA, pA, fb.n)
+
+		coplanar := cosAngle >= coplanarCosThreshold && math.Abs(sinB) <= coplanarSinMax && math.Abs(sinA) <= coplanarSinMax
+		concave := sinB > concaveSinMin && sinA > concaveSinMin
+		if coplanar || concave {
+			fa.SetEdgeActive(int(refA.edgeIdx), false)
+			fb.SetEdgeActive(int(refB.edgeIdx), false)
+		}
+	}
 }
 
 // GetTree returns the AABB tree containing the faces.
@@ -203,6 +314,8 @@ func (f *Faces) Clear() {
 	f.count = 0
 }
 
+// Deform applies impulse to deformable vertices within radius of impact.
+// Deform returns true when at least one vertex is displaced.
 func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if f.allowTessellate {
 		// Quattro intervalli geometrici lungo il raggio d'impatto.
@@ -335,7 +448,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		for k := range f.markedEdges {
 			delete(f.markedEdges, k)
 		}
-		// Fase 1: individua gli spigoli da raffinare nella regione d'impatto.
+		// individua gli spigoli da raffinare nella regione d'impatto.
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]
 			if fc == nil || !fc.IsDeformable() {
@@ -357,7 +470,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		if len(f.markedEdges) == 0 {
 			break
 		}
-		// Fase 2: ogni lato condiviso riceve un unico punto medio.
+		// ogni lato condiviso riceve un unico punto medio.
 		for k := range f.midpoints {
 			delete(f.midpoints, k)
 		}
@@ -378,7 +491,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				}
 			}
 		}
-		// Fase 3: applica le suddivisioni a tutte le facce incidenti.
+		// applica le suddivisioni a tutte le facce incidenti.
 		f.nextFaces = f.nextFaces[:0]
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]

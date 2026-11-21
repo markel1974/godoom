@@ -281,3 +281,7 @@ func (v *MultiSprite) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius f
 func (v *MultiSprite) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	return false
 }
+
+func (v *MultiSprite) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
+	return 0, geometry.XYZ{}, false
+}

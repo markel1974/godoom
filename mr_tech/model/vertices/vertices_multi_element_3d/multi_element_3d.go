@@ -698,3 +698,8 @@ func (v *MultiElement3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_
 	}
 	return links, nil
 }
+
+// IntersectRay tests a ray against the element and returns the nearest hit distance, hit point, and hit status.
+func (v *MultiElement3D) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
+	return 0, geometry.XYZ{}, false
+}

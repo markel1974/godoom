@@ -2,7 +2,6 @@ package ithing
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 )
 
@@ -19,8 +18,6 @@ type IThing interface {
 	IsEqual(other IThing) bool
 
 	GetDistSq(pX, pY, pZ float64) float64
-
-	IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool)
 
 	IsActive() bool
 

@@ -7,7 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/materials"
-	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/vertices/vertices_multi_element_3d"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -548,38 +547,6 @@ func (t *Base) dentCompute(force float64) (float64, float64) {
 func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
 	return t.Deform(impact, impulse, radius)
-}
-
-// IntersectRay tests a world-space ray against the thing's mesh geometry and returns the hit distance and face normal.
-func (t *Base) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
-	if t.ent == nil || t.IVertices == nil {
-		return maxDist, geometry.XYZ{}, false
-	}
-	v3d, ok := t.IVertices.(*vertices_element_3d.Element3D)
-	if !ok {
-		return maxDist, geometry.XYZ{}, false
-	}
-	cx, cy, cz := t.ent.GetCenter()
-	dx := oX - cx
-	dy := oY - cy
-	dz := oZ - cz
-	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := t.ent.GetAxes()
-	locOx := dx*ax0 + dy*ay0 + dz*az0
-	locOy := dx*ax1 + dy*ay1 + dz*az1
-	locOz := dx*ax2 + dy*ay2 + dz*az2
-	locDirX := dirX*ax0 + dirY*ay0 + dirZ*az0
-	locDirY := dirX*ax1 + dirY*ay1 + dirZ*az1
-	locDirZ := dirX*ax2 + dirY*ay2 + dirZ*az2
-
-	hitDist, hitFace, okHit := v3d.IntersectRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist)
-	if !okHit || hitFace == nil {
-		return maxDist, geometry.XYZ{}, false
-	}
-	lnx, lny, lnz := hitFace.GetNormal()
-	wnx := lnx*ax0 + lny*ax1 + lnz*ax2
-	wny := lnx*ay0 + lny*ay1 + lnz*ay2
-	wnz := lnx*az0 + lny*az1 + lnz*az2
-	return hitDist, geometry.XYZ{X: wnx, Y: wny, Z: wnz}, true
 }
 
 /*

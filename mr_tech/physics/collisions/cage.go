@@ -899,7 +899,7 @@ func (s *Cage) CommitStaticClamp() {
 // IsBlockedAlong reports whether pushing this cage along unit direction (dirX, dirY, dirZ)
 // pushes into any active or clamped static world face.
 func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
-	const wallBlockDotThreshold = -0.05
+	const wallBlockDotThreshold = -0.50
 	if s.staticContact.IsBlockedAlong(dirX, dirY, dirZ, wallBlockDotThreshold) {
 		return true
 	}

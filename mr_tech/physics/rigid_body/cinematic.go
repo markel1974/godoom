@@ -961,10 +961,14 @@ func (e *Cinematic) effectiveContactInvMasses(e2 *Cinematic, nz float64) (float6
 	if e2.kinematic {
 		invMass2 = 0.0
 	}
-	if e2.onGround && nz > floorNormalThreshold {
-		invMass2 = 0.0
-	} else if e.onGround && nz < -floorNormalThreshold {
-		invMass1 = 0.0
+	// Preserve infinite support mass only when an upright character/actor interacts with a grounded body;
+	// free 6-DoF stacks must exchange full two-way impulses across layers.
+	if e.keepUpright || e2.keepUpright {
+		if e2.onGround && nz > floorNormalThreshold {
+			invMass2 = 0.0
+		} else if e.onGround && nz < -floorNormalThreshold {
+			invMass1 = 0.0
+		}
 	}
 	return invMass1, invMass2
 }
@@ -1241,11 +1245,12 @@ func (e *Cinematic) ResolveElasticPenetrationConstrained(other *Cinematic, other
 	}
 	invMass1 := e.GetInvMass()
 	invMass2 := other.GetInvMass()
-	// Kinematic or static-supported bodies behave as infinite mass along blocked axes.
-	if e.kinematic || !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
+	uprightPair := e.keepUpright || other.keepUpright
+	// Kinematic or statically blocked bodies behave as infinite mass along blocked axes.
+	if e.kinematic || !selfMovable || (uprightPair && e.IsOnGround() && nz < -floorNormalThreshold) {
 		invMass1 = 0.0
 	}
-	if other.kinematic || !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
+	if other.kinematic || !otherMovable || (uprightPair && (otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
 		invMass2 = 0.0
 	}
 	invMassSum := invMass1 + invMass2

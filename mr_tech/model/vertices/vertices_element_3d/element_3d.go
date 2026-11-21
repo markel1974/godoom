@@ -362,6 +362,32 @@ func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64
 	v.lastVolA = v.volA
 }
 
+// IntersectRay tests a world-space ray against the thing's mesh geometry and returns the hit distance and face normal.
+func (v *Element3D) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
+	ent := v.ent
+	cx, cy, cz := ent.GetCenter()
+	dx := oX - cx
+	dy := oY - cy
+	dz := oZ - cz
+	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := ent.GetAxes()
+	locOx := dx*ax0 + dy*ay0 + dz*az0
+	locOy := dx*ax1 + dy*ay1 + dz*az1
+	locOz := dx*ax2 + dy*ay2 + dz*az2
+	locDirX := dirX*ax0 + dirY*ay0 + dirZ*az0
+	locDirY := dirX*ax1 + dirY*ay1 + dirZ*az1
+	locDirZ := dirX*ax2 + dirY*ay2 + dirZ*az2
+
+	hitDist, hitFace, okHit := v.IntersectRayFace(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist)
+	if !okHit || hitFace == nil {
+		return maxDist, geometry.XYZ{}, false
+	}
+	lnx, lny, lnz := hitFace.GetNormal()
+	wnx := lnx*ax0 + lny*ax1 + lnz*ax2
+	wny := lnx*ay0 + lny*ay1 + lnz*ay2
+	wnz := lnx*az0 + lny*az1 + lnz*az2
+	return hitDist, geometry.XYZ{X: wnx, Y: wny, Z: wnz}, true
+}
+
 // rebuildSolverFromVolume updates solver collision data from volume face bounds, centroid, and inertia when non-nil.
 func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
 	if vol == nil || solver == nil {
@@ -599,7 +625,7 @@ func (v *Element3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, 
 
 // IntersectRay finds the closest solid face hit by a ray within maxDist.
 // It returns the hit distance, the intersected face, and whether a hit occurred.
-func (v *Element3D) IntersectRay(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist float64) (float64, *volumes.Face, bool) {
+func (v *Element3D) IntersectRayFace(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist float64) (float64, *volumes.Face, bool) {
 	if v.volA == nil {
 		return maxDist, nil, false
 	}

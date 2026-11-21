@@ -392,13 +392,28 @@ func (t *Solver) StageResolvePosition() {
 		alreadyResolved := (sPushX-rPushX)*nX + (sPushY-rPushY)*nY + (sPushZ-rPushZ)*nZ
 		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ()+rPushZ, targetBaseZ+sPushZ, sPushZ)
 		if pen > 0 {
-			otherMovable := !rCage.IsBlockedAlong(-nX, -nY, -nZ) && slot.Penetrable(0)
-			selfMovable := !t.cage.IsBlockedAlong(nX, nY, nZ) && t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rCage.GetEntity().GetId())
-			t.entity.ResolveElasticPenetrationConstrained(rCage.GetEntity(), rCage.HasFloor(), nX, nY, nZ, pen, selfMovable, otherMovable)
+			rEnt := rCage.GetEntity()
+			otherBlocked := rCage.IsBlockedAlong(-nX, -nY, -nZ)
+			selfBlocked := t.cage.IsBlockedAlong(nX, nY, nZ)
+			var otherMovable, selfMovable bool
+			if !t.entity.KeepUpright() && !rEnt.KeepUpright() {
+				otherMovable = !otherBlocked
+				selfMovable = !selfBlocked
+				if !selfMovable && !otherMovable {
+					// When both 6-DoF bodies contact static surfaces, keep resolving overlap;
+					// the per-iteration static clamp sweep projects out any wall/floor encroachment.
+					selfMovable = true
+					otherMovable = true
+				}
+			} else {
+				otherMovable = !otherBlocked && slot.Penetrable(0)
+				selfMovable = !selfBlocked && t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rEnt.GetId())
+			}
+			t.entity.ResolveElasticPenetrationConstrained(rEnt, rCage.HasFloor(), nX, nY, nZ, pen, selfMovable, otherMovable)
 			if !otherMovable && selfMovable {
 				t.entity.ClampNormalVelocity(nX, nY, nZ)
 			} else if !selfMovable && otherMovable {
-				rCage.GetEntity().ClampNormalVelocity(-nX, -nY, -nZ)
+				rEnt.ClampNormalVelocity(-nX, -nY, -nZ)
 			}
 		}
 	}

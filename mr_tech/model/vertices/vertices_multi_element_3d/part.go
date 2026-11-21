@@ -149,16 +149,16 @@ func (v *Part) SetRagdollMode() {}
 // Deform applies an impulse-based deformation to this part within radius of impact.
 // It returns true if the underlying entry was deformed.
 func (v *Part) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	if v.entry != nil {
-		return v.entry.Deform(impact, impulse, radius)
-	}
-	return false
+	return v.entry.Deform(impact, impulse, radius)
 }
 
 // DeformDent applies a dent deformation at impact along normal with the given depth and radius.
 func (v *Part) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	if v.entry != nil {
-		return v.entry.DeformDent(impact, normal, depth, radius)
-	}
-	return false
+	return v.entry.DeformDent(impact, normal, depth, radius)
+}
+
+// IntersectRay tests a ray against this part up to maxDist.
+// IntersectRay returns the hit distance, hit point, and whether an intersection was found.
+func (v *Part) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
+	return v.entry.IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist)
 }

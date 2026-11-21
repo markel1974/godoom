@@ -152,14 +152,22 @@ func (v *VerticesSprite) SetAction(idx int) {
 	return
 }
 
-// SetRagdollMode switches the vertices sprite to ragdoll behavior.
+// SetRagdollMode switches the sprite to ragdoll physics mode.
 func (v *VerticesSprite) SetRagdollMode() {
 }
 
+// Deform applies an impulse-based deformation at impact within radius and reports whether the sprite changed.
 func (v *VerticesSprite) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	return false
 }
 
+// DeformDent applies a dent centered at impact along normal with the given depth and radius.
+// It reports whether the sprite geometry was changed.
 func (v *VerticesSprite) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
 	return false
+}
+
+// IntersectRay tests a ray against the sprite and returns the hit distance, hit position, and whether it hit.
+func (v *VerticesSprite) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool) {
+	return 0, geometry.XYZ{}, false
 }

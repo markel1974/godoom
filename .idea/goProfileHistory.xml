@@ -129,5 +129,13 @@
         <option name="profileType" value="CPU" />
       </GoProfileMapEntry>
     </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-11-21-074228-751.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1795243308452" />
+        <option name="file" value="godoom-cpu-2026-11-21-074228-751.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
   </component>
 </project>

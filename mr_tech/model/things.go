@@ -16,9 +16,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
+// solverJitter defines a small epsilon used to stabilize solver event calculations.
 const solverJitter = 1e-6
 
-// Things manages game objects, their spatial partitioning, and contact interactions within a simulation environment.
+// Things manages game entities, their spatial state, collision coordination, and staged lifecycle updates.
 type Things struct {
 	config            []*config.Thing
 	volumes           *Volumes
@@ -45,7 +46,7 @@ type Things struct {
 	throwable         []*config.Thing
 }
 
-// NewThings initializes and returns an instance of Things with the specified maximum number of things.
+// NewThings creates and initializes a Things manager from thing configs, volumes, materials, and collision settings.
 func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols *Volumes, materials *materials.Materials) *Things {
 	const defaultLen = 1024
 	if maxOverlaps <= 0 {
@@ -74,7 +75,7 @@ func NewThings(maxOverlaps int, solverIterations int, cfg []*config.Thing, vols 
 	return e
 }
 
-// Setup initializes the necessary configurations or resources required for the Things object to function properly.
+// Setup initializes things from configuration, resolves volumes and teleport targets, and stages created entities.
 func (th *Things) Setup() error {
 	th.resolveTeleportTargets()
 	for _, ct := range th.cfg {
@@ -104,26 +105,27 @@ func (th *Things) Setup() error {
 	return nil
 }
 
-// GetMaterials returns a pointer to the Materials associated with the Things instance.
+// GetMaterials returns the materials associated with this Things instance.
 func (th *Things) GetMaterials() *materials.Materials {
 	return th.materials
 }
 
-// GetVolumes returns a IVolumesHandler interface.
+// GetVolumes returns the volumes handler.
 func (th *Things) GetVolumes() things.IVolumesHandler {
 	return th.volumes
 }
 
-// Len returns the number of staged elements in the coordinator.
+// Len returns the number of staged things.
 func (th *Things) Len() int {
 	return th.coordinator.StagedLen()
 }
 
-// QueryCollisionCage checks collisions between the specified CollisionCage and others in the spatial structure (tree).
+// QueryCollisionCage checks for collisions within lCage, limiting overlap processing to maxOverlaps.
 func (th *Things) QueryCollisionCage(lCage *collisions.Cage, maxOverlaps int) {
 	th.queryCollisionCage(lCage, maxOverlaps, nil)
 }
 
+// querySolverContacts populates collision contacts for a cage against world volumes and other things.
 func (th *Things) querySolverContacts(cage *collisions.Cage, wake collisions.WakeRunningFn) {
 	if s := cage.GetSolver(); s == nil || !s.IgnoresStatic() {
 		th.volumes.QueryCollisionCage(cage, th.maxOverlapsWorld)
@@ -131,6 +133,7 @@ func (th *Things) querySolverContacts(cage *collisions.Cage, wake collisions.Wak
 	th.queryCollisionCage(cage, th.maxOverlapsThings, wake)
 }
 
+// queryCollisionCage queries nearby cages, records face overlaps up to maxOverlaps, and wakes sleeping solvers when needed.
 func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wake collisions.WakeRunningFn) {
 	lThing := lCage.GetObject().(ithing.IThing)
 	th.tree.QueryOverlaps(lCage, func(object aabb.IObject) bool {
@@ -181,34 +184,35 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 	})
 }
 
-// QueryMultiFrustum performs a spatial query against two frustums, invoking the callback for each intersected IAABB object.
+// QueryMultiFrustum queries objects against rear and front frustums, invoking callback with membership flags.
 func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
 	th.tree.QueryMultiFrustum(rear, front, callback)
 }
 
-// QueryFrustum performs a spatial query within the specified frustum, invoking the callback for each intersected object.
+// QueryFrustum calls callback for each object intersecting the frustum, stopping if callback returns false.
 func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	th.tree.QueryFrustum(front, callback)
 }
 
-// QueryStatic iterates over all static objects, applying the provided callback function to each object.
+// QueryStatic calls callback for each static object.
 func (th *Things) QueryStatic(callback func(object aabb.IObject) bool) {
 	for _, st := range th.statics {
 		callback(st)
 	}
 }
 
-// GetPlayer returns the current player instance.
+// GetPlayer returns the current player.
 func (th *Things) GetPlayer() *things.Player {
 	return th.player
 }
 
-// SetPlayer assigns a ThingPlayer to the Things collection and integrates it into the entity management system.
+// SetPlayer sets the active player and adds it to the collection of things.
 func (th *Things) SetPlayer(p *things.Player) {
 	th.player = p
 	th.addThing(p)
 }
 
+// GetThing returns the thing with the specified ID, or nil if no matching thing is found.
 func (th *Things) GetThing(id string) ithing.IThing {
 	for _, thing := range th.entities {
 		if thing.GetId() == id {
@@ -218,29 +222,24 @@ func (th *Things) GetThing(id string) ithing.IThing {
 	return nil
 }
 
-// GetTextures fetches the ITextures instance from the associated Materials object.
+// GetTextures returns the texture collection associated with the Things materials.
 func (th *Things) GetTextures() textures.ITextures {
 	return th.materials.GetTextures()
 }
 
-// QueryRay performs a raycast query within the spatial tree, invoking the callback for each intersected object.
-// Parameters:
-// - oX, oY, oZ: Origin coordinates of the ray.
-// - dirX, dirY, dirZ: Direction vector of the ray.
-// - maxDistance: Maximum distance the ray can travel.
-// - callback: Function invoked for each intersected object, receives the object and its distance as arguments.
+// QueryRay finds objects intersected by a ray up to maxDistance and invokes callback with each hit distance.
+// QueryRay uses the callback return values to update the search distance and decide whether to continue.
 func (th *Things) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool)) {
 	th.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// QueryVolume returns the volume containing (x, y, z), or nil if none is found.
+// QueryVolume returns the volume containing the point at the given coordinates, or nil if none is found.
 func (th *Things) QueryVolume(x, y, z float64) *volumes.Volume {
 	vol, _ := th.volumes.QueryPoint(x, y, z)
 	return vol
 }
 
-// resolveTeleportTargets resolves TeleportSpec.Target references (matching another Thing's TargetName or Id)
-// into concrete Destination coordinates and TargetAngle when Destination is unset.
+// resolveTeleportTargets resolves teleport destinations and angles from configured target thing IDs or target names.
 func (th *Things) resolveTeleportTargets() {
 	targets := make(map[string]*config.Thing)
 	for _, ct := range th.cfg {
@@ -269,7 +268,7 @@ func (th *Things) resolveTeleportTargets() {
 	}
 }
 
-// Create creates a new IThing instance based on the provided Thing and adds it to the Things collection.
+// create initializes callbacks, constructs a thing for the config kind, positions it, and returns it.
 func (th *Things) create(ct *config.Thing, volume *volumes.Volume) ithing.IThing {
 	if ct.OnCollision == nil {
 		fmt.Println("onCollision is nil for thing:" + ct.Id)
@@ -296,8 +295,10 @@ func (th *Things) create(ct *config.Thing, volume *volumes.Volume) ithing.IThing
 		thing = things.NewEnemy(th, ct, volume)
 	case config.ThingWeaponDef:
 		thing = things.NewWeapon(th, ct, volume)
+		th.throwable = append(th.throwable, ct)
 	case config.ThingThrowableDef:
 		thing = things.NewThingThrowable(th, ct, volume)
+		th.throwable = append(th.throwable, ct)
 	case config.ThingKeyDef:
 		thing = things.NewKey(th, ct, volume)
 	case config.ThingDoorDef:
@@ -323,7 +324,7 @@ func (th *Things) create(ct *config.Thing, volume *volumes.Volume) ithing.IThing
 	return thing
 }
 
-// CreateThrowable creates a throwable object with specified position, angle, pitch, mass, radius, and speed, adding it to the pending list.
+// CreateThrowable clones a throwable template, initializes its state, and queues it for creation in the given volume.
 func (th *Things) CreateThrowable(self ithing.IThing, throwableIndex int, onCollision config.CollisionFunc, onImpact config.ImpactFunc, volume *volumes.Volume, pos geometry.XYZ, angle, pitch, speed float64) {
 	if len(th.throwable) <= throwableIndex {
 		return
@@ -352,12 +353,12 @@ func (th *Things) CreateThrowable(self ithing.IThing, throwableIndex int, onColl
 	th.hasPending = true
 }
 
-// AddJoint registers an active bilateral PGS joint constraint with the coordinator.
+// AddJoint adds a joint constraint to the coordinator.
 func (th *Things) AddJoint(joint *collisions.JointConstraint) {
 	th.coordinator.AddJoint(joint)
 }
 
-// StagePart queues a newly released 6-DoF segment for immediate staging in the current physics tick.
+// StagePart queues a non-nil thing for staging, expanding the pending stage buffer as needed.
 func (th *Things) StagePart(part ithing.IThing) {
 	if part == nil {
 		return
@@ -371,7 +372,7 @@ func (th *Things) StagePart(part ithing.IThing) {
 	th.pendingStageLen++
 }
 
-// StageRemove queues a deactivated Thing for safe removal from Things.tree and Things.entities.
+// StageRemove queues thing for removal, ignoring nil values.
 func (th *Things) StageRemove(thing ithing.IThing) {
 	if thing == nil {
 		return
@@ -385,6 +386,7 @@ func (th *Things) StageRemove(thing ithing.IThing) {
 	th.pendingRemoveLen++
 }
 
+// flushPendingRemovals removes all queued things and coordinator removables, then clears the pending removal lists.
 func (th *Things) flushPendingRemovals() {
 	if th.pendingRemoveLen > 0 {
 		for x := 0; x < th.pendingRemoveLen; x++ {
@@ -401,14 +403,14 @@ func (th *Things) flushPendingRemovals() {
 	}
 }
 
-// StagePrepare resets staging state before collecting ready things and thinkers.
+// StagePrepare resets staging state and advances the stage epoch.
 func (th *Things) StagePrepare() {
 	th.coordinator.Reset()
 	th.thinkersLen = 0
 	th.stageEpoch++
 }
 
-// StageAdd queues t2 as ready (or routes attached sub-parts to their owning Thing) and avoids duplicate per-tick staging.
+// StageAdd stages the given thing, or its owner when it is a non-physics-free subpart.
 func (th *Things) StageAdd(t2 ithing.IThing) {
 	if sub, ok := t2.(ithing.ISubPart); ok && !sub.IsPhysicsFree() {
 		if owner := sub.GetOwner(); owner != nil {
@@ -419,6 +421,7 @@ func (th *Things) StageAdd(t2 ithing.IThing) {
 	th.stageOne(t2)
 }
 
+// stageOne stages an active thing's solver once per epoch and tracks it for thinking when applicable.
 func (th *Things) stageOne(t2 ithing.IThing) {
 	if t2 == nil || !t2.IsActive() {
 		return
@@ -438,13 +441,12 @@ func (th *Things) StageCommit() {
 
 }
 
-// applySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
-// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
+// applySafeStepUp applies a safe upward step to the cage, clamped against static volumes.
 func (th *Things) applySafeStepUp(cage *collisions.Cage, stepZ float64) {
 	cage.ApplySafeStepUp(stepZ, th.volumes.ClampStaticCage)
 }
 
-// Compute updates the state of all managed entities by computing their active state and processing collisions.
+// Compute processes pending changes, dispatches thinking events at the given coordinates, steps physics, and updates objects.
 func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	th.flushPendingRemovals()
 	if th.hasPending {
@@ -513,12 +515,12 @@ func (th *Things) Compute(pX float64, pY float64, pZ float64) {
 	}
 }
 
-// AddStaticThing adds a static object to the scene without physics or spatial partitioning.
+// AddStaticThing adds a static thing to the collection.
 func (th *Things) AddStaticThing(ent ithing.IThing) {
 	th.statics = append(th.statics, ent)
 }
 
-// addThing registers ent in entities and inserts either all articulated segment sub-things or ent itself into tree.
+// addThing registers a thing, indexes it or its parts, grows internal buffers as needed, and starts its loop.
 func (th *Things) addThing(ent ithing.IThing) {
 	th.entities[ent.GetEntity().GetId()] = ent
 	var parts int
@@ -546,7 +548,7 @@ func (th *Things) addThing(ent ithing.IThing) {
 	ent.StartLoop()
 }
 
-// removeThing removes an IThing instance from the spatial tree (when tree-resident) and the entities map.
+// removeThing removes the given thing from the registry and, when it owns no parts, from the tree.
 func (th *Things) removeThing(ent ithing.IThing) {
 	if ent == nil {
 		return

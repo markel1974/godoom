@@ -288,7 +288,7 @@ func (c *Coordinator) Step() {
 	}
 
 	if c.jointsLen > 0 {
-		for pass := 0; pass < 6; pass++ {
+		for range 6 {
 			changed := false
 			for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
 				jc := c.joints[jIdx]

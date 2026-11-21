@@ -170,3 +170,154 @@ func TestCoordinatorStepZeroAllocs(t *testing.T) {
 		t.Fatalf("expected 0 allocations per Coordinator.Step, got %v", allocs)
 	}
 }
+
+func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
+	rigid_body.SetFps(60)
+	defer rigid_body.SetFps(120)
+
+	sA, cA := newDynamicCoordinatorSolver(0, 0, 10, 20, 20, 20, false)
+	sB, cB := newDynamicCoordinatorSolver(18, 0, 10, 20, 20, 20, false)
+	floorObj := newTestUprightObject(0, 0, -5, 400, 400, 10)
+	floor := &solverParentFace{
+		testFace: newTestFace([3]float64{-200, -200, 0}, [3]float64{200, -200, 0}, [3]float64{0, 200, 0}, 0, 0, 1),
+		parent:   floorObj.solver,
+	}
+	wall := &solverParentFace{
+		testFace: newTestFace([3]float64{-40, -200, 0}, [3]float64{-40, 200, 0}, [3]float64{-40, 200, 100}, 1, 0, 0),
+		parent:   floorObj.solver,
+	}
+	botTopFace := newTestFace([3]float64{10, -10, -10}, [3]float64{10, 10, -10}, [3]float64{10, 10, 10}, 1, 0, 0)
+	topBotFace := newTestFace([3]float64{-10, -10, -10}, [3]float64{-10, 10, -10}, [3]float64{-10, 10, 10}, -1, 0, 0)
+
+	broadphaseQueries := 0
+	clampStaticQueriesA := 0
+	clampStaticQueriesB := 0
+
+	queryFn := func(cage *Cage, _ WakeRunningFn) {
+		broadphaseQueries++
+		cage.AddFace(floor, nil)
+		cage.AddFace(wall, nil)
+		cage.CachePendingStaticFaces(cage.GetAABB())
+		cage.Commit(nil)
+		if cage == cA && !cage.HasSeen(cB) {
+			cage.Seen(cB)
+			cB.Seen(cage)
+			cage.AddFace(topBotFace, botTopFace)
+			cage.Commit(cB)
+		}
+	}
+	clampFn := func(cage *Cage) {
+		for pass := 0; pass < 3; pass++ {
+			moved := false
+			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
+			if !cage.HasStaticFaceCache(lAABB) {
+				if cage == cA {
+					clampStaticQueriesA++
+				} else {
+					clampStaticQueriesB++
+				}
+				oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ := cage.BeginPaddedStaticFaceQuery(lAABB)
+				cage.AddCachedStaticFace(floor)
+				cage.AddCachedStaticFace(wall)
+				cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
+			}
+			if cage.ClampCachedStaticFaces(lAABB) {
+				moved = true
+			}
+			if cage.StaticFaceFlushClamp(lAABB) {
+				moved = true
+			}
+			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
+			if !moved {
+				break
+			}
+		}
+		cage.CommitStaticClamp()
+	}
+
+	coord := NewCoordinator(8, 16, queryFn, clampFn)
+
+	// Subcase 1: Body pushed incrementally beyond zero-displacement Rebuild bounds triggers at most 1 padded ClampStatic refresh per cage across 8 iterations.
+	sB.GetEntity().SetV(-100, 0, 0)
+	broadphaseQueries = 0
+	clampStaticQueriesA = 0
+	clampStaticQueriesB = 0
+	coord.Reset()
+	coord.Stage(sA)
+	coord.Stage(sB)
+	coord.Step()
+	if broadphaseQueries != 2 {
+		t.Fatalf("expected 1 initial broadphase query per running cage (total 2), got %d", broadphaseQueries)
+	}
+	if clampStaticQueriesA > 1 || clampStaticQueriesB > 1 || (clampStaticQueriesA+clampStaticQueriesB) == 0 {
+		t.Fatalf("expected at most 1 padded ClampStatic refresh per cage across 8 iterations, got A=%d B=%d", clampStaticQueriesA, clampStaticQueriesB)
+	}
+
+	// Subcase 2: Single body sliding gently within its own Rebuild swept bounds reuses QueryContacts cache with 0 ClampStatic re-queries and 0 heap allocations.
+	sSole, cSole := newDynamicCoordinatorSolver(0, 0, 10, 20, 20, 20, false)
+	soleClampQueries := 0
+	soleQueryFn := func(cage *Cage, _ WakeRunningFn) {
+		cage.AddFace(floor, nil)
+		cage.AddFace(wall, nil)
+		cage.CachePendingStaticFaces(cage.GetAABB())
+		cage.Commit(nil)
+	}
+	soleClampFn := func(cage *Cage) {
+		for pass := 0; pass < 3; pass++ {
+			moved := false
+			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
+			if !cage.HasStaticFaceCache(lAABB) {
+				soleClampQueries++
+				oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ := cage.BeginPaddedStaticFaceQuery(lAABB)
+				cage.AddCachedStaticFace(floor)
+				cage.AddCachedStaticFace(wall)
+				cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
+			}
+			if cage.ClampCachedStaticFaces(lAABB) {
+				moved = true
+			}
+			if cage.StaticFaceFlushClamp(lAABB) {
+				moved = true
+			}
+			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
+			if !moved {
+				break
+			}
+		}
+		cage.CommitStaticClamp()
+	}
+	soleCoord := NewCoordinator(8, 16, soleQueryFn, soleClampFn)
+	sSole.GetEntity().SetV(-60, 0, 0)
+	soleCoord.Reset()
+	soleCoord.Stage(sSole)
+	soleCoord.Step()
+	if soleClampQueries != 0 {
+		t.Fatalf("expected 0 ClampStatic re-queries within Rebuild swept bounds, got %d (pos=%v)", soleClampQueries, cSole.GetEntity())
+	}
+
+	sSole.GetEntity().SetV(0, 0, 0)
+	allocs := testing.AllocsPerRun(50, func() {
+		soleCoord.Reset()
+		soleCoord.Stage(sSole)
+		soleCoord.Step()
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 allocations per cached Coordinator.Step, got %v", allocs)
+	}
+
+	// Subcase 3: When pushed far outside Rebuild bounds during ClampStatic, cache misses at most once and reuses across remaining passes/iterations.
+	clampStaticQueriesA = 0
+	sA.GetEntity().AddTo(-80, 0, 0)
+	for iter := 0; iter < 8; iter++ {
+		if cA.NeedsStaticClamp() {
+			clampFn(cA)
+			cA.CommitStaticClamp()
+		}
+	}
+	if clampStaticQueriesA != 1 {
+		t.Fatalf("expected exactly 1 broadphase cache refresh after out-of-bounds push across 8 clamp loops, got %d", clampStaticQueriesA)
+	}
+	if ax, _, _ := sA.GetEntity().GetCenter(); ax < -30.5 {
+		t.Fatalf("expected cached wall clamp to keep entity outside x=-40 wall (x >= -30), got x=%.3f", ax)
+	}
+}

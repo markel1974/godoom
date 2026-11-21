@@ -9,13 +9,13 @@ import (
 // BucketSize defines the size of a single bucket, calculated as BucketFloor + 1.
 const BucketSize = BucketFloor + 1
 
-// FacesPerBucket specifies the maximum number of manifold/face entries stored per bucket.
+// FacesPerBucket specifies the initial preallocated number of manifold/face entries per bucket.
 const FacesPerBucket = 16
 
 // warmStartFactor controls the fraction of previous-frame impulses carried over to persistent contacts.
 const warmStartFactor = 0.80
 
-// maxPushQueue caps unique remote cages expanded during a single iterative BFS push-chain check.
+// maxPushQueue caps unique remote cages expanded during a single iterative DFS push-chain check.
 const maxPushQueue = 64
 
 // noEntityId marks an absent entity ID in push-chain tracking (valid entity IDs start at 0).
@@ -24,26 +24,24 @@ const noEntityId = ^uint64(0)
 // Bucket holds collision data for a specific bucket, using double-buffered Entry pointer pools for zero-copy warm starting.
 type Bucket struct {
 	bucket           BucketType
-	currPoll         [FacesPerBucket]*Entry
-	prevPool         [FacesPerBucket]*Entry
-	currPoolPtr      *[FacesPerBucket]*Entry
-	prevPoolPtr      *[FacesPerBucket]*Entry
+	currPool         []*Entry
+	prevPool         []*Entry
 	containerCounter int
 	prevCount        int
-	inelasticCount   int8
-	dynamicCount     int8
+	inelasticCount   int
+	dynamicCount     int
 	cache            BucketCache
 }
 
 // NewBucket creates a new Bucket for a given BucketType, preallocating its double-buffered Entry pools.
 func NewBucket(bucket BucketType) *Bucket {
 	b := &Bucket{
-		bucket: bucket,
+		bucket:   bucket,
+		currPool: make([]*Entry, FacesPerBucket),
+		prevPool: make([]*Entry, FacesPerBucket),
 	}
-	b.currPoolPtr = &b.currPoll
-	b.prevPoolPtr = &b.prevPool
 	for i := 0; i < FacesPerBucket; i++ {
-		b.currPoll[i] = NewCageEntry()
+		b.currPool[i] = NewCageEntry()
 		b.prevPool[i] = NewCageEntry()
 	}
 	return b
@@ -51,12 +49,27 @@ func NewBucket(bucket BucketType) *Bucket {
 
 // Rebuild swaps current and previous Entry pools in O(1) without copying and resets containerCounter to 0.
 func (b *Bucket) Rebuild() {
-	b.currPoolPtr, b.prevPoolPtr = b.prevPoolPtr, b.currPoolPtr
+	b.currPool, b.prevPool = b.prevPool, b.currPool
 	b.prevCount = b.containerCounter
 	b.containerCounter = 0
 	b.inelasticCount = 0
 	b.dynamicCount = 0
 	b.cache.Reset()
+}
+
+// growCurrPool doubles currPool capacity while keeping existing Entry pointers stable.
+func (b *Bucket) growCurrPool() {
+	oldLen := len(b.currPool)
+	newLen := oldLen * 2
+	if newLen < FacesPerBucket {
+		newLen = FacesPerBucket
+	}
+	next := make([]*Entry, newLen)
+	copy(next, b.currPool)
+	for i := oldLen; i < newLen; i++ {
+		next[i] = NewCageEntry()
+	}
+	b.currPool = next
 }
 
 // Count returns the total number of entries currently stored in the Bucket.
@@ -67,11 +80,11 @@ func (b *Bucket) Count() int {
 // RemoveEntry swaps target out of the active pool while preserving all preallocated Entry buffers.
 func (b *Bucket) RemoveEntry(target *Entry) bool {
 	for i := 0; i < b.containerCounter; i++ {
-		if b.currPoolPtr[i] == target {
+		if b.currPool[i] == target {
 			b.countEntry(target, -1)
 			b.cache.ClearPenetrable()
 			last := b.containerCounter - 1
-			b.currPoolPtr[i], b.currPoolPtr[last] = b.currPoolPtr[last], b.currPoolPtr[i]
+			b.currPool[i], b.currPool[last] = b.currPool[last], b.currPool[i]
 			b.containerCounter = last
 			return true
 		}
@@ -80,7 +93,7 @@ func (b *Bucket) RemoveEntry(target *Entry) bool {
 }
 
 // countEntry adjusts the bucket's inelastic or dynamic entry counters by delta based on the entry impact type.
-func (b *Bucket) countEntry(e *Entry, delta int8) {
+func (b *Bucket) countEntry(e *Entry, delta int) {
 	if e.iMode == ImpactInelastic {
 		b.inelasticCount += delta
 	} else if e.rCage != nil {
@@ -101,7 +114,7 @@ func (b *Bucket) rebuildEntry(target *Entry, bucket BucketType, lCage *Cage, rCa
 // HasEntryFor reports whether the Bucket currently holds an active dynamic entry for entityId.
 func (b *Bucket) HasEntryFor(entityId uint64) bool {
 	for i := 0; i < b.containerCounter; i++ {
-		if rCage := b.currPoolPtr[i].rCage; rCage != nil && rCage.GetEntity().GetId() == entityId {
+		if rCage := b.currPool[i].rCage; rCage != nil && rCage.GetEntity().GetId() == entityId {
 			return true
 		}
 	}
@@ -139,9 +152,11 @@ func (b *Bucket) Penetrable(from uint64, depth int) bool {
 		return val
 	}
 	selfId := noEntityId
-	if e := b.currPoolPtr[0]; e != nil && e.lCage != nil {
-		if ent := e.lCage.GetEntity(); ent != nil {
-			selfId = ent.GetId()
+	if b.containerCounter > 0 {
+		if e := b.currPool[0]; e != nil && e.lCage != nil {
+			if ent := e.lCage.GetEntity(); ent != nil {
+				selfId = ent.GetId()
+			}
 		}
 	}
 	res := b.doPenetrable(depth, from, selfId)
@@ -165,7 +180,7 @@ func (b *Bucket) doPenetrable(depth int, seen1, seen2 uint64) bool {
 	prevRId := noEntityId
 
 	for i := 0; i < b.containerCounter; i++ {
-		entry := b.currPoolPtr[i]
+		entry := b.currPool[i]
 		rId, blocked, ok := extractDynamicRemoteId(entry)
 		if blocked {
 			return false
@@ -254,7 +269,7 @@ func (b *Bucket) dfsPenetrable(startDepth int, seen1, seen2 uint64) bool {
 		}
 		stackIdx[sp] = i + 1
 
-		entry := curr.currPoolPtr[i]
+		entry := curr.currPool[i]
 		rId, blocked, ok := extractDynamicRemoteId(entry)
 		if blocked {
 			return false
@@ -345,7 +360,7 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 	}
 
 	for i := 0; i < b.containerCounter; i++ {
-		existing := b.currPoolPtr[i]
+		existing := b.currPool[i]
 		// Deduplicate coincident dynamic contact points for the same body, preserving up to 4 manifold corners.
 		if rCage != nil && existing.rCage != nil {
 			if rCage.GetEntity().GetId() == existing.rCage.GetEntity().GetId() {
@@ -402,52 +417,32 @@ func (b *Bucket) Add(bucket BucketType, lCage *Cage, rCage *Cage, rFace IFace, d
 		return nil
 	}
 
-	// Insert a new plane into the non-full bucket
-	if b.containerCounter < FacesPerBucket {
-		target := b.currPoolPtr[b.containerCounter]
-		target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
-		b.countEntry(target, 1)
-		b.cache.ClearPenetrable()
-		b.matchWarmStart(target)
-		b.containerCounter++
-		return target
+	// Insert into the reusable pool, growing lazily when exceeding the initial capacity.
+	if b.containerCounter >= len(b.currPool) {
+		b.growCurrPool()
 	}
-
-	// Replace the least relevant face (respecting impactModePriority first, then penetration depth)
-	minIdx := 0
-	minPrio := b.currPoolPtr[0].iMode.Priority()
-	minPen := b.currPoolPtr[0].penetration
-	for i := 1; i < FacesPerBucket; i++ {
-		cPrio := b.currPoolPtr[i].iMode.Priority()
-		cPen := b.currPoolPtr[i].penetration
-		if cPrio < minPrio || (cPrio == minPrio && cPen < minPen) {
-			minPrio = cPrio
-			minPen = cPen
-			minIdx = i
-		}
-	}
-	inPrio := iMode.Priority()
-	if inPrio > minPrio || (inPrio == minPrio && penetration > minPen) {
-		target := b.currPoolPtr[minIdx]
-		b.rebuildEntry(target, bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
-		b.matchWarmStart(target)
-	}
-	return nil
+	target := b.currPool[b.containerCounter]
+	target.Rebuild(bucket, lCage, rCage, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
+	b.countEntry(target, 1)
+	b.cache.ClearPenetrable()
+	b.matchWarmStart(target)
+	b.containerCounter++
+	return target
 }
 
 // replaceCoplanarManifold replaces a coplanar contact when the candidate improves penetration or manifold spread.
 func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, coplanarCount int, bucket BucketType, lCage *Cage, rFace IFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ float64, iMode ImpactMode) {
 	minPenIdx := coplanar[0]
-	minPen := b.currPoolPtr[minPenIdx].penetration
+	minPen := b.currPool[minPenIdx].penetration
 	for k := 1; k < coplanarCount; k++ {
 		idx := coplanar[k]
-		if p := b.currPoolPtr[idx].penetration; p < minPen {
+		if p := b.currPool[idx].penetration; p < minPen {
 			minPen = p
 			minPenIdx = idx
 		}
 	}
 	if penetration > minPen+1e-4 {
-		target := b.currPoolPtr[minPenIdx]
+		target := b.currPool[minPenIdx]
 		b.rebuildEntry(target, bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 		return
@@ -456,7 +451,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 	worstSlot := -1
 	worstMinDistSq := math.MaxFloat64
 	for s := 0; s < coplanarCount; s++ {
-		es := b.currPoolPtr[coplanar[s]]
+		es := b.currPool[coplanar[s]]
 		if es.penetration > penetration+1e-4 {
 			continue
 		}
@@ -465,7 +460,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 			if k == s {
 				continue
 			}
-			ek := b.currPoolPtr[coplanar[k]]
+			ek := b.currPool[coplanar[k]]
 			dx := es.p0X - ek.p0X
 			dy := es.p0Y - ek.p0Y
 			dz := es.p0Z - ek.p0Z
@@ -487,7 +482,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 		if k == worstSlot {
 			continue
 		}
-		ek := b.currPoolPtr[coplanar[k]]
+		ek := b.currPool[coplanar[k]]
 		dx := p0x - ek.p0X
 		dy := p0y - ek.p0Y
 		dz := p0z - ek.p0Z
@@ -496,7 +491,7 @@ func (b *Bucket) replaceCoplanarManifold(coplanar *[aabb.MaxManifoldPoints]int, 
 		}
 	}
 	if candMinDistSq > worstMinDistSq*(1.0+1e-3) {
-		target := b.currPoolPtr[coplanar[worstSlot]]
+		target := b.currPool[coplanar[worstSlot]]
 		b.rebuildEntry(target, bucket, lCage, nil, rFace, dist, penetration, normalX, normalY, normalZ, p0x, p0y, p0z, maxZ, iMode)
 		b.matchWarmStart(target)
 	}
@@ -534,7 +529,7 @@ func (b *Bucket) matchWarmStart(entry *Entry) {
 	var bestPrev *Entry
 
 	for i := 0; i < b.prevCount; i++ {
-		w := b.prevPoolPtr[i]
+		w := b.prevPool[i]
 		if w.warmConsumed || w.acc.GetNormal() <= 0.0 {
 			continue
 		}

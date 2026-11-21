@@ -237,7 +237,7 @@ func TestPenetrableCycleAndCluster(t *testing.T) {
 		cageC.buckets[BucketWallEast].Add(BucketWallEast, cageC, cageA, nil, -0.1, 0.1, -1, 0, 0, 80, float64(p*5), 20, 40, ImpactElastic)
 	}
 
-	entryA := cageA.buckets[BucketWallEast].currPoolPtr[0]
+	entryA := cageA.buckets[BucketWallEast].currPool[0]
 
 	// Cycle detection must immediately return without hanging or blowing up stack/CPU
 	done := make(chan bool, 1)

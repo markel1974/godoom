@@ -175,10 +175,10 @@ func NewCage(id uint64) *Cage {
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
 	}
-	for i := BucketType(0); i < BucketSize; i++ {
+	for i := range BucketSize {
 		c.buckets[i] = NewBucket(i)
 	}
-	for i := 0; i < len(c.ellipsoidLocal); i++ {
+	for i := range len(c.ellipsoidLocal) {
 		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
 	}
 	return c
@@ -351,6 +351,65 @@ func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
 	return moved
 }
 
+// BeginStaticFaceCache initializes the per-frame cached static face list for the given broadphase AABB.
+func (s *Cage) BeginStaticFaceCache(lAABB *aabb.AABB) {
+	s.staticContact.BeginStaticFaceCache(lAABB)
+}
+
+// AddCachedStaticFace records a solid static face in this cage's per-frame broadphase cache.
+func (s *Cage) AddCachedStaticFace(rFace IFace) {
+	s.staticContact.AddCachedFace(rFace)
+}
+
+// CommitStaticFaceCache marks the cage's per-frame cached static faces as complete for reuse.
+func (s *Cage) CommitStaticFaceCache() {
+	s.staticContact.CommitStaticFaceCache()
+}
+
+// BeginPaddedStaticFaceQuery expands lAABB temporarily to cover nearby post-push clamping and starts the static face cache.
+func (s *Cage) BeginPaddedStaticFaceQuery(lAABB *aabb.AABB) (minX, minY, minZ, maxX, maxY, maxZ float64) {
+	minX, minY, minZ, maxX, maxY, maxZ = lAABB.GetMinMax()
+	padX := math.Max(s.eRadX, 4.0) + math.Abs(s.dX)
+	padY := math.Max(s.eRadY, 4.0) + math.Abs(s.dY)
+	padZ := math.Max(s.maxStep, math.Max(s.eRadZ, 4.0)) + math.Abs(s.dZ)
+	lAABB.Rebuild(minX-padX, minY-padY, minZ-padZ, maxX+padX, maxY+padY, maxZ+padZ)
+	s.BeginStaticFaceCache(lAABB)
+	return minX, minY, minZ, maxX, maxY, maxZ
+}
+
+// EndPaddedStaticFaceQuery restores the tight clamp AABB bounds and commits the cached static faces for reuse.
+func (s *Cage) EndPaddedStaticFaceQuery(lAABB *aabb.AABB, minX, minY, minZ, maxX, maxY, maxZ float64) {
+	lAABB.Rebuild(minX, minY, minZ, maxX, maxY, maxZ)
+	s.CommitStaticFaceCache()
+}
+
+// HasStaticFaceCache reports whether cached static faces cover lAABB without needing a fresh BVH query.
+func (s *Cage) HasStaticFaceCache(lAABB *aabb.AABB) bool {
+	return s.staticContact.HasStaticFaceCache(lAABB)
+}
+
+// CachePendingStaticFaces copies pending static faces queued via AddFace into the per-frame broadphase cache.
+func (s *Cage) CachePendingStaticFaces(lAABB *aabb.AABB) {
+	fc := s.staticContact
+	fc.BeginStaticFaceCache(lAABB)
+	for i := 0; i < s.facesIdx; i++ {
+		fc.AddCachedFace(s.faces[i].rFace)
+	}
+	fc.CommitStaticFaceCache()
+}
+
+// ClampCachedStaticFaces resolves static face clamping against all faces stored in the per-frame broadphase cache.
+func (s *Cage) ClampCachedStaticFaces(lAABB *aabb.AABB) bool {
+	moved := false
+	fc := s.staticContact
+	for i := 0; i < fc.cachedFacesLen; i++ {
+		if s.StaticFaceClamp(lAABB, fc.cachedFaces[i]) {
+			moved = true
+		}
+	}
+	return moved
+}
+
 // clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
 func (s *Cage) clampWallShouldSkip(fc *StaticFaceContact) bool {
 	curBaseZ := s.tZ - s.eRadZ
@@ -481,11 +540,20 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pe
 	return s.addToBucketEntry(bucket, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode) != nil
 }
 
+func (s *Cage) growSlots() {
+	n := make([]*Entry, nextGrowCap(len(s.slots), int(totalSlots)))
+	copy(n, s.slots)
+	s.slots = n
+}
+
 // addToBucketEntry adds a collision entry to the selected bucket and tracks it in the cage slots.
 // It returns the created entry, or nil if no entry was added.
 func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	entry := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if entry != nil {
+		if s.slotsLen >= len(s.slots) {
+			s.growSlots()
+		}
 		s.slots[s.slotsLen] = entry
 		s.slotsLen++
 		return entry

@@ -960,3 +960,49 @@ func TestStaticFaceContactGrowAndZeroAllocs(t *testing.T) {
 		t.Fatalf("expected 0 heap allocs after StaticFaceContact buffer growth, got %v", allocs)
 	}
 }
+
+func TestBucketGrowAndZeroAllocs(t *testing.T) {
+	objHost := newTestUprightObject(0, 0, 20, 20, 20, 40)
+	cageHost := newTestCage(400, objHost)
+
+	const numEntries = 130 // exceeds both FacesPerBucket (16), totalSlots (96), and int8 max (127)
+	remotes := make([]*Cage, numEntries)
+	for i := 0; i < numEntries; i++ {
+		objR := newTestUprightObject(float64(30+i*25), 0, 20, 20, 20, 40)
+		remotes[i] = newTestCage(uint64(401+i), objR)
+	}
+
+	// Warm up two Rebuild cycles so both currPool and prevPool (plus Cage.slots) expand to hold 130 entries.
+	for cycle := 0; cycle < 2; cycle++ {
+		cageHost.Rebuild(0, uint64(cycle+1))
+		for i := 0; i < numEntries; i++ {
+			e := cageHost.addToBucketEntry(BucketWallEast, remotes[i], nil, -0.1, 0.1, -1, 0, 0, float64(i*10), 0, 20, 40, ImpactElastic)
+			if e == nil {
+				t.Fatalf("cycle %d entry %d: expected Entry without eviction", cycle, i)
+			}
+		}
+	}
+
+	b := cageHost.buckets[BucketWallEast]
+	if b.Count() != numEntries {
+		t.Fatalf("expected %d entries preserved in Bucket after growth, got %d", numEntries, b.Count())
+	}
+	if b.dynamicCount != numEntries {
+		t.Fatalf("expected dynamicCount == %d without int8 overflow, got %d", numEntries, b.dynamicCount)
+	}
+	if cageHost.GetSlotsLen() != numEntries {
+		t.Fatalf("expected %d cage slots after growSlots, got %d", numEntries, cageHost.GetSlotsLen())
+	}
+
+	session := uint64(10)
+	allocs := testing.AllocsPerRun(20, func() {
+		cageHost.Rebuild(0, session)
+		for i := 0; i < numEntries; i++ {
+			cageHost.addToBucketEntry(BucketWallEast, remotes[i], nil, -0.1, 0.1, -1, 0, 0, float64(i*10), 0, 20, 40, ImpactElastic)
+		}
+		session++
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 heap allocs reusing expanded Bucket and Cage.slots pools, got %v", allocs)
+	}
+}

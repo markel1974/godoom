@@ -117,44 +117,34 @@ func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 		}
 		return false
 	})
+	if counter <= maxOverlaps {
+		cage.CachePendingStaticFaces(cage.GetAABB())
+	}
 	cage.Commit(nil)
 }
 
 // ClampStaticCage projects any entity moved or pushed during the step strictly outside solid world faces.
 func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 	const maxPasses = 3
-	const maxNearVolumes = 8
-	var nearVols [maxNearVolumes]*volumes.Volume
-	nearVolsLen := 0
 
 	for pass := 0; pass < maxPasses; pass++ {
 		moved := false
 		origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, lAABB := cage.BeginStaticClamp()
 
-		if pass == 0 {
+		if !cage.HasStaticFaceCache(lAABB) {
+			oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ := cage.BeginPaddedStaticFaceQuery(lAABB)
 			s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
 				vol := object.(*volumes.Volume)
-				if nearVolsLen < len(nearVols) {
-					nearVols[nearVolsLen] = vol
-					nearVolsLen++
-				}
 				vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-					if cage.StaticFaceClamp(lAABB, otherEnt.(*volumes.Face)) {
-						moved = true
-					}
+					cage.AddCachedStaticFace(otherEnt.(*volumes.Face))
 					return false
 				})
 				return false
 			})
-		} else {
-			for v := 0; v < nearVolsLen; v++ {
-				nearVols[v].QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-					if cage.StaticFaceClamp(lAABB, otherEnt.(*volumes.Face)) {
-						moved = true
-					}
-					return false
-				})
-			}
+			cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
+		}
+		if cage.ClampCachedStaticFaces(lAABB) {
+			moved = true
 		}
 		if cage.StaticFaceFlushClamp(lAABB) {
 			moved = true

@@ -34,6 +34,7 @@ func (fw *FlatWallPlane) IsCoplanar(nx, ny, nz float64, ax, ay, az float64) bool
 const (
 	staticFaceFlatWallInitCap = 32
 	staticFaceClampMax        = 16
+	staticFaceCacheInitCap    = 64
 )
 
 func nextGrowCap(cur, initialCap int) int {
@@ -72,6 +73,16 @@ type StaticFaceContact struct {
 
 	clampCorners    []IFace
 	clampCornersLen int
+
+	cachedFaces    []IFace
+	cachedFacesLen int
+	cachedValid    bool
+	cacheMinX      float64
+	cacheMinY      float64
+	cacheMinZ      float64
+	cacheMaxX      float64
+	cacheMaxY      float64
+	cacheMaxZ      float64
 }
 
 // NewStaticFaceContact creates a new StaticFaceContact with zeroed contact state.
@@ -80,14 +91,17 @@ func NewStaticFaceContact() *StaticFaceContact {
 		flatWalls:    make([]FlatWallPlane, staticFaceFlatWallInitCap),
 		clampNormals: make([][3]float64, staticFaceClampMax),
 		clampCorners: make([]IFace, staticFaceClampMax),
+		cachedFaces:  make([]IFace, staticFaceCacheInitCap),
 	}
 }
 
-// Reset clears cached clamp normals, flat walls, and clamp corners.
+// Reset clears cached clamp normals, flat walls, clamp corners, and per-frame static face cache.
 func (fc *StaticFaceContact) Reset() {
 	fc.clampNormalsLen = 0
 	fc.flatWallsLen = 0
 	fc.clampCornersLen = 0
+	fc.cachedFacesLen = 0
+	fc.cachedValid = false
 }
 
 // ResetFlatWalls clears the recorded flat wall planes for the contact.
@@ -299,4 +313,51 @@ func (fc *StaticFaceContact) growClampNormals() {
 	n := make([][3]float64, nextGrowCap(len(fc.clampNormals), staticFaceClampMax))
 	copy(n, fc.clampNormals)
 	fc.clampNormals = n
+}
+
+// growCachedFaces expands the reusable cachedFaces buffer while preserving collected static faces.
+func (fc *StaticFaceContact) growCachedFaces() {
+	n := make([]IFace, nextGrowCap(len(fc.cachedFaces), staticFaceCacheInitCap))
+	copy(n, fc.cachedFaces)
+	fc.cachedFaces = n
+}
+
+// BeginStaticFaceCache initializes the per-frame static broadphase cache for the given AABB bounds.
+func (fc *StaticFaceContact) BeginStaticFaceCache(lAABB *aabb.AABB) {
+	if lAABB != nil {
+		fc.cacheMinX, fc.cacheMinY, fc.cacheMinZ, fc.cacheMaxX, fc.cacheMaxY, fc.cacheMaxZ = lAABB.GetMinMax()
+	} else {
+		fc.cacheMinX, fc.cacheMinY, fc.cacheMinZ = 0, 0, 0
+		fc.cacheMaxX, fc.cacheMaxY, fc.cacheMaxZ = 0, 0, 0
+	}
+	fc.cachedFacesLen = 0
+	fc.cachedValid = false
+}
+
+// AddCachedFace stores a solid static candidate face in the per-frame broadphase cache.
+func (fc *StaticFaceContact) AddCachedFace(rFace IFace) {
+	if rFace == nil || !rFace.IsSolid() {
+		return
+	}
+	if fc.cachedFacesLen >= len(fc.cachedFaces) {
+		fc.growCachedFaces()
+	}
+	fc.cachedFaces[fc.cachedFacesLen] = rFace
+	fc.cachedFacesLen++
+}
+
+// CommitStaticFaceCache marks the current cached static face set valid for its recorded AABB bounds.
+func (fc *StaticFaceContact) CommitStaticFaceCache() {
+	fc.cachedValid = true
+}
+
+// HasStaticFaceCache reports whether the cached static face set completely covers lAABB.
+func (fc *StaticFaceContact) HasStaticFaceCache(lAABB *aabb.AABB) bool {
+	if !fc.cachedValid || lAABB == nil {
+		return false
+	}
+	minX, minY, minZ, maxX, maxY, maxZ := lAABB.GetMinMax()
+	return minX >= fc.cacheMinX && maxX <= fc.cacheMaxX &&
+		minY >= fc.cacheMinY && maxY <= fc.cacheMaxY &&
+		minZ >= fc.cacheMinZ && maxZ <= fc.cacheMaxZ
 }

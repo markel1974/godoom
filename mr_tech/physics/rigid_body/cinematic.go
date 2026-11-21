@@ -775,7 +775,9 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 	e.vx += e.ax * e.dt
 	e.vy += e.ay * e.dt
 
-	groundedFlat := e.onGround && (!e.isTilted || e.keepUpright)
+	linSpdSq := e.vx*e.vx + e.vy*e.vy
+	angSpdSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
+	groundedFlat := e.onGround && (e.keepUpright || (!e.isTilted && linSpdSq < e.vMin*e.vMin && angSpdSq < sleepAngVelMaxSq))
 
 	if groundedFlat {
 		if e.vz < 0.0 {
@@ -811,7 +813,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 		e.vx *= groundDamping
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
-		if !groundedFlat && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.16 {
+		if (!groundedFlat) && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.16 {
 			e.vx *= 0.80
 			e.vy *= 0.80
 			e.wx *= 0.80
@@ -827,6 +829,13 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 			}
 			if e.vz <= 0.0 {
 				e.vz = 0.0
+			}
+		} else if !e.isTilted {
+			if math.Abs(e.vx) < e.vMin {
+				e.vx = 0.0
+			}
+			if math.Abs(e.vy) < e.vMin {
+				e.vy = 0.0
 			}
 		}
 	} else {
@@ -961,14 +970,10 @@ func (e *Cinematic) effectiveContactInvMasses(e2 *Cinematic, nz float64) (float6
 	if e2.kinematic {
 		invMass2 = 0.0
 	}
-	// Preserve infinite support mass only when an upright character/actor interacts with a grounded body;
-	// free 6-DoF stacks must exchange full two-way impulses across layers.
-	if e.keepUpright || e2.keepUpright {
-		if e2.onGround && nz > floorNormalThreshold {
-			invMass2 = 0.0
-		} else if e.onGround && nz < -floorNormalThreshold {
-			invMass1 = 0.0
-		}
+	if e2.onGround && nz > floorNormalThreshold {
+		invMass2 = 0.0
+	} else if e.onGround && nz < -floorNormalThreshold {
+		invMass1 = 0.0
 	}
 	return invMass1, invMass2
 }
@@ -1245,15 +1250,25 @@ func (e *Cinematic) ResolveElasticPenetrationConstrained(other *Cinematic, other
 	}
 	invMass1 := e.GetInvMass()
 	invMass2 := other.GetInvMass()
-	uprightPair := e.keepUpright || other.keepUpright
-	// Kinematic or statically blocked bodies behave as infinite mass along blocked axes.
-	if e.kinematic || !selfMovable || (uprightPair && e.IsOnGround() && nz < -floorNormalThreshold) {
+	// Kinematic or static-supported bodies behave as infinite mass along blocked axes.
+	if e.kinematic || !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
 		invMass1 = 0.0
 	}
-	if other.kinematic || !otherMovable || (uprightPair && (otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
+	if other.kinematic || !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
 		invMass2 = 0.0
 	}
 	invMassSum := invMass1 + invMass2
+	if invMassSum <= 0.0 && !e.kinematic && !other.kinematic && !e.keepUpright && !other.keepUpright {
+		if nz > floorNormalThreshold {
+			invMass1 = e.invMass
+		} else if nz < -floorNormalThreshold {
+			invMass2 = other.invMass
+		} else {
+			invMass1 = e.invMass
+			invMass2 = other.invMass
+		}
+		invMassSum = invMass1 + invMass2
+	}
 	if invMassSum <= 0.0 {
 		return 0, 0, false
 	}
@@ -1261,17 +1276,31 @@ func (e *Cinematic) ResolveElasticPenetrationConstrained(other *Cinematic, other
 	p1 := correction * (invMass1 / invMassSum)
 	p2 := correction * (invMass2 / invMassSum)
 
-	if nz > floorNormalThreshold && (otherFloor || other.IsOnGround()) {
-		if (!e.isTilted || e.keepUpright) && e.vz < 0.0 {
+	const supportSlopeMinNZ = 0.25
+	if nz > supportSlopeMinNZ && (otherFloor || other.IsOnGround()) && e.vz < 0.0 {
+		if (!e.isTilted || e.keepUpright) && nz > floorNormalThreshold {
 			e.vz = 0.0
+		} else {
+			e.bleedDownwardSinkingVel(nz, p1)
 		}
-	} else if nz < -floorNormalThreshold && e.IsOnGround() {
-		if (!other.isTilted || other.keepUpright) && other.vz < 0.0 {
+	} else if nz < -supportSlopeMinNZ && e.IsOnGround() && other.vz < 0.0 {
+		if (!other.isTilted || other.keepUpright) && nz < -floorNormalThreshold {
 			other.vz = 0.0
+		} else {
+			other.bleedDownwardSinkingVel(-nz, p2)
 		}
 	}
 
 	return p1, p2, true
+}
+
+// bleedDownwardSinkingVel damps unresolved downward Z velocity proportional to upward positional
+// recovery without ever injecting lateral (vx, vy) momentum across multi-contact wedges.
+func (e *Cinematic) bleedDownwardSinkingVel(upNZ, p float64) {
+	if p <= 0.0 || e.dt <= 0.0 || e.vz >= 0.0 {
+		return
+	}
+	e.vz = math.Min(0.0, e.vz+(p*upNZ)/e.dt)
 }
 
 // ResolveInelasticPenetration computes full rigid positional projection out of static walls, floors, and ceilings.
@@ -1280,9 +1309,11 @@ func (e *Cinematic) ResolveInelasticPenetration(nz float64, pen float64) (float6
 	if pen <= 0.0 {
 		return 0, false
 	}
-	if nz > floorNormalThreshold {
-		if (!e.isTilted || e.keepUpright) && e.vz < 0.0 {
+	if nz > floorNormalThreshold && e.vz < 0.0 {
+		if !e.isTilted || e.keepUpright {
 			e.vz = 0.0
+		} else if e.dt > 0.0 {
+			e.vz = math.Min(0.0, e.vz+(pen*nz)/e.dt)
 		}
 	}
 	return pen, true

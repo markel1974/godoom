@@ -22,6 +22,7 @@ type Volume struct {
 	object     any
 	vertexTags []*articulated_dynamics.TagAxis
 	marker     int
+	deformable bool
 	dirty      bool
 }
 
@@ -37,6 +38,7 @@ func newVolume(dynamic bool, modelId int, id string, tag string, mass, restituti
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
+		deformable: true,
 	}
 	v.aabb = v.solver.GetEntity().GetAABB()
 	return v
@@ -79,6 +81,11 @@ func (v *Volume) Rebuild() bool {
 	v.dirty = true
 
 	return true
+}
+
+// IsDeformable reports whether the volume can undergo deformation.
+func (v *Volume) IsDeformable() bool {
+	return v.deformable
 }
 
 // IsDynamic reports whether the volume is configured for dynamic physics.

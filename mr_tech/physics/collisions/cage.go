@@ -899,7 +899,7 @@ func (s *Cage) CommitStaticClamp() {
 // IsBlockedAlong reports whether pushing this cage along unit direction (dirX, dirY, dirZ)
 // pushes into any active or clamped static world face.
 func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
-	const wallBlockDotThreshold = -0.50
+	const wallBlockDotThreshold = -0.85
 	if s.staticContact.IsBlockedAlong(dirX, dirY, dirZ, wallBlockDotThreshold) {
 		return true
 	}
@@ -983,9 +983,36 @@ func (s *Cage) effectiveRadius(nX, nY, nZ float64) float64 {
 // GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.[cite: 6]
 func (s *Cage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
 
-// HasFloor reports whether the collision cage has a floor.[cite: 6]
+// HasFloor reports whether the collision cage has floor or multi-contact cradle support.[cite: 6]
 func (s *Cage) HasFloor() bool {
-	return s.hasFloor
+	if s.hasFloor {
+		return true
+	}
+	if s.entity.KeepUpright() || s.slotsLen < 2 {
+		return false
+	}
+	return s.hasCradleSupport()
+}
+
+// hasCradleSupport reports whether two opposing upward-supporting contacts cradle a free 6-DoF body vertically.
+func (s *Cage) hasCradleSupport() bool {
+	const minSlopeNZ = 0.25
+	for i := 0; i < s.slotsLen; i++ {
+		a := s.slots[i]
+		if a.iMode == ImpactStep || a.nZ <= minSlopeNZ {
+			continue
+		}
+		for j := i + 1; j < s.slotsLen; j++ {
+			b := s.slots[j]
+			if b.iMode == ImpactStep || b.nZ <= minSlopeNZ {
+				continue
+			}
+			if a.nZ+b.nZ >= floorNormalThreshold && (a.nX*b.nX+a.nY*b.nY) < -0.10 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).

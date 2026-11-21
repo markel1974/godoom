@@ -14,7 +14,13 @@ func runPileSimulation(t *testing.T, nBoxes int, wakeOnBroadphase bool) {
 	rigid_body.SetFps(120)
 	defer rigid_body.SetFps(120)
 
-	floorObj := newTestUprightObject(0, 0, -25, 1000, 1000, 50)
+	floorSolver := NewSolver(false, 0.0, 0.0, 0.2, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0.0)
+	floorObj := &testObject{solver: floorSolver, ent: floorSolver.GetEntity(), box: aabb.NewAABB()}
+	floorObj.ent.Rebuild(-500, -500, -50, 1000, 1000, 50)
+	floorObj.ent.SetKeepUpright(true)
+	floorObj.ent.LockUpright()
+	floorObj.ent.SetKinematic(true)
+	_ = floorSolver.Setup(floorObj)
 	staticFaces := []IFace{
 		&solverParentFace{testFace: newTestFace([3]float64{-200, -200, 0}, [3]float64{200, -200, 0}, [3]float64{200, 200, 0}, 0, 0, 1), parent: floorObj.solver},
 		&solverParentFace{testFace: newTestFace([3]float64{-200, -200, 0}, [3]float64{200, 200, 0}, [3]float64{-200, 200, 0}, 0, 0, 1), parent: floorObj.solver},
@@ -118,7 +124,7 @@ func runPileSimulation(t *testing.T, nBoxes int, wakeOnBroadphase bool) {
 	coord := NewCoordinator(10, nBoxes+16, queryFn, clampFn)
 	var stepTimeTotal time.Duration
 	var stepCountWindow int
-	for step := 0; step < 960; step++ {
+	for step := 0; step < 1200; step++ {
 		t0 := time.Now()
 		coord.Reset()
 		for _, s := range solvers {
@@ -127,28 +133,7 @@ func runPileSimulation(t *testing.T, nBoxes int, wakeOnBroadphase bool) {
 		coord.Step()
 		stepTimeTotal += time.Since(t0)
 		stepCountWindow++
-		if step >= 954 && step <= 959 {
-			s := solvers[65]
-			ent := s.GetEntity()
-			cx, cy, cz := ent.GetCenter()
-			vx, vy, vz := ent.GetVelocity()
-			wx, wy, wz := ent.GetAngularVelocity()
-			nx, ny, nz := s.GetCage().GetNetDisplacement()
-			px, py, pz := s.GetCage().GetPushOffset()
-			t.Logf("trace[65] step=%d pos=(%.3f,%.3f,%.3f) v=(%.3f,%.3f,%.3f) w=(%.3f,%.3f,%.3f) net=(%.5f,%.5f,%.5f) push=(%.5f,%.5f,%.5f) floor=%v slots=%d",
-				step, cx, cy, cz, vx, vy, vz, wx, wy, wz, nx, ny, nz, px, py, pz, s.GetCage().HasFloor(), s.GetCage().GetSlotsLen())
-			for si := 0; si < s.GetCage().GetSlotsLen(); si++ {
-				sl := s.GetCage().GetSlot(si)
-				snx, sny, snz := sl.GetNormal()
-				rId := uint64(0)
-				if rc := sl.GetRCage(); rc != nil {
-					rId = rc.GetEntity().GetId()
-				}
-				t.Logf("    slot %d: bucket=%s mode=%d rId=%d n=(%.3f,%.3f,%.3f) pen=%.4f warmN=%.3f",
-					si, sl.GetBucket(), sl.GetImpactMode(), rId, snx, sny, snz, sl.GetPenetration(), sl.GetSolverState().GetNormal())
-			}
-		}
-		if step == 120 || step == 240 || step == 360 || step == 480 || step == 600 || step == 720 || step == 840 || step == 959 {
+		if step == 120 || step == 240 || step == 360 || step == 480 || step == 600 || step == 720 || step == 840 || step == 960 || step == 1080 || step == 1199 {
 			awake := 0
 			calmV := 0
 			noGround := 0
@@ -188,7 +173,38 @@ func runPileSimulation(t *testing.T, nBoxes int, wakeOnBroadphase bool) {
 			stepCountWindow = 0
 			t.Logf("step %3d: running=%3d awake=%3d calmV=%3d noGnd=%3d hiNet=%3d hiW=%3d maxSpd=%.2f(#%d) avgStep=%.3fms",
 				step, coord.RunningLen(), awake, calmV, noGround, hiNet, hiW, math.Sqrt(maxSpdSq), maxIdx, avgMs)
-			if step == 959 && maxIdx >= 0 {
+			if step == 720 && hiW > 0 {
+				shown := 0
+				for idx, s := range solvers {
+					ent := s.GetEntity()
+					wx, wy, wz := ent.GetAngularVelocity()
+					if wx*wx+wy*wy+wz*wz <= 0.16*0.16 {
+						continue
+					}
+					vx, vy, vz := ent.GetVelocity()
+					nx, ny, nz := s.GetCage().GetNetDisplacement()
+					px, py, pz := s.GetCage().GetPushOffset()
+					t.Logf("  hiW[%3d]: v=(%.3f,%.3f,%.3f) w=(%.3f,%.3f,%.3f) net=(%.5f,%.5f,%.5f) push=(%.5f,%.5f,%.5f) onGnd=%v slots=%d",
+						idx, vx, vy, vz, wx, wy, wz, nx, ny, nz, px, py, pz, ent.IsOnGround(), s.GetCage().GetSlotsLen())
+					if shown == 0 {
+						for si := 0; si < s.GetCage().GetSlotsLen(); si++ {
+							sl := s.GetCage().GetSlot(si)
+							snx, sny, snz := sl.GetNormal()
+							rId := uint64(0)
+							if rc := sl.GetRCage(); rc != nil {
+								rId = rc.GetEntity().GetId()
+							}
+							t.Logf("    slot %d: b=%s mode=%d rId=%d n=(%.3f,%.3f,%.3f) pen=%.4f warmN=%.3f",
+								si, sl.GetBucket(), sl.GetImpactMode(), rId, snx, sny, snz, sl.GetPenetration(), sl.GetSolverState().GetNormal())
+						}
+					}
+					shown++
+					if shown >= 8 {
+						break
+					}
+				}
+			}
+			if step == 1199 && maxIdx >= 0 {
 				for _, idx := range []int{3, 8, maxIdx} {
 					s := solvers[idx]
 					ent := s.GetEntity()
@@ -219,5 +235,8 @@ func runPileSimulation(t *testing.T, nBoxes int, wakeOnBroadphase bool) {
 func TestDiagDynamicPileSleep(t *testing.T) {
 	t.Run("100_obb_hit_wake", func(t *testing.T) {
 		runPileSimulation(t, 100, false)
+	})
+	t.Run("500_obb_hit_wake", func(t *testing.T) {
+		runPileSimulation(t, 500, false)
 	})
 }

@@ -288,7 +288,7 @@ func (t *Base) GetSolver() *collisions.Solver {
 }
 
 // Deformable reports whether the base can be deformed.
-func (t *Base) Deformable() bool {
+func (t *Base) IsDeformable() bool {
 	return t.deformable
 }
 
@@ -397,39 +397,38 @@ func (t *Base) FireHitscan(self ithing.IThing, id string, pos geometry.XYZ, forc
 	var closestFace *volumes.Face
 	var closestVol *volumes.Volume
 
-	const wallDeform = true
-
-	if wallDeform {
-		// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
-		if vols := t.things.GetVolumes(); vols != nil {
-			vols.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace, func(object aabb.IObject, distance float64) (float64, bool) {
-				vol, ok := object.(*volumes.Volume)
-				if !ok {
-					return closestDistFace, false
-				}
-				hit := false
-				if facesTree := vol.GetFacesTree(); facesTree != nil {
-					facesTree.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace, func(fObj aabb.IObject, fDist float64) (float64, bool) {
-						face, fOk := fObj.(*volumes.Face)
-						if !fOk || !face.IsSolid() {
-							return closestDistFace, false
-						}
-						if tHit, okHit := face.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace); okHit {
-							closestDistFace = tHit
-							closestFace = face
-							closestVol = vol
-							hit = true
-							return tHit, true
-						}
-						return closestDistFace, false
-					})
-				}
-				if hit {
-					return closestDistFace, true
-				}
+	// Se il colpo interseca un muro/volume prima o invece di una Thing, il muro intercetta il colpo
+	if vols := t.things.GetVolumes(); vols != nil {
+		vols.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace, func(object aabb.IObject, distance float64) (float64, bool) {
+			vol, ok := object.(*volumes.Volume)
+			if !ok {
 				return closestDistFace, false
-			})
-		}
+			}
+			if !vol.IsDeformable() {
+				return closestDistFace, false
+			}
+			hit := false
+			if facesTree := vol.GetFacesTree(); facesTree != nil {
+				facesTree.QueryRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace, func(fObj aabb.IObject, fDist float64) (float64, bool) {
+					face, fOk := fObj.(*volumes.Face)
+					if !fOk || !face.IsSolid() {
+						return closestDistFace, false
+					}
+					if tHit, okHit := face.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, closestDistFace); okHit {
+						closestDistFace = tHit
+						closestFace = face
+						closestVol = vol
+						hit = true
+						return tHit, true
+					}
+					return closestDistFace, false
+				})
+			}
+			if hit {
+				return closestDistFace, true
+			}
+			return closestDistFace, false
+		})
 	}
 
 	if closestThing != nil && (closestFace == nil || closestDistThing < closestDistFace) {
@@ -442,7 +441,7 @@ func (t *Base) FireHitscan(self ithing.IThing, id string, pos geometry.XYZ, forc
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDistThing, dirX, dirY, dirZ)
 
-		if closestThing.Deformable() {
+		if closestThing.IsDeformable() {
 			// Deformiamo il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
 			impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
 			dentDepth, dentRadius := t.dentCompute(force)
@@ -507,28 +506,19 @@ func (t *Base) onInelasticCollision(other aabb.IObject, energy float64) {
 	//TODO
 }
 
-// Deform applies an impulse deformation around the impact point, converting inputs to local space first.
-// Deform returns false when vertices or the owning entity are unavailable.
+// Deform applies a local mesh deformation from an impact point, impulse, and radius.
+// It returns false when the base is not deformable.
 func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	if t.IVertices == nil || t.ent == nil {
+	if !t.IsDeformable() {
 		return false
 	}
-	// Per modelli 3D e mesh di Thing, convertiamo punto d'impatto e impulso dallo spazio mondo allo spazio locale dell'entità
 	cx, cy, cz := t.ent.GetCenter()
 	dx := impact.X - cx
 	dy := impact.Y - cy
 	dz := impact.Z - cz
 	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := t.ent.GetAxes()
-	localImpact := geometry.XYZ{
-		X: dx*ax0 + dy*ay0 + dz*az0,
-		Y: dx*ax1 + dy*ay1 + dz*az1,
-		Z: dx*ax2 + dy*ay2 + dz*az2,
-	}
-	localImpulse := geometry.XYZ{
-		X: impulse.X*ax0 + impulse.Y*ay0 + impulse.Z*az0,
-		Y: impulse.X*ax1 + impulse.Y*ay1 + impulse.Z*az1,
-		Z: impulse.X*ax2 + impulse.Y*ay2 + impulse.Z*az2,
-	}
+	localImpact := geometry.XYZ{X: dx*ax0 + dy*ay0 + dz*az0, Y: dx*ax1 + dy*ay1 + dz*az1, Z: dx*ax2 + dy*ay2 + dz*az2}
+	localImpulse := geometry.XYZ{X: impulse.X*ax0 + impulse.Y*ay0 + impulse.Z*az0, Y: impulse.X*ax1 + impulse.Y*ay1 + impulse.Z*az1, Z: impulse.X*ax2 + impulse.Y*ay2 + impulse.Z*az2}
 	return t.IVertices.Deform(localImpact, localImpulse, radius)
 }
 

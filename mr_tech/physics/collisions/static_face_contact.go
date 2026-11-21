@@ -12,6 +12,18 @@ type flatWallPlane struct {
 	pX, pY, pZ float64
 }
 
+func (fw *flatWallPlane) Assign(nx, ny, nz float64, px, py, pz float64) {
+	fw.nX, fw.nY, fw.nZ = nx, ny, nz
+	fw.pX, fw.pY, fw.pZ = px, py, pz
+}
+
+func (fw *flatWallPlane) IsCoplanar(nx, ny, nz float64, ax, ay, az float64) bool {
+	if nx*fw.nX+ny*fw.nY+nz*fw.nZ > 0.999 && math.Abs((ax-fw.pX)*fw.nX+(ay-fw.pY)*fw.nY+(az-fw.pZ)*fw.nZ) < planeEpsilon {
+		return true
+	}
+	return false
+}
+
 // StaticFaceContact stores reusable contact data for resolving collisions between a moving cage and static faces.
 type StaticFaceContact struct {
 	bucket                 BucketType
@@ -86,7 +98,7 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 			continue // Skybox or non-solid surface: ignore collision and volume tracking[cite: 6]
 		}
 
-		if !s.evaluateStaticFace(lAABB, rFace, fc) {
+		if !s.evalStaticFace(lAABB, rFace, fc) {
 			continue
 		}
 
@@ -118,18 +130,18 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 
 		if fc.bucket.IsWall() {
 			if iMode == ImpactStep {
-				if fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) ||
-					s.hasCoplanarInelasticSlot(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				if fc.hasCoplanarFlatWall() ||
+					fc.hasCoplanarInelasticSlot(s) {
 					continue
 				}
 			} else {
-				if fc.cornerHit && fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
+				if fc.cornerHit && fc.hasCoplanarFlatWall() {
 					continue
 				}
-				s.pruneCoplanarStepSlots(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+				fc.pruneCoplanarStepSlots(s)
 				if !fc.cornerHit {
-					fc.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
-					s.pruneCoplanarCornerHits(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+					fc.recordFlatWall()
+					fc.pruneCoplanarCornerHits(s)
 				}
 			}
 		}
@@ -142,103 +154,11 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 	}
 }
 
-// FlushClamp resolves queued corner clamp contacts against the cage and returns whether any contact moved it.
-// It clears the queued clamp corners after processing.
-func (fc *StaticFaceContact) FlushClamp(s *Cage, lAABB *aabb.AABB) bool {
-	moved := false
-	for i := 0; i < fc.clampCornersLen; i++ {
-		if !s.evaluateStaticFace(lAABB, fc.clampCorners[i], fc) || fc.pen <= 0.0 {
-			continue
-		}
-		if fc.bucket.IsWall() {
-			if fc.clampWallShouldSkip(s) ||
-				fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
-				continue
-			}
-		}
-		if fc.clampApplyContact(s) {
-			moved = true
-		}
-	}
-	fc.clampCornersLen = 0
-	return moved
-}
-
-// Clamp evaluates a solid face against the cage AABB and applies penetration correction when needed.
-// Clamp marks floor contact as grounded, skips invalid wall clamps, and defers corner wall contacts.
-func (fc *StaticFaceContact) Clamp(s *Cage, lAABB *aabb.AABB, rFace IFace) bool {
-	if !rFace.IsSolid() {
-		return false
-	}
-	if !s.evaluateStaticFace(lAABB, rFace, fc) {
-		return false
-	}
-	if fc.pen <= 0.0 {
-		if fc.bucket == BucketFloor && fc.dist <= floorGroundTolerance {
-			s.hasFloor = true
-			s.entity.SetOnGround(true)
-		}
-		return false
-	}
-	if fc.bucket == BucketFloor {
-		s.hasFloor = true
-		s.entity.SetOnGround(true)
-	}
-	if fc.bucket.IsWall() {
-		if fc.clampWallShouldSkip(s) {
-			return false
-		}
-		if fc.cornerHit {
-			if fc.hasCoplanarFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ) {
-				return false
-			}
-			if fc.clampCornersLen < len(fc.clampCorners) {
-				fc.clampCorners[fc.clampCornersLen] = rFace
-				fc.clampCornersLen++
-				return false
-			}
-		} else {
-			fc.recordFlatWall(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
-		}
-	}
-	return fc.clampApplyContact(s)
-}
-
-// clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
-func (fc *StaticFaceContact) clampWallShouldSkip(s *Cage) bool {
-	curBaseZ := s.tZ - s.eRadZ
-	preBaseZ := s.GetBaseZ()
-	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
-		return true
-	}
-	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
-}
-
-// clampApplyContact clamps velocity, resolves penetration, updates cage position, and reports whether movement occurred.
-func (fc *StaticFaceContact) clampApplyContact(s *Cage) bool {
-	ent := s.entity
-	fc.addClampNormal(fc.nX, fc.nY, fc.nZ)
-	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
-	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
-	if !ok || p <= 0.0 {
-		return false
-	}
-	ent.AddTo(fc.nX*p, fc.nY*p, fc.nZ*p)
-	s.tX += fc.nX * p
-	s.tY += fc.nY * p
-	s.tZ += fc.nZ * p
-	s.dX = s.tX - s.cX
-	s.dY = s.tY - s.cY
-	s.dZ = s.tZ - s.cZ
-	return true
-}
-
 // hasCoplanarFlatWall reports whether a recorded flat wall shares the given normal and plane within tolerance.
-func (fc *StaticFaceContact) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64) bool {
+func (fc *StaticFaceContact) hasCoplanarFlatWall() bool {
+	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
 	for i := 0; i < fc.flatWallsLen; i++ {
-		w := &fc.flatWalls[i]
-		if nX*w.nX+nY*w.nY+nZ*w.nZ > 0.999 &&
-			math.Abs((ax-w.pX)*w.nX+(ay-w.pY)*w.nY+(az-w.pZ)*w.nZ) < planeEpsilon {
+		if fc.flatWalls[i].IsCoplanar(nX, nY, nZ, ax, ay, az) {
 			return true
 		}
 	}
@@ -247,14 +167,12 @@ func (fc *StaticFaceContact) hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az float64)
 
 // recordFlatWall stores a flat wall plane unless an equivalent coplanar wall is already tracked.
 // It ignores new walls when the fixed wall buffer is full.
-func (fc *StaticFaceContact) recordFlatWall(nX, nY, nZ, ax, ay, az float64) {
-	if fc.hasCoplanarFlatWall(nX, nY, nZ, ax, ay, az) || fc.flatWallsLen >= len(fc.flatWalls) {
+func (fc *StaticFaceContact) recordFlatWall() {
+	if fc.hasCoplanarFlatWall() || fc.flatWallsLen >= len(fc.flatWalls) {
 		return
 	}
-	fc.flatWalls[fc.flatWallsLen] = flatWallPlane{
-		nX: nX, nY: nY, nZ: nZ,
-		pX: ax, pY: ay, pZ: az,
-	}
+	ptr := &fc.flatWalls[fc.flatWallsLen]
+	ptr.Assign(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 	fc.flatWallsLen++
 }
 
@@ -272,5 +190,48 @@ func (fc *StaticFaceContact) addClampNormal(nX, nY, nZ float64) {
 		fc.clampNormals[fc.clampNormalsLen][1] = nY
 		fc.clampNormals[fc.clampNormalsLen][2] = nZ
 		fc.clampNormalsLen++
+	}
+}
+
+// hasCoplanarInelasticSlot reports whether the cage has an inelastic wall slot
+// on the original plane defined by the given normal and anchor.
+func (fc *StaticFaceContact) hasCoplanarInelasticSlot(s *Cage) bool {
+	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
+	for i := 0; i < s.slotsLen; i++ {
+		slot := s.slots[i]
+		if slot.iMode == ImpactInelastic && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
+			return true
+		}
+	}
+	return false
+}
+
+// pruneCoplanarStepSlots removes wall step slots whose original plane matches the given normal and anchor.
+func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
+	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
+	for i := 0; i < s.slotsLen; {
+		slot := s.slots[i]
+		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
+			s.buckets[slot.bucket].RemoveEntry(slot)
+			s.slotsLen--
+			s.slots[i] = s.slots[s.slotsLen]
+			continue
+		}
+		i++
+	}
+}
+
+// pruneCoplanarCornerHits removes corner-hit slots whose original plane matches the contact plane.
+func (fc *StaticFaceContact) pruneCoplanarCornerHits(s *Cage) {
+	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
+	for i := 0; i < s.slotsLen; {
+		slot := s.slots[i]
+		if slot.isCorner && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
+			s.buckets[slot.bucket].RemoveEntry(slot)
+			s.slotsLen--
+			s.slots[i] = s.slots[s.slotsLen]
+			continue
+		}
+		i++
 	}
 }

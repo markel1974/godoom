@@ -294,12 +294,93 @@ func (s *Cage) Commit(rCage *Cage) {
 
 // StaticFaceClamp clamps static contact data against the given AABB and face, reporting whether it succeeded.
 func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
-	return s.staticContact.Clamp(s, lAABB, rFace)
+	if !rFace.IsSolid() {
+		return false
+	}
+	fc := s.staticContact
+	if !s.evalStaticFace(lAABB, rFace, fc) {
+		return false
+	}
+	if fc.pen <= 0.0 {
+		if fc.bucket == BucketFloor && fc.dist <= floorGroundTolerance {
+			s.hasFloor = true
+			s.entity.SetOnGround(true)
+		}
+		return false
+	}
+	if fc.bucket == BucketFloor {
+		s.hasFloor = true
+		s.entity.SetOnGround(true)
+	}
+	if fc.bucket.IsWall() {
+		if s.clampWallShouldSkip(fc) {
+			return false
+		}
+		if fc.cornerHit {
+			if fc.hasCoplanarFlatWall() {
+				return false
+			}
+			if fc.clampCornersLen < len(fc.clampCorners) {
+				fc.clampCorners[fc.clampCornersLen] = rFace
+				fc.clampCornersLen++
+				return false
+			}
+		} else {
+			fc.recordFlatWall()
+		}
+	}
+	return s.clampApplyContact(fc)
 }
 
 // StaticFaceFlushClamp reports whether the cage's static contact can flush-clamp against the given AABB.
 func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
-	return s.staticContact.FlushClamp(s, lAABB)
+	moved := false
+	fc := s.staticContact
+	for i := 0; i < fc.clampCornersLen; i++ {
+		if !s.evalStaticFace(lAABB, fc.clampCorners[i], fc) || fc.pen <= 0.0 {
+			continue
+		}
+		if fc.bucket.IsWall() {
+			if s.clampWallShouldSkip(fc) || fc.hasCoplanarFlatWall() {
+				continue
+			}
+		}
+		if s.clampApplyContact(fc) {
+			moved = true
+		}
+	}
+	fc.clampCornersLen = 0
+	return moved
+}
+
+// clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
+func (s *Cage) clampWallShouldSkip(fc *StaticFaceContact) bool {
+	curBaseZ := s.tZ - s.eRadZ
+	preBaseZ := s.GetBaseZ()
+	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
+		return true
+	}
+	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
+}
+
+// clampApplyContact clamps velocity, resolves penetration, updates cage position, and reports whether movement occurred.
+func (s *Cage) clampApplyContact(fc *StaticFaceContact) bool {
+	fc.addClampNormal(fc.nX, fc.nY, fc.nZ)
+
+	ent := s.entity
+	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
+	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
+	if !ok || p <= 0.0 {
+		return false
+	}
+	ent.AddTo(fc.nX*p, fc.nY*p, fc.nZ*p)
+	s.tX += fc.nX * p
+	s.tY += fc.nY * p
+	s.tZ += fc.nZ * p
+	s.dX = s.tX - s.cX
+	s.dY = s.tY - s.cY
+	s.dZ = s.tZ - s.cZ
+	return true
 }
 
 // addStaticTriangleManifold emits either the single closest contact for KeepUpright entities or a clipped OBB
@@ -419,45 +500,6 @@ func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dis
 		return entry
 	}
 	return nil
-}
-
-// hasCoplanarInelasticSlot reports whether the cage has an inelastic wall slot
-// on the original plane defined by the given normal and anchor.
-func (s *Cage) hasCoplanarInelasticSlot(nX, nY, nZ, ax, ay, az float64) bool {
-	for i := 0; i < s.slotsLen; i++ {
-		slot := s.slots[i]
-		if slot.iMode == ImpactInelastic && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
-			return true
-		}
-	}
-	return false
-}
-
-// pruneCoplanarStepSlots removes wall step slots whose original plane matches the given normal and anchor.
-func (s *Cage) pruneCoplanarStepSlots(nX, nY, nZ, ax, ay, az float64) {
-	for i := 0; i < s.slotsLen; {
-		slot := s.slots[i]
-		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
-			s.buckets[slot.bucket].RemoveEntry(slot)
-			s.slotsLen--
-			s.slots[i] = s.slots[s.slotsLen]
-			continue
-		}
-		i++
-	}
-}
-
-func (s *Cage) pruneCoplanarCornerHits(nX, nY, nZ, ax, ay, az float64) {
-	for i := 0; i < s.slotsLen; {
-		slot := s.slots[i]
-		if slot.isCorner && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
-			s.buckets[slot.bucket].RemoveEntry(slot)
-			s.slotsLen--
-			s.slots[i] = s.slots[s.slotsLen]
-			continue
-		}
-		i++
-	}
 }
 
 // commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
@@ -997,10 +1039,10 @@ func (s *Cage) GetPushOffset() (float64, float64, float64) {
 	return curX - s.cX, curY - s.cY, curZ - s.cZ
 }
 
-// evaluateStaticFace evaluates a static world triangle against the cage sweep (bucket, plane normal,
+// evalStaticFace evaluates a static world triangle against the cage sweep (bucket, plane normal,
 // signed separation distance, anti-phantom-plane filtered penetration, and world face bounds) into out
 // without heap allocation or large value copies in the hot path.
-func (s *Cage) evaluateStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceContact) bool {
+func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceContact) bool {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
@@ -1271,11 +1313,7 @@ func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget flo
 	invRY := 1.0 / s.eRadY
 	invRZ := 1.0 / s.eRadZ
 
-	qx, qy, qz, featT := closestPointOnTriangleFeature(
-		(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
-		(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
-		(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
-	)
+	qx, qy, qz, featT := closestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
 	if qx*qx+qy*qy+qz*qz < 1.0-1e-9 {
 		if allowInactiveEdge || !isInactiveTriangleFeature(featT, activeMask) {
 			return true
@@ -1290,11 +1328,7 @@ func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget flo
 		px := s.cX + tauPlane*s.dX
 		py := s.cY + tauPlane*s.dY
 		pz := s.cZ + tauPlane*s.dZ
-		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature(
-			(v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ,
-			(v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ,
-			(v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ,
-		)
+		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
 		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 {
 			if allowInactiveEdge || !isInactiveTriangleFeature(featPlane, activeMask) {
 				return true
@@ -1302,12 +1336,7 @@ func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget flo
 		}
 	}
 
-	_, _, _, _, _, _, segSq, _, pierced, segFeat := closestSegmentToTriangleFeature(
-		s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
-		(v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ,
-		(v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ,
-		(v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ,
-	)
+	_, _, _, _, _, _, segSq, _, pierced, segFeat := closestSegmentToTriangleFeature(s.dX*invRX, s.dY*invRY, s.dZ*invRZ, (v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ, (v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ, (v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ)
 	if segSq >= 1.0-1e-9 {
 		return false
 	}
@@ -1329,11 +1358,7 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
 
-	qx, qy, qz, feat := closestPointOnTriangleFeature(
-		(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
-		(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
-		(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
-	)
+	qx, qy, qz, feat := closestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
 	bestSq := qx*qx + qy*qy + qz*qz
 	inactiveFeat := isInactiveTriangleFeature(feat, activeMask)
 	crossedPlane := distStart >= -satFilterEpsilon && distTarget < 0.0
@@ -1350,11 +1375,7 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 			px := s.cX + tauPlane*s.dX
 			py := s.cY + tauPlane*s.dY
 			pz := s.cZ + tauPlane*s.dZ
-			qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature(
-				(v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ,
-				(v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ,
-				(v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ,
-			)
+			qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
 			if planeSq := qpx*qpx + qpy*qpy + qpz*qpz; planeSq < 1.0-1e-9 {
 				resolvedPlane = true
 				qxW, qyW, qzW, hasPt = px+qpx*s.eRadX, py+qpy*s.eRadY, pz+qpz*s.eRadZ, true
@@ -1370,12 +1391,7 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 			if !crossedPlane && s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
 				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
 			}
-			sx, sy, sz, sqx, sqy, sqz, segSq, startSq, pierced, segFeat := closestSegmentToTriangleFeature(
-				s.dX*invRX, s.dY*invRY, s.dZ*invRZ,
-				(v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ,
-				(v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ,
-				(v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ,
-			)
+			sx, sy, sz, sqx, sqy, sqz, segSq, startSq, pierced, segFeat := closestSegmentToTriangleFeature(s.dX*invRX, s.dY*invRY, s.dZ*invRZ, (v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ, (v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ, (v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ)
 			if segSq >= 1.0-1e-9 || (startSq < 1.0-1e-9 && !(crossedPlane && pierced)) {
 				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
 			}
@@ -1434,11 +1450,7 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 		px := s.cX + tauPlane*s.dX
 		py := s.cY + tauPlane*s.dY
 		pz := s.cZ + tauPlane*s.dZ
-		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature(
-			(v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ,
-			(v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ,
-			(v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ,
-		)
+		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
 		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 && featPlane == 0 {
 			return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
 		}

@@ -506,6 +506,15 @@ func (t *Base) onInelasticCollision(other aabb.IObject, energy float64) {
 	//TODO
 }
 
+// DeformDent produces an indentation on the thing's vertices around a world-space impact point.
+func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
+	if !t.IsDeformable() {
+		return false
+	}
+	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
+	return t.Deform(impact, impulse, radius)
+}
+
 // Deform applies a local mesh deformation from an impact point, impulse, and radius.
 // It returns false when the base is not deformable.
 func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
@@ -531,12 +540,6 @@ func (t *Base) dentCompute(force float64) (float64, float64) {
 		dentRadius = math.Min(math.Max(force*0.00003, 6.0), 16.0)
 	}
 	return dentDepth, dentRadius
-}
-
-// DeformDent produces an indentation on the thing's vertices around a world-space impact point.
-func (t *Base) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
-	return t.Deform(impact, impulse, radius)
 }
 
 /*

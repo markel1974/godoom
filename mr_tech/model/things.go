@@ -168,16 +168,19 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 			return pairCounter > maxOverlaps
 		})
 		if wasSleeping {
-			if pairCounter == 0 {
+			if pairCounter == 0 || !lCage.WillHitDynamic(rCage) {
+				lCage.DiscardPendingFaces()
 				return false
 			}
-			// Real face intersection with a sleeping body: wake its connected island before rebuilding/committing rCage.
-			if wake != nil {
-				if rSolver := rCage.GetSolver(); rSolver != nil {
-					wake(rSolver)
+			if lCage.ShouldWakeDynamic(rCage) {
+				// Real narrow-phase contact with kinetic disturbance or upward support: wake rSolver.
+				if wake != nil {
+					if rSolver := rCage.GetSolver(); rSolver != nil {
+						wake(rSolver)
+					}
 				}
+				rCage.Seen(lCage)
 			}
-			rCage.Seen(lCage)
 		}
 		lCage.Commit(rCage)
 		return false

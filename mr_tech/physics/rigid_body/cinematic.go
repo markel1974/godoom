@@ -43,6 +43,10 @@ const (
 
 	sleepPushSlopSq = (defaultPenetrationSlop * 2.0) * (defaultPenetrationSlop * 2.0)
 
+	wakeLinVelSq = 4.0 * 4.0
+
+	wakeAngVelSq = 0.60 * 0.60
+
 	rotScale = 1.0
 
 	defaultInertia = 32.0
@@ -425,6 +429,53 @@ func (e *Cinematic) DampCalmRagdoll() {
 	}
 }
 
+func (e *Cinematic) effectiveVelSq(postPrepare bool) (float64, float64) {
+	vz := e.vz
+	if postPrepare && e.onGround && !e.keepUpright && vz < 0.0 {
+		vz = math.Min(0.0, vz+e.gForce*e.dt*1.1)
+	}
+	vSq := e.vx*e.vx + e.vy*e.vy + vz*vz
+	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
+	return vSq, wSq
+}
+
+// HasWakeMotion reports whether this body has active motion beyond calm resting contact thresholds.
+// When postPrepare is true, one frame of gravity on a grounded 6-DoF body is discounted before checking vertical speed.
+func (e *Cinematic) HasWakeMotion(pushSq float64, postPrepare bool) bool {
+	if pushSq > sleepPushSlopSq {
+		return true
+	}
+	vSq, wSq := e.effectiveVelSq(postPrepare)
+	return vSq > wakeLinVelSq || wSq > wakeAngVelSq
+}
+
+// HasSupportMotion reports whether body motion exceeds resting micro-noise so sleeping bodies atop it must wake.
+func (e *Cinematic) HasSupportMotion(pushSq float64, postPrepare bool) bool {
+	if !e.onGround || pushSq > 1e-4 {
+		return true
+	}
+	vSq, wSq := e.effectiveVelSq(postPrepare)
+	return vSq > 0.25 || wSq > 0.04
+}
+
+// DampCalmSettling gently damps residual post-solve micro-creep and corner wobble on grounded 6-DoF bodies
+// whose per-step displacement is already within resting slop so dense piles settle instead of orbiting forever.
+func (e *Cinematic) DampCalmSettling(pushSq float64) {
+	if e.keepUpright || e.invMass <= 0.0 || !e.onGround || pushSq > sleepPushSlopSq {
+		return
+	}
+	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
+	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
+	if vSq < 9.0 && wSq < 0.36 {
+		e.vx *= 0.65
+		e.vy *= 0.65
+		e.vz *= 0.65
+		e.wx *= 0.65
+		e.wy *= 0.65
+		e.wz *= 0.65
+	}
+}
+
 // UpdateSleepState advances or resets the calm accumulator based on post-solver linear/angular speed and push-out delta.
 // It returns true when the body satisfies all rest conditions for at least sleepTimeThreshold seconds.
 func (e *Cinematic) UpdateSleepState(canSleep bool, pushSq float64) bool {
@@ -444,14 +495,14 @@ func (e *Cinematic) UpdateSleepStateWithSupport(canSleep bool, pushSq float64, e
 	}
 	linThresh := math.Max(e.vMin*2.0, (sleepEpsilon/e.dt)*1.5)
 	angMaxSq := sleepAngVelMaxSq
-	if externalSupport || (!e.keepUpright && e.isTilted) {
-		// Free 6-DoF and joint-supported ragdoll limbs cannot snap flat under groundedFlat,
-		// so calibrate calm speed to ~8 cm/s (4.0 units/s at 50 units/m) alongside strict net-displacement slop.
+	if externalSupport || !e.keepUpright {
+		// Free 6-DoF bodies and joint-supported ragdoll limbs can retain tiny resting creep or corner
+		// micro-spin under PGS; calibrate calm speed to ~8 cm/s (4.0 units/s at 50 units/m) alongside net slop.
 		if linThresh < 4.0 {
 			linThresh = 4.0
 		}
-		if angMaxSq < 0.16*0.16 {
-			angMaxSq = 0.16 * 0.16
+		if angMaxSq < 0.28*0.28 {
+			angMaxSq = 0.28 * 0.28
 		}
 	}
 	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
@@ -503,10 +554,10 @@ func (e *Cinematic) IsKinematic() bool {
 	return e.kinematic
 }
 
-// SetOnGround sets the entity's ground state and adjusts vertical velocity when grounded flat.
+// SetOnGround sets the entity's ground state and adjusts vertical velocity for upright grounded bodies.
 func (e *Cinematic) SetOnGround(onGround bool) {
 	e.onGround = onGround
-	if e.onGround && (!e.isTilted || e.keepUpright) && e.vz < 0.0 {
+	if e.onGround && e.keepUpright && e.vz < 0.0 {
 		e.vz = 0.0
 	}
 }
@@ -813,7 +864,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 		e.vx *= groundDamping
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
-		if (!groundedFlat) && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.16 {
+		if (!groundedFlat) && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.36 {
 			e.vx *= 0.80
 			e.vy *= 0.80
 			e.wx *= 0.80
@@ -964,10 +1015,10 @@ func (e *Cinematic) WarmStartImpact(e2 *Cinematic, nx, ny, nz float64, cx1, cy1,
 func (e *Cinematic) effectiveContactInvMasses(e2 *Cinematic, nz float64) (float64, float64) {
 	invMass1 := e.invMass
 	invMass2 := e2.invMass
-	if e.kinematic {
+	if e.kinematic || e.IsSleeping() {
 		invMass1 = 0.0
 	}
-	if e2.kinematic {
+	if e2.kinematic || e2.IsSleeping() {
 		invMass2 = 0.0
 	}
 	if e2.onGround && nz > floorNormalThreshold {
@@ -1251,14 +1302,14 @@ func (e *Cinematic) ResolveElasticPenetrationConstrained(other *Cinematic, other
 	invMass1 := e.GetInvMass()
 	invMass2 := other.GetInvMass()
 	// Kinematic or static-supported bodies behave as infinite mass along blocked axes.
-	if e.kinematic || !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
+	if e.kinematic || e.IsSleeping() || !selfMovable || (e.IsOnGround() && nz < -floorNormalThreshold) {
 		invMass1 = 0.0
 	}
-	if other.kinematic || !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
+	if other.kinematic || other.IsSleeping() || !otherMovable || ((otherFloor || other.IsOnGround()) && nz > floorNormalThreshold) {
 		invMass2 = 0.0
 	}
 	invMassSum := invMass1 + invMass2
-	if invMassSum <= 0.0 && !e.kinematic && !other.kinematic && !e.keepUpright && !other.keepUpright {
+	if invMassSum <= 0.0 && !e.kinematic && !other.kinematic && !e.IsSleeping() && !other.IsSleeping() && !e.keepUpright && !other.keepUpright {
 		if nz > floorNormalThreshold {
 			invMass1 = e.invMass
 		} else if nz < -floorNormalThreshold {

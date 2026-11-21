@@ -32,6 +32,8 @@ func noopDetachedImpact(other config.IThingConfig, id string, force, closestDist
 func NewAttachedPart(things IThingHandler, owner ithing.IThing, location *volumes.Volume, id string, verts *vertices_multi_element_3d.Part) *Detached {
 	ent := verts.GetSolver().GetEntity()
 	cfg := config.NewConfigThing(id, geometry.XYZ{}, 0, config.ThingItemDef, ent.GetMass(), 1, 1, 0)
+	//TODO MERGE ALL PARAMETERS!
+	cfg.Deformable = owner.IsDeformable()
 	cfg.OnCollision = noopDetachedCollision
 	cfg.OnImpact = noopDetachedImpact
 

@@ -23,3 +23,22 @@ DA FARE - PULIZIA ARCHITETTURALE:
 - [ ] Estrazione package math3d da physics/aabb: separare Quaternion, Axes, Point, Plane, SAT e OBBManifold dall'infrastruttura spaziale AABB/BVH.
 - [ ] Split di cinematic.go (1.529 righe) / cage.go (1.511 righe) per separare chiaramente integrazione/sleep, solver impatti PGS e broadphase/manifold.
 - [ ] Cache locality nei pool caldi: valutare slice/array di struct per valore al posto di puntatori in Tree.nodes ([]*Node), Bucket.currPoll/prevPool ([16]*Entry, incluso refuso di nome currPoll) e Coordinator.running ([]*Solver), disaccoppiando anche eventuali bounds di animazione dal BoundingBox fisico.
+
+
+
+TODO
+
+riportare Cage a puro componente di acquisizione geometrica parallela separato dal Solver e da Cinematic risolverebbe il collo di bottiglia residuo nei primi 1–2 secondi di simulazione (quando tutti i 500 corpi sono ancora in caduta/impatto a ~5–7 ms/tick su un core solo).
+
+Come è accoppiata oggi rispetto all'idea originaria
+Raccolta sequenziale su 1 core: in Coordinator.Step l'integrazione iniziale (StagePrepare) e tutte le query BVH statiche/dinamiche (Things.querySolverContacts) girano in un unico ciclo singolo.
+Scritture incrociate durante la raccolta: commitDynamicManifold non si limita a raccogliere geometria per s, ma scrive direttamente anche nei buckets/slots/hasFloor di rCage, marca Seen su entrambi e invoca wakeRunningFn che allunga c.running mentre il ciclo è in corso.
+Logica di solver dentro Cage: oltre ai buffer geometrici (ellipsoid, faces, manifold), Cage gestisce oggi anche il filtering verticale/wall (rMaxZ <= minBaseZ), la logica di step-up (ApplySafeStepUp), i blocchi direzionali (IsBlockedAlong, HasFloor) e la mutazione della posa durante StaticFaceClamp.
+Punti chiave per riportarla in purezza senza race né regressioni
+
+Quando separerai le fasi in Acquisizione parallela (read-only) -> Merge deterministico -> Solver -> Cinematica:
+
+Snapshot read-only in acquisizione: in Fase 1 ogni worker dovrebbe popolare solo i buffer locali della propria Cage (facce catturate e manifold calcolati leggendo BVH statico, Volumes e stato congelato dei partner), senza mai scrivere su rCage né mutare Cinematic.
+Simmetria e risvegli senza contesa: sostituire il doppio write lCage.Seen(rCage) / rCage.Seen(lCage) testando in parallelo le coppie per ordinamento canonico (lId < rId tra attivi, e solo awake -> sleeping per i dormienti), emettendo eventuali richieste di wake in una coda per-worker da fondere prima del solver.
+Determinismo per il PGS: ordinare per ID del partner i contatti raccolti prima di inserirli negli slot del Solver, perché il risolutore Gauss-Seidel in StageResolve e StageResolvePosition è sensibile all'ordine dei vincoli.
+Cache statica immutabile per le iterazioni posizionali: Coordinator.Step richiama clampStaticFn dentro ogni iterazione di StageResolvePosition. Espandendo leggermente l'ellissoide di cattura in Fase 1 (CachePendingStaticFaces va già in quella direzione), il solver può eseguire i clamp posizionali esclusivamente contro i triangoli già catturati nella Cage senza più interrogare il BVH globale in fase di risoluzione.

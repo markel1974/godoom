@@ -410,9 +410,9 @@ func (t *Solver) StageResolvePosition() {
 				selfMovable = !selfBlocked && t.cage.IsBucketPenetrable(slot.GetBucket().Opposite(), rEnt.GetId())
 			}
 			t.entity.ResolveElasticPenetrationConstrained(rEnt, rCage.HasFloor(), nX, nY, nZ, pen, selfMovable, otherMovable)
-			if !otherMovable && selfMovable {
+			if !otherMovable && selfMovable && t.entity.KeepUpright() {
 				t.entity.ClampNormalVelocity(nX, nY, nZ)
-			} else if !selfMovable && otherMovable {
+			} else if !selfMovable && otherMovable && rEnt.KeepUpright() {
 				rEnt.ClampNormalVelocity(-nX, -nY, -nZ)
 			}
 		}
@@ -430,7 +430,9 @@ func (t *Solver) StageResolvePosition() {
 		pen := clampUpwardPenetration(slot.GetPenetration(), alreadyResolved, nZ, slot.GetMaxZ(), targetBaseZ+sPushZ, sPushZ)
 		if pen > 0 {
 			t.entity.ResolveInelasticPenetration(nX, nY, nZ, pen)
-			t.entity.ClampNormalVelocity(nX, nY, nZ)
+			if t.entity.KeepUpright() {
+				t.entity.ClampNormalVelocity(nX, nY, nZ)
+			}
 		}
 	}
 }

@@ -159,13 +159,22 @@ func (c *Coordinator) wakeIsland(root *Solver, addToRunning bool) {
 		curr := c.wakeQueue[head]
 		cage := curr.cage
 		slotsLen := cage.GetSlotsLen()
+		dx, dy, dz := cage.GetNetDisplacement()
+		dispSq := dx*dx + dy*dy + dz*dz
+		currMoveWake := curr.entity.KeepUpright() || curr.entity.HasWakeMotion(dispSq, false)
+		currSupportWake := curr.entity.HasSupportMotion(dispSq, false)
 		for i := 0; i < slotsLen; i++ {
-			rCage := cage.GetSlot(i).GetRCage()
+			slot := cage.GetSlot(i)
+			rCage := slot.GetRCage()
 			if rCage == nil {
 				continue
 			}
 			rSolver := rCage.GetSolver()
 			if rSolver == nil || !rSolver.IsActive() || !rSolver.IsSleeping() {
+				continue
+			}
+			_, _, snz := slot.GetNormal()
+			if !currMoveWake && (snz >= -0.30 || !currSupportWake) && rSolver.entity.IsOnGround() {
 				continue
 			}
 			rSolver.WakeUp()
@@ -372,39 +381,25 @@ func (c *Coordinator) Step() {
 		}
 	}
 	for x := 0; x < c.runningLen; x++ {
-		c.running[x].cage.CommitStaticClamp()
+		s := c.running[x]
+		s.cage.CommitStaticClamp()
 		if c.jointsLen > 0 && c.jointSupported[x] {
-			c.running[x].entity.DampCalmRagdoll()
+			s.entity.DampCalmRagdoll()
+		} else if !s.entity.KeepUpright() && s.entity.IsOnGround() {
+			nx, ny, nz := s.cage.GetNetDisplacement()
+			s.entity.DampCalmSettling(nx*nx + ny*ny + nz*nz)
 		}
 	}
 
 	c.updateIslandSleep()
 }
 
-// updateIslandSleep updates connected solver islands and puts fully inactive islands to sleep.
+// updateIslandSleep updates joint-coupled solver islands and local support dependencies,
+// allowing calm grounded sub-clusters to enter sleep even while distant pile elements settle.
 func (c *Coordinator) updateIslandSleep() {
 	for x := 0; x < c.runningLen; x++ {
 		c.islandParent[x] = x
 		c.islandSleep[x] = c.running[x].UpdateSleepStateWithSupport(c.jointSupported[x])
-	}
-	for x := 0; x < c.runningLen; x++ {
-		cage := c.running[x].cage
-		slotsLen := cage.GetSlotsLen()
-		for i := 0; i < slotsLen; i++ {
-			rCage := cage.GetSlot(i).GetRCage()
-			if rCage == nil {
-				continue
-			}
-			rIdx := rCage.GetSolverIndex()
-			if rIdx < 0 || rIdx == x {
-				continue
-			}
-			rx := c.findIsland(x)
-			ry := c.findIsland(rIdx)
-			if rx != ry {
-				c.islandParent[ry] = rx
-			}
-		}
 	}
 	for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
 		jc := c.joints[jIdx]
@@ -426,8 +421,87 @@ func (c *Coordinator) updateIslandSleep() {
 		}
 	}
 	for x := 0; x < c.runningLen; x++ {
+		c.islandSleep[x] = c.islandSleep[c.findIsland(x)]
+	}
+	for x := 0; x < c.runningLen; x++ {
+		if c.islandSleep[x] {
+			continue
+		}
+		sx := c.running[x]
+		dx, dy, dz := sx.cage.GetNetDisplacement()
+		hasMotion := sx.entity.KeepUpright() || sx.entity.HasWakeMotion(dx*dx+dy*dy+dz*dz, false)
+		cage := sx.cage
+		slotsLen := cage.GetSlotsLen()
+		for i := 0; i < slotsLen; i++ {
+			slot := cage.GetSlot(i)
+			rCage := slot.GetRCage()
+			if rCage == nil {
+				continue
+			}
+			rIdx := rCage.GetSolverIndex()
+			if rIdx < 0 || rIdx == x || !c.islandSleep[rIdx] {
+				continue
+			}
+			_, _, snz := slot.GetNormal()
+			penThresh := 0.05
+			if snz > 0.30 {
+				penThresh = 0.08
+			}
+			if snz < -0.30 || hasMotion || (slot.GetPenetration() > penThresh && (snz < 0.70 || !c.running[rIdx].entity.IsOnGround())) {
+				c.islandSleep[rIdx] = false
+			}
+		}
+	}
+	for pass := 0; pass < c.runningLen; pass++ {
+		changed := false
+		for x := 0; x < c.runningLen; x++ {
+			if !c.islandSleep[x] {
+				continue
+			}
+			cage := c.running[x].cage
+			slotsLen := cage.GetSlotsLen()
+			for i := 0; i < slotsLen; i++ {
+				slot := cage.GetSlot(i)
+				rCage := slot.GetRCage()
+				if rCage == nil {
+					continue
+				}
+				rIdx := rCage.GetSolverIndex()
+				if rIdx < 0 || rIdx == x || c.islandSleep[rIdx] {
+					continue
+				}
+				_, _, snz := slot.GetNormal()
+				if snz > 0.30 {
+					c.islandSleep[x] = false
+					changed = true
+					break
+				}
+			}
+		}
+		if c.jointsLen > 0 {
+			for jIdx := 0; jIdx < c.jointsLen; jIdx++ {
+				jc := c.joints[jIdx]
+				ia := jc.solverA.GetSolverIndex()
+				ib := jc.solverB.GetSolverIndex()
+				if ia < 0 || ib < 0 {
+					continue
+				}
+				if !c.islandSleep[ia] && c.islandSleep[ib] {
+					c.islandSleep[ib] = false
+					changed = true
+				} else if !c.islandSleep[ib] && c.islandSleep[ia] {
+					c.islandSleep[ia] = false
+					changed = true
+				}
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	for x := 0; x < c.runningLen; x++ {
 		s := c.running[x]
-		if c.islandSleep[c.findIsland(x)] {
+		if c.islandSleep[x] {
 			s.EnterSleep()
 		}
 		s.SetSolverIndex(-1)

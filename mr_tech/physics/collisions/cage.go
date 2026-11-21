@@ -564,40 +564,43 @@ func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dis
 	return nil
 }
 
-// commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
-// geometry when KeepUpright is active and 15-axis OBB SAT + conservative advancement otherwise.
-func (s *Cage) commitDynamicManifold(rCage *Cage) {
-	var rFace, recipFace IFace
+// DiscardPendingFaces clears queued faces without committing them when a speculative query does not hit.
+func (s *Cage) DiscardPendingFaces() {
+	s.facesIdx = 0
+}
+
+// firstSolidDynamicFaces returns the first solid remote/local face pair queued on the cage.
+func (s *Cage) firstSolidDynamicFaces() (IFace, IFace) {
 	for i := 0; i < s.facesIdx; i++ {
 		f := s.faces[i]
 		if f.rFace != nil && f.rFace.IsSolid() {
-			rFace = f.rFace
-			recipFace = f.lFace
-			break
+			recipFace := f.lFace
+			if recipFace == nil {
+				recipFace = f.rFace
+			}
+			return f.rFace, recipFace
 		}
 	}
-	if rFace == nil {
-		return
-	}
-	if recipFace == nil {
-		recipFace = rFace
-	}
+	return nil, nil
+}
 
+// evalDynamicManifold populates s.manifold for a dynamic pair and returns the partner's target geometry.
+func (s *Cage) evalDynamicManifold(rCage *Cage) (lUpright, rUpright bool, rTx, rTy, rTz, rDX, rDY, rDZ, rRadX, rRadY, rRadZ float64) {
 	lEnt := s.entity
 	rEnt := rCage.GetEntity()
-	lUpright := lEnt.KeepUpright()
-	rUpright := rEnt.KeepUpright()
+	lUpright = lEnt.KeepUpright()
+	rUpright = rEnt.KeepUpright()
 	s.eRadX, s.eRadY, s.eRadZ = lEnt.HalfExtents()
 
 	rEntDX, rEntDY, rEntDZ := rEnt.GetFrameDisplacement()
 	rCX, rCY, rCZ := rEnt.GetCenter()
-	rDX, rDY, rDZ := rEntDX, rEntDY, rEntDZ
+	rDX, rDY, rDZ = rEntDX, rEntDY, rEntDZ
 	if rCage.session == s.session {
 		rCX, rCY, rCZ = rCage.cX, rCage.cY, rCage.cZ
 		rDX, rDY, rDZ = rCage.dX, rCage.dY, rCage.dZ
 	}
-	rTx, rTy, rTz := rCX+rDX, rCY+rDY, rCZ+rDZ
-	rRadX, rRadY, rRadZ := rEnt.HalfExtents()
+	rTx, rTy, rTz = rCX+rDX, rCY+rDY, rCZ+rDZ
+	rRadX, rRadY, rRadZ = rEnt.HalfExtents()
 
 	m := s.manifold
 	switch {
@@ -619,7 +622,56 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 	default:
 		m.ComputeSweptAtOffset(lEnt.BoundingBox, rEnt.BoundingBox, s.dX, s.dY, s.dZ, rEntDX, rEntDY, rEntDZ)
 	}
+	return lUpright, rUpright, rTx, rTy, rTz, rDX, rDY, rDZ, rRadX, rRadY, rRadZ
+}
 
+// WillHitDynamic reports whether the queued solid faces against rCage produce a real narrow-phase hit.
+func (s *Cage) WillHitDynamic(rCage *Cage) bool {
+	if rFace, _ := s.firstSolidDynamicFaces(); rFace == nil {
+		return false
+	}
+	s.evalDynamicManifold(rCage)
+	m := s.manifold
+	return m.GetHit() && m.GetPenetration() > 0 && m.GetCount() > 0
+}
+
+// ShouldWakeDynamic reports whether the latest WillHitDynamic manifold warrants waking sleeping rCage.
+// Calm resting contacts against a grounded sleeping floor partner avoid triggering pile-wide wake cascades.
+func (s *Cage) ShouldWakeDynamic(rCage *Cage) bool {
+	lEnt := s.entity
+	rEnt := rCage.GetEntity()
+	if lEnt.KeepUpright() || !rEnt.IsOnGround() {
+		return true
+	}
+	m := s.manifold
+	_, _, nz := m.GetNormal()
+	if nz < -0.30 && lEnt.HasSupportMotion(0.0, true) {
+		return true
+	}
+	if lEnt.HasWakeMotion(0.0, true) {
+		return true
+	}
+	penThresh := 0.05
+	if nz > 0.30 {
+		// Discount 1 tick of downward gravity displacement plus resting positional slop on floor contacts.
+		penThresh = 0.08
+	}
+	return m.GetPenetration() > penThresh && nz > -0.70
+}
+
+// commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
+// geometry when KeepUpright is active and 15-axis OBB SAT + conservative advancement otherwise.
+func (s *Cage) commitDynamicManifold(rCage *Cage) {
+	rFace, recipFace := s.firstSolidDynamicFaces()
+	if rFace == nil {
+		return
+	}
+
+	lEnt := s.entity
+	rEnt := rCage.GetEntity()
+	lUpright, rUpright, rTx, rTy, rTz, _, _, rDZ, rRadX, rRadY, rRadZ := s.evalDynamicManifold(rCage)
+
+	m := s.manifold
 	mNormalX, mNormalY, mNormalZ := m.GetNormal()
 	b := Normal2BucketType(mNormalX, mNormalY, mNormalZ)
 	if !m.GetHit() {
@@ -629,23 +681,35 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 			dx, dy := s.tX-rTx, s.tY-rTy
 			xyOverlap = dx*dx+dy*dy < sumR*sumR
 		}
-		if m.GetGap() <= floorGroundTolerance && xyOverlap {
+		gap := m.GetGap()
+		if gap <= floorGroundTolerance && xyOverlap {
+			const sixDofFloorGapSlop = 0.025
 			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
-				s.hasFloor = true
+				if lUpright || (s.dZ >= -0.06 && lEnt.GetVz() >= -6.0 && gap <= sixDofFloorGapSlop+math.Max(0.0, -rDZ)) {
+					s.hasFloor = true
+				}
 			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {
-				rCage.hasFloor = true
+				if rUpright || (rDZ >= -0.06 && rEnt.GetVz() >= -6.0 && gap <= sixDofFloorGapSlop+math.Max(0.0, -s.dZ)) {
+					rCage.hasFloor = true
+				}
 			}
 		}
 		return
 	}
 
+	lSleep := lEnt.IsSleeping()
+	rSleep := rEnt.IsSleeping()
 	penetration := m.GetPenetration()
 	count := m.GetCount()
 	dist := -penetration
 	if b == BucketFloor && mNormalZ >= floorNormalThreshold && dist <= floorGroundTolerance {
-		s.hasFloor = true
+		if !lSleep {
+			s.hasFloor = true
+		}
 	} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance {
-		rCage.hasFloor = true
+		if !rSleep {
+			rCage.hasFloor = true
+		}
 	}
 
 	if penetration <= 0 || count == 0 {
@@ -656,7 +720,7 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 	lMaxZ := s.tZ + s.eRadZ
 
 	iMode := ImpactElastic
-	if b.IsWall() {
+	if b.IsWall() && (lUpright || s.maxStep > 0) {
 		baseZ := s.GetBaseZ()
 		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
 		if rMaxZ <= minBaseZ+satFilterEpsilon {
@@ -675,9 +739,10 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		}
 
 		ptDist := -ptPen
-		//mNormalX, mNormalY, mNormalZ := m.GetNormal()
-		s.addToBucket(b, rCage, rFace, ptDist, ptPen, mNormalX, mNormalY, mNormalZ, ptX, ptY, ptZ, rMaxZ, iMode)
-		if iMode == ImpactElastic {
+		if !lSleep {
+			s.addToBucket(b, rCage, rFace, ptDist, ptPen, mNormalX, mNormalY, mNormalZ, ptX, ptY, ptZ, rMaxZ, iMode)
+		}
+		if iMode == ImpactElastic && !rSleep {
 			oppB := b.Opposite()
 			rCage.addToBucket(oppB, s, recipFace, ptDist, ptPen, -mNormalX, -mNormalY, -mNormalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
 			if oppB == BucketFloor {
@@ -688,9 +753,13 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 
 	switch b {
 	case BucketFloor:
-		s.hasFloor = true
+		if !lSleep {
+			s.hasFloor = true
+		}
 	case BucketCeiling:
-		rCage.hasFloor = true
+		if !rSleep {
+			rCage.hasFloor = true
+		}
 	}
 }
 

@@ -116,6 +116,7 @@ func (res *Sat) Compute(dx, dy, dz float64, a *Axes, scx, scy, scz float64, b *A
 		}
 	}
 
+	faceNX, faceNY, faceNZ := res.nx, res.ny, res.nz
 	// Test the nine cross-product axes A[i] x B[j] (indices 6..14).
 	for i := 0; i < 3; i++ {
 		i1 := (i + 1) % 3
@@ -141,11 +142,15 @@ func (res *Sat) Compute(dx, dy, dz float64, a *Axes, scx, scy, scz float64, b *A
 				if p < res.minPen {
 					res.minPen = p
 				}
-				// Slightly bias against edge-edge axes to prevent numerical angle chatter on flat face contacts.
-				if axisLen > edgeAxisMinLen && p < faceBestPen*0.98-1e-6 && p < res.contactPen {
-					res.contactPen = p
-					res.contactAxis = 6 + i*3 + j
-					res.nx, res.ny, res.nz = a.WorldCrossUnitNormal(i, b, j, axisLen, proj)
+				// Prefer multi-point face manifolds whenever the edge-edge normal is nearly collinear with
+				// the best face axis or does not clearly improve penetration depth.
+				if axisLen > edgeAxisMinLen && p < faceBestPen*0.95-1e-6 && p < res.contactPen {
+					nx, ny, nz := a.WorldCrossUnitNormal(i, b, j, axisLen, proj)
+					if math.Abs(nx*faceNX+ny*faceNY+nz*faceNZ) < 0.985 || faceBestPen > p*1.5+0.03 {
+						res.contactPen = p
+						res.contactAxis = 6 + i*3 + j
+						res.nx, res.ny, res.nz = nx, ny, nz
+					}
 				}
 			}
 		}

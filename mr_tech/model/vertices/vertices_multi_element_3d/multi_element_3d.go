@@ -97,7 +97,7 @@ func NewMultiElement3D(cfg *config.Thing, materials *materials.Materials) *Multi
 
 	numParts := v.elements.Len()
 	v.partViews = make([]*Part, numParts)
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		v.partViews[i] = NewPart(v, v.elements.GetEntry(i), i, 0)
 	}
 
@@ -260,7 +260,7 @@ func (v *MultiElement3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag floa
 	vz += pvz
 
 	subtreeCount := 0
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		if inSubtree[i] {
 			subtreeCount++
 		}
@@ -270,7 +270,7 @@ func (v *MultiElement3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag floa
 		subGroupID = v.partThings[partIdx].GetEntity().GetId()
 	}
 
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		if !inSubtree[i] {
 			continue
 		}
@@ -281,7 +281,7 @@ func (v *MultiElement3D) releaseSubtree(partIdx int, dirX, dirY, dirZ, fMag floa
 	}
 
 	if subtreeCount > 1 && v.onAddJoint != nil {
-		for i := 0; i < numParts; i++ {
+		for i := range numParts {
 			if !inSubtree[i] || i == partIdx {
 				continue
 			}
@@ -337,7 +337,7 @@ func (v *MultiElement3D) SetRagdollMode() {
 	groupID := ent.GetId()
 
 	inRagdoll := make([]bool, numParts)
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		if v.partViews[i].IsPhysicsFree() {
 			continue
 		}
@@ -425,7 +425,7 @@ func (v *MultiElement3D) SetAction(idx int) {
 	v.compiled = false
 	enteringRagdoll := false
 	eoLen := v.links.ExecutionOrderLen()
-	for eoIdx := 0; eoIdx < eoLen; eoIdx++ {
+	for eoIdx := range eoLen {
 		i := v.links.ExecutionOrderAt(eoIdx)
 		el := v.elements.GetEntry(i)
 		if el == nil || v.partViews[i].IsPhysicsFree() {
@@ -461,7 +461,7 @@ func (v *MultiElement3D) SyncAttachedParts() {
 	}
 	v.compiledCX, v.compiledCY, v.compiledCZ = cx, cy, cz
 	numParts := len(v.partViews)
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		pv := v.partViews[i]
 		if pv.IsPhysicsFree() {
 			continue

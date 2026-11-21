@@ -133,7 +133,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 	missPen := om.points.GetPenetration()
 	missCount := om.points.GetCount()
 
-	if toi, ok := om.findSweptImpact(om.sat, om.clipA, om.clipB, self, other, dAX, dAY, dAZ, dBX, dBY, dBZ, offX, offY, offZ, rotBound); ok {
+	if toi, ok := om.findSweptImpact(om.sat, om.clipA, om.clipB, self, other, dAX, dAY, dAZ, dBX, dBY, dBZ, offX, offY, offZ, rotBound, !missHit); ok {
 		return toi
 	}
 
@@ -147,7 +147,7 @@ func (om *OBBManifold) ComputeSweptAtOffset(self *BoundingBox, other *BoundingBo
 
 // findSweptImpact advances two moving OBBs to their first swept contact and builds the contact manifold.
 // It returns the impact time in [0,1] and whether an impact was found.
-func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64, offX, offY, offZ, rotBound float64) (float64, bool) {
+func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, other *BoundingBox, dAX, dAY, dAZ, dBX, dBY, dBZ float64, offX, offY, offZ, rotBound float64, separatedAtEnd bool) (float64, bool) {
 	const maxCAIter = 32
 	const ccdGapTol = 1e-3
 	const minProgressStep = 1e-12
@@ -176,6 +176,10 @@ func (om *OBBManifold) findSweptImpact(sat *Sat, clipA, clipB *ClipPolygon, r, o
 		curDZ := baseDZ + offZ*t
 		sat.Compute(curDX, curDY, curDZ, om.axesA, scx, scy, scz, om.axesB, ocx, ocy, ocz)
 		if sat.hit {
+			// A pre-existing t=0 overlap that separates cleanly by t=1 is not a swept impact.
+			if iter == 0 && separatedAtEnd && (offX*sat.nx+offY*sat.ny+offZ*sat.nz) <= 0.0 && (thetaA+thetaB) < 0.5 {
+				return 1.0, false
+			}
 			hitFound = true
 			break
 		}

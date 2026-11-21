@@ -11,6 +11,8 @@ type IThing interface {
 
 	IVertices
 
+	Deformable() bool
+
 	GetSolver() *collisions.Solver
 
 	IsEqual(other IThing) bool

@@ -53,6 +53,7 @@ type Thing struct {
 	WakeupDistance     float64      `json:"wakeupDistance"`
 	GForce             float64      `json:"gForce"`
 	MaxStepFactor      float64      `json:"maxStep"`
+	Deformable         bool         `json:"deformable"`
 
 	MultiElement3D *Model3D      `json:"multiElement3D"`
 	Element3D      *Model3DEntry `json:"element3D"`
@@ -89,9 +90,11 @@ func NewConfigThing(id string, pos geometry.XYZ, angle float64, kind ThingType, 
 		JumpForce:      600,
 		Friction:       0.2,
 		GForce:         9.8,
+		Deformable:     true,
 	}
 	if th.Kind == ThingPlayerDef || th.Kind == ThingEnemyDef {
 		th.MaxStepFactor = 0.5
+		th.Deformable = false
 	}
 
 	return th
@@ -145,6 +148,7 @@ func (t *Thing) Clone() *Thing {
 		Sprite:         t.Sprite,
 		Door:           t.Door,
 		Key:            t.Key,
+		Deformable:     t.Deformable,
 		Teleport:       t.Teleport,
 		Weapon:         t.Weapon,
 		OnBind:         t.OnBind,

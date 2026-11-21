@@ -56,6 +56,7 @@ type Base struct {
 	onCollision    config.CollisionFunc
 	onImpact       config.ImpactFunc
 	maxStepFactor  float64
+	deformable     bool
 	done           chan struct{}
 }
 
@@ -80,6 +81,7 @@ func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts ithing.I
 		jumpForce:      cfg.JumpForce,
 		acceleration:   cfg.Acceleration,
 		maxStepFactor:  cfg.MaxStepFactor,
+		deformable:     cfg.Deformable,
 		things:         things,
 		inbox:          make(chan *ithing.ThingEvent, 16),
 		done:           make(chan struct{}),
@@ -286,6 +288,11 @@ func (t *Base) GetSolver() *collisions.Solver {
 	return t.solver
 }
 
+// Deformable reports whether the base can be deformed.
+func (t *Base) Deformable() bool {
+	return t.deformable
+}
+
 // beforePrepare updates the base angle from its entity yaw and compiles textures for the current global tick.
 func (t *Base) beforePrepare() {
 	t.angle = t.ent.GetYaw()
@@ -439,20 +446,23 @@ func (t *Base) FireHitscan(self ithing.IThing, id string, pos geometry.XYZ, forc
 		closestThing.GetEntity().AddForceAtPoint(dirX*force, dirY*force, dirZ*force, impactX, impactY, impactZ)
 		closestThing.Impact(self, id, force, closestDistThing, dirX, dirY, dirZ)
 
-		// Deformiamo il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
-		impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
-		dentDepth, dentRadius := t.dentCompute(force)
-		var impulse geometry.XYZ
-		if hasThingNormal {
-			normX, normY, normZ := closestThingNormal.X, closestThingNormal.Y, closestThingNormal.Z
-			if dirX*normX+dirY*normY+dirZ*normZ > 0 {
-				normX, normY, normZ = -normX, -normY, -normZ
+		if closestThing.Deformable() {
+			// Deformiamo il Thing (Porta, Modello 3D, barile, etc.) se supporta la deformazione
+			impactPoint := geometry.XYZ{X: impactX, Y: impactY, Z: impactZ}
+			dentDepth, dentRadius := t.dentCompute(force)
+			var impulse geometry.XYZ
+			if hasThingNormal {
+				normX, normY, normZ := closestThingNormal.X, closestThingNormal.Y, closestThingNormal.Z
+				if dirX*normX+dirY*normY+dirZ*normZ > 0 {
+					normX, normY, normZ = -normX, -normY, -normZ
+				}
+				impulse = geometry.XYZ{X: -normX * dentDepth, Y: -normY * dentDepth, Z: -normZ * dentDepth}
+			} else {
+				impulse = geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
 			}
-			impulse = geometry.XYZ{X: -normX * dentDepth, Y: -normY * dentDepth, Z: -normZ * dentDepth}
-		} else {
-			impulse = geometry.XYZ{X: dirX * dentDepth, Y: dirY * dentDepth, Z: dirZ * dentDepth}
+			closestThing.Deform(impactPoint, impulse, dentRadius)
 		}
-		closestThing.Deform(impactPoint, impulse, dentRadius)
+
 		//t.spawnBulletHole(impactX, impactY, impactZ, closestThing)
 		return
 	}

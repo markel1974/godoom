@@ -345,10 +345,10 @@ func (th *Things) CreateThrowable(self ithing.IThing, throwableIndex int, onColl
 		return
 	}
 	throwable := th.create(dst, volume)
-	if self != nil && throwable.GetSolver() != nil && throwable.GetSolver().GetCage() != nil {
-		sx, sy, _ := self.GetEntity().GetCenter()
-		throwable.GetSolver().GetCage().SetSpawnOrigin(sx, sy, pos.Z)
-	}
+	ent := throwable.GetEntity()
+	sx, sy, _ := ent.GetCenter()
+	solver := throwable.GetSolver()
+	solver.GetCage().SetSpawnOrigin(sx, sy, pos.Z)
 	th.pending[slot] = throwable
 	th.hasPending = true
 }

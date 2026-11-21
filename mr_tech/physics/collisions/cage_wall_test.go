@@ -895,3 +895,68 @@ func TestDynamicKeepUprightSymmetricCollision(t *testing.T) {
 		t.Fatalf("subcase E (OBB after toggle): expected OBB box overlap after disabling KeepUpright, got 0 contacts")
 	}
 }
+
+func TestStaticFaceContactGrowAndZeroAllocs(t *testing.T) {
+	fc := NewStaticFaceContact()
+
+	// Exceed initial 32 flat walls capacity with distinct vertical planes around a circle.
+	const numWalls = 40
+	for i := 0; i < numWalls; i++ {
+		ang := (2.0 * math.Pi * float64(i)) / float64(numWalls)
+		nx, ny := math.Cos(ang), math.Sin(ang)
+		fc.origNX, fc.origNY, fc.origNZ = nx, ny, 0.0
+		fc.origAX, fc.origAY, fc.origAZ = nx*10.0, ny*10.0, 0.0
+		fc.RecordFlatWall()
+	}
+	if fc.flatWallsLen != numWalls {
+		t.Fatalf("expected %d recorded flat walls after growth, got %d", numWalls, fc.flatWallsLen)
+	}
+	for _, idx := range []int{0, 32, numWalls - 1} {
+		ang := (2.0 * math.Pi * float64(idx)) / float64(numWalls)
+		nx, ny := math.Cos(ang), math.Sin(ang)
+		fc.origNX, fc.origNY, fc.origNZ = nx, ny, 0.0
+		fc.origAX, fc.origAY, fc.origAZ = nx*10.0, ny*10.0, 0.0
+		if !fc.HasCoplanarFlatWall() {
+			t.Fatalf("expected recorded wall %d to remain coplanar-matched after growth", idx)
+		}
+	}
+
+	// Exceed initial 16 clamp normals and clamp corners capacity without dropping entries.
+	const numClamps = 24
+	dummyFace := newTestFace([3]float64{0, 0, 0}, [3]float64{10, 0, 0}, [3]float64{10, 0, 10}, 0, -1, 0)
+	for i := 0; i < numClamps; i++ {
+		ang := (2.0 * math.Pi * float64(i)) / float64(numClamps)
+		fc.AddClampNormal(math.Cos(ang), math.Sin(ang), 0.0)
+		if !fc.AddClampCorner(dummyFace) {
+			t.Fatalf("expected AddClampCorner(%d) to grow and accept face", i)
+		}
+	}
+	if fc.clampNormalsLen != numClamps || fc.clampCornersLen != numClamps {
+		t.Fatalf("expected %d clamp normals and corners after growth, got normals=%d corners=%d",
+			numClamps, fc.clampNormalsLen, fc.clampCornersLen)
+	}
+	lastAng := (2.0 * math.Pi * float64(numClamps-1)) / float64(numClamps)
+	if !fc.IsBlockedAlong(-math.Cos(lastAng), -math.Sin(lastAng), 0.0, -0.99) {
+		t.Fatalf("expected 24th clamp normal to block opposing direction after buffer growth")
+	}
+
+	// Subsequent frame reuses expanded buffers with 0 heap allocations.
+	allocs := testing.AllocsPerRun(50, func() {
+		fc.Reset()
+		for i := 0; i < numWalls; i++ {
+			ang := (2.0 * math.Pi * float64(i)) / float64(numWalls)
+			nx, ny := math.Cos(ang), math.Sin(ang)
+			fc.origNX, fc.origNY, fc.origNZ = nx, ny, 0.0
+			fc.origAX, fc.origAY, fc.origAZ = nx*10.0, ny*10.0, 0.0
+			fc.RecordFlatWall()
+		}
+		for i := 0; i < numClamps; i++ {
+			ang := (2.0 * math.Pi * float64(i)) / float64(numClamps)
+			fc.AddClampNormal(math.Cos(ang), math.Sin(ang), 0.0)
+			fc.AddClampCorner(dummyFace)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 heap allocs after StaticFaceContact buffer growth, got %v", allocs)
+	}
+}

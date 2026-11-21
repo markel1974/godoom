@@ -317,16 +317,14 @@ func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
 			return false
 		}
 		if fc.cornerHit {
-			if fc.hasCoplanarFlatWall() {
+			if fc.HasCoplanarFlatWall() {
 				return false
 			}
-			if fc.clampCornersLen < len(fc.clampCorners) {
-				fc.clampCorners[fc.clampCornersLen] = rFace
-				fc.clampCornersLen++
+			if fc.AddClampCorner(rFace) {
 				return false
 			}
 		} else {
-			fc.recordFlatWall()
+			fc.RecordFlatWall()
 		}
 	}
 	return s.clampApplyContact(fc)
@@ -341,7 +339,7 @@ func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
 			continue
 		}
 		if fc.bucket.IsWall() {
-			if s.clampWallShouldSkip(fc) || fc.hasCoplanarFlatWall() {
+			if s.clampWallShouldSkip(fc) || fc.HasCoplanarFlatWall() {
 				continue
 			}
 		}
@@ -365,7 +363,7 @@ func (s *Cage) clampWallShouldSkip(fc *StaticFaceContact) bool {
 
 // clampApplyContact clamps velocity, resolves penetration, updates cage position, and reports whether movement occurred.
 func (s *Cage) clampApplyContact(fc *StaticFaceContact) bool {
-	fc.addClampNormal(fc.nX, fc.nY, fc.nZ)
+	fc.AddClampNormal(fc.nX, fc.nY, fc.nZ)
 
 	ent := s.entity
 	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
@@ -448,11 +446,7 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *StaticFaceContact, iMo
 	if !fc.cornerHit {
 		if activeMask := rFace.ActiveEdgeMask(); activeMask != EdgeAllActive && s.eRadX > 0 && s.eRadY > 0 && s.eRadZ > 0 {
 			invRX, invRY, invRZ := 1.0/s.eRadX, 1.0/s.eRadY, 1.0/s.eRadZ
-			_, _, _, feat := closestPointOnTriangleFeature(
-				(v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ,
-				(v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ,
-				(v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ,
-			)
+			_, _, _, feat := closestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
 			if isInactiveTriangleFeature(feat, activeMask) {
 				return
 			}
@@ -473,10 +467,7 @@ func (s *Cage) projectStabilizedStaticContact(fc *StaticFaceContact) (float64, f
 	supX += s.tX - entCX
 	supY += s.tY - entCY
 	supZ += s.tZ - entCZ
-	distSup := (supX-fc.anchorX)*fc.nX + (supY-fc.anchorY)*fc.nY + (supZ-fc.anchorZ)*fc.nZ
-	px := math.Max(fc.minX, math.Min(fc.maxX, supX-fc.nX*distSup))
-	py := math.Max(fc.minY, math.Min(fc.maxY, supY-fc.nY*distSup))
-	pz := math.Max(fc.minZ, math.Min(fc.maxZ, supZ-fc.nZ*distSup))
+	px, py, pz := fc.Project(supX, supY, supZ)
 	if !s.entity.KeepUpright() {
 		px = math.Max(s.tX-s.eRadX, math.Min(s.tX+s.eRadX, px))
 		py = math.Max(s.tY-s.eRadY, math.Min(s.tY+s.eRadY, py))

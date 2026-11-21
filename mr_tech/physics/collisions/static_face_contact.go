@@ -6,22 +6,42 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// flatWallPlane represents a planar wall contact defined by a normal and a point on the plane.
-type flatWallPlane struct {
+// FlatWallPlane represents a flat wall plane defined by a normal direction and a point on the plane.
+type FlatWallPlane struct {
 	nX, nY, nZ float64
 	pX, pY, pZ float64
 }
 
-func (fw *flatWallPlane) Assign(nx, ny, nz float64, px, py, pz float64) {
+// NewFlatWallPlane creates a new flat wall plane with zeroed normal and point coordinates.
+func NewFlatWallPlane() *FlatWallPlane {
+	return &FlatWallPlane{}
+}
+
+// Assign sets the plane's normal vector and reference point coordinates.
+func (fw *FlatWallPlane) Assign(nx, ny, nz float64, px, py, pz float64) {
 	fw.nX, fw.nY, fw.nZ = nx, ny, nz
 	fw.pX, fw.pY, fw.pZ = px, py, pz
 }
 
-func (fw *flatWallPlane) IsCoplanar(nx, ny, nz float64, ax, ay, az float64) bool {
+// IsCoplanar reports whether the given normal and point define the same plane within tolerance.
+func (fw *FlatWallPlane) IsCoplanar(nx, ny, nz float64, ax, ay, az float64) bool {
 	if nx*fw.nX+ny*fw.nY+nz*fw.nZ > 0.999 && math.Abs((ax-fw.pX)*fw.nX+(ay-fw.pY)*fw.nY+(az-fw.pZ)*fw.nZ) < planeEpsilon {
 		return true
 	}
 	return false
+}
+
+const (
+	staticFaceFlatWallInitCap = 32
+	staticFaceClampMax        = 16
+)
+
+func nextGrowCap(cur, initialCap int) int {
+	newCap := cur * 2
+	if newCap < initialCap {
+		newCap = initialCap
+	}
+	return newCap
 }
 
 // StaticFaceContact stores reusable contact data for resolving collisions between a moving cage and static faces.
@@ -44,19 +64,23 @@ type StaticFaceContact struct {
 	cornerHit              bool
 	hasContact             bool
 
-	flatWalls    [32]flatWallPlane
+	flatWalls    []FlatWallPlane
 	flatWallsLen int
 
-	clampNormals    [16][3]float64
+	clampNormals    [][3]float64
 	clampNormalsLen int
 
-	clampCorners    [16]IFace
+	clampCorners    []IFace
 	clampCornersLen int
 }
 
 // NewStaticFaceContact creates a new StaticFaceContact with zeroed contact state.
 func NewStaticFaceContact() *StaticFaceContact {
-	return &StaticFaceContact{}
+	return &StaticFaceContact{
+		flatWalls:    make([]FlatWallPlane, staticFaceFlatWallInitCap),
+		clampNormals: make([][3]float64, staticFaceClampMax),
+		clampCorners: make([]IFace, staticFaceClampMax),
+	}
 }
 
 // Reset clears cached clamp normals, flat walls, and clamp corners.
@@ -85,6 +109,15 @@ func (fc *StaticFaceContact) IsBlockedAlong(dirX, dirY, dirZ float64, threshold 
 		}
 	}
 	return false
+}
+
+// Project projects the support point onto the contact plane and clamps it to the contact bounds.
+func (fc *StaticFaceContact) Project(supX, supY, supZ float64) (float64, float64, float64) {
+	distSup := (supX-fc.anchorX)*fc.nX + (supY-fc.anchorY)*fc.nY + (supZ-fc.anchorZ)*fc.nZ
+	px := math.Max(fc.minX, math.Min(fc.maxX, supX-fc.nX*distSup))
+	py := math.Max(fc.minY, math.Min(fc.maxY, supY-fc.nY*distSup))
+	pz := math.Max(fc.minZ, math.Min(fc.maxZ, supZ-fc.nZ*distSup))
+	return px, py, pz
 }
 
 // Commit evaluates static face contacts for the cage and records valid collision manifolds, steps, floors, and volume hits.
@@ -130,17 +163,17 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 
 		if fc.bucket.IsWall() {
 			if iMode == ImpactStep {
-				if fc.hasCoplanarFlatWall() ||
+				if fc.HasCoplanarFlatWall() ||
 					fc.hasCoplanarInelasticSlot(s) {
 					continue
 				}
 			} else {
-				if fc.cornerHit && fc.hasCoplanarFlatWall() {
+				if fc.cornerHit && fc.HasCoplanarFlatWall() {
 					continue
 				}
 				fc.pruneCoplanarStepSlots(s)
 				if !fc.cornerHit {
-					fc.recordFlatWall()
+					fc.RecordFlatWall()
 					fc.pruneCoplanarCornerHits(s)
 				}
 			}
@@ -154,8 +187,8 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 	}
 }
 
-// hasCoplanarFlatWall reports whether a recorded flat wall shares the given normal and plane within tolerance.
-func (fc *StaticFaceContact) hasCoplanarFlatWall() bool {
+// HasCoplanarFlatWall reports whether a recorded flat wall shares the given normal and plane within tolerance.
+func (fc *StaticFaceContact) HasCoplanarFlatWall() bool {
 	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
 	for i := 0; i < fc.flatWallsLen; i++ {
 		if fc.flatWalls[i].IsCoplanar(nX, nY, nZ, ax, ay, az) {
@@ -165,32 +198,43 @@ func (fc *StaticFaceContact) hasCoplanarFlatWall() bool {
 	return false
 }
 
-// recordFlatWall stores a flat wall plane unless an equivalent coplanar wall is already tracked.
-// It ignores new walls when the fixed wall buffer is full.
-func (fc *StaticFaceContact) recordFlatWall() {
-	if fc.hasCoplanarFlatWall() || fc.flatWallsLen >= len(fc.flatWalls) {
+// RecordFlatWall stores a flat wall plane unless an equivalent coplanar wall is already tracked.
+func (fc *StaticFaceContact) RecordFlatWall() {
+	if fc.HasCoplanarFlatWall() {
 		return
 	}
-	ptr := &fc.flatWalls[fc.flatWallsLen]
-	ptr.Assign(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
+	if fc.flatWallsLen >= len(fc.flatWalls) {
+		fc.growFlatWalls()
+	}
+	fc.flatWalls[fc.flatWallsLen].Assign(fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 	fc.flatWallsLen++
 }
 
-// addClampNormal stores a clamp normal if no nearly identical normal is already recorded.
-// It silently ignores duplicates and additions beyond the fixed clamp-normal capacity.
-func (fc *StaticFaceContact) addClampNormal(nX, nY, nZ float64) {
+// AddClampCorner queues a face for corner clamping, expanding the reusable buffer if needed.
+func (fc *StaticFaceContact) AddClampCorner(f IFace) bool {
+	if fc.clampCornersLen >= len(fc.clampCorners) {
+		fc.growClampCorners()
+	}
+	fc.clampCorners[fc.clampCornersLen] = f
+	fc.clampCornersLen++
+	return true
+}
+
+// AddClampNormal stores a clamp normal if no nearly identical normal is already recorded, expanding the buffer if needed.
+func (fc *StaticFaceContact) AddClampNormal(nX, nY, nZ float64) {
 	for i := 0; i < fc.clampNormalsLen; i++ {
 		c := &fc.clampNormals[i]
 		if c[0]*nX+c[1]*nY+c[2]*nZ > 0.999 {
 			return
 		}
 	}
-	if fc.clampNormalsLen < len(fc.clampNormals) {
-		fc.clampNormals[fc.clampNormalsLen][0] = nX
-		fc.clampNormals[fc.clampNormalsLen][1] = nY
-		fc.clampNormals[fc.clampNormalsLen][2] = nZ
-		fc.clampNormalsLen++
+	if fc.clampNormalsLen >= len(fc.clampNormals) {
+		fc.growClampNormals()
 	}
+	fc.clampNormals[fc.clampNormalsLen][0] = nX
+	fc.clampNormals[fc.clampNormalsLen][1] = nY
+	fc.clampNormals[fc.clampNormalsLen][2] = nZ
+	fc.clampNormalsLen++
 }
 
 // hasCoplanarInelasticSlot reports whether the cage has an inelastic wall slot
@@ -234,4 +278,25 @@ func (fc *StaticFaceContact) pruneCoplanarCornerHits(s *Cage) {
 		}
 		i++
 	}
+}
+
+// growFlatWalls expands the reusable flatWalls buffer while preserving recorded wall planes.
+func (fc *StaticFaceContact) growFlatWalls() {
+	n := make([]FlatWallPlane, nextGrowCap(len(fc.flatWalls), staticFaceFlatWallInitCap))
+	copy(n, fc.flatWalls)
+	fc.flatWalls = n
+}
+
+// growClampCorners expands the reusable clampCorners buffer while preserving queued faces.
+func (fc *StaticFaceContact) growClampCorners() {
+	n := make([]IFace, nextGrowCap(len(fc.clampCorners), staticFaceClampMax))
+	copy(n, fc.clampCorners)
+	fc.clampCorners = n
+}
+
+// growClampNormals expands the reusable clampNormals buffer while preserving recorded normals.
+func (fc *StaticFaceContact) growClampNormals() {
+	n := make([][3]float64, nextGrowCap(len(fc.clampNormals), staticFaceClampMax))
+	copy(n, fc.clampNormals)
+	fc.clampNormals = n
 }

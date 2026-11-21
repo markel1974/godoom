@@ -127,7 +127,7 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 	}
 
 	coord := NewCoordinator(10, nBoxes+16, queryFn, clampFn)
-	maxSteps := int(fps) * 10
+	maxSteps := int(fps) * 8
 	if fps == 120 {
 		maxSteps = int(fps) * 6
 	}
@@ -137,18 +137,6 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 			coord.Stage(s)
 		}
 		coord.Step()
-		if fps == 60 && nBoxes == 100 && step >= 596 && step <= 599 {
-			for _, idxT := range []int{71, 97} {
-				s := solvers[idxT]
-				ent := s.GetEntity()
-				px, py, pz := s.GetCage().GetPushOffset()
-				nx, ny, nz := s.GetCage().GetNetDisplacement()
-				vx, vy, vz := ent.GetVelocity()
-				_, _, cz := ent.GetCenter()
-				t.Logf("  step %d #%d(id=%d) sleep=%v gnd=%v tilt=%v z=%.3f v=(%.2f,%.2f,%.2f) push=(%.3f,%.3f,%.3f) net=(%.3f,%.3f,%.3f) slots=%d",
-					step, idxT, ent.GetId(), s.IsSleeping(), ent.IsOnGround(), ent.IsTilted(), cz, vx, vy, vz, px, py, pz, nx, ny, nz, s.GetCage().GetSlotsLen())
-			}
-		}
 	}
 
 	awake := 0
@@ -166,61 +154,6 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 		}
 	}
 	if awake != 0 {
-		shown := 0
-		for idx, s := range solvers {
-			if s.IsSleeping() {
-				continue
-			}
-			ent := s.GetEntity()
-			vx, vy, vz := ent.GetVelocity()
-			wx, wy, wz := ent.GetAngularVelocity()
-			nx, ny, nz := s.GetCage().GetNetDisplacement()
-			netSq := nx*nx + ny*ny + nz*nz
-			wSq := wx*wx + wy*wy + wz*wz
-			spdSq := vx*vx + vy*vy + vz*vz
-			if !ent.IsOnGround() || spdSq > 16.0 || wSq > 0.28*0.28 || netSq > 0.0016 {
-				px, py, pz := s.GetCage().GetPushOffset()
-				_, _, dz := ent.GetFrameDisplacement()
-				t.Logf("  notReady[%3d]: id=%d onGnd=%v v=(%.2f,%.2f,%.2f) w=(%.3f,%.3f,%.3f) dZ=%.4f net=(%.4f,%.4f,%.4f) push=(%.4f,%.4f,%.4f) slots=%d",
-					idx, ent.GetId(), ent.IsOnGround(), vx, vy, vz, wx, wy, wz, dz, nx, ny, nz, px, py, pz, s.GetCage().GetSlotsLen())
-				for si := 0; si < s.GetCage().GetSlotsLen(); si++ {
-					sl := s.GetCage().GetSlot(si)
-					snx, sny, snz := sl.GetNormal()
-					rId := uint64(0)
-					if rc := sl.GetRCage(); rc != nil {
-						rId = rc.GetEntity().GetId()
-					}
-					t.Logf("    slot %d rId=%d n=(%.3f,%.3f,%.3f) pen=%.4f warmN=%.2f", si, rId, snx, sny, snz, sl.GetPenetration(), sl.GetSolverState().GetNormal())
-				}
-				shown++
-			}
-			if shown >= 10 {
-				break
-			}
-		}
-		if shown == 0 {
-			for idx, s := range solvers {
-				if s.IsSleeping() {
-					continue
-				}
-				ent := s.GetEntity()
-				nx, ny, nz := s.GetCage().GetNetDisplacement()
-				maxPen, maxNZ := 0.0, 0.0
-				for si := 0; si < s.GetCage().GetSlotsLen(); si++ {
-					sl := s.GetCage().GetSlot(si)
-					if sl.GetPenetration() > maxPen {
-						maxPen = sl.GetPenetration()
-						_, _, maxNZ = sl.GetNormal()
-					}
-				}
-				t.Logf("  calmAwake[%3d]: dt=%.5f g=%.1f net=(%.4f,%.4f,%.4f) sm=%v maxPen=%.4f(nZ=%.2f)",
-					idx, ent.GetDt(), ent.GetGForce(), nx, ny, nz, ent.HasSupportMotion(nx*nx+ny*ny+nz*nz, false), maxPen, maxNZ)
-				shown++
-				if shown >= 8 {
-					break
-				}
-			}
-		}
 		t.Fatalf("expected all %d 6-DoF boxes to settle and sleep within %d steps, still awake=%d (running=%d)",
 			nBoxes, maxSteps, awake, coord.RunningLen())
 	}
@@ -244,7 +177,8 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 	solvers = append(solvers, striker)
 	faces = append(faces, sFace)
 	nBoxes++
-	for step := 0; step < 30; step++ {
+	strikerSteps := max(int(fps)/4, 1)
+	for step := 0; step < strikerSteps; step++ {
 		coord.Reset()
 		for _, s := range solvers {
 			coord.Stage(s)

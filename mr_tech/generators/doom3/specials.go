@@ -534,7 +534,7 @@ func CreateConfigEnemy(classname string, pos geometry.XYZ, cModel *config.Model3
 		md3.ActionMaps = make([][]int, len(parts))
 		for i := range md3.ActionMaps {
 			md3.ActionMaps[i] = make([]int, numActions)
-			for a := 0; a < numActions; a++ {
+			for a := range numActions {
 				md3.ActionMaps[i][a] = a
 			}
 		}
@@ -557,7 +557,7 @@ func CreateConfigEnemyParts(classname string, pos geometry.XYZ, md3 *config.Mode
 	thingCfg.MultiElement3D = md3
 	thingCfg.GForce = GForce
 	thingCfg.JumpForce = JumpForce
-	thingCfg.Impulse = 3.0
+	thingCfg.Impulse = 4.0
 	return thingCfg.Thing
 }
 

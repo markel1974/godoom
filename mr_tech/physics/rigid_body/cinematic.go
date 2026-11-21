@@ -125,56 +125,60 @@ const (
 
 // Cinematic represents the physical state and 6-DoF rigid-body dynamics of an object in a simulation.
 type Cinematic struct {
-	mass                 float64
-	invMass              float64
-	vx                   float64
-	vy                   float64
-	vz                   float64
-	ax                   float64
-	ay                   float64
-	az                   float64
-	wx                   float64
-	wy                   float64
-	wz                   float64
-	torqueX              float64
-	torqueY              float64
-	torqueZ              float64
-	vMin                 float64
-	airFriction          float64
-	airDamping           float64
-	airAngDamping        float64
-	gForce               float64
-	material             *PhysicsMaterial
-	maxVelocitySq        float64
-	sleepThresholdSq     float64
-	dt                   float64
-	terminalZVelocity    float64
-	onGround             bool
-	isTilted             bool
-	keepUpright          bool
-	uprightLocked        bool
-	kinematic            bool
-	groundYawDamping     float64
-	groundTiltDamping    float64
-	lowEnergyTiltDamping float64
-	calmRagdollDamping   float64
-	calmSettlingDamping  float64
-	calmUpdateDamping    float64
-	faceAlignCos         float64
-	sleeping             bool
-	sleepTimer           float64
-	preSolveVx           float64
-	preSolveVy           float64
-	preSolveVz           float64
-	preSolveWx           float64
-	preSolveWy           float64
-	preSolveWz           float64
-	hasPreSolve          bool
-	r                    *Matrix3x3
-	body                 *Matrix3x3 // Body-space inertia tensor.
-	bodyInv              *Matrix3x3 // Body-space inverse inertia tensor.
-	world                *Matrix3x3
-	worldInv             *Matrix3x3
+	mass                   float64
+	invMass                float64
+	vx                     float64
+	vy                     float64
+	vz                     float64
+	ax                     float64
+	ay                     float64
+	az                     float64
+	wx                     float64
+	wy                     float64
+	wz                     float64
+	torqueX                float64
+	torqueY                float64
+	torqueZ                float64
+	vMin                   float64
+	airFriction            float64
+	airDamping             float64
+	airAngDamping          float64
+	gForce                 float64
+	material               *PhysicsMaterial
+	maxVelocitySq          float64
+	sleepThresholdSq       float64
+	dt                     float64
+	terminalZVelocity      float64
+	onGround               bool
+	isTilted               bool
+	keepUpright            bool
+	uprightLocked          bool
+	kinematic              bool
+	groundYawDamping       float64
+	groundTiltDamping      float64
+	lowEnergyTiltDamping   float64
+	calmRagdollDamping     float64
+	calmSettlingDamping    float64
+	calmAngSettlingDamping float64
+	calmUpdateDamping      float64
+	calmPushSlopSq         float64
+	calmAngVelSq           float64
+	supportPushSlopSq      float64
+	faceAlignCos           float64
+	sleeping               bool
+	sleepTimer             float64
+	preSolveVx             float64
+	preSolveVy             float64
+	preSolveVz             float64
+	preSolveWx             float64
+	preSolveWy             float64
+	preSolveWz             float64
+	hasPreSolve            bool
+	r                      *Matrix3x3
+	body                   *Matrix3x3 // Body-space inertia tensor.
+	bodyInv                *Matrix3x3 // Body-space inverse inertia tensor.
+	world                  *Matrix3x3
+	worldInv               *Matrix3x3
 }
 
 // NewCinematic initializes a new Cinematic instance with specified mass, restitution, ground friction, and gravitational force.
@@ -343,9 +347,17 @@ func (e *Cinematic) SetDt(dt float64) {
 	e.groundTiltDamping = math.Pow(groundTiltDampingBase, e.dt)
 	e.lowEnergyTiltDamping = math.Pow(lowEnergyTiltDampingBase, e.dt)
 	refSteps := e.dt * 120.0
+	dtScale := math.Max(1.0, math.Min(4.0, refSteps))
 	e.calmRagdollDamping = math.Pow(0.78, refSteps)
 	e.calmSettlingDamping = math.Pow(0.65, refSteps)
+	e.calmAngSettlingDamping = math.Pow(0.65, refSteps*dtScale)
 	e.calmUpdateDamping = math.Pow(0.80, refSteps)
+	calmSlop := defaultPenetrationSlop * (1.0 + dtScale)
+	e.calmPushSlopSq = calmSlop * calmSlop
+	calmAngVel := 0.60 * dtScale
+	e.calmAngVelSq = calmAngVel * calmAngVel
+	supportSlop := 0.01 * dtScale
+	e.supportPushSlopSq = supportSlop * supportSlop
 	e.material.SetDt(e.dt)
 	e.airDamping = math.Pow(e.airFriction, e.dt)
 	e.airAngDamping = math.Pow(airAngDampingBase, e.dt)
@@ -418,13 +430,17 @@ func (e *Cinematic) SetSleeping(sleeping bool) {
 	e.Stop()
 }
 
+func (e *Cinematic) scaleCalmAxes(linScale, angScale float64) {
+	e.vx *= linScale
+	e.vy *= linScale
+	e.vz *= linScale
+	e.wx *= angScale
+	e.wy *= angScale
+	e.wz *= angScale
+}
+
 func (e *Cinematic) scaleCalmMotion(scale float64) {
-	e.vx *= scale
-	e.vy *= scale
-	e.vz *= scale
-	e.wx *= scale
-	e.wy *= scale
-	e.wz *= scale
+	e.scaleCalmAxes(scale, scale)
 }
 
 // DampCalmRagdoll applies gentle joint-support damping to slow 6-DoF ragdoll limbs below ~0.1 m/s
@@ -459,7 +475,11 @@ func (e *Cinematic) FloorWakePenThreshold() float64 {
 // HasWakeMotion reports whether this body has active motion beyond calm resting contact thresholds.
 // When postPrepare is true, one frame of gravity on a grounded 6-DoF body is discounted before checking vertical speed.
 func (e *Cinematic) HasWakeMotion(pushSq float64, postPrepare bool) bool {
-	if pushSq > sleepPushSlopSq {
+	pushLim := sleepPushSlopSq
+	if !e.keepUpright {
+		pushLim = e.calmPushSlopSq
+	}
+	if pushSq > pushLim {
 		return true
 	}
 	vSq, wSq := e.effectiveVelSq(postPrepare)
@@ -468,7 +488,7 @@ func (e *Cinematic) HasWakeMotion(pushSq float64, postPrepare bool) bool {
 
 // HasSupportMotion reports whether body motion exceeds resting micro-noise so sleeping bodies atop it must wake.
 func (e *Cinematic) HasSupportMotion(pushSq float64, postPrepare bool) bool {
-	if !e.onGround || pushSq > 1e-4 {
+	if !e.onGround || pushSq > e.supportPushSlopSq {
 		return true
 	}
 	vSq, wSq := e.effectiveVelSq(postPrepare)
@@ -478,13 +498,13 @@ func (e *Cinematic) HasSupportMotion(pushSq float64, postPrepare bool) bool {
 // DampCalmSettling gently damps residual post-solve micro-creep and corner wobble on grounded 6-DoF bodies
 // whose per-step displacement is already within resting slop so dense piles settle instead of orbiting forever.
 func (e *Cinematic) DampCalmSettling(pushSq float64) {
-	if e.keepUpright || e.invMass <= 0.0 || !e.onGround || pushSq > sleepPushSlopSq {
+	if e.keepUpright || e.invMass <= 0.0 || !e.onGround || pushSq > e.calmPushSlopSq {
 		return
 	}
 	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
 	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
-	if vSq < 9.0 && wSq < 0.36 {
-		e.scaleCalmMotion(e.calmSettlingDamping)
+	if vSq < 9.0 && wSq < e.calmAngVelSq {
+		e.scaleCalmAxes(e.calmSettlingDamping, e.calmAngSettlingDamping)
 	}
 }
 
@@ -497,7 +517,11 @@ func (e *Cinematic) UpdateSleepState(canSleep bool, pushSq float64) bool {
 // UpdateSleepStateWithSupport behaves like UpdateSleepState, optionally treating externalSupport
 // (e.g. a grounded joint-connected neighbor) as ground support without altering ground friction.
 func (e *Cinematic) UpdateSleepStateWithSupport(canSleep bool, pushSq float64, externalSupport bool) bool {
-	if !canSleep || e.invMass <= 0.0 || (!e.onGround && !externalSupport) || (e.keepUpright && e.isTilted) || pushSq > sleepPushSlopSq {
+	pushLim := sleepPushSlopSq
+	if externalSupport || !e.keepUpright {
+		pushLim = e.calmPushSlopSq
+	}
+	if !canSleep || e.invMass <= 0.0 || (!e.onGround && !externalSupport) || (e.keepUpright && e.isTilted) || pushSq > pushLim {
 		e.sleepTimer = 0.0
 		return false
 	}
@@ -876,7 +900,7 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 		e.vx *= groundDamping
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
-		if (!groundedFlat) && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.36 {
+		if (!groundedFlat) && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < e.calmAngVelSq {
 			damp := e.calmUpdateDamping
 			e.vx *= damp
 			e.vy *= damp

@@ -655,7 +655,14 @@ func (s *Cage) ShouldWakeDynamic(rCage *Cage) bool {
 	if nz > 0.30 {
 		penThresh = lEnt.FloorWakePenThreshold()
 	}
-	return m.GetPenetration() > penThresh && nz > -0.70
+	maxPtPen := 0.0
+	cnt := m.GetCount()
+	for pi := range cnt {
+		if _, _, _, ptPen := m.GetPoint(pi); ptPen > maxPtPen {
+			maxPtPen = ptPen
+		}
+	}
+	return maxPtPen > penThresh && nz > -0.70
 }
 
 func hasDynamicRestFloorGap(ent *rigid_body.Entity, selfDZ, gap, partnerDZ float64) bool {
@@ -1070,20 +1077,39 @@ func (s *Cage) HasFloor() bool {
 	return s.hasCradleSupport()
 }
 
-// hasCradleSupport reports whether two opposing upward-supporting contacts cradle a free 6-DoF body vertically.
+// hasCradleSupport reports whether two opposing contacts (two gentle upward slopes, or a steep support slope
+// blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
 func (s *Cage) hasCradleSupport() bool {
-	const minSlopeNZ = 0.25
+	const (
+		minSlopeNZ        = 0.25
+		steepSupportNZ    = 0.45
+		minWallBumperNZ   = -0.05
+		minPairOpposingXY = -0.10
+		minWallOpposingXY = -0.35
+	)
 	for i := 0; i < s.slotsLen; i++ {
 		a := s.slots[i]
-		if a.iMode == ImpactStep || a.nZ <= minSlopeNZ {
+		if a.iMode == ImpactStep || a.nZ < minWallBumperNZ {
 			continue
 		}
 		for j := i + 1; j < s.slotsLen; j++ {
 			b := s.slots[j]
-			if b.iMode == ImpactStep || b.nZ <= minSlopeNZ {
+			if b.iMode == ImpactStep || b.nZ < minWallBumperNZ {
 				continue
 			}
-			if a.nZ+b.nZ >= floorNormalThreshold && (a.nX*b.nX+a.nY*b.nY) < -0.10 {
+			hi, lo := a, b
+			if lo.nZ > hi.nZ {
+				hi, lo = b, a
+			}
+			if hi.nZ <= minSlopeNZ {
+				continue
+			}
+			horizDot := hi.nX*lo.nX + hi.nY*lo.nY
+			if lo.nZ > minSlopeNZ {
+				if hi.nZ+lo.nZ >= floorNormalThreshold && horizDot < minPairOpposingXY {
+					return true
+				}
+			} else if hi.nZ >= steepSupportNZ && horizDot < minWallOpposingXY {
 				return true
 			}
 		}
@@ -1116,10 +1142,18 @@ func (s *Cage) GetSolver() *Solver {
 	return s.solver
 }
 
-// ZeroDisplacement resets any pending displacement delta on this cage when entering sleep.
+// ZeroDisplacement resets any pending displacement delta and frame push baselines on this cage when entering sleep.
 func (s *Cage) ZeroDisplacement() {
 	s.dX, s.dY, s.dZ = 0, 0, 0
 	s.stepDX, s.stepDY, s.stepDZ = 0, 0, 0
+	s.passDX, s.passDY, s.passDZ = 0, 0, 0
+	s.applied = false
+	if s.entity != nil {
+		curX, curY, curZ := s.entity.GetCenter()
+		s.cX, s.cY, s.cZ = curX, curY, curZ
+		s.tX, s.tY, s.tZ = curX, curY, curZ
+		s.appliedX, s.appliedY, s.appliedZ = curX, curY, curZ
+	}
 }
 
 // SetSpawnOrigin records a safe pre-spawn or pre-rotation origin for the next Rebuild sweep and static clamp.

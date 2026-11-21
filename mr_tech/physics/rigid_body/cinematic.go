@@ -157,6 +157,9 @@ type Cinematic struct {
 	groundYawDamping     float64
 	groundTiltDamping    float64
 	lowEnergyTiltDamping float64
+	calmRagdollDamping   float64
+	calmSettlingDamping  float64
+	calmUpdateDamping    float64
 	faceAlignCos         float64
 	sleeping             bool
 	sleepTimer           float64
@@ -339,6 +342,10 @@ func (e *Cinematic) SetDt(dt float64) {
 	e.groundYawDamping = math.Pow(groundYawDampingBase, e.dt)
 	e.groundTiltDamping = math.Pow(groundTiltDampingBase, e.dt)
 	e.lowEnergyTiltDamping = math.Pow(lowEnergyTiltDampingBase, e.dt)
+	refSteps := e.dt * 120.0
+	e.calmRagdollDamping = math.Pow(0.78, refSteps)
+	e.calmSettlingDamping = math.Pow(0.65, refSteps)
+	e.calmUpdateDamping = math.Pow(0.80, refSteps)
 	e.material.SetDt(e.dt)
 	e.airDamping = math.Pow(e.airFriction, e.dt)
 	e.airAngDamping = math.Pow(airAngDampingBase, e.dt)
@@ -411,6 +418,15 @@ func (e *Cinematic) SetSleeping(sleeping bool) {
 	e.Stop()
 }
 
+func (e *Cinematic) scaleCalmMotion(scale float64) {
+	e.vx *= scale
+	e.vy *= scale
+	e.vz *= scale
+	e.wx *= scale
+	e.wy *= scale
+	e.wz *= scale
+}
+
 // DampCalmRagdoll applies gentle joint-support damping to slow 6-DoF ragdoll limbs below ~0.1 m/s
 // so multi-link chains settle instead of orbiting endlessly on single corner contacts.
 func (e *Cinematic) DampCalmRagdoll() {
@@ -420,12 +436,7 @@ func (e *Cinematic) DampCalmRagdoll() {
 	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
 	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
 	if vSq < 25.0 && wSq < 0.16 {
-		e.vx *= 0.78
-		e.vy *= 0.78
-		e.vz *= 0.78
-		e.wx *= 0.78
-		e.wy *= 0.78
-		e.wz *= 0.78
+		e.scaleCalmMotion(e.calmRagdollDamping)
 	}
 }
 
@@ -437,6 +448,12 @@ func (e *Cinematic) effectiveVelSq(postPrepare bool) (float64, float64) {
 	vSq := e.vx*e.vx + e.vy*e.vy + vz*vz
 	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
 	return vSq, wSq
+}
+
+// FloorWakePenThreshold returns the resting penetration allowance above a floor support,
+// scaling with one timestep of downward gravity displacement (g * dt^2).
+func (e *Cinematic) FloorWakePenThreshold() float64 {
+	return 0.05 + e.gForce*e.dt*e.dt
 }
 
 // HasWakeMotion reports whether this body has active motion beyond calm resting contact thresholds.
@@ -467,12 +484,7 @@ func (e *Cinematic) DampCalmSettling(pushSq float64) {
 	vSq := e.vx*e.vx + e.vy*e.vy + e.vz*e.vz
 	wSq := e.wx*e.wx + e.wy*e.wy + e.wz*e.wz
 	if vSq < 9.0 && wSq < 0.36 {
-		e.vx *= 0.65
-		e.vy *= 0.65
-		e.vz *= 0.65
-		e.wx *= 0.65
-		e.wy *= 0.65
-		e.wz *= 0.65
+		e.scaleCalmMotion(e.calmSettlingDamping)
 	}
 }
 
@@ -865,11 +877,12 @@ func (e *Cinematic) Update(ax0, ax1, ax2 float64) {
 		e.vy *= groundDamping
 		e.vz *= e.airDamping
 		if (!groundedFlat) && (e.vx*e.vx+e.vy*e.vy) < 36.0 && (e.wx*e.wx+e.wy*e.wy+e.wz*e.wz) < 0.36 {
-			e.vx *= 0.80
-			e.vy *= 0.80
-			e.wx *= 0.80
-			e.wy *= 0.80
-			e.wz *= 0.80
+			damp := e.calmUpdateDamping
+			e.vx *= damp
+			e.vy *= damp
+			e.wx *= damp
+			e.wy *= damp
+			e.wz *= damp
 		}
 		if groundedFlat {
 			if math.Abs(e.vx) < e.vMin {

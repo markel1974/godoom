@@ -445,7 +445,7 @@ func (c *Coordinator) updateIslandSleep() {
 			_, _, snz := slot.GetNormal()
 			penThresh := 0.05
 			if snz > 0.30 {
-				penThresh = 0.08
+				penThresh = sx.entity.FloorWakePenThreshold()
 			}
 			if snz < -0.30 || hasMotion || (slot.GetPenetration() > penThresh && (snz < 0.70 || !c.running[rIdx].entity.IsOnGround())) {
 				c.islandSleep[rIdx] = false

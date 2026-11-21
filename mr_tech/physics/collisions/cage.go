@@ -653,10 +653,18 @@ func (s *Cage) ShouldWakeDynamic(rCage *Cage) bool {
 	}
 	penThresh := 0.05
 	if nz > 0.30 {
-		// Discount 1 tick of downward gravity displacement plus resting positional slop on floor contacts.
-		penThresh = 0.08
+		penThresh = lEnt.FloorWakePenThreshold()
 	}
 	return m.GetPenetration() > penThresh && nz > -0.70
+}
+
+func hasDynamicRestFloorGap(ent *rigid_body.Entity, selfDZ, gap, partnerDZ float64) bool {
+	const sixDofFloorGapSlop = 0.025
+	dt := ent.GetDt()
+	gravVel := ent.GetGForce() * dt
+	maxDZ := gravVel*dt*1.5 + 0.01
+	maxVZ := gravVel*1.35 + 0.5
+	return selfDZ >= -maxDZ && ent.GetVz() >= -maxVZ && gap <= sixDofFloorGapSlop+math.Max(0.0, -partnerDZ)
 }
 
 // commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
@@ -683,13 +691,12 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		}
 		gap := m.GetGap()
 		if gap <= floorGroundTolerance && xyOverlap {
-			const sixDofFloorGapSlop = 0.025
 			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
-				if lUpright || (s.dZ >= -0.06 && lEnt.GetVz() >= -6.0 && gap <= sixDofFloorGapSlop+math.Max(0.0, -rDZ)) {
+				if lUpright || hasDynamicRestFloorGap(lEnt, s.dZ, gap, rDZ) {
 					s.hasFloor = true
 				}
 			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {
-				if rUpright || (rDZ >= -0.06 && rEnt.GetVz() >= -6.0 && gap <= sixDofFloorGapSlop+math.Max(0.0, -s.dZ)) {
+				if rUpright || hasDynamicRestFloorGap(rEnt, rDZ, gap, s.dZ) {
 					rCage.hasFloor = true
 				}
 			}

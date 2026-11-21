@@ -412,6 +412,9 @@ func (s *Cage) ClampCachedStaticFaces(lAABB *aabb.AABB) bool {
 
 // clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
 func (s *Cage) clampWallShouldSkip(fc *StaticFaceContact) bool {
+	if fc.wallTopLip {
+		return true
+	}
 	curBaseZ := s.tZ - s.eRadZ
 	preBaseZ := s.GetBaseZ()
 	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
@@ -1206,6 +1209,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 	out.minZ, out.maxZ = rMinZ, rMaxZ
 	out.cornerHit = false
 	out.hasContact = false
+	out.wallTopLip = false
 
 	if penetration <= 0 {
 		if bucket == BucketFloor && dist <= floorGroundTolerance {
@@ -1330,31 +1334,147 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 		}
 	}
 	// Cap steep upward spike-tip pushout by vertical clearance only when an upward spike tip pokes beneath the body top.
-	spikeTipCap := false
 	if (solidWE || solidNS) && nZ >= 0.6 && (s.tZ-s.eRadZ) > rMinZ && rMaxZ < s.tZ+s.eRadZ {
 		if oz := oZ / nZ; oz < axisOverlap {
 			axisOverlap = oz
-			spikeTipCap = true
 		}
 	}
 	minOverlap := axisOverlap + deltaPen
 
-	if !s.entity.KeepUpright() && penetration > minOverlap {
-		if spikeTipCap && distTarget >= -satFilterEpsilon {
-			penetration = minOverlap
-		} else if distTarget < -satFilterEpsilon && s.intersectsFiniteTriangle3D(rFace, distStart, distTarget, true) {
-			// Preserve full penetration when tunneling through a validated finite 3D triangle.
-		} else if penetration > minOverlap+satFilterEpsilon {
-			if !s.intersectsFiniteTriangle3D(rFace, distStart, distTarget, true) {
-				return false
+	if !s.entity.KeepUpright() {
+		if !s.intersectsFiniteTriangleOBB(rFace, distStart, distTarget) {
+			return false
+		}
+		if distTarget >= -satFilterEpsilon {
+			if clipPen, clipMinZ, hasClip := out.prism.Penetration(s, rFace, s.tX, s.tY, s.tZ, nX, nY, nZ); hasClip {
+				if bucket.IsWall() && rMaxZ-clipMinZ <= floorGroundTolerance {
+					effPreMinZ := clipMinZ - s.dZ
+					if _, preMinZ, preHas := out.prism.Penetration(s, rFace, s.cX, s.cY, s.cZ, nX, nY, nZ); preHas {
+						effPreMinZ = preMinZ
+					}
+					if (rMaxZ <= clipMinZ+satFilterEpsilon && effPreMinZ+s.maxStep >= rMaxZ-satFilterEpsilon) ||
+						(effPreMinZ >= rMaxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon) {
+						out.wallTopLip = true
+					}
+				}
+				if clipPen < penetration {
+					penetration = clipPen
+				}
+				if penetration <= 0.0 {
+					out.pen = 0.0
+					return true
+				}
 			}
-		} else {
-			penetration = minOverlap
+			if penetration > minOverlap {
+				penetration = minOverlap
+			}
 		}
 	}
 
 	out.pen = penetration
 	return true
+}
+
+// overlapsTriangleLocalOBB performs a zero-allocation 13-axis SAT check between rFace
+// and the entity's oriented bounding box positioned at (cx, cy, cz).
+func (s *Cage) overlapsTriangleLocalOBB(rFace IFace, cx, cy, cz float64) bool {
+	hx, hy, hz := s.entity.GetSizeCenter()
+	if hx <= 0.0 || hy <= 0.0 || hz <= 0.0 {
+		return true
+	}
+	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := s.entity.GetAxes()
+	v0x, v0y, v0z := rFace.Get0()
+	v1x, v1y, v1z := rFace.Get1()
+	v2x, v2y, v2z := rFace.Get2()
+
+	d0x, d0y, d0z := v0x-cx, v0y-cy, v0z-cz
+	d1x, d1y, d1z := v1x-cx, v1y-cy, v1z-cz
+	d2x, d2y, d2z := v2x-cx, v2y-cy, v2z-cz
+
+	p0x := d0x*ax0 + d0y*ay0 + d0z*az0
+	p0y := d0x*ax1 + d0y*ay1 + d0z*az1
+	p0z := d0x*ax2 + d0y*ay2 + d0z*az2
+
+	p1x := d1x*ax0 + d1y*ay0 + d1z*az0
+	p1y := d1x*ax1 + d1y*ay1 + d1z*az1
+	p1z := d1x*ax2 + d1y*ay2 + d1z*az2
+
+	p2x := d2x*ax0 + d2y*ay0 + d2z*az0
+	p2y := d2x*ax1 + d2y*ay1 + d2z*az1
+	p2z := d2x*ax2 + d2y*ay2 + d2z*az2
+
+	if math.Min(p0x, math.Min(p1x, p2x)) > hx || math.Max(p0x, math.Max(p1x, p2x)) < -hx {
+		return false
+	}
+	if math.Min(p0y, math.Min(p1y, p2y)) > hy || math.Max(p0y, math.Max(p1y, p2y)) < -hy {
+		return false
+	}
+	if math.Min(p0z, math.Min(p1z, p2z)) > hz || math.Max(p0z, math.Max(p1z, p2z)) < -hz {
+		return false
+	}
+
+	e0x, e0y, e0z := p1x-p0x, p1y-p0y, p1z-p0z
+	e1x, e1y, e1z := p2x-p1x, p2y-p1y, p2z-p1z
+	e2x, e2y, e2z := p0x-p2x, p0y-p2y, p0z-p2z
+
+	tnx := e0y*e1z - e0z*e1y
+	tny := e0z*e1x - e0x*e1z
+	tnz := e0x*e1y - e0y*e1x
+	if math.Abs(p0x*tnx+p0y*tny+p0z*tnz) > hx*math.Abs(tnx)+hy*math.Abs(tny)+hz*math.Abs(tnz) {
+		return false
+	}
+
+	return overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e0x, e0y, e0z) &&
+		overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e1x, e1y, e1z) &&
+		overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e2x, e2y, e2z)
+}
+
+func overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, ex, ey, ez float64) bool {
+	absX, absY, absZ := math.Abs(ex), math.Abs(ey), math.Abs(ez)
+
+	if rad := hy*absZ + hz*absY; rad > 1e-12 {
+		a0 := -p0y*ez + p0z*ey
+		a1 := -p1y*ez + p1z*ey
+		a2 := -p2y*ez + p2z*ey
+		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
+			return false
+		}
+	}
+	if rad := hx*absZ + hz*absX; rad > 1e-12 {
+		a0 := p0x*ez - p0z*ex
+		a1 := p1x*ez - p1z*ex
+		a2 := p2x*ez - p2z*ex
+		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
+			return false
+		}
+	}
+	if rad := hx*absY + hy*absX; rad > 1e-12 {
+		a0 := -p0x*ey + p0y*ex
+		a1 := -p1x*ey + p1y*ex
+		a2 := -p2x*ey + p2y*ex
+		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
+			return false
+		}
+	}
+	return true
+}
+
+// intersectsFiniteTriangleOBB validates finite 3D triangle intersection for a 6-DoF OBB at target t
+// or plane crossing point tauPlane when sweeping across the face plane.
+func (s *Cage) intersectsFiniteTriangleOBB(rFace IFace, distStart, distTarget float64) bool {
+	if s.overlapsTriangleLocalOBB(rFace, s.tX, s.tY, s.tZ) {
+		return true
+	}
+	if distStart >= -satFilterEpsilon && distTarget < 0.0 {
+		tauPlane := 0.5
+		if denom := distStart - distTarget; denom > 1e-12 {
+			tauPlane = math.Max(0.0, math.Min(1.0, distStart/denom))
+		}
+		if s.overlapsTriangleLocalOBB(rFace, s.cX+tauPlane*s.dX, s.cY+tauPlane*s.dY, s.cZ+tauPlane*s.dZ) {
+			return true
+		}
+	}
+	return false
 }
 
 // intersectsFiniteTriangle3D reports whether the cage's scaled ellipsoid at target t, plane-crossing point,
@@ -1538,6 +1658,25 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 			if pen3D < penetration-satFilterEpsilon || (nx3*nX+ny3*nY+nz3*nZ) > 0.0 {
 				return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW, true
 			}
+		} else if onBoundary && !crossedPlane {
+			// On flat/near-flat floor/ceiling boundary edges, use curved ellipsoid rim separation
+			// instead of infinite-plane depth so balanced upright bodies settle smoothly without catapulting.
+			nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
+			sameVerticalBucket := (bucket == BucketFloor && nz3 >= floorNormalThreshold) || (bucket == BucketCeiling && nz3 <= -floorNormalThreshold)
+			if sameVerticalBucket && pen3D < penetration {
+				return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW, true
+			}
+			if qXY := math.Hypot(qx, qy); qXY > 1e-6 && qXY < 1.0-1e-9 {
+				var rimPen float64
+				if bucket == BucketFloor && qz < 0.0 {
+					rimPen = (qz + math.Sqrt(math.Max(0.0, 1.0-qXY*qXY))) * s.eRadZ
+				} else if bucket == BucketCeiling && qz > 0.0 {
+					rimPen = (math.Sqrt(math.Max(0.0, 1.0-qXY*qXY)) - qz) * s.eRadZ
+				}
+				if rimPen > 0.0 && rimPen < penetration {
+					return true, true, onBoundary, nX, nY, nZ, rimPen, qxW, qyW, qzW, true
+				}
+			}
 		}
 		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
 	}
@@ -1568,6 +1707,12 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 	}
 	rMinZ := math.Min(v0z, math.Min(v1z, v2z))
 	rMaxZ := math.Max(v0z, math.Max(v1z, v2z))
+	if rMaxZ < s.tZ && qz < -floorNormalThreshold {
+		nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
+		if nz3 >= floorNormalThreshold && horizPen > pen3D {
+			return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW, true
+		}
+	}
 	if (rMinZ > s.tZ || rMaxZ < s.tZ || math.Abs(nZ) > 1e-3) && horizPen >= penetration*1.5 && dot > 0.7 {
 		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
 	}

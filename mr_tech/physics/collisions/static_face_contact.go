@@ -6,44 +6,11 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// FlatWallPlane represents a flat wall plane defined by a normal direction and a point on the plane.
-type FlatWallPlane struct {
-	nX, nY, nZ float64
-	pX, pY, pZ float64
-}
-
-// NewFlatWallPlane creates a new flat wall plane with zeroed normal and point coordinates.
-func NewFlatWallPlane() *FlatWallPlane {
-	return &FlatWallPlane{}
-}
-
-// Assign sets the plane's normal vector and reference point coordinates.
-func (fw *FlatWallPlane) Assign(nx, ny, nz float64, px, py, pz float64) {
-	fw.nX, fw.nY, fw.nZ = nx, ny, nz
-	fw.pX, fw.pY, fw.pZ = px, py, pz
-}
-
-// IsCoplanar reports whether the given normal and point define the same plane within tolerance.
-func (fw *FlatWallPlane) IsCoplanar(nx, ny, nz float64, ax, ay, az float64) bool {
-	if nx*fw.nX+ny*fw.nY+nz*fw.nZ > 0.999 && math.Abs((ax-fw.pX)*fw.nX+(ay-fw.pY)*fw.nY+(az-fw.pZ)*fw.nZ) < planeEpsilon {
-		return true
-	}
-	return false
-}
-
 const (
 	staticFaceFlatWallInitCap = 32
 	staticFaceClampMax        = 16
 	staticFaceCacheInitCap    = 64
 )
-
-func nextGrowCap(cur, initialCap int) int {
-	newCap := cur * 2
-	if newCap < initialCap {
-		newCap = initialCap
-	}
-	return newCap
-}
 
 // StaticFaceContact stores reusable contact data for resolving collisions between a moving cage and static faces.
 type StaticFaceContact struct {
@@ -64,6 +31,7 @@ type StaticFaceContact struct {
 	minZ, maxZ             float64
 	cornerHit              bool
 	hasContact             bool
+	wallTopLip             bool
 
 	flatWalls    []FlatWallPlane
 	flatWallsLen int
@@ -83,6 +51,7 @@ type StaticFaceContact struct {
 	cacheMaxX      float64
 	cacheMaxY      float64
 	cacheMaxZ      float64
+	prism          TrianglePrism
 }
 
 // NewStaticFaceContact creates a new StaticFaceContact with zeroed contact state.
@@ -167,7 +136,14 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 
 		iMode := ImpactInelastic
 		if fc.bucket.IsWall() {
+			if fc.wallTopLip {
+				continue
+			}
+			curBaseZ := s.tZ - s.eRadZ
 			if fc.maxZ <= minBaseZ+satFilterEpsilon { // down-hill or within floor penetration slop[cite: 6]
+				continue
+			}
+			if baseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance {
 				continue
 			}
 			if s.maxStep > 0 && fc.maxZ <= stepZ { // up-hill (climbable step)[cite: 6]
@@ -360,4 +336,9 @@ func (fc *StaticFaceContact) HasStaticFaceCache(lAABB *aabb.AABB) bool {
 	return minX >= fc.cacheMinX && maxX <= fc.cacheMaxX &&
 		minY >= fc.cacheMinY && maxY <= fc.cacheMaxY &&
 		minZ >= fc.cacheMinZ && maxZ <= fc.cacheMaxZ
+}
+
+func nextGrowCap(cur, initialCap int) int {
+	newCap := max(cur*2, initialCap)
+	return newCap
 }

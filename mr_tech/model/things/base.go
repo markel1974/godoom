@@ -488,6 +488,7 @@ func (t *Base) Impact(other config.IThingConfig, id string, force, closestDist, 
 	t.onImpact(other, id, force, closestDist, dirX, dirY, dirZ)
 }
 
+// onElasticCollision handles elastic collision energy with another object when it is a thing.
 func (t *Base) onElasticCollision(other aabb.IObject, energy float64) {
 	z, ok := other.(ithing.IThing)
 	if ok {
@@ -495,11 +496,13 @@ func (t *Base) onElasticCollision(other aabb.IObject, energy float64) {
 	}
 }
 
+// onInelasticCollision handles an inelastic collision with another object using the given collision energy.
 func (t *Base) onInelasticCollision(other aabb.IObject, energy float64) {
 	//TODO
 }
 
-// Deform applies plastic deformation to the thing's vertices around a world-space impact point.
+// Deform applies an impulse deformation around the impact point, converting inputs to local space first.
+// Deform returns false when vertices or the owning entity are unavailable.
 func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if t.IVertices == nil || t.ent == nil {
 		return false
@@ -523,6 +526,7 @@ func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64)
 	return t.IVertices.Deform(localImpact, localImpulse, radius)
 }
 
+// dentCompute returns the dent depth and radius derived from force, using defaults for non-positive force.
 func (t *Base) dentCompute(force float64) (float64, float64) {
 	dentDepth := 2.5
 	dentRadius := 8.0

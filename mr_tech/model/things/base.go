@@ -376,14 +376,11 @@ func (t *Base) FireHitscan(self ithing.IThing, id string, pos geometry.XYZ, forc
 		meshDist := distance
 		meshNorm := geometry.XYZ{}
 		hasNorm := false
-		if rayTester, okTest := other.(interface {
-			IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool)
-		}); okTest {
-			if dHit, norm, okHit := rayTester.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, distance+128.0); okHit {
-				meshDist = dHit
-				meshNorm = norm
-				hasNorm = true
-			}
+
+		if dHit, norm, okHit := other.IntersectRay(pos.X, pos.Y, pos.Z, dirX, dirY, dirZ, distance+128.0); okHit {
+			meshDist = dHit
+			meshNorm = norm
+			hasNorm = true
 		}
 
 		closestThing = other

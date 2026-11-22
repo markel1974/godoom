@@ -21,19 +21,6 @@ func init() {
 	_thread = executor.NewMainThread()
 }
 
-// WindowInput encapsulates data related to user input for a window, including mouse position, key states, scrolling, and text input.
-type WindowInput struct {
-	mouse XY
-
-	buttons [KeyLast + 1]bool
-
-	repeat [KeyLast + 1]bool
-
-	scroll XY
-
-	typed string
-}
-
 // WindowPos represents the position and size of a window with x, y coordinates and width, height dimensions.
 type WindowPos struct {
 	xPos int
@@ -47,21 +34,19 @@ type WindowPos struct {
 
 // Window represents a graphical application window and manages its configuration, state, input, and rendering behavior.
 type Window struct {
-	ctx                              api.IContext
-	player                           *config.Player
-	th                               *executor.MainThread
-	window                           *glfw.Window
-	cfg                              WindowConfig
-	bounds                           Rect
-	vsync                            int
-	cursorVisible                    bool
-	cursorInsideWindow               bool
-	restore                          WindowPos
-	prevInp, currInp, tempInp        WindowInput
-	keysPressed                      map[Button]bool
-	pressEvents, tempPressEvents     [KeyLast + 1]bool
-	releaseEvents, tempReleaseEvents [KeyLast + 1]bool
-	prevJoy, currJoy, tempJoy        GLJoystick
+	ctx                api.IContext
+	player             *config.Player
+	th                 *executor.MainThread
+	window             *glfw.Window
+	cfg                WindowConfig
+	bounds             Rect
+	vsync              int
+	cursorVisible      bool
+	cursorInsideWindow bool
+	restore            WindowPos
+
+	input *WindowInput
+	//prevInp, currInp, tempInp *WindowInput
 
 	renderPrepareFn          func() error
 	renderAdvanceFn          func()
@@ -95,7 +80,7 @@ func NewGLWindow(ctx api.IContext, cfg WindowConfig, player *config.Player) *Win
 		cfg:           cfg,
 		player:        player,
 		cursorVisible: true,
-		keysPressed:   make(map[Button]bool),
+		input:         NewWindowInput(),
 		vsync:         vsync,
 	}
 	return w
@@ -368,69 +353,28 @@ func (w *Window) SetClipboard(str string) {
 }
 
 // KeysPressed returns a map indicating the state of each key, where the key is the Button and the value is a boolean.
-func (w *Window) KeysPressed() map[Button]bool {
-	return w.keysPressed
-}
+//func (w *Window) KeysPressed() map[Button]bool {
+//	return w.keysPressed
+//}
 
-// Pressed checks if the specified button is currently pressed and returns true if it is, otherwise false.
-func (w *Window) Pressed(button Button) bool {
-	return w.currInp.buttons[button]
-}
-
+/*
 // JustPressed returns true if the specified button was just pressed during the most recent input update cycle.
 func (w *Window) JustPressed(button Button) bool {
-	return w.pressEvents[button]
+	return w.input.HasPressedButton(button)
+	//return w.currInp.activePressed[button]
 }
+*/
 
+/*
 // JustReleased checks if the specified button was released during the last input update.
 func (w *Window) JustReleased(button Button) bool {
-	return w.releaseEvents[button]
+	return w.input.HasReleasedButton(button)
 }
-
-// Repeated checks if the given button is currently being held in a repeated state.
-func (w *Window) Repeated(button Button) bool {
-	return w.currInp.repeat[button]
-}
-
-// MousePosition returns the current position of the mouse cursor relative to the window as an XY struct.
-func (w *Window) MousePosition() XY {
-	return w.currInp.mouse
-}
-
-// MousePreviousPosition returns the mouse position recorded during the previous input update cycle.
-func (w *Window) MousePreviousPosition() XY {
-	return w.prevInp.mouse
-}
-
-// SetMousePosition sets the mouse position within the window bounds based on the provided XY coordinates.
-func (w *Window) SetMousePosition(v XY) {
-	w.th.Call(func() {
-		if (v.X >= 0 && v.X <= w.bounds.W()) &&
-			(v.Y >= 0 && v.Y <= w.bounds.H()) {
-			w.window.SetCursorPos(
-				v.X+w.bounds.Min.X,
-				(w.bounds.H()-v.Y)+w.bounds.Min.Y,
-			)
-			w.prevInp.mouse = v
-			w.currInp.mouse = v
-			w.tempInp.mouse = v
-		}
-	})
-}
+*/
 
 // MouseInsideWindow returns true if the mouse cursor is inside the bounds of the window, otherwise false.
 func (w *Window) MouseInsideWindow() bool {
 	return w.cursorInsideWindow
-}
-
-// MouseScroll returns the accumulated mouse scroll offset as an XY vector.
-func (w *Window) MouseScroll() XY {
-	return w.currInp.scroll
-}
-
-// Typed returns the current string input typed by the user in the window.
-func (w *Window) Typed() string {
-	return w.currInp.typed
 }
 
 // initInput initializes input handling by setting up GLFW input callbacks for mouse, keyboard, cursor, scroll, and character events.
@@ -439,11 +383,9 @@ func (w *Window) initInput() {
 		w.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
 			switch action {
 			case glfw.Press:
-				w.tempPressEvents[button] = true
-				w.tempInp.buttons[button] = true
+				w.input.AddPressedButton(Button(button))
 			case glfw.Release:
-				w.tempReleaseEvents[button] = true
-				w.tempInp.buttons[button] = false
+				w.input.AddReleasedButton(Button(button))
 			}
 		})
 
@@ -453,16 +395,11 @@ func (w *Window) initInput() {
 			}
 			switch action {
 			case glfw.Press:
-				w.keysPressed[Button(key)] = true
-				w.tempPressEvents[key] = true
-				w.tempInp.buttons[key] = true
+				w.input.AddPressedButton(Button(key))
 			case glfw.Release:
-				delete(w.keysPressed, Button(key))
-				w.tempReleaseEvents[key] = true
-				w.tempInp.buttons[key] = false
+				w.input.AddReleasedButton(Button(key))
 			case glfw.Repeat:
-				w.keysPressed[Button(key)] = true
-				w.tempInp.repeat[key] = true
+				w.input.AddRepeatedButton(Button(key))
 			}
 		})
 
@@ -477,104 +414,17 @@ func (w *Window) initInput() {
 		})
 
 		w.window.SetCursorPosCallback(func(_ *glfw.Window, x, y float64) {
-			w.tempInp.mouse = MakeVec(
-				x+w.bounds.Min.X,
-				(w.bounds.H()-y)+w.bounds.Min.Y,
-			)
+			w.input.SetMouse(x+w.bounds.Min.X, (w.bounds.H()-y)+w.bounds.Min.Y)
 		})
 
 		w.window.SetScrollCallback(func(_ *glfw.Window, xOff, yOff float64) {
-			w.tempInp.scroll.X += xOff
-			w.tempInp.scroll.Y += yOff
+			w.input.SetScroll(xOff, yOff)
 		})
 
 		w.window.SetCharCallback(func(_ *glfw.Window, r rune) {
-			w.tempInp.typed += string(r)
+			//w.tempInp.typed += string(r)
 		})
 	})
-}
-
-// JoystickPresent checks if the specified joystick is currently connected to the system.
-func (w *Window) JoystickPresent(js Joystick) bool {
-	return w.currJoy.connected[js]
-}
-
-// JoystickName returns the name of the specified joystick.
-func (w *Window) JoystickName(js Joystick) string {
-	return w.currJoy.name[js]
-}
-
-// JoystickButtonCount returns the number of buttons available on the specified joystick.
-func (w *Window) JoystickButtonCount(js Joystick) int {
-	return len(w.currJoy.buttons[js])
-}
-
-// JoystickAxisCount returns the number of axes available on the specified joystick.
-func (w *Window) JoystickAxisCount(js Joystick) int {
-	return len(w.currJoy.axis[js])
-}
-
-// JoystickPressed checks if the specified gamepad button on the given joystick is currently being pressed.
-func (w *Window) JoystickPressed(js Joystick, button GamepadButton) bool {
-	return w.currJoy.getButton(js, int(button))
-}
-
-// JoystickJustPressed checks if a specific joystick button was just pressed down during the current frame.
-func (w *Window) JoystickJustPressed(js Joystick, button GamepadButton) bool {
-	return w.currJoy.getButton(js, int(button)) && !w.prevJoy.getButton(js, int(button))
-}
-
-// JoystickJustReleased checks if a joystick button was released during the last input update. Returns true if just released.
-func (w *Window) JoystickJustReleased(js Joystick, button GamepadButton) bool {
-	return !w.currJoy.getButton(js, int(button)) && w.prevJoy.getButton(js, int(button))
-}
-
-// JoystickAxis retrieves the current value of the specified joystick axis, returning it as a floating-point value.
-func (w *Window) JoystickAxis(js Joystick, axis GamepadAxis) float64 {
-	return w.currJoy.getAxis(js, int(axis))
-}
-
-// doUpdateInput updates the current input state for the window, including keyboard, mouse, and joystick data.
-func (w *Window) doUpdateInput() {
-	//keyboard
-	w.prevInp = w.currInp
-	w.currInp = w.tempInp
-	//w.keysPressed = w.tempKeysPressed
-	w.pressEvents = w.tempPressEvents
-	w.releaseEvents = w.tempReleaseEvents
-	// Clear last frame's temporary status
-	//w.tempKeysPressed = []Button{}
-	w.tempPressEvents = [KeyLast + 1]bool{}
-	w.tempReleaseEvents = [KeyLast + 1]bool{}
-	w.tempInp.repeat = [KeyLast + 1]bool{}
-	w.tempInp.scroll = ZV
-	w.tempInp.typed = ""
-	//joysticks
-	for js := Joystick1; js <= JoystickLast; js++ {
-		joystickPresent := glfw.Joystick(js).Present()
-		w.tempJoy.connected[js] = joystickPresent
-		if joystickPresent {
-			if glfw.Joystick(js).IsGamepad() {
-				gamepadInputs := glfw.Joystick(js).GetGamepadState()
-				w.tempJoy.buttons[js] = gamepadInputs.Buttons[:]
-				w.tempJoy.axis[js] = gamepadInputs.Axes[:]
-			} else {
-				w.tempJoy.buttons[js] = glfw.Joystick(js).GetButtons()
-				w.tempJoy.axis[js] = glfw.Joystick(js).GetAxes()
-			}
-			if !w.currJoy.connected[js] {
-				w.tempJoy.name[js] = glfw.Joystick(js).GetName()
-			} else {
-				w.tempJoy.name[js] = w.currJoy.name[js]
-			}
-		} else {
-			w.tempJoy.buttons[js] = []glfw.Action{}
-			w.tempJoy.axis[js] = []float32{}
-			w.tempJoy.name[js] = ""
-		}
-	}
-	w.prevJoy = w.currJoy
-	w.currJoy = w.tempJoy
 }
 
 // doPrepare initializes and configures the GLFW window based on the provided configuration settings.
@@ -620,7 +470,7 @@ func (w *Window) doPrepare() error {
 		// enter the OpenGL context
 		w.begin()
 		if err = w.ctx.Init(); err != nil {
-			panic(err)
+			return err
 		}
 		w.ctx.Enable(api.BLEND)
 		if !w.cfg.DisableScissorTest {
@@ -630,7 +480,6 @@ func (w *Window) doPrepare() error {
 		w.ctx.Enable(api.MULTISAMPLE)
 		glfw.SwapInterval(w.vsync)
 
-		//w.th.Init(w.cfg.DisableScissorTest)
 		w.end()
 
 		return nil
@@ -701,24 +550,19 @@ func (w *Window) doRun() {
 		cycles := int(accumulator / targetCycleDuration)
 		accumulator -= time.Duration(cycles) * targetCycleDuration
 
-		// Transfer tempInp -> currInp
-		w.doUpdateInput()
+		w.input.Update()
 
 		// Process Input
 		if mouseConnected && w.MouseInsideWindow() {
-			mousePos := w.MousePosition()
-			mousePrevPos := w.MousePreviousPosition()
-			if mousePos.X != mousePrevPos.X || mousePos.Y != mousePrevPos.Y {
-				mouseX := mousePos.X - mousePrevPos.X
-				mouseY := mousePos.Y - mousePrevPos.Y
-				w.playerMouseMoveFn(mouseX, mouseY)
+			if distX, distY, moved := w.input.GetMouseDist(); moved {
+				w.playerMouseMoveFn(distX, distY)
 			}
 		}
 
 		var up, down, left, right bool
 
-		if scroll := w.MouseScroll(); scroll.Y != 0 {
-			if scroll.Y > 0 {
+		if _, scrollY := w.input.GetScroll(); scrollY != 0 {
+			if scrollY > 0 {
 				up = true
 			} else {
 				down = true
@@ -726,7 +570,7 @@ func (w *Window) doRun() {
 		}
 
 		var impulse = w.player.Impulse //0.06
-		for v := range w.keysPressed {
+		for v := range w.input.keysPressed {
 			switch v {
 			case KeyEscape:
 				return
@@ -750,39 +594,38 @@ func (w *Window) doRun() {
 
 		w.playerMovesFn(impulse, up, down, left, right)
 
-		if w.JustPressed(KeyO) {
+		if w.input.HasPressedButton(KeyO) {
 			w.playerThrowFn()
 		}
-		if w.JustPressed(KeyP) {
+		if w.input.HasPressedButton(KeyP) {
 			w.playerDuckingToggleFn()
 		}
-		if w.JustPressed(KeyC) {
+		if w.input.HasPressedButton(KeyC) {
 			w.enableClearFn()
 		}
-		if w.JustPressed(KeyTab) || w.Pressed(MouseButton2) {
+		if w.input.HasPressedButton(KeyTab) || w.input.HasPressedButton(MouseButton2) {
 			w.playerJumpFn(true)
 		}
-		if w.JustPressed(KeySpace) || w.Pressed(MouseButton1) {
+		if w.input.HasPressedButton(KeySpace) || w.input.HasPressedButton(MouseButton1) {
 			w.playerFireFn()
 		}
-		if w.JustPressed(KeyE) {
+		if w.input.HasPressedButton(KeyE) {
 			w.playerUseFn()
 		}
-		if w.JustPressed(KeyM) {
+		if w.input.HasPressedButton(KeyM) {
 			mouseConnected = !mouseConnected
 		}
-		if w.JustPressed(KeyN) {
+		if w.input.HasPressedButton(KeyN) {
 			w.toggleShadowsFn()
 		}
-
-		if w.JustPressed(KeyZ) {
+		if w.input.HasPressedButton(KeyZ) {
 			w.toggleBoundingBoxDebugFn()
 		}
 		w.th.Call(func() {
 			glfw.PollEvents()
 			w.begin()
 			fbW, fbH := w.GetFramebufferSize()
-			for i := 0; i < cycles; i++ {
+			for range cycles {
 				w.renderAdvanceFn()
 			}
 			w.renderStartFn(fbW, fbH, fbW, fbH)
@@ -790,3 +633,37 @@ func (w *Window) doRun() {
 		})
 	}
 }
+
+// MouseScroll returns the accumulated mouse scroll offset as an XY vector.
+//func (w *Window) MouseScroll() (float64, float64) {
+//	return w.input.GetScroll()
+//}
+
+// Typed returns the current string input typed by the user in the window.
+//func (w *Window) Typed() string {
+//	return w.currInp.typed
+//}
+
+// Repeated checks if the given button is currently being held in a repeated state.
+//func (w *Window) Repeated(button Button) bool {
+//	return w.currInp.repeat[button]
+//}
+
+/*
+// SetMousePosition sets the mouse position within the window bounds based on the provided XY coordinates.
+func (w *Window) SetMousePosition(v XY) {
+	w.th.Call(func() {
+		if (v.X >= 0 && v.X <= w.bounds.W()) &&
+			(v.Y >= 0 && v.Y <= w.bounds.H()) {
+			w.window.SetCursorPos(v.X+w.bounds.Min.X, (w.bounds.H()-v.Y)+w.bounds.Min.Y)
+			w.input.SetMouse(v)
+			//w.input.SetCurrentMouse(v)
+			//w.input.SetPreviousMouse(v)
+			//w.prevInp.mouse = v
+			//w.currInp.mouse = v
+			//w.tempInp.mouse = v
+		}
+	})
+}
+
+*/

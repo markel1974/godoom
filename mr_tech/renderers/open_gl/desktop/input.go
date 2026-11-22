@@ -23,6 +23,8 @@ type WindowInput struct {
 	hasJoystick bool
 
 	mouseMoved bool
+
+	hasScroll bool
 }
 
 // NewWindowInput creates and initializes a WindowInput for tracking keyboard, mouse, and scroll state.
@@ -32,6 +34,7 @@ func NewWindowInput() *WindowInput {
 		keysPressed:   make(map[Button]bool),
 		hasJoystick:   false,
 		mouseMoved:    false,
+		hasScroll:     false,
 	}
 }
 
@@ -48,8 +51,8 @@ func (wi *WindowInput) SetScroll(x float64, y float64) {
 }
 
 // GetScroll returns the current horizontal and vertical scroll offsets.
-func (wi *WindowInput) GetScroll() (float64, float64) {
-	return wi.activeScroll.X, wi.activeScroll.Y
+func (wi *WindowInput) GetScroll() (float64, float64, bool) {
+	return wi.activeScroll.X, wi.activeScroll.Y, wi.hasScroll
 }
 
 // GetCurrentMouse returns the current mouse position as x and y coordinates.
@@ -107,10 +110,15 @@ func (wi *WindowInput) Update() {
 		wi.mouseMoved = false
 	}
 
-	wi.activeScroll.X = wi.tmpScroll.X
-	wi.activeScroll.Y = wi.tmpScroll.Y
-	wi.tmpScroll.X = 0
-	wi.tmpScroll.Y = 0
+	if wi.tmpScroll.X != 0 || wi.tmpScroll.Y != 0 {
+		wi.activeScroll.X = wi.tmpScroll.X
+		wi.activeScroll.Y = wi.tmpScroll.Y
+		wi.tmpScroll.X = 0
+		wi.tmpScroll.Y = 0
+		wi.hasScroll = true
+	} else {
+		wi.hasScroll = false
+	}
 
 	if wi.hasJoystick {
 		for js := Joystick1; js <= JoystickLast; js++ {

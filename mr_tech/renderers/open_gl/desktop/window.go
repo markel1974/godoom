@@ -44,6 +44,7 @@ type Window struct {
 	cursorVisible      bool
 	cursorInsideWindow bool
 	restore            WindowPos
+	fbW, fbH           int
 
 	input *WindowInput
 	//prevInp, currInp, tempInp *WindowInput
@@ -504,6 +505,7 @@ func (w *Window) doRun() {
 		panic(err)
 		return
 	}
+	refreshCounter := 0
 	targetCycleDuration := time.Second / time.Duration(w.cfg.Fps)
 	maxDelta := 250 * time.Millisecond
 
@@ -541,7 +543,7 @@ func (w *Window) doRun() {
 
 		var up, down, left, right bool
 
-		if _, scrollY := w.input.GetScroll(); scrollY != 0 {
+		if _, scrollY, hasScroll := w.input.GetScroll(); hasScroll {
 			if scrollY > 0 {
 				up = true
 			} else {
@@ -552,6 +554,7 @@ func (w *Window) doRun() {
 		var impulse = w.player.Impulse
 
 		for v := range w.input.keysPressed {
+			present := w.input.ConsumePressedButton(v)
 			switch v {
 			case KeyEscape:
 				return
@@ -570,47 +573,59 @@ func (w *Window) doRun() {
 				w.decreaseFlashFactorFn()
 			case KeyLeftShift, KeyRightShift:
 				impulse *= 1.4
+			case KeyO:
+				if present {
+					w.playerThrowFn()
+				}
+			case KeyP:
+				if present {
+					w.playerDuckingToggleFn()
+				}
+			case KeyC:
+				if present {
+					w.enableClearFn()
+				}
+			case KeyTab, MouseButton2:
+				if present {
+					w.playerJumpFn(true)
+				}
+			case KeySpace, MouseButton1:
+				if present {
+					w.playerFireFn()
+				}
+			case KeyE:
+				if present {
+					w.playerUseFn()
+				}
+			case KeyM:
+				if present {
+					mouseConnected = !mouseConnected
+				}
+			case KeyN:
+				if present {
+					w.toggleShadowsFn()
+				}
+			case KeyZ:
+				if present {
+					w.toggleBoundingBoxDebugFn()
+				}
 			}
 		}
 
 		w.playerMovesFn(impulse, up, down, left, right)
 
-		if w.input.ConsumePressedButton(KeyO) {
-			w.playerThrowFn()
-		}
-		if w.input.ConsumePressedButton(KeyP) {
-			w.playerDuckingToggleFn()
-		}
-		if w.input.ConsumePressedButton(KeyC) {
-			w.enableClearFn()
-		}
-		if w.input.ConsumePressedButton(KeyTab) || w.input.ConsumePressedButton(MouseButton2) {
-			w.playerJumpFn(true)
-		}
-		if w.input.ConsumePressedButton(KeySpace) || w.input.ConsumePressedButton(MouseButton1) {
-			w.playerFireFn()
-		}
-		if w.input.ConsumePressedButton(KeyE) {
-			w.playerUseFn()
-		}
-		if w.input.ConsumePressedButton(KeyM) {
-			mouseConnected = !mouseConnected
-		}
-		if w.input.ConsumePressedButton(KeyN) {
-			w.toggleShadowsFn()
-		}
-		if w.input.ConsumePressedButton(KeyZ) {
-			w.toggleBoundingBoxDebugFn()
-		}
-
 		w.th.Call(func() {
+			refreshCounter++
 			glfw.PollEvents()
 			w.begin()
-			fbW, fbH := w.GetFramebufferSize()
+			if refreshCounter >= 60 || w.fbW == 0 || w.fbH == 0 {
+				w.fbW, w.fbH = w.GetFramebufferSize()
+				refreshCounter = 0
+			}
 			for range cycles {
 				w.renderAdvanceFn()
 			}
-			w.renderStartFn(fbW, fbH, fbW, fbH)
+			w.renderStartFn(w.fbW, w.fbH, w.fbW, w.fbH)
 			w.window.SwapBuffers()
 		})
 	}

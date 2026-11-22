@@ -352,26 +352,6 @@ func (w *Window) SetClipboard(str string) {
 	})
 }
 
-// KeysPressed returns a map indicating the state of each key, where the key is the Button and the value is a boolean.
-//func (w *Window) KeysPressed() map[Button]bool {
-//	return w.keysPressed
-//}
-
-/*
-// JustPressed returns true if the specified button was just pressed during the most recent input update cycle.
-func (w *Window) JustPressed(button Button) bool {
-	return w.input.HasPressedButton(button)
-	//return w.currInp.activePressed[button]
-}
-*/
-
-/*
-// JustReleased checks if the specified button was released during the last input update.
-func (w *Window) JustReleased(button Button) bool {
-	return w.input.HasReleasedButton(button)
-}
-*/
-
 // MouseInsideWindow returns true if the mouse cursor is inside the bounds of the window, otherwise false.
 func (w *Window) MouseInsideWindow() bool {
 	return w.cursorInsideWindow
@@ -383,9 +363,9 @@ func (w *Window) initInput() {
 		w.window.SetMouseButtonCallback(func(_ *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
 			switch action {
 			case glfw.Press:
-				w.input.AddPressedButton(Button(button))
+				w.input.PressButton(Button(button))
 			case glfw.Release:
-				w.input.AddReleasedButton(Button(button))
+				w.input.ReleaseButton(Button(button))
 			}
 		})
 
@@ -395,11 +375,11 @@ func (w *Window) initInput() {
 			}
 			switch action {
 			case glfw.Press:
-				w.input.AddPressedButton(Button(key))
+				w.input.PressButton(Button(key))
 			case glfw.Release:
-				w.input.AddReleasedButton(Button(key))
+				w.input.ReleaseButton(Button(key))
 			case glfw.Repeat:
-				w.input.AddRepeatedButton(Button(key))
+				w.input.RepeatButton(Button(key))
 			}
 		})
 
@@ -569,7 +549,8 @@ func (w *Window) doRun() {
 			}
 		}
 
-		var impulse = w.player.Impulse //0.06
+		var impulse = w.player.Impulse
+
 		for v := range w.input.keysPressed {
 			switch v {
 			case KeyEscape:
@@ -621,6 +602,7 @@ func (w *Window) doRun() {
 		if w.input.ConsumePressedButton(KeyZ) {
 			w.toggleBoundingBoxDebugFn()
 		}
+
 		w.th.Call(func() {
 			glfw.PollEvents()
 			w.begin()

@@ -12,13 +12,7 @@ type WindowInput struct {
 
 	distMouse XY
 
-	//pressedTemp []bool
-
 	pressedActive []bool
-
-	//hasPressed bool
-
-	empty []bool
 
 	tmpScroll XY
 
@@ -29,32 +23,15 @@ type WindowInput struct {
 	hasJoystick bool
 
 	mouseMoved bool
-
-	//releasedTemp []bool
-
-	//released []bool
-
-	//hasReleased bool
-
-	//repeat []bool
-
-	//typed string
 }
 
 // NewWindowInput creates and initializes a WindowInput for tracking keyboard, mouse, and scroll state.
 func NewWindowInput() *WindowInput {
 	return &WindowInput{
-		//pressedTemp:   make([]bool, KeyLast+1),
 		pressedActive: make([]bool, KeyLast+1),
-		empty:         make([]bool, KeyLast+1),
 		keysPressed:   make(map[Button]bool),
-		//hasPressed:    false,
-		hasJoystick: false,
-		mouseMoved:  false,
-		//releasedTemp:    make([]bool, KeyLast+1),
-		//released: make([]bool, KeyLast+1),
-		//hasReleased: false,
-		//repeat:         make([]bool, KeyLast+1),
+		hasJoystick:   false,
+		mouseMoved:    false,
 	}
 }
 
@@ -90,17 +67,21 @@ func (wi *WindowInput) GetMouseDist() (float64, float64, bool) {
 	return wi.distMouse.X, wi.distMouse.Y, wi.mouseMoved
 }
 
-// AddRepeatedButton marks the button as currently pressed without recording a new press event.
-func (wi *WindowInput) AddRepeatedButton(b Button) {
+// RepeatButton marks the button as currently pressed without recording a new press event.
+func (wi *WindowInput) RepeatButton(b Button) {
 	wi.keysPressed[b] = true
 }
 
-// AddPressedButton records b as currently pressed and marks it as newly pressed for the next input update.
-func (wi *WindowInput) AddPressedButton(b Button) {
+// PressButton marks b as currently pressed and records it as a new press event.
+func (wi *WindowInput) PressButton(b Button) {
 	wi.keysPressed[b] = true
 	wi.pressedActive[b] = true
-	//wi.pressedTemp[b] = true
-	//wi.hasPressed = true
+}
+
+// ReleaseButton marks b as no longer pressed and clears its active press state.
+func (wi *WindowInput) ReleaseButton(b Button) {
+	wi.pressedActive[b] = false
+	delete(wi.keysPressed, b)
 }
 
 // ConsumePressedButton reports whether b was newly pressed and clears that press state if present.
@@ -112,32 +93,8 @@ func (wi *WindowInput) ConsumePressedButton(b Button) bool {
 	return ret
 }
 
-// AddReleasedButton records b as released and removes it from the currently pressed buttons.
-func (wi *WindowInput) AddReleasedButton(b Button) {
-	wi.pressedActive[b] = false
-	delete(wi.keysPressed, b)
-	//wi.releasedTemp[b] = true
-	//wi.hasReleased = true
-}
-
-// HasReleasedButton reports whether b was released during the last input update.
-//func (wi *WindowInput) HasReleasedButton(b Button) bool {
-//	return wi.released[b]
-//}
-
 // Update advances transient input state, updates mouse movement, and clears accumulated scroll for the next update.
 func (wi *WindowInput) Update() {
-	//if wi.hasPressed {
-	//	copy(wi.pressedActive, wi.pressedTemp)
-	//	copy(wi.pressedTemp, wi.empty)
-	//	wi.hasPressed = false
-	//}
-	//if wi.hasReleased {
-	//	copy(wi.released, wi.releasedTemp)
-	//	copy(wi.releasedTemp, wi.empty)
-	//	wi.hasReleased = false
-	//}
-
 	if wi.mouse.X != wi.prevMouse.X || wi.mouse.Y != wi.prevMouse.Y {
 		wi.distMouse.X = wi.mouse.X - wi.prevMouse.X
 		wi.distMouse.Y = wi.mouse.Y - wi.prevMouse.Y

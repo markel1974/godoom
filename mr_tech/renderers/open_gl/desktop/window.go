@@ -594,31 +594,31 @@ func (w *Window) doRun() {
 
 		w.playerMovesFn(impulse, up, down, left, right)
 
-		if w.input.HasPressedButton(KeyO) {
+		if w.input.ConsumePressedButton(KeyO) {
 			w.playerThrowFn()
 		}
-		if w.input.HasPressedButton(KeyP) {
+		if w.input.ConsumePressedButton(KeyP) {
 			w.playerDuckingToggleFn()
 		}
-		if w.input.HasPressedButton(KeyC) {
+		if w.input.ConsumePressedButton(KeyC) {
 			w.enableClearFn()
 		}
-		if w.input.HasPressedButton(KeyTab) || w.input.HasPressedButton(MouseButton2) {
+		if w.input.ConsumePressedButton(KeyTab) || w.input.ConsumePressedButton(MouseButton2) {
 			w.playerJumpFn(true)
 		}
-		if w.input.HasPressedButton(KeySpace) || w.input.HasPressedButton(MouseButton1) {
+		if w.input.ConsumePressedButton(KeySpace) || w.input.ConsumePressedButton(MouseButton1) {
 			w.playerFireFn()
 		}
-		if w.input.HasPressedButton(KeyE) {
+		if w.input.ConsumePressedButton(KeyE) {
 			w.playerUseFn()
 		}
-		if w.input.HasPressedButton(KeyM) {
+		if w.input.ConsumePressedButton(KeyM) {
 			mouseConnected = !mouseConnected
 		}
-		if w.input.HasPressedButton(KeyN) {
+		if w.input.ConsumePressedButton(KeyN) {
 			w.toggleShadowsFn()
 		}
-		if w.input.HasPressedButton(KeyZ) {
+		if w.input.ConsumePressedButton(KeyZ) {
 			w.toggleBoundingBoxDebugFn()
 		}
 		w.th.Call(func() {

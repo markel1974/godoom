@@ -12,11 +12,11 @@ type WindowInput struct {
 
 	distMouse XY
 
-	pressedTemp []bool
+	//pressedTemp []bool
 
 	pressedActive []bool
 
-	hasPressed bool
+	//hasPressed bool
 
 	empty []bool
 
@@ -44,13 +44,13 @@ type WindowInput struct {
 // NewWindowInput creates and initializes a WindowInput for tracking keyboard, mouse, and scroll state.
 func NewWindowInput() *WindowInput {
 	return &WindowInput{
-		pressedTemp:   make([]bool, KeyLast+1),
+		//pressedTemp:   make([]bool, KeyLast+1),
 		pressedActive: make([]bool, KeyLast+1),
 		empty:         make([]bool, KeyLast+1),
 		keysPressed:   make(map[Button]bool),
-		hasPressed:    false,
-		hasJoystick:   false,
-		mouseMoved:    false,
+		//hasPressed:    false,
+		hasJoystick: false,
+		mouseMoved:  false,
 		//releasedTemp:    make([]bool, KeyLast+1),
 		//released: make([]bool, KeyLast+1),
 		//hasReleased: false,
@@ -98,13 +98,18 @@ func (wi *WindowInput) AddRepeatedButton(b Button) {
 // AddPressedButton records b as currently pressed and marks it as newly pressed for the next input update.
 func (wi *WindowInput) AddPressedButton(b Button) {
 	wi.keysPressed[b] = true
-	wi.pressedTemp[b] = true
-	wi.hasPressed = true
+	wi.pressedActive[b] = true
+	//wi.pressedTemp[b] = true
+	//wi.hasPressed = true
 }
 
-// HasPressedButton reports whether b is marked as pressed in the active input state.
-func (wi *WindowInput) HasPressedButton(b Button) bool {
-	return wi.pressedActive[b]
+// ConsumePressedButton reports whether b was newly pressed and clears that press state if present.
+func (wi *WindowInput) ConsumePressedButton(b Button) bool {
+	ret := wi.pressedActive[b]
+	if ret {
+		wi.pressedActive[b] = false
+	}
+	return ret
 }
 
 // AddReleasedButton records b as released and removes it from the currently pressed buttons.
@@ -122,11 +127,11 @@ func (wi *WindowInput) AddReleasedButton(b Button) {
 
 // Update advances transient input state, updates mouse movement, and clears accumulated scroll for the next update.
 func (wi *WindowInput) Update() {
-	if wi.hasPressed {
-		copy(wi.pressedActive, wi.pressedTemp)
-		copy(wi.pressedTemp, wi.empty)
-		wi.hasPressed = false
-	}
+	//if wi.hasPressed {
+	//	copy(wi.pressedActive, wi.pressedTemp)
+	//	copy(wi.pressedTemp, wi.empty)
+	//	wi.hasPressed = false
+	//}
 	//if wi.hasReleased {
 	//	copy(wi.released, wi.releasedTemp)
 	//	copy(wi.releasedTemp, wi.empty)

@@ -202,7 +202,8 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	}
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
-	vert, vertSize, vertCount, indices, indexSize, indicesCount := w.builder.GetVertices()
+	vert, vertSize, _, indices, indexSize, _ := w.builder.GetVertices()
+	staticVertBytes, staticIdxBytes, staticGen, frameGen := w.builder.GetUploadHints()
 	//fmt.Println("TEST", vertSize, vertCount, indexSize, indicesCount)
 	lights, lightSize, lightsCount := w.builder.GetLights()
 	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
@@ -211,6 +212,7 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
 		w.flashlightMetrics.Rebuild(fbW, fbH)
 	}
+	w.post.EnsureAllocated()
 
 	w.tex.BindBuckets()
 
@@ -227,7 +229,7 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	// RENDER START HERE
 	w.depth.Prepare()
 	// MAIN PREPARE (VBO and EBO)
-	w.main.Prepare(vert, vertSize, vertCount, indices, indexSize, indicesCount)
+	w.main.PrepareFrame(vert, vertSize, staticVertBytes, indices, indexSize, staticIdxBytes, staticGen, frameGen)
 	// LIGHTS PREPARE (UBO)
 	w.lights.Prepare(lights, lightSize, lightsCount)
 	// OMBRE
@@ -355,5 +357,6 @@ func (w *RenderOpenGL) SetShadowsEnabled(shadows bool) {
 // SetBoundingBoxDebug enables or disables bounding box debug rendering.
 func (w *RenderOpenGL) SetBoundingBoxDebug(debug bool) {
 	w.enableBoundingBoxDebug = debug
+	w.hwOcc.SetDebug(debug)
 	w.handler.SetBoundingBoxDebug(w.enableBoundingBoxDebug)
 }

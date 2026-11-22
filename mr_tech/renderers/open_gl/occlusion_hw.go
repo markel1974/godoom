@@ -70,7 +70,7 @@ func NewOcclusionHW(ctx api.IContext, maxEntities int) *OcclusionHW {
 		frameCounter: 0,
 		activeStates: make([]*OcclusionState, maxEntities),
 		activeLen:    0,
-		debug:        true,
+		debug:        false,
 	}
 	hw.allVerticesPtr = ctx.Ptr(hw.allVertices)
 

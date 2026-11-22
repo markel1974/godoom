@@ -44,7 +44,6 @@ type Window struct {
 	cursorVisible      bool
 	cursorInsideWindow bool
 	restore            WindowPos
-	fbW, fbH           int
 
 	input *WindowInput
 	//prevInp, currInp, tempInp *WindowInput
@@ -500,6 +499,8 @@ func (w *Window) doRun() {
 		panic(err)
 		return
 	}
+	fbW, fbH := w.cfg.Width, w.cfg.Height
+	var winW, winH int
 	refreshCounter := 0
 	targetCycleDuration := time.Second / time.Duration(w.cfg.Fps)
 	maxDelta := 250 * time.Millisecond
@@ -580,9 +581,10 @@ func (w *Window) doRun() {
 					w.enableClearFn()
 				}
 			case KeyTab, MouseButton2:
-				if present {
-					w.playerJumpFn(true)
-				}
+				//if present {
+				//TEST JUMP
+				w.playerJumpFn(true)
+				//}
 			case KeySpace, MouseButton1:
 				if present {
 					w.playerFireFn()
@@ -609,18 +611,18 @@ func (w *Window) doRun() {
 		w.playerMovesFn(impulse, up, down, left, right)
 
 		w.th.Call(func() {
-			refreshCounter++
 			glfw.PollEvents()
 			w.begin()
-			if refreshCounter >= 60 || w.fbW == 0 || w.fbH == 0 {
-				w.fbW, w.fbH = w.GetFramebufferSize()
+			if refreshCounter >= 60 || winW == 0 || winH == 0 {
+				winW, winH = w.GetFramebufferSize()
 				refreshCounter = 0
 			}
 			for range cycles {
 				w.renderAdvanceFn()
 			}
-			w.renderStartFn(w.fbW, w.fbH, w.fbW, w.fbH)
+			w.renderStartFn(fbW, fbH, winW, winH)
 			w.window.SwapBuffers()
+			refreshCounter++
 		})
 	}
 }

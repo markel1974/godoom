@@ -44,6 +44,7 @@ type Window struct {
 	cursorVisible      bool
 	cursorInsideWindow bool
 	restore            WindowPos
+	fbW, fbH           int
 
 	input *WindowInput
 	//prevInp, currInp, tempInp *WindowInput
@@ -82,6 +83,8 @@ func NewGLWindow(ctx api.IContext, cfg WindowConfig, player *config.Player) *Win
 		cursorVisible: true,
 		input:         NewWindowInput(),
 		vsync:         vsync,
+		fbW:           0,
+		fbH:           0,
 	}
 	return w
 }
@@ -455,6 +458,8 @@ func (w *Window) doPrepare() error {
 		w.ctx.Enable(api.MULTISAMPLE)
 		glfw.SwapInterval(w.vsync)
 
+		w.fbW, w.fbH = w.GetFramebufferSize()
+
 		w.end()
 
 		return nil
@@ -499,7 +504,7 @@ func (w *Window) doRun() {
 		panic(err)
 		return
 	}
-	fbW, fbH := w.cfg.Width, w.cfg.Height
+	fbW, fbH := w.fbW, w.fbH
 	var winW, winH int
 	refreshCounter := 0
 	targetCycleDuration := time.Second / time.Duration(w.cfg.Fps)

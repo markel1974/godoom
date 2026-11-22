@@ -191,9 +191,9 @@ func (w *RenderOpenGL) RenderAdvance() {
 }
 
 // RenderStart initializes and executes the rendering process for the current frame with specified framebuffer dimensions.
-func (w *RenderOpenGL) RenderStart(fbW1 int, fbH1 int, winW int, winH int) {
-	fbW := int32(float64(fbW1) * w.renderScale)
-	fbH := int32(float64(fbH1) * w.renderScale)
+func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
+	fbW := int32(float64(fbInW) * w.renderScale)
+	fbH := int32(float64(fbInH) * w.renderScale)
 	if fbW < 1 {
 		fbW = 1
 	}

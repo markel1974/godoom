@@ -158,15 +158,13 @@ func main() {
 		helpModes.WriteString(fmt.Sprintf("[%d = %s]", idx, v.Name))
 	}
 
-	const aspect = 0.5
-
 	flag.BoolVar(&showHelp, "h", false, "show this help")
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.IntVar(&mode, "m", 2, helpModes.String())
 	flag.IntVar(&level, "l", 1, "level number")
 	flag.IntVar(&fps, "fps", 120, "fps")
-	flag.IntVar(&width, "width", 1920*aspect, "width")
-	flag.IntVar(&height, "height", 1080*aspect, "height")
+	flag.IntVar(&width, "width", 640, "width")
+	flag.IntVar(&height, "height", 480, "height")
 	flag.IntVar(&enableShadows, "shadows", 1, "enable shadows")
 	flag.IntVar(&enableShadowLights, "shadowLights", 1, "enable shadows lights")
 	flag.IntVar(&msaaSamples, "msaa", model.DefaultMSAASamples, "MSAA samples for the 3D scene [0 = off, 2, 4, 8]")

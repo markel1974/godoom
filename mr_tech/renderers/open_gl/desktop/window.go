@@ -353,11 +353,6 @@ func (w *Window) SetClipboard(str string) {
 	})
 }
 
-// MouseInsideWindow returns true if the mouse cursor is inside the bounds of the window, otherwise false.
-func (w *Window) MouseInsideWindow() bool {
-	return w.cursorInsideWindow
-}
-
 // initInput initializes input handling by setting up GLFW input callbacks for mouse, keyboard, cursor, scroll, and character events.
 func (w *Window) initInput() {
 	w.th.Call(func() {
@@ -534,8 +529,7 @@ func (w *Window) doRun() {
 
 		w.input.Update()
 
-		// Process Input
-		if mouseConnected && w.MouseInsideWindow() {
+		if mouseConnected && w.cursorInsideWindow {
 			if distX, distY, moved := w.input.GetMouseDist(); moved {
 				w.playerMouseMoveFn(distX, distY)
 			}

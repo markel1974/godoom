@@ -80,8 +80,9 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, p
 		//frustumLightRear:  metrics.NewFrustum(),
 		//lightFrontFrustum: aabb.NewFrustum(),
 		//lightRearFrustum:  aabb.NewFrustum(),
-		lightBB:      aabb.NewBoundingBox(),
-		thingsRender: NewThingsRender(),
+		lightBB:       aabb.NewBoundingBox(),
+		cachedRawVols: make([]*volumes.Volume, 0, 8192),
+		thingsRender:  NewThingsRender(),
 	}
 	prjScale := bv.cal.PrjScale
 	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)
@@ -300,12 +301,10 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) bool {
-	//if w.thingCache == nil {
-	//	w.thingCache = make(map[uint64]*ThingRenderCache, 256)
-	//}
+	if w.thingsRender == nil {
+		w.thingsRender = NewThingsRender()
+	}
 	w.thingsRender.Prepare()
-	//w.thingFrameID++
-	//w.currThingRefs = w.currThingRefs[:0]
 	tick := textures.GlobalTick()
 
 	things.StagePrepare()
@@ -318,8 +317,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		}
 
 		ent := thing.GetEntity()
-		entID := ent.GetId()
-		entry2 := w.thingsRender.Retrieve(entID)
+		entry2 := w.thingsRender.Retrieve(ent)
 
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
@@ -412,8 +410,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		}
 
 		w.fv.Commit(fv, w.modes)
-		w.thingsRender.AddRef(entID, entry2)
-		//w.currThingRefs = append(w.currThingRefs, ThingCacheRef{id: entID, gen: entry.gen})
+		w.thingsRender.AddRef(entry2)
 	}
 
 	qOcclusion := func(object aabb.IObject) bool {

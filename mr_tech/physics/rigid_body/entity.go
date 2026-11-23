@@ -36,6 +36,7 @@ func init() {
 // Entity represents a game object with a unique identifier, bounding box, and cinematic behaviors.
 type Entity struct {
 	id               uint64
+	renderMarker     int
 	ecx              float64
 	ecy              float64
 	ecz              float64
@@ -57,10 +58,11 @@ type Entity struct {
 // NewEntity creates and returns a pointer to a new Entity with specified mass, restitution, ground friction, and gravity force.
 func NewEntity(mass, restitution, groundFriction float64, restCombine, frictionCombine int, gForce float64) *Entity {
 	e := &Entity{
-		id:          uint64(GetGlobalId()),
-		BoundingBox: aabb.NewBoundingBox(),
-		Cinematic:   NewCinematic(_dt, mass, restitution, groundFriction, restCombine, frictionCombine, gForce),
-		hasCentroid: false,
+		id:           uint64(GetGlobalId()),
+		renderMarker: -1,
+		BoundingBox:  aabb.NewBoundingBox(),
+		Cinematic:    NewCinematic(_dt, mass, restitution, groundFriction, restCombine, frictionCombine, gForce),
+		hasCentroid:  false,
 	}
 	return e
 }
@@ -68,6 +70,16 @@ func NewEntity(mass, restitution, groundFriction float64, restCombine, frictionC
 // GetId returns the unique identifier of the Entity as a uint64.
 func (e *Entity) GetId() uint64 {
 	return e.id
+}
+
+// GetRenderMarker returns the renderer cache slot index assigned to this Entity, or -1 if unassigned.
+func (e *Entity) GetRenderMarker() int {
+	return e.renderMarker
+}
+
+// SetRenderMarker assigns the renderer cache slot index for this Entity.
+func (e *Entity) SetRenderMarker(marker int) {
+	e.renderMarker = marker
 }
 
 // syncInertia updates the cuboid fallback inertia for (w, h, d), reapplies any custom inertia tensor, and syncs world tensors.

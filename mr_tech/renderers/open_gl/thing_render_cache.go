@@ -1,6 +1,11 @@
 package open_gl
 
-import "github.com/markel1974/godoom/mr_tech/model/volumes"
+import (
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+)
+
+const defaultThingCacheCap = 4096
 
 // ThingCacheRef records a cached thing reference and generation used to detect render cache changes.
 type ThingCacheRef struct {
@@ -21,8 +26,10 @@ type ThingRenderCache struct {
 	yaw           float32
 	renderMode    float32
 	oX, oY, oZ    float32
+	entID         uint64
 	gen           uint64
 	lastSeenFrame uint64
+	inUse         bool
 	valid         bool
 }
 
@@ -36,9 +43,14 @@ func (tr *ThingRenderCache) GetFrameVertices() *FrameVertices {
 	return tr.fv
 }
 
+// GetGen returns the monotonic cache revision counter for this entry.
+func (tr *ThingRenderCache) GetGen() uint64 {
+	return tr.gen
+}
+
 // Equal reports whether the cache is valid and matches the supplied render state without needing animation rebuild.
 func (tr *ThingRenderCache) Equal(pFaces *volumes.Faces, pNextFaces *volumes.Faces, facesVer uint64, nextVer uint64, facesLen int, nextLen int, lerp float32, yaw float32, renderModeF float32, oX float32, oY float32, oZ float32) bool {
-	cacheHit := tr.valid &&
+	return tr.valid &&
 		tr.pFaces == pFaces &&
 		tr.pNextFaces == pNextFaces &&
 		tr.facesVer == facesVer &&
@@ -50,11 +62,9 @@ func (tr *ThingRenderCache) Equal(pFaces *volumes.Faces, pNextFaces *volumes.Fac
 		tr.renderMode == renderModeF &&
 		tr.oX == oX && tr.oY == oY && tr.oZ == oZ &&
 		!tr.fv.NeedsAnimRebuild()
-	return cacheHit
 }
 
-// Assign updates the cached render inputs and marks the cache valid.
-// Assign increments the generation counter to reflect the new cached state.
+// Assign updates the cached render inputs, marks the cache valid, and advances its revision counter.
 func (tr *ThingRenderCache) Assign(pFaces *volumes.Faces, pNextFaces *volumes.Faces, facesVer uint64, nextVer uint64, facesLen int, nextLen int, lerp float32, yaw float32, renderModeF float32, oX float32, oY float32, oZ float32) {
 	tr.pFaces = pFaces
 	tr.pNextFaces = pNextFaces
@@ -70,73 +80,161 @@ func (tr *ThingRenderCache) Assign(pFaces *volumes.Faces, pNextFaces *volumes.Fa
 	tr.gen++
 }
 
-// ThingsRender manages per-thing render caches and tracks frame references to detect changes between frames.
+// ThingsRender manages preallocated per-thing render cache slots and fixed reference arrays with zero hot-path allocations.
 type ThingsRender struct {
-	thingCache    map[uint64]*ThingRenderCache
+	entries       []*ThingRenderCache
+	freeSlots     []int
+	freeLen       int
+	nextSlot      int
 	thingFrameID  uint64
 	prevThingRefs []ThingCacheRef
+	prevLen       int
 	currThingRefs []ThingCacheRef
+	currLen       int
 }
 
-// NewThingsRender creates a ThingsRender with initialized caches and frame reference buffers.
+// NewThingsRender creates a ThingsRender with preallocated cache slots and frame reference arrays.
 func NewThingsRender() *ThingsRender {
+	return NewThingsRenderWithCap(defaultThingCacheCap)
+}
+
+// NewThingsRenderWithCap creates a ThingsRender preallocated for initCap simultaneous cached things.
+func NewThingsRenderWithCap(initCap int) *ThingsRender {
+	if initCap < 16 {
+		initCap = 16
+	}
+	entries := make([]*ThingRenderCache, initCap)
+	for i := range entries {
+		entries[i] = NewThingRenderCache()
+	}
 	return &ThingsRender{
-		thingCache:    make(map[uint64]*ThingRenderCache, 256), //TODO NON DEVE ESSERE UNA MAPPA MA UN ARRAY (MAI MAPPE NEGLI HOT PATH)
+		entries:       entries,
+		freeSlots:     make([]int, initCap),
+		freeLen:       0,
+		nextSlot:      0,
 		thingFrameID:  0,
-		prevThingRefs: make([]ThingCacheRef, 0), // TODO COMPLETAMENTE SBAGLIATO GLI ARRAY NON POSSONO ESSERE COSTRUITI AD OGNI AZIONE (MAI COSTRUITI NEGLI HOT PATH)
-		currThingRefs: make([]ThingCacheRef, 0), // TODO COMPLETAMENTE SBAGLIATO GLI ARRAY NON POSSONO ESSERE COSTRUITI AD OGNI AZIONE (MAI COSTRUITI NEGLI HOT PATH)
+		prevThingRefs: make([]ThingCacheRef, initCap),
+		prevLen:       0,
+		currThingRefs: make([]ThingCacheRef, initCap),
+		currLen:       0,
 	}
 }
 
-// Prepare starts a new thing render frame and clears the current reference list.
+// Prepare starts a new thing render frame and resets the current reference count.
 func (w *ThingsRender) Prepare() {
 	w.thingFrameID++
-	w.currThingRefs = w.currThingRefs[:0]
+	w.currLen = 0
 }
 
-// Retrieve returns the render cache for entID, creating it if needed, and marks it seen in the current frame.
-func (w *ThingsRender) Retrieve(entID uint64) *ThingRenderCache {
-	entry := w.thingCache[entID]
-	if entry == nil {
-		entry = NewThingRenderCache()
-		w.thingCache[entID] = entry
+// Retrieve returns the preallocated render cache slot bound to ent, assigning or recycling a slot if needed.
+func (w *ThingsRender) Retrieve(ent *rigid_body.Entity) *ThingRenderCache {
+	entID := ent.GetId()
+	slot := ent.GetRenderMarker()
+	if slot >= 0 && slot < w.nextSlot {
+		entry := w.entries[slot]
+		if entry.inUse && entry.entID == entID {
+			entry.lastSeenFrame = w.thingFrameID
+			return entry
+		}
 	}
+
+	if w.freeLen > 0 {
+		w.freeLen--
+		slot = w.freeSlots[w.freeLen]
+	} else {
+		if w.nextSlot >= len(w.entries) {
+			w.growEntries()
+		}
+		slot = w.nextSlot
+		w.nextSlot++
+	}
+
+	entry := w.entries[slot]
+	entry.entID = entID
+	entry.inUse = true
+	entry.valid = false
+	entry.pFaces = nil
+	entry.pNextFaces = nil
 	entry.lastSeenFrame = w.thingFrameID
+	entry.fv.DeepReset()
+	ent.SetRenderMarker(slot)
 	return entry
 }
 
-// AddRef records the entity's current cache generation for change detection during commit.
-func (w *ThingsRender) AddRef(entID uint64, entry *ThingRenderCache) {
-	w.currThingRefs = append(w.currThingRefs, ThingCacheRef{id: entID, gen: entry.gen})
+// AddRef records the entry's entity ID and current cache generation in the preallocated frame reference array.
+func (w *ThingsRender) AddRef(entry *ThingRenderCache) {
+	if w.currLen >= len(w.currThingRefs) {
+		w.growRefs()
+	}
+	w.currThingRefs[w.currLen] = ThingCacheRef{id: entry.entID, gen: entry.gen}
+	w.currLen++
 }
 
-// Commit finalizes the current thing references and reports whether they differ from the previous frame.
-// Commit also periodically removes stale cached thing entries that have not been seen recently.
+// Commit finalizes the frame's thing references, swaps the double-buffered reference arrays on changes,
+// and periodically recycles slots for entities no longer seen recently.
 func (w *ThingsRender) Commit() bool {
 	if w.thingFrameID&255 == 0 {
-		for id, entry := range w.thingCache {
-			if w.thingFrameID-entry.lastSeenFrame > 256 {
-				delete(w.thingCache, id)
+		for slot := 0; slot < w.nextSlot; slot++ {
+			entry := w.entries[slot]
+			if entry.inUse && w.thingFrameID-entry.lastSeenFrame > 256 {
+				entry.inUse = false
+				entry.valid = false
+				entry.pFaces = nil
+				entry.pNextFaces = nil
+				entry.fv.DeepReset()
+				w.freeSlots[w.freeLen] = slot
+				w.freeLen++
 			}
 		}
 	}
 
-	thingsChanged := len(w.currThingRefs) != len(w.prevThingRefs)
+	thingsChanged := w.currLen != w.prevLen
 	if !thingsChanged {
-		for i, ref := range w.currThingRefs {
-			if w.prevThingRefs[i] != ref {
+		for i := 0; i < w.currLen; i++ {
+			if w.currThingRefs[i] != w.prevThingRefs[i] {
 				thingsChanged = true
 				break
 			}
 		}
 	}
 	if thingsChanged {
-		if cap(w.prevThingRefs) < len(w.currThingRefs) {
-			w.prevThingRefs = make([]ThingCacheRef, len(w.currThingRefs))
-		} else {
-			w.prevThingRefs = w.prevThingRefs[:len(w.currThingRefs)]
-		}
-		copy(w.prevThingRefs, w.currThingRefs)
+		w.prevThingRefs, w.currThingRefs = w.currThingRefs, w.prevThingRefs
+		w.prevLen = w.currLen
 	}
 	return thingsChanged
+}
+
+// growEntries expands the cache entry pool and free-slot stack if capacity is exceeded.
+func (w *ThingsRender) growEntries() {
+	oldCap := len(w.entries)
+	newCap := oldCap * 2
+	if newCap < 16 {
+		newCap = 16
+	}
+	newEntries := make([]*ThingRenderCache, newCap)
+	copy(newEntries, w.entries)
+	for i := oldCap; i < newCap; i++ {
+		newEntries[i] = NewThingRenderCache()
+	}
+	w.entries = newEntries
+
+	newFree := make([]int, newCap)
+	copy(newFree, w.freeSlots[:w.freeLen])
+	w.freeSlots = newFree
+}
+
+// growRefs expands both reference tracking buffers together if active things per frame exceed initial capacity.
+func (w *ThingsRender) growRefs() {
+	oldCap := len(w.currThingRefs)
+	newCap := oldCap * 2
+	if newCap < 16 {
+		newCap = 16
+	}
+	newCurr := make([]ThingCacheRef, newCap)
+	copy(newCurr, w.currThingRefs[:w.currLen])
+	w.currThingRefs = newCurr
+
+	newPrev := make([]ThingCacheRef, newCap)
+	copy(newPrev, w.prevThingRefs[:w.prevLen])
+	w.prevThingRefs = newPrev
 }

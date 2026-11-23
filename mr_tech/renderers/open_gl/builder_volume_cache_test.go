@@ -181,10 +181,8 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	if medikitThing == nil || ammoThing == nil {
 		t.Fatalf("expected medikit and ammo in front frustum")
 	}
-	medID := medikitThing.GetEntity().GetId()
-	ammoID := ammoThing.GetEntity().GetId()
-	medCacheGen1 := bv.thingCache[medID].gen
-	ammoCacheGen1 := bv.thingCache[ammoID].gen
+	medCacheGen1 := bv.thingsRender.Retrieve(medikitThing.GetEntity()).GetGen()
+	ammoCacheGen1 := bv.thingsRender.Retrieve(ammoThing.GetEntity()).GetGen()
 
 	// Frame 2: nothing moved and animated texture tick interval (32) not crossed -> full reuse.
 	bv.Compute(640, 480, vi, en)
@@ -203,11 +201,11 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	if fGen3 <= fGen2 {
 		t.Fatalf("expected frameGen to advance when visible item moved, got %d -> %d", fGen2, fGen3)
 	}
-	if bv.thingCache[medID].gen <= medCacheGen1 {
-		t.Fatalf("expected moved item cache gen to advance, got %d -> %d", medCacheGen1, bv.thingCache[medID].gen)
+	if genNow := bv.thingsRender.Retrieve(medikitThing.GetEntity()).GetGen(); genNow <= medCacheGen1 {
+		t.Fatalf("expected moved item cache gen to advance, got %d -> %d", medCacheGen1, genNow)
 	}
-	if bv.thingCache[ammoID].gen != ammoCacheGen1 {
-		t.Fatalf("expected stationary item vertex cache gen=%d reused, got %d", ammoCacheGen1, bv.thingCache[ammoID].gen)
+	if ammoNow := bv.thingsRender.Retrieve(ammoThing.GetEntity()).GetGen(); ammoNow != ammoCacheGen1 {
+		t.Fatalf("expected stationary item vertex cache gen=%d reused, got %d", ammoCacheGen1, ammoNow)
 	}
 
 	// Frame 4: mark sector dirty -> must invalidate static volume cache and increment staticGen.
@@ -262,4 +260,99 @@ func TestVisibleVolumesSortFrontToBack(t *testing.T) {
 	_ = model.NewCalibration
 	_ = things.NewUI
 	_ = metrics.NewFrustum
+}
+
+func TestThingsRenderSlotRecyclingAndABASafety(t *testing.T) {
+	tr := NewThingsRenderWithCap(16)
+	e1 := rigid_body.NewEntity(10, 0, 0.2, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
+	e2 := rigid_body.NewEntity(10, 0, 0.2, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
+
+	tr.Prepare()
+	c1 := tr.Retrieve(e1)
+	c1.Assign(nil, nil, 1, 0, 1, 0, 0, 0, 0, 1, 2, 3)
+	tr.AddRef(c1)
+	if !tr.Commit() {
+		t.Fatalf("expected initial frame Commit to report change")
+	}
+	slot1 := e1.GetRenderMarker()
+	if slot1 != 0 {
+		t.Fatalf("expected first entity at slot 0, got %d", slot1)
+	}
+
+	// Step > 512 empty frames without e1 so slot 0 is pruned cleanly on a 256-frame boundary.
+	for i := 0; i < 520; i++ {
+		tr.Prepare()
+		tr.Commit()
+	}
+	if tr.freeLen != 1 || tr.freeSlots[0] != slot1 {
+		t.Fatalf("expected slot %d recycled into freeSlots, got freeLen=%d slots=%v", slot1, tr.freeLen, tr.freeSlots[:tr.freeLen])
+	}
+
+	// New entity e2 reuses slot 0 without allocating.
+	tr.Prepare()
+	c2 := tr.Retrieve(e2)
+	c2.Assign(nil, nil, 2, 0, 2, 0, 0, 0, 0, 9, 9, 9)
+	tr.AddRef(c2)
+	tr.Commit()
+	if e2.GetRenderMarker() != slot1 {
+		t.Fatalf("expected e2 to reuse slot %d, got %d", slot1, e2.GetRenderMarker())
+	}
+	if tr.freeLen != 0 {
+		t.Fatalf("expected freeSlots empty after reuse, got %d", tr.freeLen)
+	}
+
+	// Stale returning e1 still holds old renderMarker=0, must detect entID mismatch and allocate slot 1 without disturbing e2.
+	tr.Prepare()
+	c2Again := tr.Retrieve(e2)
+	c1Returned := tr.Retrieve(e1)
+	if c1Returned == c2Again {
+		t.Fatalf("returning e1 collided with active e2 cache slot %d", slot1)
+	}
+	if e1.GetRenderMarker() != 1 || c1Returned.valid {
+		t.Fatalf("expected returning e1 to get fresh uninitialized slot 1, got slot=%d valid=%v", e1.GetRenderMarker(), c1Returned.valid)
+	}
+	if c2Again.oX != 9 {
+		t.Fatalf("e2 cached state was corrupted when e1 returned")
+	}
+	tr.AddRef(c2Again)
+	tr.AddRef(c1Returned)
+	tr.Commit()
+}
+
+func TestThingsRenderZeroAllocsHotPath(t *testing.T) {
+	tr := NewThingsRenderWithCap(64)
+	ents := make([]*rigid_body.Entity, 16)
+	for i := range ents {
+		ents[i] = rigid_body.NewEntity(10, 0, 0.2, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
+	}
+
+	// Warm up slots once (first assignment only).
+	tr.Prepare()
+	for _, e := range ents {
+		c := tr.Retrieve(e)
+		c.Assign(nil, nil, 1, 0, 1, 0, 0, 0, 0, 1, 2, 3)
+		tr.AddRef(c)
+	}
+	tr.Commit()
+
+	toggle := false
+	allocs := testing.AllocsPerRun(200, func() {
+		toggle = !toggle
+		count := len(ents)
+		if toggle {
+			count -= 2
+		}
+		tr.Prepare()
+		for i := 0; i < count; i++ {
+			c := tr.Retrieve(ents[i])
+			if i == 0 {
+				c.Assign(nil, nil, 1, 0, 1, 0, 0, 0, 0, float32(count), 2, 3)
+			}
+			tr.AddRef(c)
+		}
+		tr.Commit()
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 heap allocations in ThingsRender hot path, got %.2f", allocs)
+	}
 }

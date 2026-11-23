@@ -65,6 +65,14 @@ func MatrixMultiply4x4Ptr(out, a, b *float32) {
 // Returns the inverted matrix and a boolean indicating success (true) or failure (false) if the determinant is zero.
 func MatrixInverse4x4(m [16]float32) ([16]float32, bool) {
 	var inv [16]float32
+	if !MatrixInverse4x4Ptr(&inv, &m) {
+		return [16]float32{}, false
+	}
+	return inv, true
+}
+
+// MatrixInverse4x4Ptr computes the inverse of matrix m directly into inv without copying 64-byte arrays.
+func MatrixInverse4x4Ptr(inv, m *[16]float32) bool {
 	var det float32
 
 	inv[0] = m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10]
@@ -86,11 +94,12 @@ func MatrixInverse4x4(m [16]float32) ([16]float32, bool) {
 
 	det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12]
 	if det == 0 {
-		return [16]float32{}, false
+		*inv = [16]float32{}
+		return false
 	}
 	invDet := 1.0 / det
 	for i := 0; i < 16; i++ {
 		inv[i] *= invDet
 	}
-	return inv, true
+	return true
 }

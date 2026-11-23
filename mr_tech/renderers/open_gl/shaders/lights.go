@@ -69,35 +69,48 @@ const (
 
 // Lights represents a collection of light data and OpenGL resources for managing and rendering dynamic scene lighting.
 type Lights struct {
-	ctx             api.IContext
-	prg             uint32
-	table           [LightLocLast]int32
-	uboLights       [lightsDoubleBuffer]uint32
-	viewLights      []float32
-	viewLightsPtr   unsafe.Pointer
-	frameIdx        int
-	activeLights    int32
-	shadows         int32
-	stride          int32
-	handler         *Handler
-	cal             *model.Calibration
-	main            *Main
-	depth           *Depth
-	mapMetrics      *metrics.Map
-	debugLights     int
-	clusterTex      uint32
-	clusterBuf      []uint16
-	clusterCounts   [ClusterCount]uint16
-	clusterCells    []uint16
-	clusterNear     float32
-	clusterLogScale float32
-	globalCount     int32
-	clustersReady   bool
-	lightOrder      []int
-	lightScores     []float32
+	ctx                api.IContext
+	prg                uint32
+	table              [LightLocLast]int32
+	uboLights          [lightsDoubleBuffer]uint32
+	viewLights         []float32
+	viewLightsPtr      unsafe.Pointer
+	frameIdx           int
+	activeLights       int32
+	shadows            int32
+	stride             int32
+	handler            *Handler
+	cal                *model.Calibration
+	main               *Main
+	depth              *Depth
+	mapMetrics         *metrics.Map
+	debugLights        int
+	clusterTex         uint32
+	clusterBuf         []uint16
+	clusterCounts      [ClusterCount]uint16
+	clusterActive      [ClusterCount]uint16
+	clusterActiveCount int
+	clusterCells       []uint16
+	clusterNear        float32
+	clusterLogScale    float32
+	globalCount        int32
+	clustersReady      bool
+	heap               [maxUBOLights]lightCandidate
 }
 
 const lightFloatsPerEntry = 16
+
+type lightBlock [lightFloatsPerEntry]float32
+
+type lightCandidate struct {
+	idx      int32
+	score    float32
+	vx       float32
+	vy       float32
+	vz       float32
+	effSq    float32
+	invScale float32
+}
 
 // NewLights initializes and returns a new instance of Lights with default settings.
 func NewLights(stride int32) *Lights {
@@ -110,8 +123,6 @@ func NewLights(stride int32) *Lights {
 		debugLights:   0,
 		clusterBuf:    make([]uint16, ClusterTexWidth*ClusterTexHeight*4),
 		clusterCells:  make([]uint16, ClusterCount*clusterMaxLightsPerBin),
-		lightOrder:    make([]int, 1024),
-		lightScores:   make([]float32, 1024),
 	}
 }
 
@@ -187,86 +198,164 @@ func (s *Lights) Prepare(frameLights unsafe.Pointer, lightSize int32, numLights 
 		s.globalCount = 0
 		return
 	}
-	const floatsPerLight = 16
-	srcCount := int(numLights)
-	srcFloats := srcCount * floatsPerLight
-	src := unsafe.Slice((*float32)(frameLights), srcFloats)
 
+	srcCount := int(numLights)
 	outCount := srcCount
-	uploadBytes := int(lightSize)
-	if srcCount > maxUBOLights {
+	if outCount > maxUBOLights {
 		outCount = maxUBOLights
-		s.activeLights = maxUBOLights
-		uploadBytes = maxUBOLights * floatsPerLight * 4
 	}
-	neededFloats := outCount * floatsPerLight
+	neededFloats := outCount * lightFloatsPerEntry
 	if neededFloats > len(s.viewLights) {
 		s.viewLights = make([]float32, neededFloats)
 		s.viewLightsPtr = unsafe.Pointer(&s.viewLights[0])
 	}
-	dst := s.viewLights[:neededFloats]
 
-	packLight := func(srcIdx, dstIdx int) {
-		sOff := srcIdx * floatsPerLight
-		dOff := dstIdx * floatsPerLight
+	src := unsafe.Slice((*lightBlock)(frameLights), srcCount)
+	dst := unsafe.Slice((*lightBlock)(s.viewLightsPtr), outCount)
 
-		dst[dOff], dst[dOff+1], dst[dOff+2] = s.mapMetrics.TransformPointToView(src[sOff], src[sOff+1], src[sOff+2])
-		dst[dOff+8], dst[dOff+9], dst[dOff+10] = s.mapMetrics.TransformDirectionNormalizedToView(src[sOff+8], src[sOff+9], src[sOff+10])
+	vm := s.mapMetrics.GetViewMatrix()
+	m0, m1, m2 := vm[0], vm[1], vm[2]
+	m4, m5, m6 := vm[4], vm[5], vm[6]
+	m8, m9, m10 := vm[8], vm[9], vm[10]
+	m12, m13, m14 := vm[12], vm[13], vm[14]
 
-		dst[dOff+3] = src[sOff+3]
-		dst[dOff+4] = src[sOff+4]
-		dst[dOff+5] = src[sOff+5]
-		dst[dOff+6] = src[sOff+6]
-		dst[dOff+7] = src[sOff+7]
-		dst[dOff+11] = src[sOff+11]
-		dst[dOff+12] = src[sOff+12]
-		dst[dOff+13] = src[sOff+13]
-		dst[dOff+14], dst[dOff+15] = metrics.ComputeLightAttenuation(src[sOff+7], src[sOff+11])
-	}
-
+	uploadBytes := int(lightSize)
 	if srcCount <= maxUBOLights {
-		for i := range srcCount {
-			packLight(i, i)
-		}
-	} else {
-		if cap(s.lightOrder) < srcCount {
-			s.lightOrder = make([]int, srcCount)
-			s.lightScores = make([]float32, srcCount)
-		}
-		order := s.lightOrder[:srcCount]
-		scores := s.lightScores[:srcCount]
-		for i := range srcCount {
-			order[i] = i
-			sOff := i * floatsPerLight
-			intensity := src[sOff+7]
-			if intensity <= 0.001 {
-				scores[i] = 1e30
-				continue
-			}
-			lightType := int(src[sOff+3] + 0.5)
-			if lightType == 2 {
-				scores[i] = -1e30
-				continue
-			}
-			vx, vy, vz := src[sOff], src[sOff+1], src[sOff+2]
-			vx, vy, vz = s.mapMetrics.TransformPointToView(vx, vy, vz)
+		for i := 0; i < srcCount; i++ {
+			sp := &src[i]
+			dp := &dst[i]
+			*dp = *sp
 
-			effSq, _ := metrics.ComputeLightAttenuation(intensity, src[sOff+11])
-			scores[i] = (vx*vx + vy*vy + vz*vz) - effSq
-		}
-		// Partial selection sort for top maxUBOLights nearest/relevant lights (0 allocs).
-		for i := range maxUBOLights {
-			minPos := i
-			minScore := scores[order[i]]
-			for j := i + 1; j < srcCount; j++ {
-				sc := scores[order[j]]
-				if sc < minScore {
-					minScore = sc
-					minPos = j
+			x, y, z := sp[0], sp[1], sp[2]
+			dp[0] = m0*x + m4*y + m8*z + m12
+			dp[1] = m1*x + m5*y + m9*z + m13
+			dp[2] = m2*x + m6*y + m10*z + m14
+
+			lType := int(sp[3] + 0.5)
+			if lType == 1 || lType == 2 {
+				dx, dy, dz := sp[8], sp[9], sp[10]
+				vx := m0*dx + m4*dy + m8*dz
+				vy := m1*dx + m5*dy + m9*dz
+				vz := m2*dx + m6*dy + m10*dz
+				lenSq := vx*vx + vy*vy + vz*vz
+				if lenSq > 1e-12 {
+					invLen := float32(1.0 / math.Sqrt(float64(lenSq)))
+					dp[8] = vx * invLen
+					dp[9] = vy * invLen
+					dp[10] = vz * invLen
+				} else {
+					dp[8], dp[9], dp[10] = vx, vy, vz
 				}
 			}
-			order[i], order[minPos] = order[minPos], order[i]
-			packLight(order[i], i)
+
+			intensity := sp[7]
+			if intensity < 0.1 {
+				intensity = 0.1
+			}
+			falloff := sp[11]
+			if falloff < 1.0 {
+				falloff = 1.0
+			}
+			scale := falloff * intensity
+			effRadius := float32(4.605) * scale
+			dp[14] = effRadius * effRadius
+			dp[15] = float32(1.0) / scale
+		}
+	} else {
+		heapLen := 0
+		for i := 0; i < srcCount; i++ {
+			sp := &src[i]
+			rawInt := sp[7]
+			if rawInt <= 0.001 {
+				continue
+			}
+
+			x, y, z := sp[0], sp[1], sp[2]
+			vx := m0*x + m4*y + m8*z + m12
+			vy := m1*x + m5*y + m9*z + m13
+			vz := m2*x + m6*y + m10*z + m14
+
+			effInt := rawInt
+			if effInt < 0.1 {
+				effInt = 0.1
+			}
+			falloff := sp[11]
+			if falloff < 1.0 {
+				falloff = 1.0
+			}
+			scale := falloff * effInt
+			effRadius := float32(4.605) * scale
+			effSq := effRadius * effRadius
+			invScale := float32(1.0) / scale
+
+			var score float32
+			if int(sp[3]+0.5) == 2 {
+				score = -1e30
+			} else {
+				score = (vx*vx + vy*vy + vz*vz) - effSq
+			}
+
+			if heapLen < maxUBOLights {
+				s.heap[heapLen] = lightCandidate{
+					idx:      int32(i),
+					score:    score,
+					vx:       vx,
+					vy:       vy,
+					vz:       vz,
+					effSq:    effSq,
+					invScale: invScale,
+				}
+				heapLen++
+				if heapLen == maxUBOLights {
+					for p := maxUBOLights/2 - 1; p >= 0; p-- {
+						siftDownLightMaxHeap(&s.heap, p, maxUBOLights)
+					}
+				}
+			} else if score < s.heap[0].score {
+				s.heap[0] = lightCandidate{
+					idx:      int32(i),
+					score:    score,
+					vx:       vx,
+					vy:       vy,
+					vz:       vz,
+					effSq:    effSq,
+					invScale: invScale,
+				}
+				siftDownLightMaxHeap(&s.heap, 0, maxUBOLights)
+			}
+		}
+
+		if heapLen == 0 {
+			s.activeLights = 0
+			s.globalCount = 0
+			return
+		}
+		s.activeLights = int32(heapLen)
+		uploadBytes = heapLen * lightFloatsPerEntry * 4
+
+		for k := 0; k < heapLen; k++ {
+			c := &s.heap[k]
+			sp := &src[c.idx]
+			dp := &dst[k]
+			*dp = *sp
+			dp[0], dp[1], dp[2] = c.vx, c.vy, c.vz
+			dp[14], dp[15] = c.effSq, c.invScale
+			lType := int(sp[3] + 0.5)
+			if lType == 1 || lType == 2 {
+				dx, dy, dz := sp[8], sp[9], sp[10]
+				dvx := m0*dx + m4*dy + m8*dz
+				dvy := m1*dx + m5*dy + m9*dz
+				dvz := m2*dx + m6*dy + m10*dz
+				lenSq := dvx*dvx + dvy*dvy + dvz*dvz
+				if lenSq > 1e-12 {
+					invLen := float32(1.0 / math.Sqrt(float64(lenSq)))
+					dp[8] = dvx * invLen
+					dp[9] = dvy * invLen
+					dp[10] = dvz * invLen
+				} else {
+					dp[8], dp[9], dp[10] = dvx, dvy, dvz
+				}
+			}
 		}
 	}
 
@@ -274,6 +363,27 @@ func (s *Lights) Prepare(frameLights unsafe.Pointer, lightSize int32, numLights 
 	// Scrittura asincrona garantita sull'UBO inattivo
 	s.ctx.BufferSubData(api.UNIFORM_BUFFER, 0, uploadBytes, s.viewLightsPtr)
 	s.ctx.BindBuffer(api.UNIFORM_BUFFER, 0)
+}
+
+func siftDownLightMaxHeap(heap *[maxUBOLights]lightCandidate, i, n int) {
+	item := heap[i]
+	for {
+		left := 2*i + 1
+		if left >= n {
+			break
+		}
+		largest := left
+		right := left + 1
+		if right < n && heap[right].score > heap[left].score {
+			largest = right
+		}
+		if heap[largest].score <= item.score {
+			break
+		}
+		heap[i] = heap[largest]
+		i = largest
+	}
+	heap[i] = item
 }
 
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
@@ -362,24 +472,18 @@ func (s *Lights) PrepareClusters() (tex uint32, near float32, logScale float32, 
 		return s.clusterTex, s.clusterNear, s.clusterLogScale, s.globalCount
 	}
 
-	proj := s.mapMetrics.GetProj()
+	proj := s.mapMetrics.GetProjMatrix()
 	zNear := s.mapMetrics.GetRoomZNear()
 	zFar := s.mapMetrics.GetRoomZFar()
 
-	usedPool := s.PrepareClustersWithProj(proj, zNear, zFar)
+	usedPool := s.PrepareClustersWithProjPtr(proj, zNear, zFar)
 	if s.clusterTex != 0 {
 		poolTexels := (usedPool + 3) / 4
 		poolRows := (poolTexels + ClusterTexWidth - 1) / ClusterTexWidth
-		totalRows := clusterHeaderRows + poolRows
-		if totalRows > ClusterTexHeight {
-			totalRows = ClusterTexHeight
-		}
+		totalRows := min(clusterHeaderRows+poolRows, ClusterTexHeight)
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
 		s.ctx.BindTexture(api.TEXTURE_2D, s.clusterTex)
-		needed := totalRows * ClusterTexWidth * 4
-		if needed > len(s.clusterBuf) {
-			needed = len(s.clusterBuf)
-		}
+		needed := min(totalRows*ClusterTexWidth*4, len(s.clusterBuf))
 		s.ctx.TexSubImage2D(api.TEXTURE_2D, 0, 0, 0, ClusterTexWidth, int32(totalRows), api.RGBA_INTEGER, api.UNSIGNED_SHORT, s.ctx.Ptr(s.clusterBuf[:needed]))
 		s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	}
@@ -390,6 +494,11 @@ func (s *Lights) PrepareClusters() (tex uint32, near float32, logScale float32, 
 // PrepareClustersWithProj bins active view-space lights into the 16x9x16 clustered grid using proj, zNear, zFar.
 // Returns the total number of packed pool indices (global lights + per-cluster references) with zero heap allocations.
 func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) int {
+	return s.PrepareClustersWithProjPtr(&proj, zNear, zFar)
+}
+
+// PrepareClustersWithProjPtr bins active view-space lights into the 16x9x16 clustered grid without copying proj.
+func (s *Lights) PrepareClustersWithProjPtr(proj *[16]float32, zNear, zFar float32) int {
 	if zNear < 0.5 {
 		zNear = 0.5
 	}
@@ -398,24 +507,37 @@ func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) 
 	}
 	s.clusterNear = zNear
 	s.clusterLogScale = float32(float64(ClusterGridZ) / math.Log(float64(zFar/zNear)))
+	logNear := math.Log(float64(zNear))
 
-	clear(s.clusterCounts[:])
-
-	n := int(s.activeLights)
-	if n > 256 {
-		n = 256
+	for k := 0; k < s.clusterActiveCount; k++ {
+		hOff := int(s.clusterActive[k]) * 4
+		s.clusterBuf[hOff] = 0
+		s.clusterBuf[hOff+1] = 0
+		s.clusterBuf[hOff+2] = 0
 	}
-	globalCount := int32(0)
-	isPersp := math.Abs(float64(proj[11]+1.0)) < 1e-4 && math.Abs(float64(proj[0])) > 1e-6 && math.Abs(float64(proj[5])) > 1e-6
+	s.clusterActiveCount = 0
 
-	for i := 0; i < n; i++ {
-		off := i * lightFloatsPerEntry
-		intensity := s.viewLights[off+7]
+	n := min(int(s.activeLights), maxUBOLights)
+	if n <= 0 {
+		s.globalCount = 0
+		return 0
+	}
+
+	activeCount := 0
+	globalCount := int32(0)
+	p0, p5, p8, p9, p11 := proj[0], proj[5], proj[8], proj[9], proj[11]
+	isPersp := math.Abs(float64(p11+1.0)) < 1e-4 && math.Abs(float64(p0)) > 1e-6 && math.Abs(float64(p5)) > 1e-6
+	isSymPersp := isPersp && p8 == 0 && p9 == 0
+
+	viewEntries := unsafe.Slice((*lightBlock)(s.viewLightsPtr), n)
+	for i := range n {
+		vb := &viewEntries[i]
+		intensity := vb[7]
 		if intensity <= 0.001 {
 			continue
 		}
-		lightType := int(s.viewLights[off+3] + 0.5)
-		effRadiusSq := s.viewLights[off+14]
+		lightType := int(vb[3] + 0.5)
+		effRadiusSq := vb[14]
 		if lightType == 2 || effRadiusSq <= 0 || effRadiusSq > 1e12 {
 			if int(globalCount) < clusterPoolMaxIndices {
 				s.clusterBuf[clusterPoolBaseUint16+int(globalCount)] = uint16(i)
@@ -424,7 +546,7 @@ func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) 
 			continue
 		}
 
-		vx, vy, vz := s.viewLights[off], s.viewLights[off+1], s.viewLights[off+2]
+		vx, vy, vz := vb[0], vb[1], vb[2]
 		r := float32(math.Sqrt(float64(effRadiusSq)))
 		dMin := -vz - r
 		dMax := -vz + r
@@ -440,8 +562,8 @@ func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) 
 			dMaxC = zFar
 		}
 
-		cz0 := int(math.Floor(math.Log(float64(dMinC/zNear)) * float64(s.clusterLogScale)))
-		cz1 := int(math.Floor(math.Log(float64(dMaxC/zNear)) * float64(s.clusterLogScale)))
+		cz0 := int(math.Floor((math.Log(float64(dMinC)) - logNear) * float64(s.clusterLogScale)))
+		cz1 := int(math.Floor((math.Log(float64(dMaxC)) - logNear) * float64(s.clusterLogScale)))
 		if cz0 < 0 {
 			cz0 = 0
 		} else if cz0 >= ClusterGridZ {
@@ -458,49 +580,102 @@ func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) 
 			cx0, cx1 = 0, ClusterGridX-1
 			cy0, cy1 = 0, ClusterGridY-1
 		} else {
-			zA := -dMinC
-			zB := -dMaxC
 			xMin, xMax := vx-r, vx+r
 			yMin, yMax := vy-r, vy+r
 
-			minNdcX, maxNdcX := float32(1e9), float32(-1e9)
-			for ix := 0; ix < 2; ix++ {
-				xv := xMin
-				if ix == 1 {
-					xv = xMax
+			var minNdcX, maxNdcX, minNdcY, maxNdcY float32
+			if isSymPersp {
+				invZMin := float32(1.0) / dMinC
+				invZMax := float32(1.0) / dMaxC
+				if p0 >= 0 {
+					if xMin < 0 {
+						minNdcX = p0 * xMin * invZMin
+					} else {
+						minNdcX = p0 * xMin * invZMax
+					}
+					if xMax > 0 {
+						maxNdcX = p0 * xMax * invZMin
+					} else {
+						maxNdcX = p0 * xMax * invZMax
+					}
+				} else {
+					if xMax > 0 {
+						minNdcX = p0 * xMax * invZMin
+					} else {
+						minNdcX = p0 * xMax * invZMax
+					}
+					if xMin < 0 {
+						maxNdcX = p0 * xMin * invZMin
+					} else {
+						maxNdcX = p0 * xMin * invZMax
+					}
 				}
-				for iz := 0; iz < 2; iz++ {
-					zv := zA
-					if iz == 1 {
-						zv = zB
+				if p5 >= 0 {
+					if yMin < 0 {
+						minNdcY = p5 * yMin * invZMin
+					} else {
+						minNdcY = p5 * yMin * invZMax
 					}
-					ndcX := (proj[0]*xv + proj[8]*zv) / (proj[11] * zv)
-					if ndcX < minNdcX {
-						minNdcX = ndcX
+					if yMax > 0 {
+						maxNdcY = p5 * yMax * invZMin
+					} else {
+						maxNdcY = p5 * yMax * invZMax
 					}
-					if ndcX > maxNdcX {
-						maxNdcX = ndcX
+				} else {
+					if yMax > 0 {
+						minNdcY = p5 * yMax * invZMin
+					} else {
+						minNdcY = p5 * yMax * invZMax
+					}
+					if yMin < 0 {
+						maxNdcY = p5 * yMin * invZMin
+					} else {
+						maxNdcY = p5 * yMin * invZMax
 					}
 				}
-			}
+			} else {
+				zA := -dMinC
+				zB := -dMaxC
 
-			minNdcY, maxNdcY := float32(1e9), float32(-1e9)
-			for iy := 0; iy < 2; iy++ {
-				yv := yMin
-				if iy == 1 {
-					yv = yMax
+				minNdcX, maxNdcX = float32(1e9), float32(-1e9)
+				for ix := range 2 {
+					xv := xMin
+					if ix == 1 {
+						xv = xMax
+					}
+					for iz := range 2 {
+						zv := zA
+						if iz == 1 {
+							zv = zB
+						}
+						ndcX := (p0*xv + p8*zv) / (p11 * zv)
+						if ndcX < minNdcX {
+							minNdcX = ndcX
+						}
+						if ndcX > maxNdcX {
+							maxNdcX = ndcX
+						}
+					}
 				}
-				for iz := 0; iz < 2; iz++ {
-					zv := zA
-					if iz == 1 {
-						zv = zB
+
+				minNdcY, maxNdcY = float32(1e9), float32(-1e9)
+				for iy := range 2 {
+					yv := yMin
+					if iy == 1 {
+						yv = yMax
 					}
-					ndcY := (proj[5]*yv + proj[9]*zv) / (proj[11] * zv)
-					if ndcY < minNdcY {
-						minNdcY = ndcY
-					}
-					if ndcY > maxNdcY {
-						maxNdcY = ndcY
+					for iz := range 2 {
+						zv := zA
+						if iz == 1 {
+							zv = zB
+						}
+						ndcY := (p5*yv + p9*zv) / (p11 * zv)
+						if ndcY < minNdcY {
+							minNdcY = ndcY
+						}
+						if ndcY > maxNdcY {
+							maxNdcY = ndcY
+						}
 					}
 				}
 			}
@@ -542,6 +717,10 @@ func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) 
 				for cx := cx0; cx <= cx1; cx++ {
 					cid := rowBase + cx
 					cnt := s.clusterCounts[cid]
+					if cnt == 0 && activeCount < ClusterCount {
+						s.clusterActive[activeCount] = uint16(cid)
+						activeCount++
+					}
 					if cnt < clusterMaxLightsPerBin {
 						s.clusterCells[cid*clusterMaxLightsPerBin+int(cnt)] = uint16(i)
 						s.clusterCounts[cid] = cnt + 1
@@ -551,10 +730,13 @@ func (s *Lights) PrepareClustersWithProj(proj [16]float32, zNear, zFar float32) 
 		}
 	}
 
+	s.clusterActiveCount = activeCount
 	s.globalCount = globalCount
 	writeIdx := int(globalCount)
-	for cid := 0; cid < ClusterCount; cid++ {
+	for k := 0; k < activeCount; k++ {
+		cid := int(s.clusterActive[k])
 		cnt := int(s.clusterCounts[cid])
+		s.clusterCounts[cid] = 0
 		avail := clusterPoolMaxIndices - writeIdx
 		if cnt > avail {
 			cnt = avail

@@ -8,6 +8,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -91,6 +92,7 @@ func TestClusteredForwardBinningAndZeroAllocs(t *testing.T) {
 	ctx := newClusterStateCtx()
 	l := NewLights(64)
 	l.ctx = ctx
+	l.mapMetrics = metrics.NewMap()
 	if err := l.Init(); err != nil {
 		t.Fatalf("Lights.Init failed: %v", err)
 	}
@@ -103,7 +105,7 @@ func TestClusteredForwardBinningAndZeroAllocs(t *testing.T) {
 		0, 0, -2000.0 / 999.0, 0,
 	}
 
-	// Pack 4 lights directly in view space (mapMetrics == nil keeps view coords verbatim):
+	// Pack 4 lights directly in view space (identity view matrix keeps view coords verbatim):
 	// 0: Directional light (type=2) -> must go into global pool.
 	// 1: Near-left point light at (-18, 0, -30) with small radius -> cx < 8 only.
 	// 2: Far-right point light at (+40, 0, -200) -> cx >= 8 only, higher cz slice.
@@ -191,6 +193,26 @@ func TestClusteredForwardBinningAndZeroAllocs(t *testing.T) {
 	})
 	if allocs != 0 {
 		t.Fatalf("expected 0 heap allocations in PrepareClustersWithProj, got %.2f", allocs)
+	}
+
+	// Turn off light 1 and verify previously active clusters clear back to (0, 0) via active-index tracking.
+	lights[1*16+7] = 0.0
+	l.Prepare(unsafe.Pointer(&lights[0]), int32(len(lights)*4), 4)
+	l.PrepareClustersWithProj(proj, 1.0, 1000.0)
+	if off, cnt := l.GetClusterCell(3, 4, leftZ); off != 0 || cnt != 0 {
+		t.Fatalf("expected previously active left cluster (3, 4, %d) cleared to (0,0), got (%d,%d)", leftZ, off, cnt)
+	}
+	if !hasLight(9, 4, rightZ, 2) {
+		t.Fatalf("expected light 2 to remain in right cluster (9, 4, %d)", rightZ)
+	}
+
+	// Zero active lights must also clear remaining previously active cluster headers.
+	l.Prepare(nil, 0, 0)
+	if usedEmpty := l.PrepareClustersWithProj(proj, 1.0, 1000.0); usedEmpty != 0 {
+		t.Fatalf("expected usedPool=0 when activeLights=0, got %d", usedEmpty)
+	}
+	if off, cnt := l.GetClusterCell(9, 4, rightZ); off != 0 || cnt != 0 {
+		t.Fatalf("expected right cluster (9, 4, %d) cleared to (0,0) on 0 lights, got (%d,%d)", rightZ, off, cnt)
 	}
 }
 
@@ -320,6 +342,7 @@ func TestClusterPoolHandlesHighDensityWithoutTruncationOrUint16Wrap(t *testing.T
 	ctx := newClusterStateCtx()
 	l := NewLights(64)
 	l.ctx = ctx
+	l.mapMetrics = metrics.NewMap()
 	if err := l.Init(); err != nil {
 		t.Fatalf("Lights.Init failed: %v", err)
 	}
@@ -378,6 +401,7 @@ func TestLightsPrepareCapsAboveMaxUBOLightsByProximity(t *testing.T) {
 	ctx := newClusterStateCtx()
 	l := NewLights(64)
 	l.ctx = ctx
+	l.mapMetrics = metrics.NewMap()
 	if err := l.Init(); err != nil {
 		t.Fatalf("Lights.Init failed: %v", err)
 	}

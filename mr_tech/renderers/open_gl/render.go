@@ -230,7 +230,7 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	rawFlashX, rawFlashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
 	flashX, flashY := rawFlashX, rawFlashY
 	if w.engine != nil {
-		flashX, flashY = resolveFlashOrigin(w.engine.GetVolumes(), w.mapMetrics.GetInvView(), rawFlashX, rawFlashY)
+		flashX, flashY = resolveFlashOrigin(w.engine.GetVolumes(), w.mapMetrics.GetInvViewMatrix(), rawFlashX, rawFlashY)
 	}
 	w.flashlightMetrics.UpdateWithAim(w.mapMetrics.GetViewPtr(), flashX, flashY, rawFlashX, rawFlashY, flashSensitivity)
 
@@ -380,7 +380,7 @@ type solidRaycaster interface {
 
 // resolveFlashOrigin preserves the configured view-space shoulder offset (flashX, flashY)
 // unless solid world geometry physically blocks the line between the camera eye and that offset.
-func resolveFlashOrigin(raycaster solidRaycaster, invView [16]float32, flashX, flashY float32) (float32, float32) {
+func resolveFlashOrigin(raycaster solidRaycaster, invView *[16]float32, flashX, flashY float32) (float32, float32) {
 	if raycaster == nil {
 		return flashX, flashY
 	}

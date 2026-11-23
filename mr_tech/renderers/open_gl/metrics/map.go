@@ -92,6 +92,11 @@ func (m *Map) GetProj() [16]float32 {
 	return m.proj
 }
 
+// GetProjMatrix returns a pointer to the projection matrix without copying.
+func (m *Map) GetProjMatrix() *[16]float32 {
+	return &m.proj
+}
+
 // GetViewPtr returns a pointer to the view matrix stored in the Map structure.
 func (m *Map) GetViewPtr() *float32 {
 	return m.viewPtr
@@ -102,9 +107,19 @@ func (m *Map) GetView() [16]float32 {
 	return m.view
 }
 
+// GetViewMatrix returns a pointer to the view matrix without copying.
+func (m *Map) GetViewMatrix() *[16]float32 {
+	return &m.view
+}
+
 // GetInvView returns a copy of the inverse view matrix.
 func (m *Map) GetInvView() [16]float32 {
 	return m.invView
+}
+
+// GetInvViewMatrix returns a pointer to the inverse view matrix without copying.
+func (m *Map) GetInvViewMatrix() *[16]float32 {
+	return &m.invView
 }
 
 // TransformDirectionToView transforms a normalized 3D direction vector into the view space and computes its squared length.
@@ -343,9 +358,7 @@ func (m *Map) createProjView(vi *engine.ViewMatrix, scaleX float32, scaleY float
 	m.view[8], m.view[9], m.view[10], m.view[11] = rZ, uZ, -fZ, 0
 	m.view[12], m.view[13], m.view[14], m.view[15] = tx, ty, tz, 1
 	// Matrix inversion (Useful for dynamic Skyboxes or advanced Frustum Culling)
-	if inv, ok := MatrixInverse4x4(m.view); ok {
-		copy(m.invView[:], inv[:])
-	}
+	MatrixInverse4x4Ptr(&m.invView, &m.view)
 }
 
 /*

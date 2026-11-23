@@ -9,6 +9,7 @@ import (
 // VisibleVolumes manages a collection of visible 3D volumes, maintaining their order and proximity to a camera position.
 type VisibleVolumes struct {
 	volumes          []*volumes.Volume
+	dists            []float64
 	index            int
 	camX, camY, camZ float64
 }
@@ -17,6 +18,7 @@ type VisibleVolumes struct {
 func NewVisibleVols(initSize int) *VisibleVolumes {
 	return &VisibleVolumes{
 		volumes: make([]*volumes.Volume, initSize),
+		dists:   make([]float64, initSize),
 		index:   0,
 		camX:    0,
 		camY:    0,
@@ -31,8 +33,18 @@ func (vs *VisibleVolumes) Reset(maxLen int, camX, camY, camZ float64) {
 	vs.camY = camY
 	vs.camZ = camZ
 	if maxLen >= len(vs.volumes) {
-		vs.volumes = make([]*volumes.Volume, maxLen*2)
+		newCap := maxLen * 2
+		if newCap < 16 {
+			newCap = 16
+		}
+		vs.volumes = make([]*volumes.Volume, newCap)
+		vs.dists = make([]float64, newCap)
 	}
+}
+
+// RawSlice returns the active slice of collected volumes in raw query order.
+func (vs *VisibleVolumes) RawSlice() []*volumes.Volume {
+	return vs.volumes[:vs.index]
 }
 
 // At returns the Volume at the specified index within the VisibleVolumes' internal volumes slice.
@@ -42,12 +54,31 @@ func (vs *VisibleVolumes) At(index int) *volumes.Volume {
 
 // Add appends the given Volume to the VisibleVolumes list and increments the internal index.
 func (vs *VisibleVolumes) Add(volume *volumes.Volume) {
+	if vs.index >= len(vs.volumes) {
+		newCap := len(vs.volumes) * 2
+		if newCap < 16 {
+			newCap = 16
+		}
+		newVols := make([]*volumes.Volume, newCap)
+		copy(newVols, vs.volumes)
+		vs.volumes = newVols
+		newDists := make([]float64, newCap)
+		copy(newDists, vs.dists)
+		vs.dists = newDists
+	}
 	vs.volumes[vs.index] = volume
 	vs.index++
 }
 
 // Sort organizes the `VisibleVolumes` in front-to-back order based on their distances to the camera coordinates.
 func (vs *VisibleVolumes) Sort() {
+	for i := 0; i < vs.index; i++ {
+		aX, aY, aZ := vs.volumes[i].GetAABB().GetCentroid()
+		dx := aX - vs.camX
+		dy := aY - vs.camY
+		dz := aZ - vs.camZ
+		vs.dists[i] = dx*dx + dy*dy + dz*dz
+	}
 	sort.Sort(vs)
 }
 
@@ -55,16 +86,12 @@ func (vs *VisibleVolumes) Sort() {
 func (vs *VisibleVolumes) Len() int { return vs.index }
 
 // Swap swaps the elements at indices i and j within the volumes slice of the VisibleVolumes struct.
-func (vs *VisibleVolumes) Swap(i, j int) { vs.volumes[i], vs.volumes[j] = vs.volumes[j], vs.volumes[i] }
+func (vs *VisibleVolumes) Swap(i, j int) {
+	vs.volumes[i], vs.volumes[j] = vs.volumes[j], vs.volumes[i]
+	vs.dists[i], vs.dists[j] = vs.dists[j], vs.dists[i]
+}
 
-// Less compares two volumes based on their squared distance from the camera in a front-to-back sorting approach.
+// Less compares two volumes based on their precomputed squared distance from the camera in a front-to-back order.
 func (vs *VisibleVolumes) Less(i, j int) bool {
-	// Sorting Front-to-Back (Distanza Quadra Pura)
-	a := vs.volumes[i]
-	b := vs.volumes[j]
-	aX, aY, aZ := a.GetAABB().GetCentroid()
-	bX, bY, bZ := b.GetAABB().GetCentroid()
-	distA := (aX-vs.camX)*(aX-vs.camX) + (aY-vs.camY)*(aY-vs.camY) + (aZ-vs.camZ)*(aZ-vs.camZ)
-	distB := (bX-vs.camX)*(bX-vs.camX) + (bY-vs.camY)*(bY-vs.camY) + (bZ-vs.camZ)*(bZ-vs.camZ)
-	return distA < distB
+	return vs.dists[i] < vs.dists[j]
 }

@@ -435,6 +435,7 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 			f.Zero()
 		}
 	}
+	dstFaces.BumpVersion()
 	return minX, minY, minZ, maxX, maxY, maxZ
 }
 

@@ -159,7 +159,6 @@ func (s *Liquid) Render(renderGeometry func()) {
 	fbW, fbH := s.handler.GetSize()
 
 	s.ctx.UseProgram(s.prg)
-	_ = s.SetupSamplers()
 
 	//TODO from config
 	const liquidTimeScale = 0.02
@@ -205,6 +204,7 @@ func (s *Liquid) Render(renderGeometry func()) {
 	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowMap)
 	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	s.ctx.BindVertexArray(0)
 
 	s.ctx.Disable(api.BLEND)
 	s.ctx.DepthMask(true)

@@ -43,6 +43,19 @@ type BuilderVolume struct {
 	lightBB  *aabb.BoundingBox
 	playerId uint64
 	player   *things.Player
+
+	cachedRawVols   []*volumes.Volume
+	cachedSky       *textures.Material
+	staticGen       uint64
+	staticVertBytes int
+	staticIdxBytes  int
+	frameGen        uint64
+	lastPreparedGen uint64
+
+	thingCache    map[uint64]*ThingRenderCache
+	thingFrameID  uint64
+	prevThingRefs []ThingCacheRef
+	currThingRefs []ThingCacheRef
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -111,6 +124,11 @@ func (w *BuilderVolume) GetLights() (unsafe.Pointer, int32, int32) { return w.fl
 // GetSkyMaterial returns the sky material associated with the BuilderVolume.
 func (w *BuilderVolume) GetSkyMaterial() *textures.Material { return w.cSky }
 
+// GetUploadHints returns static prefix byte offsets and generation counters used for incremental GPU buffer uploads.
+func (w *BuilderVolume) GetUploadHints() (staticVertBytes, staticIdxBytes int, staticGen, frameGen uint64) {
+	return w.staticVertBytes, w.staticIdxBytes, w.staticGen, w.frameGen
+}
+
 // Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *engine.Engine) {
 	px, py, pz := vi.GetView()
@@ -126,30 +144,26 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 	size := w.cal.ZLightFar
 	w.lightBB.RebuildCenter(px, py, pz, size, size, size)
 
-	// Ripristina VBO e Comandi allo stato congelato
-	//w.fv.Reset()
-	//w.dc.Reset()
-
-	w.fv.DeepReset()
-	w.dcOpaque.DeepReset()
-	w.dcAdditive.DeepReset()
-	w.dcLiquid.DeepReset()
-	w.cSky = nil
-
 	w.occlusion.Reset()
 
-	w.pushQVolumes(engine.GetVolumes(), frustumFront, px, py, pz)
+	staticChanged := w.pushQVolumes(engine.GetVolumes(), frustumFront, px, py, pz)
 	w.pushQLights(engine.GetLights(), frustumFront, px, py, pz)
-	w.pushQThings(engine.GetThings(), frustumFront)
+	thingsChanged := w.pushQThings(engine.GetThings(), frustumFront)
 
-	w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
-	w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
-	w.dcRenderLiquid.Prepare(w.dcLiquid.GetDrawCommands())
+	if staticChanged || thingsChanged || w.frameGen == 0 {
+		w.frameGen++
+	}
+	if w.lastPreparedGen != w.frameGen {
+		w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
+		w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
+		w.dcRenderLiquid.Prepare(w.dcLiquid.GetDrawCommands())
+		w.lastPreparedGen = w.frameGen
+	}
 }
 
 // pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
 // It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
-func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) {
+func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
 	w.visibleVol.Reset(vols.Len(), pX, pY, pZ)
 
 	// Raccolta dal DBVH (Broad-Phase)
@@ -158,12 +172,54 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		return false
 	})
 
+	visLen := w.visibleVol.Len()
+	canReuse := w.staticGen > 0 && visLen == len(w.cachedRawVols)
+	if canReuse {
+		for i := 0; i < visLen; i++ {
+			vol := w.visibleVol.At(i)
+			if vol != w.cachedRawVols[i] || vol.IsDirty() {
+				canReuse = false
+				break
+			}
+			marker := vol.GetMarker()
+			if marker <= 0 || w.fv.Stage(marker).NeedsAnimRebuild() {
+				canReuse = false
+				break
+			}
+		}
+	}
+
+	if canReuse {
+		w.fv.Reset()
+		w.dcOpaque.Reset()
+		w.dcAdditive.Reset()
+		w.dcLiquid.Reset()
+		w.cSky = w.cachedSky
+		return false
+	}
+
+	w.fv.DeepReset()
+	w.dcOpaque.DeepReset()
+	w.dcAdditive.DeepReset()
+	w.dcLiquid.DeepReset()
+	w.cSky = nil
+
+	if cap(w.cachedRawVols) < visLen {
+		w.cachedRawVols = make([]*volumes.Volume, visLen)
+	} else {
+		for i := visLen; i < len(w.cachedRawVols); i++ {
+			w.cachedRawVols[i] = nil
+		}
+		w.cachedRawVols = w.cachedRawVols[:visLen]
+	}
+	copy(w.cachedRawVols, w.visibleVol.RawSlice())
+
 	//GPU CULLING HELPER
 	w.visibleVol.Sort()
 
 	//counter := 0
 
-	for vIdx := 0; vIdx < w.visibleVol.Len(); vIdx++ {
+	for vIdx := 0; vIdx < visLen; vIdx++ {
 		vol := w.visibleVol.At(vIdx)
 		marker := vol.GetMarker()
 		if marker <= 0 {
@@ -171,160 +227,220 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 			vol.SetMarker(marker)
 		}
 		fv := w.fv.Stage(marker)
-		if !vol.IsDirty() {
-			w.fv.Commit(fv, w.modes)
-			if skyMat := fv.GetMaterial(0); skyMat != nil {
-				w.cSky = skyMat
+		if vol.IsDirty() || fv.NeedsAnimRebuild() {
+			fv.DeepReset()
+			faces := vol.GetFaces()
+			startIdx := fv.GetIndicesLen()
+			//added := false
+			for x := 0; x < faces.Len(); x++ {
+				face := faces.At(x)
+				if face == nil {
+					continue
+				}
+				mat := face.GetMaterial()
+				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
+					continue
+				}
+				tex := mat.GetCurrentFrame()
+				if tex == nil {
+					continue
+				}
+				if mat.IsAnimated() {
+					fv.AddAnimRef(mat, tex)
+				}
+				tId := tex.GetIdentifier()
+				if tId < 0 {
+					tId, _ = w.tex.Get(tex)
+					tex.SetIdentifier(tId)
+				}
+				if mat.GetKind() == int(config.MaterialKindSky) {
+					w.cSky = mat // Nebbia volumetrica atmosferica
+					fv.SetMaterial(0, mat)
+					continue
+				}
+				faceBlendT := float32(0.0)
+				if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
+					faceBlendT = 0.5
+				}
+				packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
+				p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
+				u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
+				id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
+				id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
+				id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
+				fv.AddTriangle(id0, id1, id2)
+				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
+				endIdx := fv.GetIndicesLen()
+				if startIdx != endIdx {
+					blendMode := mat.GetBlendMode()
+					fv.AddBatch(blendMode, endIdx-startIdx, mat)
+					startIdx = endIdx
+					//added = true
+				}
 			}
-			continue
-		}
-
-		fv.DeepReset()
-		hasAnim := false
-		faces := vol.GetFaces()
-		startIdx := fv.GetIndicesLen()
-		//added := false
-		for x := 0; x < faces.Len(); x++ {
-			face := faces.At(x)
-			if face == nil {
-				continue
-			}
-			mat := face.GetMaterial()
-			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
-				continue
-			}
-			if mat.IsAnimated() {
-				hasAnim = true
-			}
-			tex := mat.GetCurrentFrame()
-			if tex == nil {
-				continue
-			}
-			tId := tex.GetIdentifier()
-			if tId < 0 {
-				tId, _ = w.tex.Get(tex)
-				tex.SetIdentifier(tId)
-			}
-			if mat.GetKind() == int(config.MaterialKindSky) {
-				w.cSky = mat // Nebbia volumetrica atmosferica
-				fv.SetMaterial(0, mat)
-				continue
-			}
-			faceBlendT := float32(0.0)
-			if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
-				faceBlendT = 0.5
-			}
-			packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
-			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
-			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-			id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
-			id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
-			id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
-			fv.AddTriangle(id0, id1, id2)
-			//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
-			endIdx := fv.GetIndicesLen()
-			if startIdx != endIdx {
-				blendMode := mat.GetBlendMode()
-				fv.AddBatch(blendMode, endIdx-startIdx, mat)
-				startIdx = endIdx
-				//added = true
-			}
+			vol.ClearDirty()
 		}
 
 		w.fv.Commit(fv, w.modes)
-		if !hasAnim {
-			vol.ClearDirty()
+		if skyMat := fv.GetMaterial(0); skyMat != nil {
+			w.cSky = skyMat
 		}
 		//if added {
 		//	counter++
 		//}
 	}
 
-	//fmt.Println("Volumes:", vols.Len(), counter, vols.Len()-counter)
+	w.cachedSky = w.cSky
+	w.fv.Freeze()
+	w.dcOpaque.Freeze()
+	w.dcAdditive.Freeze()
+	w.dcLiquid.Freeze()
+	w.staticVertBytes, w.staticIdxBytes = w.fv.FrozenBytes()
+	w.staticGen++
+	return true
 }
 
 // pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) {
-	//counter := 0
+func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) bool {
+	if w.thingCache == nil {
+		w.thingCache = make(map[uint64]*ThingRenderCache, 256)
+	}
+	w.thingFrameID++
+	w.currThingRefs = w.currThingRefs[:0]
+	tick := textures.GlobalTick()
+
 	things.StagePrepare()
 
 	pushPassThing := func(thing ithing.IThing) {
-		thing.Compile(textures.GlobalTick())
+		thing.Compile(tick)
 		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 		if pFaces == nil || pFaces.Len() == 0 {
 			return
 		}
-		//thing.SetVisible()
+
+		ent := thing.GetEntity()
+		entID := ent.GetId()
+		entry := w.thingCache[entID]
+		if entry == nil {
+			entry = &ThingRenderCache{fv: NewStagingFrameVertices(128)}
+			w.thingCache[entID] = entry
+		}
+		entry.lastSeenFrame = w.thingFrameID
+
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
 		if renderMode == vertices.RenderModeModel3D {
 			yaw = 0.0
 		}
-		tPosX, tPosY, zBot := thing.GetEntity().GetCenter()
+		renderModeF := float32(renderMode)
+		tPosX, tPosY, zBot := ent.GetCenter()
 		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 
-		var currentMat *textures.Material
-		var currentTargetDc *DrawCommands
-		batchStart := w.fv.GetIndicesLen()
-
-		limit := pFaces.Len()
-		if pNextFaces != nil && pNextFaces.Len() < limit {
-			limit = pNextFaces.Len()
+		facesVer := pFaces.GetVersion()
+		facesLen := pFaces.Len()
+		var nextVer uint64
+		var nextLen int
+		if pNextFaces != nil {
+			nextVer = pNextFaces.GetVersion()
+			nextLen = pNextFaces.Len()
 		}
 
-		for fx := 0; fx < limit; fx++ {
-			face := pFaces.At(fx)
-			if face == nil {
-				continue
-			}
-			mat := face.GetMaterial()
-			if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
-				continue
-			}
-			tex := mat.GetCurrentFrame()
-			if tex == nil {
-				continue
-			}
-			tId := tex.GetIdentifier()
-			if tId < 0 {
-				tId, _ = w.tex.Get(tex)
-				tex.SetIdentifier(tId)
+		cacheHit := entry.valid &&
+			entry.pFaces == pFaces &&
+			entry.pNextFaces == pNextFaces &&
+			entry.facesVer == facesVer &&
+			entry.nextVer == nextVer &&
+			entry.facesLen == facesLen &&
+			entry.nextLen == nextLen &&
+			entry.lerp == lerp &&
+			entry.yaw == yaw &&
+			entry.renderMode == renderModeF &&
+			entry.oX == oX && entry.oY == oY && entry.oZ == oZ &&
+			!entry.fv.NeedsAnimRebuild()
+
+		if !cacheHit {
+			entry.fv.DeepReset()
+
+			var currentMat *textures.Material
+			batchStart := entry.fv.GetIndicesLen()
+
+			limit := facesLen
+			if pNextFaces != nil && nextLen < limit {
+				limit = nextLen
 			}
 
-			if mat != currentMat {
-				currentIndices := w.fv.GetIndicesLen()
-				if currentIndices > batchStart && currentTargetDc != nil {
-					currentTargetDc.Compute(batchStart, currentIndices, currentMat)
+			for fx := 0; fx < limit; fx++ {
+				face := pFaces.At(fx)
+				if face == nil {
+					continue
 				}
-				batchStart = currentIndices
-				currentMat = mat
-				currentTargetDc = w.modes[mat.GetBlendMode()]
-			}
+				mat := face.GetMaterial()
+				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
+					continue
+				}
+				tex := mat.GetCurrentFrame()
+				if tex == nil {
+					continue
+				}
+				if mat.IsAnimated() {
+					entry.fv.AddAnimRef(mat, tex)
+				}
+				tId := tex.GetIdentifier()
+				if tId < 0 {
+					tId, _ = w.tex.Get(tex)
+					tex.SetIdentifier(tId)
+				}
 
-			packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
-			p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
-			u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-			var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
-			if pNextFaces != nil {
-				if nf := pNextFaces.At(fx); nf != nil {
-					np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = nf.GetPointsFlat()
+				if mat != currentMat {
+					currentIndices := entry.fv.GetIndicesLen()
+					if currentIndices > batchStart && currentMat != nil {
+						entry.fv.AddBatch(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat)
+					}
+					batchStart = currentIndices
+					currentMat = mat
+				}
+
+				packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
+				p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
+				u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
+				var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
+				if pNextFaces != nil {
+					if nf := pNextFaces.At(fx); nf != nil {
+						np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = nf.GetPointsFlat()
+					} else {
+						np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
+					}
 				} else {
 					np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
 				}
-			} else {
-				np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
+
+				id0 := entry.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, renderModeF, float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
+				id1 := entry.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, renderModeF, float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
+				id2 := entry.fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, renderModeF, float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
+				entry.fv.AddTriangle(id0, id1, id2)
 			}
 
-			id0 := w.fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, float32(renderMode), float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
-			id1 := w.fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, float32(renderMode), float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
-			id2 := w.fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, float32(renderMode), float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
-			w.fv.AddTriangle(id0, id1, id2)
+			currentIndices := entry.fv.GetIndicesLen()
+			if currentIndices > batchStart && currentMat != nil {
+				entry.fv.AddBatch(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat)
+			}
+
+			entry.pFaces = pFaces
+			entry.pNextFaces = pNextFaces
+			entry.facesVer = facesVer
+			entry.nextVer = nextVer
+			entry.facesLen = facesLen
+			entry.nextLen = nextLen
+			entry.lerp = lerp
+			entry.yaw = yaw
+			entry.renderMode = renderModeF
+			entry.oX, entry.oY, entry.oZ = oX, oY, oZ
+			entry.valid = true
+			entry.gen++
 		}
 
-		currentIndices := w.fv.GetIndicesLen()
-		if currentIndices > batchStart && currentTargetDc != nil {
-			currentTargetDc.Compute(batchStart, currentIndices, currentMat)
-		}
+		w.fv.Commit(entry.fv, w.modes)
+		w.currThingRefs = append(w.currThingRefs, ThingCacheRef{id: entID, gen: entry.gen})
 	}
 
 	qOcclusion := func(object aabb.IObject) bool {
@@ -362,7 +478,33 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	things.StageCommit()
 
-	//fmt.Println("THINGS", things.Len(), "DRAW", counter)
+	if w.thingFrameID&255 == 0 {
+		for id, entry := range w.thingCache {
+			if w.thingFrameID-entry.lastSeenFrame > 256 {
+				delete(w.thingCache, id)
+			}
+		}
+	}
+
+	thingsChanged := len(w.currThingRefs) != len(w.prevThingRefs)
+	if !thingsChanged {
+		for i, ref := range w.currThingRefs {
+			if w.prevThingRefs[i] != ref {
+				thingsChanged = true
+				break
+			}
+		}
+	}
+	if thingsChanged {
+		if cap(w.prevThingRefs) < len(w.currThingRefs) {
+			w.prevThingRefs = make([]ThingCacheRef, len(w.currThingRefs))
+		} else {
+			w.prevThingRefs = w.prevThingRefs[:len(w.currThingRefs)]
+		}
+		copy(w.prevThingRefs, w.currThingRefs)
+	}
+
+	return thingsChanged
 }
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.

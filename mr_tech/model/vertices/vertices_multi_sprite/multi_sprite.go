@@ -179,6 +179,7 @@ func (v *MultiSprite) SetAction(idx int) {
 
 	// Restart animation for all faces in the new action volume
 	if faces := v.comp.GetFaces(); faces != nil {
+		faces.BumpVersion()
 		for i := 0; i < faces.Len(); i++ {
 			f := faces.At(i)
 			if f == nil {

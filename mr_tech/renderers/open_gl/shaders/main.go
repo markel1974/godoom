@@ -71,6 +71,12 @@ type Main struct {
 	mainEBO             [mainDoubleBuffer]uint32
 	vboBytesCap         [mainDoubleBuffer]int
 	eboBytesCap         [mainDoubleBuffer]int
+	vboStaticGen        [mainDoubleBuffer]uint64
+	vboStaticBytes      [mainDoubleBuffer]int
+	vboFrameGen         [mainDoubleBuffer]uint64
+	eboStaticGen        [mainDoubleBuffer]uint64
+	eboStaticBytes      [mainDoubleBuffer]int
+	eboFrameGen         [mainDoubleBuffer]uint64
 	frameIdx            int
 	emissiveIntensity   float32
 	stride              int32
@@ -198,6 +204,7 @@ func (s *Main) Init() error {
 		s.ctx.EnableVertexAttribArray(10)
 	}
 
+	s.ctx.BindVertexArray(0)
 	s.ctx.Enable(api.DEPTH_TEST)
 	s.ctx.DepthFunc(api.LEQUAL)
 	return nil
@@ -314,28 +321,75 @@ func (s *Main) Compile(a IAssets) error {
 
 // Prepare configures the rendering pipeline, updates buffer data, and manages double buffering for rendering operations.
 func (s *Main) Prepare(vPtr unsafe.Pointer, vSize int, vCount int32, iPtr unsafe.Pointer, iSize int, iCount int32) {
-	fbW, fbH := s.handler.GetSize()
-	s.ctx.Viewport(0, 0, fbW, fbH)
-	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
-	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
+	s.PrepareFrame(vPtr, vSize, 0, iPtr, iSize, 0, 0, 0)
+}
 
-	s.frameIdx = (s.frameIdx + 1) % mainDoubleBuffer
+// PrepareFrame uploads vertices and indices into the active double-buffered VAO/VBO/EBO, skipping unchanged static prefixes or identical frames.
+func (s *Main) PrepareFrame(vPtr unsafe.Pointer, vSize int, staticVertBytes int, iPtr unsafe.Pointer, iSize int, staticIdxBytes int, staticGen uint64, frameGen uint64) {
+	idx := (s.frameIdx + 1) % mainDoubleBuffer
+	s.frameIdx = idx
 
-	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.mainVBO[s.frameIdx])
-	if vSize > s.vboBytesCap[s.frameIdx] {
+	s.ctx.BindVertexArray(s.mainVAO[idx])
+
+	s.ctx.BindBuffer(api.ARRAY_BUFFER, s.mainVBO[idx])
+	if vSize > s.vboBytesCap[idx] {
 		newCap := vSize * 2
 		s.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
-		s.vboBytesCap[s.frameIdx] = newCap
+		s.vboBytesCap[idx] = newCap
+		s.vboStaticGen[idx] = 0
+		s.vboStaticBytes[idx] = 0
+		s.vboFrameGen[idx] = 0
 	}
-	s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vSize, vPtr)
+	if vSize > 0 {
+		if frameGen != 0 && s.vboFrameGen[idx] == frameGen {
+			// Entire vertex buffer in this double-buffer slot is already current.
+		} else if staticGen != 0 && s.vboStaticGen[idx] == staticGen && s.vboStaticBytes[idx] == staticVertBytes && staticVertBytes <= vSize {
+			if dynBytes := vSize - staticVertBytes; dynBytes > 0 {
+				s.ctx.BufferSubData(api.ARRAY_BUFFER, staticVertBytes, dynBytes, unsafe.Add(vPtr, staticVertBytes))
+			}
+			s.vboFrameGen[idx] = frameGen
+		} else {
+			s.ctx.BufferSubData(api.ARRAY_BUFFER, 0, vSize, vPtr)
+			s.vboStaticGen[idx] = staticGen
+			s.vboStaticBytes[idx] = staticVertBytes
+			s.vboFrameGen[idx] = frameGen
+		}
+	} else {
+		s.vboStaticGen[idx] = 0
+		s.vboStaticBytes[idx] = 0
+		s.vboFrameGen[idx] = frameGen
+	}
 
-	s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[s.frameIdx])
-	if iSize > s.eboBytesCap[s.frameIdx] {
+	s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[idx])
+	if iSize > s.eboBytesCap[idx] {
 		newCap := iSize * 2
 		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
-		s.eboBytesCap[s.frameIdx] = newCap
+		s.eboBytesCap[idx] = newCap
+		s.eboStaticGen[idx] = 0
+		s.eboStaticBytes[idx] = 0
+		s.eboFrameGen[idx] = 0
 	}
-	s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iSize, iPtr)
+	if iSize > 0 {
+		if frameGen != 0 && s.eboFrameGen[idx] == frameGen {
+			// Entire index buffer in this double-buffer slot is already current.
+		} else if staticGen != 0 && s.eboStaticGen[idx] == staticGen && s.eboStaticBytes[idx] == staticIdxBytes && staticIdxBytes <= iSize {
+			if dynBytes := iSize - staticIdxBytes; dynBytes > 0 {
+				s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, staticIdxBytes, dynBytes, unsafe.Add(iPtr, staticIdxBytes))
+			}
+			s.eboFrameGen[idx] = frameGen
+		} else {
+			s.ctx.BufferSubData(api.ELEMENT_ARRAY_BUFFER, 0, iSize, iPtr)
+			s.eboStaticGen[idx] = staticGen
+			s.eboStaticBytes[idx] = staticIdxBytes
+			s.eboFrameGen[idx] = frameGen
+		}
+	} else {
+		s.eboStaticGen[idx] = 0
+		s.eboStaticBytes[idx] = 0
+		s.eboFrameGen[idx] = frameGen
+	}
+
+	s.ctx.BindVertexArray(0)
 }
 
 // Render executes the single-pass forward rendering pipeline, combining all lights and shadows directly onto geometry.
@@ -424,4 +478,5 @@ func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, fl
 	renderGeometry()
 	// Disable it immediately so subsequent passes are not affected
 	s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
+	s.ctx.BindVertexArray(0)
 }

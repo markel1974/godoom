@@ -120,6 +120,7 @@ func (s *Post) SetupSamplers() error {
 	s.ctx.BufferData(api.ARRAY_BUFFER, len(quad)*4, s.ctx.Ptr(quad), api.STATIC_DRAW)
 	s.ctx.VertexAttribPointer(0, 2, api.FLOAT, false, 0, nil)
 	s.ctx.EnableVertexAttribArray(0)
+	s.ctx.BindVertexArray(0)
 
 	return nil
 }
@@ -199,15 +200,20 @@ func (s *Post) Init() error {
 	return nil
 }
 
-// Prepare prepares the post-processing pipeline by resolving the multisample antialiasing (MSAA) buffers to standard buffers.
-func (s *Post) Prepare() {
+// EnsureAllocated guarantees that the scene MSAA, resolve, and optional LDR framebuffers exist at the active handler size.
+func (s *Post) EnsureAllocated() {
 	fbW, fbH := s.handler.GetSize()
-	if fbW != s.w || fbH != s.h {
+	if fbW != s.w || fbH != s.h || s.msaaFbo == 0 {
 		s.allocate(fbW, fbH)
 	}
+}
+
+// Prepare prepares the post-processing pipeline by resolving the multisample antialiasing (MSAA) buffers to standard buffers.
+func (s *Post) Prepare() {
+	s.EnsureAllocated()
 	// Physically resolve the multisampled FBO before 2D filters.
 	// Depth is consumed only by the liquid pass (resolved earlier), so skip it here.
-	s.ResolveMSAA(fbW, fbH, ResolveColor|ResolveBright)
+	s.ResolveMSAA(s.w, s.h, ResolveColor|ResolveBright)
 }
 
 // Render performs final post-processing, applying exposure, contrast, saturation, and bloom effects using two texture inputs.
@@ -250,6 +256,7 @@ func (s *Post) Render(winW, winH int32) {
 		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}
 
+	s.ctx.BindVertexArray(0)
 	s.ctx.Enable(api.DEPTH_TEST)
 }
 
@@ -354,6 +361,7 @@ func (s *Post) allocate(width, height int32) {
 	}
 
 	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing) ---
+	s.ctx.ActiveTexture(api.TEXTURE0)
 	s.ctx.GenFramebuffers(1, &s.fbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
 
@@ -388,6 +396,7 @@ func (s *Post) allocate(width, height int32) {
 		s.allocateLDR()
 	}
 
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 }
 

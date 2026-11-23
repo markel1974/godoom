@@ -36,6 +36,8 @@ type FrameVertices struct {
 	containerIdx        int
 	batches             []FrameBatch
 	materials           []*textures.Material
+	animMats            []*textures.Material
+	animTexs            []*textures.Texture
 }
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
@@ -51,9 +53,23 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 		batches:      make([]FrameBatch, 0, 8),
 		materials:    make([]*textures.Material, materialsMax),
 	}
-	fv.verticesPtr = ctx.Ptr(fv.vertices)
-	fv.indicesPtr = ctx.Ptr(fv.indices)
+	if ctx != nil {
+		fv.verticesPtr = ctx.Ptr(fv.vertices)
+		fv.indicesPtr = ctx.Ptr(fv.indices)
+	}
 	return fv
+}
+
+// NewStagingFrameVertices initializes a CPU-only staging FrameVertices without registering pointers with the GPU context.
+func NewStagingFrameVertices(maxVerts int) *FrameVertices {
+	const maxStride = 20
+	return &FrameVertices{
+		vertices:  make([]float32, maxVerts),
+		indices:   make([]uint32, maxVerts),
+		stride:    maxStride,
+		batches:   make([]FrameBatch, 0, 4),
+		materials: make([]*textures.Material, materialsMax),
+	}
 }
 
 // CreateMarker increments the container index and returns the updated value as an integer.
@@ -68,7 +84,7 @@ func (w *FrameVertices) Stage(marker int) *FrameVertices {
 		w.growContainers()
 	}
 	if w.containers[marker] == nil {
-		w.containers[marker] = NewFrameVertices(w.ctx, 128)
+		w.containers[marker] = NewStagingFrameVertices(128)
 	}
 	return w.containers[marker]
 }
@@ -158,8 +174,36 @@ func (w *FrameVertices) DeepReset() {
 	w.freezeIndicesCount = 0
 	w.freezeVerticesSlot = 0
 	w.batches = w.batches[:0]
+	w.animMats = w.animMats[:0]
+	w.animTexs = w.animTexs[:0]
 	copy(w.materials, _emptyMaterial)
 	w.Reset()
+}
+
+// AddAnimRef records an animated material and the active texture frame used when building vertices.
+func (w *FrameVertices) AddAnimRef(mat *textures.Material, tex *textures.Texture) {
+	for _, existing := range w.animMats {
+		if existing == mat {
+			return
+		}
+	}
+	w.animMats = append(w.animMats, mat)
+	w.animTexs = append(w.animTexs, tex)
+}
+
+// NeedsAnimRebuild reports whether any tracked animated material has advanced to a different texture frame.
+func (w *FrameVertices) NeedsAnimRebuild() bool {
+	for i, mat := range w.animMats {
+		if mat.GetCurrentFrame() != w.animTexs[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// FrozenBytes returns the byte sizes of the frozen static prefix in the vertex and index buffers.
+func (w *FrameVertices) FrozenBytes() (int, int) {
+	return int(w.freezeVerticesCount * 4), int(w.freezeIndicesCount * 4)
 }
 
 // Reset restores the vertices count, indices count, and vertices slot to their previously frozen states.
@@ -273,7 +317,9 @@ func (w *FrameVertices) growIndices() {
 	newData := make([]uint32, newSize)
 	copy(newData, w.indices)
 	w.indices = newData
-	w.indicesPtr = w.ctx.Ptr(w.indices)
+	if w.ctx != nil {
+		w.indicesPtr = w.ctx.Ptr(w.indices)
+	}
 }
 
 // growVertices doubles the capacity of the vertices slice or initializes it with a default size of 128 if empty.
@@ -285,7 +331,9 @@ func (w *FrameVertices) growVertices() {
 	newData := make([]float32, newSize)
 	copy(newData, w.vertices)
 	w.vertices = newData
-	w.verticesPtr = w.ctx.Ptr(w.vertices)
+	if w.ctx != nil {
+		w.verticesPtr = w.ctx.Ptr(w.vertices)
+	}
 }
 
 func (w *FrameVertices) growContainers() {

@@ -38,6 +38,7 @@ type Faces struct {
 	nextFaces       []*Face
 	hasTesselation  bool
 	allowTessellate bool
+	version         uint64
 }
 
 // NewFaces creates a Faces collection with the given initial capacity.
@@ -81,8 +82,19 @@ func (f *Faces) TessellateInit() {
 	f.hasTesselation = true
 }
 
+// GetVersion returns a monotonically increasing revision counter incremented when faces change.
+func (f *Faces) GetVersion() uint64 {
+	return f.version
+}
+
+// BumpVersion increments the faces revision counter to signal geometry updates.
+func (f *Faces) BumpVersion() {
+	f.version++
+}
+
 // Rebuild recomputes cached bounds, normals, active edge masks, and mass properties from the current faces.
 func (f *Faces) Rebuild() {
+	f.version++
 	f.tree.Clear()
 	if f.count == 0 {
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = 0, 0, 0, 0, 0, 0
@@ -254,6 +266,7 @@ func (f *Faces) Add(face *Face) {
 	}
 	f.container[f.count] = face
 	f.count++
+	f.version++
 }
 
 // ComputeMassProperties computes the centroid and unit-mass inertia tensor for the stored faces.
@@ -284,6 +297,7 @@ func (f *Faces) ComputeMassProperties() (float64, float64, float64, float64, flo
 // Set assigns face to the element at idx.
 func (f *Faces) Set(idx int, face *Face) {
 	f.container[idx] = face
+	f.version++
 }
 
 // At returns the face stored at idx, or nil if idx is out of bounds.
@@ -304,7 +318,10 @@ func (f *Faces) EnsureLen(targetLen int) {
 // SetCount sets the active face count, keeping it within the container length.
 func (f *Faces) SetCount(count int) {
 	if count <= len(f.container) {
-		f.count = count
+		if f.count != count {
+			f.count = count
+			f.version++
+		}
 	}
 }
 
@@ -312,6 +329,7 @@ func (f *Faces) SetCount(count int) {
 func (f *Faces) Clear() {
 	f.tree.Clear()
 	f.count = 0
+	f.version++
 }
 
 // Deform applies impulse to deformable vertices within radius of impact.
@@ -413,6 +431,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 		}
 	}
 
+	f.version++
 	return true
 }
 

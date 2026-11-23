@@ -70,13 +70,12 @@ type BuilderVolume struct {
 	instAdditive     shaders.PtrPool[shaders.InstancedDrawItem]
 	instTransSrc     shaders.PtrPool[rigidTransItem]
 	lastInstVBO      uint32
-	transDynPool     shaders.PtrPool[shaders.TransparentDrawItem]
-	transparentItems []*shaders.TransparentDrawItem
-	transparentLen   int
-	lastCamGLX       float32
-	lastCamGLY       float32
-	lastCamGLZ       float32
-	meshFrame        uint64
+	transparentItems *shaders.TransparentDrawItems
+
+	lastCamGLX float32
+	lastCamGLY float32
+	lastCamGLZ float32
+	meshFrame  uint64
 }
 
 type rigidInstance struct {
@@ -126,7 +125,7 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, p
 		volMeshes:           make(map[*volumes.Faces]*shaders.ResidentMesh, 1024),
 		thingMeshes:         make(map[uint64][]*shaders.ResidentMesh, 256),
 		instancePool:        shaders.NewInstancePool(ctx, 256),
-		transparentItems:    make([]*shaders.TransparentDrawItem, 64),
+		transparentItems:    shaders.NewTransparentDrawItems(64),
 	}
 	bv.instGroups.Init(32)
 	bv.texLookupFn = bv.lookupTexLayer
@@ -224,101 +223,22 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 	hasTrans := w.staticTransSrc.Len > 0 || w.instTransSrc.Len > 0 || len(transCmds) > 0
 	camMoved := camGLX != w.lastCamGLX || camGLY != w.lastCamGLY || camGLZ != w.lastCamGLZ
 	if hasTrans {
-		if staticChanged || thingsChanged || camMoved || w.transparentLen == 0 {
-			prevTransLen := w.transparentLen
-			w.transparentLen = 0
-			w.transDynPool.Reset()
-			for i := 0; i < w.staticTransSrc.Len; i++ {
-				it := w.staticTransSrc.Items[i]
-				sub := it.Sub
-				dx := sub.CentroidX - camGLX
-				dy := sub.CentroidY - camGLY
-				dz := sub.CentroidZ - camGLZ
-				it.DistSq = dx*dx + dy*dy + dz*dz
-				w.addTransparentItem(it)
-			}
+		if staticChanged || thingsChanged || camMoved || w.transparentItems.Len() == 0 {
+			w.transparentItems.Begin()
+			w.transparentItems.AddStatic(&w.staticTransSrc, camGLX, camGLY, camGLZ)
 			for i := 0; i < w.instTransSrc.Len; i++ {
 				rt := w.instTransSrc.Items[i]
-				sub := rt.sub
-				dx := rt.cx - camGLX
-				dy := rt.cy - camGLY
-				dz := rt.cz - camGLZ
-				it := w.transDynPool.Acquire()
-				it.Kind = shaders.TransparentInstanced
-				it.DistSq = dx*dx + dy*dy + dz*dz
-				it.SortOrder = sub.SortOrder
-				it.CullMode = sub.CullMode
-				it.HasCutout = sub.HasCutout
-				it.PolygonOffset = sub.PolygonOffset
-				it.FirstIndex = 0
-				it.IndexCount = 0
-				it.Mesh = rt.mesh
-				it.Sub = sub
-				it.InstanceVBO = w.lastInstVBO
-				it.BaseByteOffset = rt.baseByteOffset
-				it.InstanceCount = 1
-				w.addTransparentItem(it)
+				w.transparentItems.AddInstanced(rt.mesh, rt.sub, w.lastInstVBO, rt.baseByteOffset, rt.cx, rt.cy, rt.cz, camGLX, camGLY, camGLZ)
 			}
-			for _, cmd := range transCmds {
-				if cmd.GetIndexCount() == 0 {
-					continue
-				}
-				mat := cmd.GetMaterial()
-				cx, cy, cz := cmd.GetCentroid()
-				dx := cx - camGLX
-				dy := cy - camGLY
-				dz := cz - camGLZ
-				sortOrder := 0
-				cullMode := config.CullFront
-				hasCutout := false
-				polyOff := false
-				if mat != nil {
-					sortOrder = mat.GetSort()
-					cullMode = mat.GetCullMode()
-					hasCutout = mat.HasCutout()
-					polyOff = mat.GetPolygonOffset()
-				}
-				it := w.transDynPool.Acquire()
-				it.Kind = shaders.TransparentStreaming
-				it.DistSq = dx*dx + dy*dy + dz*dz
-				it.SortOrder = sortOrder
-				it.CullMode = cullMode
-				it.HasCutout = hasCutout
-				it.PolygonOffset = polyOff
-				it.FirstIndex = cmd.GetFirstIndex()
-				it.IndexCount = cmd.GetIndexCount()
-				it.Mesh = nil
-				it.Sub = nil
-				it.InstanceVBO = 0
-				it.BaseByteOffset = 0
-				it.InstanceCount = 0
-				w.addTransparentItem(it)
-			}
-			for i := w.transparentLen; i < prevTransLen; i++ {
-				w.transparentItems[i] = nil
-			}
-			shaders.SortTransparentDrawItems(w.transparentItems, w.transparentLen)
-			w.dcRenderTransparent.SetTransparentDraws(w.transparentItems, w.transparentLen)
+			w.transparentItems.AddCommands(transCmds, camGLX, camGLY, camGLZ)
+			w.transparentItems.End()
+			w.dcRenderTransparent.SetTransparentDraws(w.transparentItems)
 		}
-	} else if w.transparentLen > 0 {
-		for i := 0; i < w.transparentLen; i++ {
-			w.transparentItems[i] = nil
-		}
-		w.transparentLen = 0
-		w.dcRenderTransparent.SetTransparentDraws(nil, 0)
+	} else if w.transparentItems.Len() > 0 {
+		w.transparentItems.Clear()
+		w.dcRenderTransparent.SetTransparentDraws(nil)
 	}
 	w.lastCamGLX, w.lastCamGLY, w.lastCamGLZ = camGLX, camGLY, camGLZ
-}
-
-func (w *BuilderVolume) addTransparentItem(it *shaders.TransparentDrawItem) {
-	if w.transparentLen >= len(w.transparentItems) {
-		newLen := max(len(w.transparentItems)*2, 32)
-		grown := make([]*shaders.TransparentDrawItem, newLen)
-		copy(grown, w.transparentItems)
-		w.transparentItems = grown
-	}
-	w.transparentItems[w.transparentLen] = it
-	w.transparentLen++
 }
 
 // pushQVolumes updates GPU-resident static volume meshes only when the visible volume set, geometry, or animated wall textures change.

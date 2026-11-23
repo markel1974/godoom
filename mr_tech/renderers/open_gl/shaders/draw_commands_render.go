@@ -155,8 +155,7 @@ type DrawCommandsRender struct {
 	staticLen        int
 	instancedItems   []*InstancedDrawItem
 	instancedLen     int
-	transparentItems []*TransparentDrawItem
-	transparentLen   int
+	transparentItems *TransparentDrawItems
 
 	streamingVAO    uint32
 	locInstanceMode int32
@@ -224,14 +223,13 @@ func (w *DrawCommandsRender) SetResidentDraws(staticItems []*StaticDrawItem, sta
 }
 
 // SetTransparentDraws stores depth-sorted translucent items across streaming, static, and instanced sources.
-func (w *DrawCommandsRender) SetTransparentDraws(items []*TransparentDrawItem, itemsLen int) {
+func (w *DrawCommandsRender) SetTransparentDraws(items *TransparentDrawItems) {
 	w.transparentItems = items
-	w.transparentLen = itemsLen
 }
 
 // HasCommands returns true if there are streaming or resident render commands available to process.
 func (w *DrawCommandsRender) HasCommands() bool {
-	return w.batchesLen > 0 || w.staticLen > 0 || w.instancedLen > 0 || w.transparentLen > 0
+	return w.batchesLen > 0 || w.staticLen > 0 || w.instancedLen > 0 || (w.transparentItems != nil && w.transparentItems.Len() > 0)
 }
 
 // GetName retrieves the name of the DrawCommandsRender instance.
@@ -268,7 +266,6 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.instancedItems = nil
 	w.instancedLen = 0
 	w.transparentItems = nil
-	w.transparentLen = 0
 
 	if len(dc) == 0 {
 		return
@@ -678,15 +675,19 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 
 // RenderTransparent executes depth-sorted translucent items strictly back-to-front.
 func (w *DrawCommandsRender) RenderTransparent() {
-	if w.transparentLen == 0 {
+	if w.transparentItems == nil {
+		return
+	}
+	nTrans := w.transparentItems.Len()
+	if nTrans == 0 {
 		return
 	}
 	curCull := cullStateUnset
 	curPoly := -1
 	var boundVAO uint32
 
-	for i := 0; i < w.transparentLen; i++ {
-		it := w.transparentItems[i]
+	for i := 0; i < nTrans; i++ {
+		it := w.transparentItems.data[i]
 		po := 0
 		if it.PolygonOffset {
 			po = 1

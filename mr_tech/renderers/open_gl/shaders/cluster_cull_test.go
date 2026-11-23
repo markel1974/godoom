@@ -296,14 +296,13 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 	mesh.SubMeshesLen = 1
 
-	transItems := []*TransparentDrawItem{
-		{Kind: TransparentStreaming, DistSq: 100.0, SortOrder: 1, CullMode: config.CullNone, FirstIndex: 10, IndexCount: 6},
-		{Kind: TransparentStreaming, DistSq: 900.0, SortOrder: 2, CullMode: config.CullNone, FirstIndex: 40, IndexCount: 6},
-		{Kind: TransparentStatic, DistSq: 900.0, SortOrder: 0, CullMode: config.CullNone, Mesh: mesh, Sub: mesh.SubMeshes[0]},
-	}
-	SortTransparentDrawItems(transItems, len(transItems))
+	transItems := NewTransparentDrawItems(4)
+	transItems.Add(&TransparentDrawItem{Kind: TransparentStreaming, DistSq: 100.0, SortOrder: 1, CullMode: config.CullNone, FirstIndex: 10, IndexCount: 6})
+	transItems.Add(&TransparentDrawItem{Kind: TransparentStreaming, DistSq: 900.0, SortOrder: 2, CullMode: config.CullNone, FirstIndex: 40, IndexCount: 6})
+	transItems.Add(&TransparentDrawItem{Kind: TransparentStatic, DistSq: 900.0, SortOrder: 0, CullMode: config.CullNone, Mesh: mesh, Sub: mesh.SubMeshes[0]})
+	transItems.SortTransparentDrawItems()
 	dcrTrans := NewDrawCommandsRender(ctx, "trans_test", false)
-	dcrTrans.SetTransparentDraws(transItems, len(transItems))
+	dcrTrans.SetTransparentDraws(transItems)
 	ctx.drawStarts = ctx.drawStarts[:0]
 	dcrTrans.RenderTransparent()
 
@@ -316,10 +315,52 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 
 	allocs := testing.AllocsPerRun(50, func() {
-		SortTransparentDrawItems(transItems, len(transItems))
+		transItems.SortTransparentDrawItems()
 	})
 	if allocs != 0 {
 		t.Fatalf("expected 0 allocs in SortTransparentDrawItems, got %.2f", allocs)
+	}
+
+	// Verify Begin/AddStatic/AddInstanced/AddCommands/End lifecycle, stale trimming, Clear, and 0 allocs.
+	var staticSrc PtrPool[TransparentDrawItem]
+	st := staticSrc.Acquire()
+	st.Kind = TransparentStatic
+	st.Mesh = mesh
+	st.Sub = &ResidentSubMesh{FirstIndex: 30, IndexCount: 6, CentroidX: 10, CentroidY: 0, CentroidZ: 0, SortOrder: 1, CullMode: config.CullNone}
+	transCmd := NewDrawCommand()
+	transCmd.SetFirstIndex(10)
+	transCmd.SetIndexCount(6)
+	transCmd.SetCentroid(3, 0, 0)
+	transCmds := []*DrawCommand{transCmd}
+	subInst := &ResidentSubMesh{FirstIndex: 60, IndexCount: 6, SortOrder: 0, CullMode: config.CullNone}
+
+	runCycle := func(withInst bool) {
+		transItems.Begin()
+		transItems.AddStatic(&staticSrc, 0, 0, 0)
+		if withInst {
+			transItems.AddInstanced(mesh, subInst, 9, 16, 20, 0, 0, 0, 0, 0)
+		}
+		transItems.AddCommands(transCmds, 0, 0, 0)
+		transItems.End()
+	}
+	runCycle(true)
+	if transItems.Len() != 3 || transItems.At(0).Kind != TransparentInstanced || transItems.At(1).Kind != TransparentStatic || transItems.At(2).Kind != TransparentStreaming {
+		t.Fatalf("unexpected lifecycle order or count=%d", transItems.Len())
+	}
+	// Shrink from 3 to 2 items and verify stale slot 2 is nilled cleanly.
+	runCycle(false)
+	if transItems.Len() != 2 || transItems.data[2] != nil {
+		t.Fatalf("expected Trim on End to shrink to 2 and clear stale data[2], got len=%d ptr=%v", transItems.Len(), transItems.data[2])
+	}
+	cycleAllocs := testing.AllocsPerRun(50, func() {
+		runCycle(true)
+	})
+	if cycleAllocs != 0 {
+		t.Fatalf("expected 0 allocs in TransparentDrawItems Begin/Add/End cycle, got %.2f", cycleAllocs)
+	}
+	transItems.Clear()
+	if transItems.Len() != 0 || transItems.data[0] != nil {
+		t.Fatalf("expected Clear to reset Len=0 and clear stale entries, got len=%d", transItems.Len())
 	}
 }
 

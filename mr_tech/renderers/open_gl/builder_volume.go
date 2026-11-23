@@ -14,6 +14,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/occlusion"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/ptr"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -25,7 +28,7 @@ type RigidInstance struct {
 
 type RigidInstanceGroup struct {
 	mesh           *gpu.ResidentMesh
-	instances      gpu.PtrPool[RigidInstance]
+	instances      ptr.PtrPool[RigidInstance]
 	baseByteOffset int32
 }
 
@@ -54,7 +57,7 @@ type BuilderVolume struct {
 	cal                 *model.Calibration
 	visibleVol          *VisibleVolumes
 	modes               []*gpu.DrawCommands
-	occlusion           *gpu.OcclusionHW
+	occlusion           *occlusion.OcclusionHW
 	frustumFront        *metrics.Frustum
 	lightBB             *aabb.BoundingBox
 	playerId            uint64
@@ -79,18 +82,18 @@ type BuilderVolume struct {
 	thingMeshes         map[uint64][]*gpu.ResidentMesh
 	texLookupFn         func(*textures.Texture) (float32, bool)
 
-	staticOpaque   gpu.PtrPool[gpu.DrawItemStatic]
-	staticLiquid   gpu.PtrPool[gpu.DrawItemStatic]
-	staticAdditive gpu.PtrPool[gpu.DrawItemStatic]
-	staticTransSrc gpu.PtrPool[gpu.DrawItemTransparent]
+	staticOpaque   ptr.PtrPool[gpu.DrawItemStatic]
+	staticLiquid   ptr.PtrPool[gpu.DrawItemStatic]
+	staticAdditive ptr.PtrPool[gpu.DrawItemStatic]
+	staticTransSrc ptr.PtrPool[gpu.DrawItemTransparent]
 
 	instancePool     *gpu.InstancePool
-	instGroups       gpu.PtrPool[RigidInstanceGroup]
+	instGroups       ptr.PtrPool[RigidInstanceGroup]
 	instFrame        uint64
-	instOpaque       gpu.PtrPool[gpu.DrawItemInstanced]
-	instLiquid       gpu.PtrPool[gpu.DrawItemInstanced]
-	instAdditive     gpu.PtrPool[gpu.DrawItemInstanced]
-	instTransSrc     gpu.PtrPool[RigidTransItem]
+	instOpaque       ptr.PtrPool[gpu.DrawItemInstanced]
+	instLiquid       ptr.PtrPool[gpu.DrawItemInstanced]
+	instAdditive     ptr.PtrPool[gpu.DrawItemInstanced]
+	instTransSrc     ptr.PtrPool[RigidTransItem]
 	lastInstVBO      uint32
 	transparentItems *gpu.DrawItemsTransparent
 
@@ -130,7 +133,7 @@ func NewBuilderVolume(ctx api.IContext, tex *gpu.Textures, cal *model.Calibratio
 		cal:                 cal,
 		visibleVol:          NewVisibleVols(8192),
 		modes:               make([]*gpu.DrawCommands, config.BlendModeLatest),
-		occlusion:           gpu.NewOcclusionHW(ctx, 4096),
+		occlusion:           occlusion.NewOcclusionHW(ctx, 4096),
 		frustumFront:        metrics.NewFrustum(),
 		lightBB:             aabb.NewBoundingBox(),
 		cachedRawVols:       make([]*volumes.Volume, 8192),
@@ -740,7 +743,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			g.baseByteOffset = baseByteOff
 			for k := range cnt {
 				inst := g.instances.Items[k]
-				w.instancePool.WriteTransformAt(baseFloat+k*gpu.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
+				w.instancePool.WriteTransformAt(baseFloat+k*vertex_layout.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
 			}
 		}
 		instVBO := w.instancePool.Upload()
@@ -778,7 +781,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 						rt := w.instTransSrc.Acquire()
 						rt.mesh = g.mesh
 						rt.sub = sub
-						rt.baseByteOffset = g.baseByteOffset + int32(k*gpu.InstanceMatrixFloats*4)
+						rt.baseByteOffset = g.baseByteOffset + int32(k*vertex_layout.InstanceMatrixFloats*4)
 						rt.cx = float32(inst.cx)
 						rt.cy = float32(inst.cz)
 						rt.cz = float32(-inst.cy)
@@ -854,11 +857,11 @@ func (w *BuilderVolume) GetInstancedDrawCount() int {
 // GetStreamingVertexCount returns the current vertex count stored in the CPU streaming buffer.
 func (w *BuilderVolume) GetStreamingVertexCount() int {
 	_, _, vCount, _, _, _ := w.fv.GetVertices()
-	return int(vCount) / gpu.StreamingVertexFloats
+	return int(vCount) / vertex_layout.StreamingVertexFloats
 }
 
 // GetHWOcclusion retrieves the hardware-based occlusion object associated with the BuilderVolume.
-func (w *BuilderVolume) GetHWOcclusion() *gpu.OcclusionHW {
+func (w *BuilderVolume) GetHWOcclusion() *occlusion.OcclusionHW {
 	return w.occlusion
 }
 

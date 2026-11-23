@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/ptr"
 )
 
 // DrawItemsTransparent manages a reusable collection of transparent draw items for sorting and rendering.
@@ -12,7 +13,7 @@ type DrawItemsTransparent struct {
 	data           []*DrawItemTransparent
 	transparentLen int
 	prevLen        int
-	dynPool        PtrPool[DrawItemTransparent]
+	dynPool        ptr.PtrPool[DrawItemTransparent]
 }
 
 // NewDrawItemsTransparent creates an empty DrawItemsTransparent collection with initial storage for n items.
@@ -86,7 +87,7 @@ func (w *DrawItemsTransparent) Add(it *DrawItemTransparent) {
 }
 
 // AddStatic queues prebuilt static transparent submesh items, updating camera-relative squared distances.
-func (w *DrawItemsTransparent) AddStatic(src *PtrPool[DrawItemTransparent], camX, camY, camZ float32) {
+func (w *DrawItemsTransparent) AddStatic(src *ptr.PtrPool[DrawItemTransparent], camX, camY, camZ float32) {
 	for i := 0; i < src.Len; i++ {
 		it := src.Items[i]
 		sub := it.Sub

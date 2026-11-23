@@ -1,4 +1,4 @@
-package gpu
+package occlusion
 
 import (
 	"testing"

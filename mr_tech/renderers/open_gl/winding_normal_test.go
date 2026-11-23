@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -85,7 +86,7 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 	ctx := &noopRenderCtx{}
 	rm := gpu.NewResidentMesh(ctx)
 	ok := rm.Rebuild(faces, func(_ *textures.Texture) (float32, bool) { return 3.0, true })
-	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%gpu.StaticVertexFloats != 0 {
+	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%vertex_layout.StaticVertexFloats != 0 {
 		t.Fatalf("expected valid 24-float ResidentMesh vertex buffer, ok=%v floats=%d", ok, len(rm.VertFloats))
 	}
 
@@ -97,7 +98,7 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 	}
 
 	// Verify ResidentMesh uploaded GL normal (nx, nz, -ny) and lightmap (0.25, 0.75, 2) for fA vertex 0.
-	vf := rm.VertFloats[:gpu.StaticVertexFloats]
+	vf := rm.VertFloats[:vertex_layout.StaticVertexFloats]
 	if math.Abs(float64(vf[13]-0.25)) > 1e-5 || math.Abs(float64(vf[14]-0.75)) > 1e-5 || math.Abs(float64(vf[15]-2.0)) > 1e-5 {
 		t.Fatalf("unexpected lightmap attribute in ResidentMesh vertex: (%v, %v, %v)", vf[13], vf[14], vf[15])
 	}

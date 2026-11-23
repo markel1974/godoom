@@ -17,6 +17,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/occlusion"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -95,7 +96,7 @@ func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVol
 		dcLiquid:   dcLiquid,
 		modes:      modes,
 		cal:        cal,
-		occlusion:  gpu.NewOcclusionHW(stubCtx{}, 8),
+		occlusion:  occlusion.NewOcclusionHW(stubCtx{}, 8),
 		player:     pl,
 		playerId:   plID,
 	}

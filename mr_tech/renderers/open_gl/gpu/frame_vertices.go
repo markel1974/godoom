@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -37,7 +38,7 @@ type FrameVertices struct {
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
-	const maxStride = StreamingVertexFloats
+	const maxStride = vertex_layout.StreamingVertexFloats
 	fv := &FrameVertices{
 		ctx:          ctx,
 		vertices:     make([]float32, maxVerts),
@@ -57,7 +58,7 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 
 // NewStagingFrameVertices initializes a CPU-only staging FrameVertices without registering pointers with the GPU context.
 func NewStagingFrameVertices(maxVerts int) *FrameVertices {
-	const maxStride = StreamingVertexFloats
+	const maxStride = vertex_layout.StreamingVertexFloats
 	return &FrameVertices{
 		vertices:  make([]float32, maxVerts),
 		indices:   make([]uint32, maxVerts),

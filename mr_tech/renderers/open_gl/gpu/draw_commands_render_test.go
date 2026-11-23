@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/ptr"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -171,7 +172,7 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 
 	// Verify Begin/AddStatic/AddInstanced/AddCommands/End lifecycle, stale trimming, Clear, and 0 allocs.
-	var staticSrc PtrPool[DrawItemTransparent]
+	var staticSrc ptr.PtrPool[DrawItemTransparent]
 	st := staticSrc.Acquire()
 	st.Kind = TransparentStatic
 	st.Mesh = mesh

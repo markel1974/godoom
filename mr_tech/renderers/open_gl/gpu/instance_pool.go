@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
 )
 
 // InstancePool accumulates per-instance 4x4 transform matrices for the active frame
@@ -24,7 +25,7 @@ func NewInstancePool(ctx api.IContext, initInstances int) *InstancePool {
 	if initInstances < 64 {
 		initInstances = 64
 	}
-	data := make([]float32, initInstances*InstanceMatrixFloats)
+	data := make([]float32, initInstances*vertex_layout.InstanceMatrixFloats)
 	return &InstancePool{
 		ctx:  ctx,
 		data: data,
@@ -40,19 +41,19 @@ func (p *InstancePool) Reset() {
 
 // Reserve allocates consecutive matrix slots and returns the base byte offset and base float index.
 func (p *InstancePool) Reserve(numInstances int) (baseByteOffset int32, baseFloat int) {
-	needed := (int(p.count) + numInstances) * InstanceMatrixFloats
+	needed := (int(p.count) + numInstances) * vertex_layout.InstanceMatrixFloats
 	if needed > len(p.data) {
 		newLen := len(p.data) * 2
 		for newLen < needed {
 			newLen *= 2
 		}
 		grown := make([]float32, newLen)
-		copy(grown, p.data[:int(p.count)*InstanceMatrixFloats])
+		copy(grown, p.data[:int(p.count)*vertex_layout.InstanceMatrixFloats])
 		p.data = grown
 		p.ptr = unsafe.Pointer(&p.data[0])
 	}
-	baseByteOffset = p.count * (InstanceMatrixFloats * 4)
-	baseFloat = int(p.count) * InstanceMatrixFloats
+	baseByteOffset = p.count * (vertex_layout.InstanceMatrixFloats * 4)
+	baseFloat = int(p.count) * vertex_layout.InstanceMatrixFloats
 	p.count += int32(numInstances)
 	return baseByteOffset, baseFloat
 }
@@ -122,10 +123,10 @@ func (p *InstancePool) Upload() uint32 {
 	if p.vbo[idx] == 0 {
 		p.ctx.GenBuffers(1, &p.vbo[idx])
 	}
-	bytesNeeded := int(p.count) * (InstanceMatrixFloats * 4)
+	bytesNeeded := int(p.count) * (vertex_layout.InstanceMatrixFloats * 4)
 	p.ctx.BindBuffer(api.ARRAY_BUFFER, p.vbo[idx])
 	if bytesNeeded > p.vboCap[idx] {
-		newCap := max(bytesNeeded*2, 64*InstanceMatrixFloats*4)
+		newCap := max(bytesNeeded*2, 64*vertex_layout.InstanceMatrixFloats*4)
 		p.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		p.vboCap[idx] = newCap
 	}

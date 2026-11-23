@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	profiler2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/profiler"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
 )
 
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
@@ -15,7 +17,7 @@ type DrawCommandsRender struct {
 	streamCutout     int
 	isAdditive       bool
 	name             string
-	profiler         *GpuProfiler
+	profiler         *profiler2.GpuProfiler
 	totalDraws       uint64
 	totalIndices     uint64
 	hasSolidPrepass  bool
@@ -111,7 +113,7 @@ func (w *DrawCommandsRender) HasSolid() bool { return w.hasSolid }
 func (w *DrawCommandsRender) HasCutout() bool { return w.hasCutout }
 
 // SetProfiler sets the GpuProfiler instance to be used for profiling GPU performance in DrawCommandsRender.
-func (w *DrawCommandsRender) SetProfiler(profiler *GpuProfiler) {
+func (w *DrawCommandsRender) SetProfiler(profiler *profiler2.GpuProfiler) {
 	w.profiler = profiler
 }
 
@@ -152,7 +154,7 @@ func (w *DrawCommandsRender) Render() {
 
 	// Resident static meshes (u_instanceMode = 0)
 	if w.renderAllStaticLen > 0 {
-		w.setInstanceMode(InstanceModeStatic)
+		w.setInstanceMode(vertex_layout.InstanceModeStatic)
 		for i := 0; i < w.renderAllStaticLen; i++ {
 			b := w.renderAllStatic[i]
 			w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, b.depthWrite, b.polygonOffset)
@@ -164,7 +166,7 @@ func (w *DrawCommandsRender) Render() {
 			b.Draw(w.ctx)
 		}
 	} else if w.staticLen > 0 {
-		w.setInstanceMode(InstanceModeStatic)
+		w.setInstanceMode(vertex_layout.InstanceModeStatic)
 		for i := 0; i < w.staticLen; i++ {
 			item := w.staticItems[i]
 			sub := item.Sub
@@ -191,7 +193,7 @@ func (w *DrawCommandsRender) Render() {
 
 	// Resident instanced rigid meshes (u_instanceMode = 1)
 	if w.instancedLen > 0 {
-		w.setInstanceMode(InstanceModeInstanced)
+		w.setInstanceMode(vertex_layout.InstanceModeInstanced)
 		for i := 0; i < w.instancedLen; i++ {
 			item := w.instancedItems[i]
 			sub := item.Sub
@@ -215,7 +217,7 @@ func (w *DrawCommandsRender) Render() {
 		if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
 			w.ctx.BindVertexArray(w.streamingVAO)
 		}
-		w.setInstanceMode(InstanceModeStreaming)
+		w.setInstanceMode(vertex_layout.InstanceModeStreaming)
 		for i := 0; i < w.batchesLen; i++ {
 			b2 := w.batches[i]
 			w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, b2.depthWrite, b2.polygonOffset)
@@ -259,7 +261,7 @@ func (w *DrawCommandsRender) RenderCutoutFiltered(cutout bool) {
 
 	var boundVAO uint32
 	if staticBatchLen > 0 {
-		w.setInstanceMode(InstanceModeStatic)
+		w.setInstanceMode(vertex_layout.InstanceModeStatic)
 		for i := 0; i < staticBatchLen; i++ {
 			b := staticBatches[i]
 			if b.depthWrite != currentDepthWrite {
@@ -275,7 +277,7 @@ func (w *DrawCommandsRender) RenderCutoutFiltered(cutout bool) {
 	}
 
 	if instLen > 0 {
-		w.setInstanceMode(InstanceModeInstanced)
+		w.setInstanceMode(vertex_layout.InstanceModeInstanced)
 		for i := 0; i < instLen; i++ {
 			cmd := &instCmds[i]
 			if cmd.depthWrite != currentDepthWrite {
@@ -291,7 +293,7 @@ func (w *DrawCommandsRender) RenderCutoutFiltered(cutout bool) {
 		if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
 			w.ctx.BindVertexArray(w.streamingVAO)
 		}
-		w.setInstanceMode(InstanceModeStreaming)
+		w.setInstanceMode(vertex_layout.InstanceModeStreaming)
 		for i := 0; i < w.batchesLen; i++ {
 			b2 := w.batches[i]
 			if b2.hasCutout != wantCutout {
@@ -327,7 +329,7 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 	var boundVAO uint32
 
 	if staticBatchLen > 0 {
-		w.setInstanceMode(InstanceModeStatic)
+		w.setInstanceMode(vertex_layout.InstanceModeStatic)
 		for i := 0; i < staticBatchLen; i++ {
 			b := staticBatches[i]
 			curCull = ApplyMaterialCullState(w.ctx, curCull, b.cullMode, b.hasCutout, false)
@@ -348,7 +350,7 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 				continue
 			}
 			if !didMode {
-				w.setInstanceMode(InstanceModeInstanced)
+				w.setInstanceMode(vertex_layout.InstanceModeInstanced)
 				didMode = true
 			}
 			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, false)
@@ -366,7 +368,7 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 					if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
 						w.ctx.BindVertexArray(w.streamingVAO)
 					}
-					w.setInstanceMode(InstanceModeStreaming)
+					w.setInstanceMode(vertex_layout.InstanceModeStreaming)
 					didStream = true
 				}
 				curCull = ApplyMaterialCullState(w.ctx, curCull, b2.cullMode, b2.hasCutout == 1, false)
@@ -421,7 +423,7 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 	var boundVAO uint32
 
 	if staticBatchLen > 0 {
-		w.setInstanceMode(InstanceModeStatic)
+		w.setInstanceMode(vertex_layout.InstanceModeStatic)
 		for i := 0; i < staticBatchLen; i++ {
 			b := staticBatches[i]
 			w.applyShadeState(prepassDepthFunc, &curDepthFunc, &curDepthWrite, &curPolygonOffset, &curCull, b.depthWrite, b.polygonOffset, b.cullMode, b.hasCutout)
@@ -442,7 +444,7 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 				continue
 			}
 			if !didMode {
-				w.setInstanceMode(InstanceModeInstanced)
+				w.setInstanceMode(vertex_layout.InstanceModeInstanced)
 				didMode = true
 			}
 			dw := 0
@@ -463,7 +465,7 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 		if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
 			w.ctx.BindVertexArray(w.streamingVAO)
 		}
-		w.setInstanceMode(InstanceModeStreaming)
+		w.setInstanceMode(vertex_layout.InstanceModeStreaming)
 		for i := 0; i < w.batchesLen; i++ {
 			b2 := w.batches[i]
 			if b2.hasCutout != wantCutout {
@@ -520,7 +522,7 @@ func (w *DrawCommandsRender) RenderTransparent() {
 
 		switch it.Kind {
 		case TransparentStatic:
-			w.setInstanceMode(InstanceModeStatic)
+			w.setInstanceMode(vertex_layout.InstanceModeStatic)
 			if boundVAO != it.Mesh.VAO {
 				w.ctx.BindVertexArray(it.Mesh.VAO)
 				boundVAO = it.Mesh.VAO
@@ -528,12 +530,12 @@ func (w *DrawCommandsRender) RenderTransparent() {
 			sub := it.Sub
 			w.ctx.DrawElements(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4))
 		case TransparentInstanced:
-			w.setInstanceMode(InstanceModeInstanced)
+			w.setInstanceMode(vertex_layout.InstanceModeInstanced)
 			boundVAO = it.Mesh.BindInstancedWithCache(it.InstanceVBO, it.BaseByteOffset, boundVAO)
 			sub := it.Sub
 			w.ctx.DrawElementsInstanced(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4), it.InstanceCount)
 		default:
-			w.setInstanceMode(InstanceModeStreaming)
+			w.setInstanceMode(vertex_layout.InstanceModeStreaming)
 			if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
 				w.ctx.BindVertexArray(w.streamingVAO)
 				boundVAO = w.streamingVAO

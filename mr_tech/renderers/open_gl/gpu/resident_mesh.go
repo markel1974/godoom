@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -179,7 +180,7 @@ func (rm *ResidentMesh) ReserveStaticAtlas(totalFaces int) {
 		return
 	}
 	neededVerts := totalFaces * 3
-	neededFloats := neededVerts * StaticVertexFloats
+	neededFloats := neededVerts * vertex_layout.StaticVertexFloats
 	if len(rm.VertFloats) < neededFloats {
 		rm.VertFloats = make([]float32, neededFloats)
 		if rm.ctx != nil {
@@ -316,7 +317,7 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 	})
 
 	neededVerts := validCount * 3
-	neededFloats := neededVerts * StaticVertexFloats
+	neededFloats := neededVerts * vertex_layout.StaticVertexFloats
 	reqFloats := rm.vertFloatsLen + neededFloats
 	reqVerts := rm.indicesLen + neededVerts
 	if len(rm.VertFloats) < reqFloats {
@@ -407,12 +408,12 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 		centSumZ += -(p0y + p1y + p2y) / 3.0
 		centCount++
 
-		WriteStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
-		fOut += StaticVertexFloats
-		WriteStaticVertex(rm.VertFloats[fOut:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
-		fOut += StaticVertexFloats
-		WriteStaticVertex(rm.VertFloats[fOut:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
-		fOut += StaticVertexFloats
+		vertex_layout.WriteStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		fOut += vertex_layout.StaticVertexFloats
+		vertex_layout.WriteStaticVertex(rm.VertFloats[fOut:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		fOut += vertex_layout.StaticVertexFloats
+		vertex_layout.WriteStaticVertex(rm.VertFloats[fOut:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		fOut += vertex_layout.StaticVertexFloats
 
 		rm.Indices[vIdx] = vIdx
 		rm.Indices[vIdx+1] = vIdx + 1
@@ -442,7 +443,7 @@ func (rm *ResidentMesh) uploadToGPU() {
 	if rm.indicesLen > 0 {
 		rm.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, rm.indicesLen*4, rm.indicesPtr, api.STATIC_DRAW)
 	}
-	ConfigureVertexAttribs(rm.ctx, StaticVertexFloats*4, false)
+	vertex_layout.ConfigureVertexAttribs(rm.ctx, vertex_layout.StaticVertexFloats*4, false)
 	rm.ctx.BindVertexArray(0)
 	// Invalidate instanced VAO bindings so next instanced bind refreshes cleanly.
 	rm.lastInstByteOffset = -1
@@ -460,7 +461,7 @@ func (rm *ResidentMesh) BindInstancedWithCache(instanceVBO uint32, baseByteOffse
 		rm.ctx.BindVertexArray(rm.VAOInstanced)
 		rm.ctx.BindBuffer(api.ARRAY_BUFFER, rm.VBO)
 		rm.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, rm.EBO)
-		ConfigureVertexAttribs(rm.ctx, StaticVertexFloats*4, false)
+		vertex_layout.ConfigureVertexAttribs(rm.ctx, vertex_layout.StaticVertexFloats*4, false)
 		rm.boundInstVBO = 0
 		rm.lastInstByteOffset = -1
 	} else if boundVAO != rm.VAOInstanced {
@@ -469,7 +470,7 @@ func (rm *ResidentMesh) BindInstancedWithCache(instanceVBO uint32, baseByteOffse
 
 	if rm.boundInstVBO != instanceVBO || rm.lastInstByteOffset != baseByteOffset {
 		rm.ctx.BindBuffer(api.ARRAY_BUFFER, instanceVBO)
-		const matStride = InstanceMatrixFloats * 4
+		const matStride = vertex_layout.InstanceMatrixFloats * 4
 		for col := range uint32(4) {
 			loc := 10 + col
 			off := int(baseByteOffset) + int(col*16)

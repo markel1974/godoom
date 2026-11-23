@@ -8,6 +8,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/occlusion"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/profiler"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -31,7 +33,7 @@ type IBuilder interface {
 
 	GetDrawCommandsLiquid() *gpu.DrawCommandsRender
 
-	GetHWOcclusion() *gpu.OcclusionHW
+	GetHWOcclusion() *occlusion.OcclusionHW
 
 	GetVertices() ([]float32, int32, []uint32, int32)
 
@@ -86,9 +88,9 @@ type RenderOpenGL struct {
 	dcAdditive    *gpu.DrawCommandsRender
 	dcLiquid      *gpu.DrawCommandsRender
 	dcTransparent *gpu.DrawCommandsRender
-	hwOcc         *gpu.OcclusionHW
+	hwOcc         *occlusion.OcclusionHW
 
-	gpuProfiler *gpu.GpuProfiler
+	gpuProfiler *profiler.GpuProfiler
 	renderScale float64
 }
 

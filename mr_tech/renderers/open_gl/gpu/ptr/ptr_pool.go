@@ -1,4 +1,4 @@
-package gpu
+package ptr
 
 // PtrPool provides reusable pointers to values of type T, growing as needed and resetting without reallocating.
 type PtrPool[T any] struct {

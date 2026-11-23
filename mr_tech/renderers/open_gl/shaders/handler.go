@@ -5,7 +5,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/profiler"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
@@ -37,7 +37,7 @@ type Handler struct {
 	additive    *Additive
 	liquid      *Liquid
 	deferred    *Deferred
-	profiler    *gpu.GpuProfiler
+	profiler    *profiler.GpuProfiler
 
 	emissiveIntensity float32
 	aoFactor          float32
@@ -100,7 +100,7 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *things.
 	h.fbW = fbW
 	h.fbH = fbH
 
-	h.profiler = gpu.NewGpuProfiler(h.ctx, rigid_body.GetFps())
+	h.profiler = profiler.NewGpuProfiler(h.ctx, rigid_body.GetFps())
 	h.mapMetrics = metrics.NewMap()
 	h.mapMetrics.SetOrthoSize(float32(h.cal.OrthoSize), float32(h.cal.ZNear), float32(h.cal.ZFar)+4.0)
 	h.mapMetrics.SetCenter(float32(h.cal.MapCenterX), float32(h.cal.MapCenterZ), float32(h.cal.LightCamY)+2.0)
@@ -158,7 +158,7 @@ func (h *Handler) GetContext() api.IContext {
 }
 
 // GetProfiler retrieves the GpuProfiler instance associated with the Handler.
-func (h *Handler) GetProfiler() *gpu.GpuProfiler {
+func (h *Handler) GetProfiler() *profiler.GpuProfiler {
 	return h.profiler
 }
 

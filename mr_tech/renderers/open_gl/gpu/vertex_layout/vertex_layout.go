@@ -1,4 +1,4 @@
-package gpu
+package vertex_layout
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"

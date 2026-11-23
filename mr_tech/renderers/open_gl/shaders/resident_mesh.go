@@ -1,8 +1,9 @@
 package shaders
 
 import (
+	"cmp"
 	"math"
-	"sort"
+	"slices"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -124,6 +125,15 @@ type ResidentSubMesh struct {
 	IndexCount    int32
 }
 
+func (sub *ResidentSubMesh) FinalizeCentroid(sumX, sumY, sumZ float64, count int) {
+	if sub != nil && count > 0 {
+		inv := 1.0 / float64(count)
+		sub.CentroidX = float32(sumX * inv)
+		sub.CentroidY = float32(sumY * inv)
+		sub.CentroidZ = float32(sumZ * inv)
+	}
+}
+
 type faceStateKey struct {
 	blendMode     int
 	cullMode      int
@@ -143,7 +153,8 @@ type ResidentMesh struct {
 	EBO                uint32
 	boundInstVBO       uint32
 	lastInstByteOffset int32
-	SubMeshes          []ResidentSubMesh
+	SubMeshes          []*ResidentSubMesh
+	SubMeshesLen       int
 	HasBlend           [config.BlendModeLatest]bool
 	HasSolidOpaque     bool
 	HasCutoutOpaque    bool
@@ -157,12 +168,19 @@ type ResidentMesh struct {
 	FaceCount          int
 	LastSeenFrame      uint64
 	RebuiltFrame       uint64
+	InstGroupFrame     uint64
+	InstGroupIdx       int
 	VertFloats         []float32
+	vertFloatsPtr      unsafe.Pointer
+	vertFloatsLen      int
 	Indices            []uint32
+	indicesPtr         unsafe.Pointer
+	indicesLen         int
 	AnimMats           []*textures.Material
 	AnimFrames         []*textures.Texture
+	AnimLen            int
 	faceOrder          []int
-	faceKeys           []faceStateKey
+	faceKeys           []*faceStateKey
 }
 
 // NewResidentMesh creates an unpopulated ResidentMesh bound to ctx.
@@ -173,10 +191,46 @@ func NewResidentMesh(ctx api.IContext) *ResidentMesh {
 	}
 }
 
+func (rm *ResidentMesh) acquireSubMesh() *ResidentSubMesh {
+	if rm.SubMeshesLen >= len(rm.SubMeshes) {
+		oldLen := len(rm.SubMeshes)
+		newLen := max(oldLen*2, 4)
+		grown := make([]*ResidentSubMesh, newLen)
+		copy(grown, rm.SubMeshes)
+		for i := oldLen; i < newLen; i++ {
+			grown[i] = &ResidentSubMesh{}
+		}
+		rm.SubMeshes = grown
+	}
+	sub := rm.SubMeshes[rm.SubMeshesLen]
+	rm.SubMeshesLen++
+	return sub
+}
+
+func (rm *ResidentMesh) addAnimRef(mat *textures.Material, tex *textures.Texture) {
+	for i := 0; i < rm.AnimLen; i++ {
+		if rm.AnimMats[i] == mat {
+			return
+		}
+	}
+	if rm.AnimLen >= len(rm.AnimMats) {
+		newLen := max(len(rm.AnimMats)*2, 4)
+		newMats := make([]*textures.Material, newLen)
+		copy(newMats, rm.AnimMats)
+		rm.AnimMats = newMats
+		newFrames := make([]*textures.Texture, newLen)
+		copy(newFrames, rm.AnimFrames)
+		rm.AnimFrames = newFrames
+	}
+	rm.AnimMats[rm.AnimLen] = mat
+	rm.AnimFrames[rm.AnimLen] = tex
+	rm.AnimLen++
+}
+
 // NeedsAnimRebuild reports whether any animated material on this resident mesh changed frame.
 func (rm *ResidentMesh) NeedsAnimRebuild() bool {
-	for i, mat := range rm.AnimMats {
-		if mat.GetCurrentFrame() != rm.AnimFrames[i] {
+	for i := 0; i < rm.AnimLen; i++ {
+		if rm.AnimMats[i].GetCurrentFrame() != rm.AnimFrames[i] {
 			return true
 		}
 	}
@@ -208,11 +262,17 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 	rm.HasSolidPrepass = false
 	rm.HasCutoutPrepass = false
 	rm.SkyMaterial = nil
-	rm.SubMeshes = rm.SubMeshes[:0]
-	rm.AnimMats = rm.AnimMats[:0]
-	rm.AnimFrames = rm.AnimFrames[:0]
+	prevAnimLen := rm.AnimLen
+	rm.SubMeshesLen = 0
+	rm.AnimLen = 0
+	rm.vertFloatsLen = 0
+	rm.indicesLen = 0
 
 	if faces == nil || faces.Len() == 0 {
+		for i := range prevAnimLen {
+			rm.AnimMats[i] = nil
+			rm.AnimFrames[i] = nil
+		}
 		if faces != nil {
 			rm.Version = faces.GetVersion()
 			rm.GeomHash = faces.GetGeomHash()
@@ -223,17 +283,22 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 	}
 
 	nFaces := faces.Len()
-	if cap(rm.faceOrder) < nFaces {
-		rm.faceOrder = make([]int, nFaces)
-		rm.faceKeys = make([]faceStateKey, nFaces)
-	} else {
-		rm.faceOrder = rm.faceOrder[:nFaces]
-		rm.faceKeys = rm.faceKeys[:nFaces]
+	if len(rm.faceOrder) < nFaces {
+		rm.faceOrder = make([]int, max(len(rm.faceOrder)*2, nFaces))
+	}
+	if len(rm.faceKeys) < nFaces {
+		oldLen := len(rm.faceKeys)
+		newLen := max(oldLen*2, nFaces)
+		grown := make([]*faceStateKey, newLen)
+		copy(grown, rm.faceKeys)
+		for i := oldLen; i < newLen; i++ {
+			grown[i] = &faceStateKey{}
+		}
+		rm.faceKeys = grown
 	}
 
 	validCount := 0
-	seenAnim := make(map[*textures.Material]struct{}, 8)
-	for i := 0; i < nFaces; i++ {
+	for i := range nFaces {
 		face := faces.At(i)
 		if face == nil {
 			continue
@@ -254,26 +319,27 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 			continue
 		}
 		if mat.IsAnimated() {
-			if _, seen := seenAnim[mat]; !seen {
-				seenAnim[mat] = struct{}{}
-				rm.AnimMats = append(rm.AnimMats, mat)
-				rm.AnimFrames = append(rm.AnimFrames, tex)
-			}
+			rm.addAnimRef(mat, tex)
 		}
 		bm := mat.GetBlendMode()
 		if bm < 0 || bm >= config.BlendModeLatest {
 			bm = config.BlendModeOpaque
 		}
-		rm.faceKeys[i] = faceStateKey{
-			blendMode:     bm,
-			cullMode:      mat.GetCullMode(),
-			hasCutout:     mat.HasCutout(),
-			depthWrite:    mat.GetDepthWrite(),
-			polygonOffset: mat.GetPolygonOffset(),
-			sortOrder:     mat.GetSort(),
-		}
+		ptr := rm.faceKeys[i]
+		ptr.blendMode = bm
+		ptr.cullMode = mat.GetCullMode()
+		ptr.hasCutout = mat.HasCutout()
+		ptr.depthWrite = mat.GetDepthWrite()
+		ptr.polygonOffset = mat.GetPolygonOffset()
+		ptr.sortOrder = mat.GetSort()
+
 		rm.faceOrder[validCount] = i
 		validCount++
+	}
+
+	for i := rm.AnimLen; i < prevAnimLen; i++ {
+		rm.AnimMats[i] = nil
+		rm.AnimFrames[i] = nil
 	}
 
 	if validCount == 0 {
@@ -284,53 +350,57 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		return false
 	}
 
-	sort.SliceStable(rm.faceOrder[:validCount], func(a, b int) bool {
-		ka := &rm.faceKeys[rm.faceOrder[a]]
-		kb := &rm.faceKeys[rm.faceOrder[b]]
+	slices.SortStableFunc(rm.faceOrder[:validCount], func(a, b int) int {
+		ka := rm.faceKeys[a]
+		kb := rm.faceKeys[b]
 		if ka.blendMode != kb.blendMode {
-			return ka.blendMode < kb.blendMode
+			return cmp.Compare(ka.blendMode, kb.blendMode)
 		}
 		if ka.hasCutout != kb.hasCutout {
-			return !ka.hasCutout && kb.hasCutout
+			if !ka.hasCutout {
+				return -1
+			}
+			return 1
 		}
 		if ka.depthWrite != kb.depthWrite {
-			return ka.depthWrite && !kb.depthWrite
+			if ka.depthWrite {
+				return -1
+			}
+			return 1
 		}
 		if ka.polygonOffset != kb.polygonOffset {
-			return !ka.polygonOffset && kb.polygonOffset
+			if !ka.polygonOffset {
+				return -1
+			}
+			return 1
 		}
 		if ka.cullMode != kb.cullMode {
-			return ka.cullMode < kb.cullMode
+			return cmp.Compare(ka.cullMode, kb.cullMode)
 		}
-		return ka.sortOrder < kb.sortOrder
+		return cmp.Compare(ka.sortOrder, kb.sortOrder)
 	})
 
 	neededVerts := validCount * 3
 	neededFloats := neededVerts * StaticVertexFloats
-	if cap(rm.VertFloats) < neededFloats {
-		rm.VertFloats = make([]float32, neededFloats)
-	} else {
-		rm.VertFloats = rm.VertFloats[:neededFloats]
+	if len(rm.VertFloats) < neededFloats {
+		rm.VertFloats = make([]float32, max(len(rm.VertFloats)*2, neededFloats))
+		if rm.ctx != nil {
+			rm.vertFloatsPtr = rm.ctx.Ptr(rm.VertFloats)
+		}
 	}
-	if cap(rm.Indices) < neededVerts {
-		rm.Indices = make([]uint32, neededVerts)
-	} else {
-		rm.Indices = rm.Indices[:neededVerts]
+	if len(rm.Indices) < neededVerts {
+		rm.Indices = make([]uint32, max(len(rm.Indices)*2, neededVerts))
+		if rm.ctx != nil {
+			rm.indicesPtr = rm.ctx.Ptr(rm.Indices)
+		}
 	}
+	rm.vertFloatsLen = neededFloats
+	rm.indicesLen = neededVerts
 
 	var curSub *ResidentSubMesh
 	var curKey faceStateKey
 	var centSumX, centSumY, centSumZ float64
 	var centCount int
-
-	flushSubMesh := func() {
-		if curSub != nil && centCount > 0 {
-			inv := 1.0 / float64(centCount)
-			curSub.CentroidX = float32(centSumX * inv)
-			curSub.CentroidY = float32(centSumY * inv)
-			curSub.CentroidZ = float32(centSumZ * inv)
-		}
-	}
 
 	vIdx := uint32(0)
 	fOut := 0
@@ -341,22 +411,23 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		fk := rm.faceKeys[fi]
 		texLayer, _ := texLookup(mat.GetCurrentFrame())
 
-		if curSub == nil || fk != curKey {
-			flushSubMesh()
-			curKey = fk
+		if curSub == nil || *fk != curKey {
+			curSub.FinalizeCentroid(centSumX, centSumY, centSumZ, centCount)
+			curKey = *fk
 			centSumX, centSumY, centSumZ = 0, 0, 0
 			centCount = 0
-			rm.SubMeshes = append(rm.SubMeshes, ResidentSubMesh{
-				BlendMode:     fk.blendMode,
-				CullMode:      fk.cullMode,
-				HasCutout:     fk.hasCutout,
-				DepthWrite:    fk.depthWrite,
-				PolygonOffset: fk.polygonOffset,
-				SortOrder:     fk.sortOrder,
-				FirstIndex:    int32(vIdx),
-				IndexCount:    0,
-			})
-			curSub = &rm.SubMeshes[len(rm.SubMeshes)-1]
+			curSub = rm.acquireSubMesh()
+			curSub.BlendMode = fk.blendMode
+			curSub.CullMode = fk.cullMode
+			curSub.HasCutout = fk.hasCutout
+			curSub.DepthWrite = fk.depthWrite
+			curSub.PolygonOffset = fk.polygonOffset
+			curSub.SortOrder = fk.sortOrder
+			curSub.CentroidX = 0
+			curSub.CentroidY = 0
+			curSub.CentroidZ = 0
+			curSub.FirstIndex = int32(vIdx)
+			curSub.IndexCount = 0
 			if fk.blendMode >= 0 && fk.blendMode < config.BlendModeLatest {
 				rm.HasBlend[fk.blendMode] = true
 			}
@@ -394,37 +465,12 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		centSumZ += -(p0y + p1y + p2y) / 3.0
 		centCount++
 
-		writeVert := func(px, py, pz, u, v, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv float64) {
-			rm.VertFloats[fOut] = float32(px)
-			rm.VertFloats[fOut+1] = float32(pz)
-			rm.VertFloats[fOut+2] = float32(-py)
-			rm.VertFloats[fOut+3] = float32(u)
-			rm.VertFloats[fOut+4] = float32(-v)
-			rm.VertFloats[fOut+5] = texLayer
-			rm.VertFloats[fOut+6] = float32(nx)
-			rm.VertFloats[fOut+7] = float32(nz)
-			rm.VertFloats[fOut+8] = float32(-ny)
-			rm.VertFloats[fOut+9] = float32(tx)
-			rm.VertFloats[fOut+10] = float32(tz)
-			rm.VertFloats[fOut+11] = float32(-ty)
-			rm.VertFloats[fOut+12] = float32(tSign)
-			rm.VertFloats[fOut+13] = float32(lmu)
-			rm.VertFloats[fOut+14] = float32(lmv)
-			rm.VertFloats[fOut+15] = lmIDFloat
-			rm.VertFloats[fOut+16] = packed
-			rm.VertFloats[fOut+17] = spec
-			rm.VertFloats[fOut+18] = shininess
-			rm.VertFloats[fOut+19] = dScale
-			rm.VertFloats[fOut+20] = dFactor
-			rm.VertFloats[fOut+21] = envStr
-			rm.VertFloats[fOut+22] = renderMode
-			rm.VertFloats[fOut+23] = envTint
-			fOut += StaticVertexFloats
-		}
-
-		writeVert(p0x, p0y, p0z, u0, v0, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0])
-		writeVert(p1x, p1y, p1z, u1, v1, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1])
-		writeVert(p2x, p2y, p2z, u2, v2, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2])
+		writeStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		fOut += StaticVertexFloats
+		writeStaticVertex(rm.VertFloats[fOut:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		fOut += StaticVertexFloats
+		writeStaticVertex(rm.VertFloats[fOut:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		fOut += StaticVertexFloats
 
 		rm.Indices[vIdx] = vIdx
 		rm.Indices[vIdx+1] = vIdx + 1
@@ -432,14 +478,14 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		vIdx += 3
 		curSub.IndexCount += 3
 	}
-	flushSubMesh()
+	curSub.FinalizeCentroid(centSumX, centSumY, centSumZ, centCount)
 
 	rm.uploadToGPU()
 	rm.Version = faces.GetVersion()
 	rm.GeomHash = faces.GetGeomHash()
 	rm.FaceCount = nFaces
 	rm.built = true
-	return len(rm.SubMeshes) > 0
+	return rm.SubMeshesLen > 0
 }
 
 func (rm *ResidentMesh) uploadToGPU() {
@@ -450,12 +496,12 @@ func (rm *ResidentMesh) uploadToGPU() {
 	}
 	rm.ctx.BindVertexArray(rm.VAO)
 	rm.ctx.BindBuffer(api.ARRAY_BUFFER, rm.VBO)
-	if len(rm.VertFloats) > 0 {
-		rm.ctx.BufferData(api.ARRAY_BUFFER, len(rm.VertFloats)*4, rm.ctx.Ptr(rm.VertFloats), api.STATIC_DRAW)
+	if rm.vertFloatsLen > 0 {
+		rm.ctx.BufferData(api.ARRAY_BUFFER, rm.vertFloatsLen*4, rm.vertFloatsPtr, api.STATIC_DRAW)
 	}
 	rm.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, rm.EBO)
-	if len(rm.Indices) > 0 {
-		rm.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, len(rm.Indices)*4, rm.ctx.Ptr(rm.Indices), api.STATIC_DRAW)
+	if rm.indicesLen > 0 {
+		rm.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, rm.indicesLen*4, rm.indicesPtr, api.STATIC_DRAW)
 	}
 	ConfigureVertexAttribs(rm.ctx, StaticVertexFloats*4, false)
 	rm.ctx.BindVertexArray(0)
@@ -480,7 +526,7 @@ func (rm *ResidentMesh) BindInstanced(instanceVBO uint32, baseByteOffset int32) 
 	if rm.boundInstVBO != instanceVBO || rm.lastInstByteOffset != baseByteOffset {
 		rm.ctx.BindBuffer(api.ARRAY_BUFFER, instanceVBO)
 		const matStride = InstanceMatrixFloats * 4
-		for col := uint32(0); col < 4; col++ {
+		for col := range uint32(4) {
 			loc := 10 + col
 			off := int(baseByteOffset) + int(col*16)
 			rm.ctx.VertexAttribPointer(loc, 4, api.FLOAT, false, matStride, rm.ctx.PtrOffset(off))
@@ -632,10 +678,7 @@ func (p *InstancePool) Upload() uint32 {
 	bytesNeeded := int(p.count) * (InstanceMatrixFloats * 4)
 	p.ctx.BindBuffer(api.ARRAY_BUFFER, p.vbo[idx])
 	if bytesNeeded > p.vboCap[idx] {
-		newCap := bytesNeeded * 2
-		if newCap < 64*InstanceMatrixFloats*4 {
-			newCap = 64 * InstanceMatrixFloats * 4
-		}
+		newCap := max(bytesNeeded*2, 64*InstanceMatrixFloats*4)
 		p.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
 		p.vboCap[idx] = newCap
 	}
@@ -644,58 +687,29 @@ func (p *InstancePool) Upload() uint32 {
 	return p.vbo[idx]
 }
 
-// StaticDrawItem binds a GPU-resident static submesh for direct drawing.
-type StaticDrawItem struct {
-	Mesh   *ResidentMesh
-	SubIdx int
-}
-
-// InstancedDrawItem binds a contiguous slice of instances sharing one GPU-resident submesh.
-type InstancedDrawItem struct {
-	Mesh           *ResidentMesh
-	SubIdx         int
-	InstanceVBO    uint32
-	BaseByteOffset int32
-	InstanceCount  int32
-}
-
-// TransparentKind identifies the source pipeline for a sorted translucent item.
-type TransparentKind uint8
-
-const (
-	TransparentStreaming TransparentKind = iota
-	TransparentStatic
-	TransparentInstanced
-)
-
-// TransparentDrawItem holds one translucent submesh/command sorted back-to-front per frame.
-type TransparentDrawItem struct {
-	Kind           TransparentKind
-	DistSq         float32
-	SortOrder      int
-	CullMode       int
-	HasCutout      bool
-	PolygonOffset  bool
-	FirstIndex     int32
-	IndexCount     int32
-	Mesh           *ResidentMesh
-	SubIdx         int
-	InstanceVBO    uint32
-	BaseByteOffset int32
-	InstanceCount  int32
-}
-
-// SortTransparentDrawItems sorts translucent items strictly back-to-front (largest DistSq first),
-// using SortOrder ascending as a deterministic co-planar tie-breaker.
-func SortTransparentDrawItems(items []TransparentDrawItem) {
-	if len(items) <= 1 {
-		return
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		di, dj := items[i].DistSq, items[j].DistSq
-		if math.Abs(float64(di-dj)) > 1e-2 {
-			return di > dj
-		}
-		return items[i].SortOrder < items[j].SortOrder
-	})
+func writeStaticVertex(dst []float32, px, py, pz, u, v float64, texLayer float32, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv float64, lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint float32) {
+	dst[0] = float32(px)
+	dst[1] = float32(pz)
+	dst[2] = float32(-py)
+	dst[3] = float32(u)
+	dst[4] = float32(-v)
+	dst[5] = texLayer
+	dst[6] = float32(nx)
+	dst[7] = float32(nz)
+	dst[8] = float32(-ny)
+	dst[9] = float32(tx)
+	dst[10] = float32(tz)
+	dst[11] = float32(-ty)
+	dst[12] = float32(tSign)
+	dst[13] = float32(lmu)
+	dst[14] = float32(lmv)
+	dst[15] = lmIDFloat
+	dst[16] = packed
+	dst[17] = spec
+	dst[18] = shininess
+	dst[19] = dScale
+	dst[20] = dFactor
+	dst[21] = envStr
+	dst[22] = renderMode
+	dst[23] = envTint
 }

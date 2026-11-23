@@ -291,18 +291,19 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	// Verify back-to-front transparent sorting (far before near, SortOrder ascending tie-breaker).
 	mesh := NewResidentMesh(ctx)
 	mesh.VAO = 77
-	mesh.SubMeshes = []ResidentSubMesh{
+	mesh.SubMeshes = []*ResidentSubMesh{
 		{FirstIndex: 30, IndexCount: 6, SortOrder: 2, CullMode: config.CullNone},
 	}
+	mesh.SubMeshesLen = 1
 
-	transItems := []TransparentDrawItem{
+	transItems := []*TransparentDrawItem{
 		{Kind: TransparentStreaming, DistSq: 100.0, SortOrder: 1, CullMode: config.CullNone, FirstIndex: 10, IndexCount: 6},
 		{Kind: TransparentStreaming, DistSq: 900.0, SortOrder: 2, CullMode: config.CullNone, FirstIndex: 40, IndexCount: 6},
-		{Kind: TransparentStatic, DistSq: 900.0, SortOrder: 0, CullMode: config.CullNone, Mesh: mesh, SubIdx: 0},
+		{Kind: TransparentStatic, DistSq: 900.0, SortOrder: 0, CullMode: config.CullNone, Mesh: mesh, Sub: mesh.SubMeshes[0]},
 	}
-	SortTransparentDrawItems(transItems)
+	SortTransparentDrawItems(transItems, len(transItems))
 	dcrTrans := NewDrawCommandsRender(ctx, "trans_test", false)
-	dcrTrans.SetTransparentDraws(transItems)
+	dcrTrans.SetTransparentDraws(transItems, len(transItems))
 	ctx.drawStarts = ctx.drawStarts[:0]
 	dcrTrans.RenderTransparent()
 
@@ -312,6 +313,13 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	// Expected draw index byte offsets: 30*4 (DistSq=900, SortOrder=0) -> 40*4 (DistSq=900, SortOrder=2) -> 10*4 (DistSq=100).
 	if ctx.drawStarts[0] != 30*4 || ctx.drawStarts[1] != 40*4 || ctx.drawStarts[2] != 10*4 {
 		t.Fatalf("unexpected transparent back-to-front order (byte offsets): %v", ctx.drawStarts)
+	}
+
+	allocs := testing.AllocsPerRun(50, func() {
+		SortTransparentDrawItems(transItems, len(transItems))
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 allocs in SortTransparentDrawItems, got %.2f", allocs)
 	}
 }
 

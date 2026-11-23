@@ -44,6 +44,8 @@ type DepthMap struct {
 	ctx            api.IContext
 	fbo            uint32
 	tex            uint32
+	width          int32
+	height         int32
 	matrixPtr      *float32
 	emptyMatrix    [16]float32
 	emptyMatrixPtr *float32
@@ -64,11 +66,17 @@ func NewDepthMap(ctx api.IContext) *DepthMap {
 
 // Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.
 func (d *DepthMap) Update(width, height int32) {
+	if d.fbo != 0 && d.width == width && d.height == height {
+		return
+	}
 	d.Shutdown()
+	d.width = width
+	d.height = height
 	var fbo, tex uint32
-	borderColor := []float32{1.0, 1.0, 1.0, 1.0}
+	borderColor := [4]float32{1.0, 1.0, 1.0, 1.0}
 	d.ctx.GenFramebuffers(1, &fbo)
 	d.ctx.GenTextures(1, &tex)
+	d.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
 	d.ctx.BindTexture(api.TEXTURE_2D, tex)
 	d.ctx.TexImage2D(api.TEXTURE_2D, 0, api.DEPTH_COMPONENT32F, width, height, 0, api.DEPTH_COMPONENT, api.FLOAT, nil)
 	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
@@ -85,6 +93,7 @@ func (d *DepthMap) Update(width, height int32) {
 	d.ctx.DrawBuffer(api.NONE)
 	d.ctx.ReadBuffer(api.NONE)
 	d.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
+	d.ctx.BindTexture(api.TEXTURE_2D, 0)
 	d.fbo = fbo
 	d.tex = tex
 }
@@ -104,7 +113,11 @@ func (d *DepthMap) Shutdown() {
 		d.ctx.DeleteTextures(1, &d.tex)
 		d.tex = 0
 	}
+	d.width = 0
+	d.height = 0
 }
+
+const depthDoubleBuffer = 2
 
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
@@ -116,7 +129,8 @@ type Depth struct {
 	tableSolid          [DepthLocLast]int32
 	sWidth              int32
 	sHeight             int32
-	shadowAtlasMap      *DepthMap
+	shadowAtlasMaps     [depthDoubleBuffer]*DepthMap
+	frameIdx            int
 	shadows             bool
 	shadowLights        bool
 	mapMetrics          *metrics.Map
@@ -152,7 +166,10 @@ func (s *Depth) Setup(h *Handler) error {
 	s.flash = h.GetFlash()
 	s.main = h.GetMain()
 	s.shadowLights = s.handler.GetCalibration().EnableShadowLights
-	s.shadowAtlasMap = NewDepthMap(s.ctx)
+	for i := range depthDoubleBuffer {
+		s.shadowAtlasMaps[i] = NewDepthMap(s.ctx)
+	}
+	s.frameIdx = 0
 	s.matrixEmptyPtr = &s.matrixEmpty[0]
 	s.viewMatrixPtr = s.matrixEmptyPtr
 	s.roomSpaceMatrix = s.matrixEmptyPtr
@@ -190,7 +207,7 @@ func (s *Depth) GetUniform(id DepthLoc) int32 {
 
 // GetRoomShadowTextures retrieves the texture ID associated with the room shadow map (Master Shadow Atlas).
 func (s *Depth) GetRoomShadowTextures() uint32 {
-	return s.shadowAtlasMap.tex
+	return s.shadowAtlasMaps[s.frameIdx].tex
 }
 
 // GetShadowLightCount returns the count of dynamic shadow lights currently managed by the Depth instance.
@@ -200,18 +217,19 @@ func (s *Depth) GetShadowLightCount() uint32 {
 
 // GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight shadow map (Master Shadow Atlas).
 func (s *Depth) GetFlashShadowTextures() uint32 {
-	return s.shadowAtlasMap.tex
+	return s.shadowAtlasMaps[s.frameIdx].tex
 }
 
 // GetShadowAtlasTexture retrieves the OpenGL texture ID of the master shadow atlas.
 func (s *Depth) GetShadowAtlasTexture() uint32 {
-	return s.shadowAtlasMap.tex
+	return s.shadowAtlasMaps[s.frameIdx].tex
 }
 
 // GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
 func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, *float32) {
 	_, lMatrix := s.shadowLightsMetrics.GetLight(int(idx))
-	return s.shadowAtlasMap.tex, s.shadowAtlasMap.fbo, lMatrix
+	atlas := s.shadowAtlasMaps[s.frameIdx]
+	return atlas.tex, atlas.fbo, lMatrix
 }
 
 // Compile initializes and compiles the cutout and solid depth shader programs for shadow atlas rendering.
@@ -230,12 +248,16 @@ func (s *Depth) Compile(assets IAssets) error {
 
 func (s *Depth) compileDepthProgram(assets IAssets, vertID, fragID, progName string, requireTexture bool) (uint32, [DepthLocLast]int32, error) {
 	var table [DepthLocLast]int32
-	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertID, fragID)
+	vertexSrcBytes, fragmentSrc, err := assets.ReadMulti(vertID, fragID)
 	if err != nil {
 		return 0, table, err
 	}
+	vertexSrc := string(vertexSrcBytes)
+	if requireTexture {
+		vertexSrc = injectShaderDefine(vertexSrc, "#define ALPHA_CUTOUT 1")
+	}
 
-	vertexShader, err := ShaderCompile(s.ctx, vertID, string(vertexSrc), api.VERTEX_SHADER)
+	vertexShader, err := ShaderCompile(s.ctx, vertID, vertexSrc, api.VERTEX_SHADER)
 	if err != nil {
 		return 0, table, err
 	}
@@ -282,10 +304,13 @@ func (s *Depth) Render(dc *DrawCommandsRender) {
 
 	fbW, fbH := s.handler.GetSize()
 	mainVao := s.main.GetVAO()
+	idx := (s.frameIdx + 1) % depthDoubleBuffer
+	s.frameIdx = idx
+	atlas := s.shadowAtlasMaps[idx]
 
-	if s.sWidth != atlasSize || s.sHeight != atlasSize {
-		s.allocate(atlasSize, atlasSize)
-	}
+	atlas.Update(atlasSize, atlasSize)
+	s.sWidth = atlasSize
+	s.sHeight = atlasSize
 	s.ctx.BindVertexArray(mainVao)
 
 	s.ctx.Disable(api.CULL_FACE)
@@ -297,7 +322,7 @@ func (s *Depth) Render(dc *DrawCommandsRender) {
 	s.ctx.Enable(api.SCISSOR_TEST)
 
 	// Bind single master shadow atlas FBO and clear entire depth atlas in one go
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.shadowAtlasMap.fbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, atlas.fbo)
 	s.ctx.Viewport(0, 0, atlasSize, atlasSize)
 	s.ctx.Scissor(0, 0, atlasSize, atlasSize)
 	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
@@ -305,15 +330,11 @@ func (s *Depth) Render(dc *DrawCommandsRender) {
 	interval := float32(textures.GlobalTick()) * 0.05
 	if dc.HasSolid() {
 		dc.SetPassState(mainVao, s.tableSolid[DepthLocInstanceMode])
-		s.renderAtlasPass(s.prgSolid, &s.tableSolid, interval, func() {
-			dc.RenderCutoutFiltered(false)
-		})
+		s.renderAtlasPass(s.prgSolid, &s.tableSolid, interval, dc, false)
 	}
 	if dc.HasCutout() {
 		dc.SetPassState(mainVao, s.table[DepthLocInstanceMode])
-		s.renderAtlasPass(s.prg, &s.table, interval, func() {
-			dc.RenderCutoutFiltered(true)
-		})
+		s.renderAtlasPass(s.prg, &s.table, interval, dc, true)
 	}
 
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
@@ -322,10 +343,11 @@ func (s *Depth) Render(dc *DrawCommandsRender) {
 	s.ctx.Disable(api.POLYGON_OFFSET_FILL)
 	s.ctx.DepthMask(true)
 	s.ctx.DepthFunc(api.LESS)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
-func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval float32, renderSubset func()) {
+func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval float32, dc *DrawCommandsRender, cutout bool) {
 	s.ctx.UseProgram(prg)
 	s.ctx.Uniform1f(table[DepthLocTime], interval)
 	s.ctx.UniformMatrix4fv(table[DepthLocView], 1, false, s.viewMatrixPtr)
@@ -340,7 +362,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 	s.ctx.Scissor(0, 1024, 1024, 1024)
 	s.ctx.PolygonOffset(2.0, 4.0)
 	s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.roomSpaceMatrix)
-	renderSubset()
+	dc.RenderCutoutFiltered(cutout)
 	s.ctx.Disable(api.DEPTH_CLAMP)
 
 	// OMBRE TORCIA (Prospettica - Tile 1024x1024 in alto a destra: X: 1024..2048, Y: 1024..2048)
@@ -349,7 +371,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 		s.ctx.Scissor(1024, 1024, 1024, 1024)
 		s.ctx.PolygonOffset(1.5, 2.0)
 		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.flashSpaceMatrix)
-		renderSubset()
+		dc.RenderCutoutFiltered(cutout)
 	}
 
 	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
@@ -366,7 +388,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 				s.ctx.Viewport(col*512, row*512, 512, 512)
 				s.ctx.Scissor(col*512, row*512, 512, 512)
 				s.ctx.UniformMatrix4fv(locLightSpace, 1, false, lMatrix)
-				renderSubset()
+				dc.RenderCutoutFiltered(cutout)
 			}
 		}
 	}
@@ -376,5 +398,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 func (s *Depth) allocate(width, height int32) {
 	s.sWidth = width
 	s.sHeight = height
-	s.shadowAtlasMap.Update(width, height)
+	for i := range depthDoubleBuffer {
+		s.shadowAtlasMaps[i].Update(width, height)
+	}
 }

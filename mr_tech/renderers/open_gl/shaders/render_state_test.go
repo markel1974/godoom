@@ -62,6 +62,8 @@ type recordingCtx struct {
 	drawPolyOffsets    []bool
 	drawDepthClamps    []bool
 	drawScissors       [][4]int32
+	activeTexUnit      uint32
+	boundTex2D         [16]uint32
 }
 
 func newRecordingCtx() *recordingCtx {
@@ -83,16 +85,24 @@ func (c *recordingCtx) allocIDs(n int32, out *uint32) {
 	}
 }
 
-func (c *recordingCtx) ActiveTexture(_ uint32) {}
+func (c *recordingCtx) ActiveTexture(tex uint32) {
+	if tex >= api.TEXTURE0 {
+		c.activeTexUnit = tex - api.TEXTURE0
+	}
+}
 func (c *recordingCtx) AttachShader(prg, sh uint32) {
 	c.programShaders[prg] = append(c.programShaders[prg], sh)
 }
 func (c *recordingCtx) BindBufferBase(_ uint32, _ uint32, _ uint32) {}
 func (c *recordingCtx) BindFramebuffer(_ uint32, _ uint32)          {}
 func (c *recordingCtx) BindRenderbuffer(_ uint32, _ uint32)         {}
-func (c *recordingCtx) BindTexture(_ uint32, _ uint32)              {}
-func (c *recordingCtx) BlendEquation(_ uint32)                      {}
-func (c *recordingCtx) BlendFunc(_, _ uint32)                       {}
+func (c *recordingCtx) BindTexture(target uint32, tex uint32) {
+	if target == api.TEXTURE_2D && int(c.activeTexUnit) < len(c.boundTex2D) {
+		c.boundTex2D[c.activeTexUnit] = tex
+	}
+}
+func (c *recordingCtx) BlendEquation(_ uint32) {}
+func (c *recordingCtx) BlendFunc(_, _ uint32)  {}
 func (c *recordingCtx) BlitFramebuffer(_, _, _, _, _, _, _, _ int32, mask, _ uint32) {
 	c.blitCalls++
 	c.lastBlitMask = mask
@@ -1026,5 +1036,107 @@ func TestMatrixInverse4x4ExactIdentity(t *testing.T) {
 				t.Fatalf("M * M^-1 mismatch at (%d,%d): got=%v want=%v (inv=%v)", row, col, got, want, inv)
 			}
 		}
+	}
+}
+
+func TestDepthDoubleBufferShadowAtlasAndUnbinds(t *testing.T) {
+	ctx := newRecordingCtx()
+	h := newTestHandlerWithMSAA(t, ctx, 0)
+	if err := h.GetMain().Compile(diskAssets{}); err != nil {
+		t.Fatalf("Main.Compile failed: %v", err)
+	}
+	if err := h.GetMain().Init(); err != nil {
+		t.Fatalf("Main.Init failed: %v", err)
+	}
+	if err := h.GetLights().Init(); err != nil {
+		t.Fatalf("Lights.Init failed: %v", err)
+	}
+	d := h.GetDepth()
+	if err := d.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Depth.Compile failed: %v", err)
+	}
+	p := h.GetPost()
+	if err := p.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Post.Compile failed: %v", err)
+	}
+	_ = p.SetupSamplers()
+	b := h.GetBloom()
+	if err := b.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Bloom.Compile failed: %v", err)
+	}
+	_ = b.SetupSamplers()
+	p.EnsureAllocated()
+
+	// Verify solid depth program omits ALPHA_CUTOUT while cutout depth program defines it.
+	for _, sh := range ctx.programShaders[d.prgSolid] {
+		if strings.Contains(ctx.shaderSources[sh], "#define ALPHA_CUTOUT 1") {
+			t.Fatalf("prgSolid must not define ALPHA_CUTOUT")
+		}
+	}
+	hasAlphaCutout := false
+	for _, sh := range ctx.programShaders[d.prg] {
+		if strings.Contains(ctx.shaderSources[sh], "#define ALPHA_CUTOUT 1") {
+			hasAlphaCutout = true
+			break
+		}
+	}
+	if !hasAlphaCutout {
+		t.Fatalf("cutout depth prg must inject #define ALPHA_CUTOUT 1")
+	}
+
+	solidMat, _ := makeSolidAndCutoutMaterials(t)
+	cmdSolid := NewDrawCommand()
+	cmdSolid.SetFirstIndex(0)
+	cmdSolid.SetIndexCount(6)
+	cmdSolid.SetMaterial(solidMat)
+	dcr := NewDrawCommandsRender(ctx, "atlas_dbl", false)
+	dcr.Prepare([]*DrawCommand{cmdSolid})
+
+	// Simulate Textures.BindBuckets() leaving unit 11/13 active before Depth.Render creates atlas.
+	ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEmissiveBase + 3)
+	d.SetShadowsEnabled(true)
+	h.GetMain().SetShadowsEnabled(true)
+	d.Prepare()
+
+	d.Render(dcr)
+	tex1 := d.GetShadowAtlasTexture()
+	if tex1 == 0 {
+		t.Fatalf("expected non-zero shadow atlas texture on frame 1")
+	}
+	if ctx.boundTex2D[api.TexUnitShadowAtlas] != 0 || ctx.boundTex2D[api.TexUnitEmissiveBase+3] != 0 {
+		t.Fatalf("DepthMap.Update leaked TEXTURE_2D binding: unit14=%d unit11=%d",
+			ctx.boundTex2D[api.TexUnitShadowAtlas], ctx.boundTex2D[api.TexUnitEmissiveBase+3])
+	}
+
+	h.GetMain().Render(dcr, 0.25, 0, 0, 1)
+	if ctx.boundTex2D[api.TexUnitShadowAtlas] != 0 {
+		t.Fatalf("Main.Render left shadow atlas texture bound on unit %d: %d",
+			api.TexUnitShadowAtlas, ctx.boundTex2D[api.TexUnitShadowAtlas])
+	}
+	b.Render()
+	if ctx.boundTex2D[0] != 0 {
+		t.Fatalf("Bloom.Render left TEXTURE_2D bound on unit 0: %d", ctx.boundTex2D[0])
+	}
+	p.Render(640, 480)
+	if ctx.boundTex2D[0] != 0 || ctx.boundTex2D[1] != 0 {
+		t.Fatalf("Post.Render left TEXTURE_2D bound on units 0/1: %d, %d", ctx.boundTex2D[0], ctx.boundTex2D[1])
+	}
+
+	d.Render(dcr)
+	tex2 := d.GetShadowAtlasTexture()
+	if tex2 == 0 || tex2 == tex1 {
+		t.Fatalf("expected double-buffered shadow atlas to alternate textures: tex1=%d tex2=%d", tex1, tex2)
+	}
+	d.Render(dcr)
+	tex3 := d.GetShadowAtlasTexture()
+	if tex3 != tex1 {
+		t.Fatalf("expected frame 3 shadow atlas to reuse tex1 (%d), got %d", tex1, tex3)
+	}
+
+	allocs := testing.AllocsPerRun(50, func() {
+		d.Render(dcr)
+	})
+	if allocs > 0 {
+		t.Fatalf("Depth.Render allocated %.2f objects/op, want 0", allocs)
 	}
 }

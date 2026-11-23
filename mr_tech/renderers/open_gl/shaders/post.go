@@ -264,6 +264,10 @@ func (s *Post) Render(winW, winH int32) {
 		s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 	}
 
+	s.ctx.ActiveTexture(api.TEXTURE1)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	s.ctx.ActiveTexture(api.TEXTURE0)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	s.ctx.BindVertexArray(0)
 	s.ctx.Enable(api.DEPTH_TEST)
 }

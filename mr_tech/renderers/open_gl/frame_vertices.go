@@ -39,10 +39,20 @@ type FrameVertices struct {
 	stride              int32
 	containers          []*FrameVertices
 	containerIdx        int
-	batches             []FrameBatch
+	batches             []*FrameBatch
+	batchesLen          int
 	materials           []*textures.Material
 	animMats            []*textures.Material
 	animTexs            []*textures.Texture
+	animLen             int
+}
+
+func newFrameBatches(n int) []*FrameBatch {
+	b := make([]*FrameBatch, n)
+	for i := range b {
+		b[i] = &FrameBatch{}
+	}
+	return b
 }
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
@@ -55,7 +65,7 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 		stride:       maxStride,
 		containers:   make([]*FrameVertices, 16),
 		containerIdx: 0,
-		batches:      make([]FrameBatch, 0, 8),
+		batches:      newFrameBatches(8),
 		materials:    make([]*textures.Material, materialsMax),
 	}
 	if ctx != nil {
@@ -72,7 +82,7 @@ func NewStagingFrameVertices(maxVerts int) *FrameVertices {
 		vertices:  make([]float32, maxVerts),
 		indices:   make([]uint32, maxVerts),
 		stride:    maxStride,
-		batches:   make([]FrameBatch, 0, 4),
+		batches:   newFrameBatches(4),
 		materials: make([]*textures.Material, materialsMax),
 	}
 }
@@ -104,25 +114,36 @@ func (w *FrameVertices) AddBatchCentroid(blendMode int, count int32, mat *textur
 	if count <= 0 {
 		return
 	}
-	n := len(w.batches)
-	if n > 0 && w.batches[n-1].blendMode == blendMode && w.batches[n-1].material == mat {
-		b := &w.batches[n-1]
-		b.indexCount += count
-		b.centroidX += cx
-		b.centroidY += cy
-		b.centroidZ += cz
-		b.centCount++
-		return
+	if w.batchesLen > 0 {
+		b := w.batches[w.batchesLen-1]
+		if b.blendMode == blendMode && b.material == mat {
+			b.indexCount += count
+			b.centroidX += cx
+			b.centroidY += cy
+			b.centroidZ += cz
+			b.centCount++
+			return
+		}
 	}
-	w.batches = append(w.batches, FrameBatch{
-		blendMode:  blendMode,
-		indexCount: count,
-		material:   mat,
-		centroidX:  cx,
-		centroidY:  cy,
-		centroidZ:  cz,
-		centCount:  1,
-	})
+	if w.batchesLen >= len(w.batches) {
+		oldLen := len(w.batches)
+		newLen := max(oldLen*2, 4)
+		grown := make([]*FrameBatch, newLen)
+		copy(grown, w.batches)
+		for i := oldLen; i < newLen; i++ {
+			grown[i] = &FrameBatch{}
+		}
+		w.batches = grown
+	}
+	b := w.batches[w.batchesLen]
+	b.blendMode = blendMode
+	b.indexCount = count
+	b.material = mat
+	b.centroidX = cx
+	b.centroidY = cy
+	b.centroidZ = cz
+	b.centCount = 1
+	w.batchesLen++
 }
 
 // SetMaterial assigns a material to the specified index in the materials slice of the FrameVertices object.
@@ -167,7 +188,7 @@ func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
 	}
 
 	startIdx := w.indicesCount
-	for b := 0; b < len(fv.batches); b++ {
+	for b := 0; b < fv.batchesLen; b++ {
 		batch := fv.batches[b]
 		endIdx := startIdx + batch.indexCount
 		targetDc := modes[batch.blendMode]
@@ -199,28 +220,44 @@ func (w *FrameVertices) DeepReset() {
 	w.freezeVerticesCount = 0
 	w.freezeIndicesCount = 0
 	w.freezeVerticesSlot = 0
-	w.batches = w.batches[:0]
-	w.animMats = w.animMats[:0]
-	w.animTexs = w.animTexs[:0]
+	for i := 0; i < w.batchesLen; i++ {
+		w.batches[i].material = nil
+	}
+	w.batchesLen = 0
+	for i := 0; i < w.animLen; i++ {
+		w.animMats[i] = nil
+		w.animTexs[i] = nil
+	}
+	w.animLen = 0
 	copy(w.materials, _emptyMaterial)
 	w.Reset()
 }
 
 // AddAnimRef records an animated material and the active texture frame used when building vertices.
 func (w *FrameVertices) AddAnimRef(mat *textures.Material, tex *textures.Texture) {
-	for _, existing := range w.animMats {
-		if existing == mat {
+	for i := 0; i < w.animLen; i++ {
+		if w.animMats[i] == mat {
 			return
 		}
 	}
-	w.animMats = append(w.animMats, mat)
-	w.animTexs = append(w.animTexs, tex)
+	if w.animLen >= len(w.animMats) {
+		newLen := max(len(w.animMats)*2, 4)
+		newMats := make([]*textures.Material, newLen)
+		copy(newMats, w.animMats)
+		w.animMats = newMats
+		newTexs := make([]*textures.Texture, newLen)
+		copy(newTexs, w.animTexs)
+		w.animTexs = newTexs
+	}
+	w.animMats[w.animLen] = mat
+	w.animTexs[w.animLen] = tex
+	w.animLen++
 }
 
 // NeedsAnimRebuild reports whether any tracked animated material has advanced to a different texture frame.
 func (w *FrameVertices) NeedsAnimRebuild() bool {
-	for i, mat := range w.animMats {
-		if mat.GetCurrentFrame() != w.animTexs[i] {
+	for i := 0; i < w.animLen; i++ {
+		if w.animMats[i].GetCurrentFrame() != w.animTexs[i] {
 			return true
 		}
 	}

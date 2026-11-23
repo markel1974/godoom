@@ -1,7 +1,9 @@
 #version 330 core
 
 layout (location = 0) in vec3 aPos;
+#ifdef ALPHA_CUTOUT
 layout (location = 1) in vec3 aTexCoords;
+#endif
 layout (location = 6) in vec4 aExtra;       // z = renderMode
 layout (location = 7) in vec3 aOrigin;      // streaming dynamic only
 layout (location = 8) in vec3 aPosNext;     // streaming dynamic only
@@ -11,7 +13,9 @@ layout (location = 11) in vec4 aInstanceM1;
 layout (location = 12) in vec4 aInstanceM2;
 layout (location = 13) in vec4 aInstanceM3;
 
+#ifdef ALPHA_CUTOUT
 out vec3 TexCoords;
+#endif
 
 uniform mat4 u_lightSpaceMatrix;
 uniform mat4 u_view; // Necessario per far orientare l'ombra in base a dove guarda il player
@@ -86,7 +90,9 @@ void renderAll() {
 }
 
 void main() {
+#ifdef ALPHA_CUTOUT
     TexCoords = aTexCoords;
+#endif
     float renderMode = aExtra.z;
     if (u_instanceMode == 1) {
         renderInstanced();

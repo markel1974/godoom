@@ -168,6 +168,8 @@ func (s *Bloom) Render() {
 		horizontal = !horizontal
 	}
 
+	s.ctx.ActiveTexture(api.TEXTURE0)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	s.ctx.Viewport(0, 0, fbW, fbH)
 	s.ctx.Enable(api.DEPTH_TEST)
 }

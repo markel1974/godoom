@@ -151,9 +151,12 @@ type DrawCommandsRender struct {
 	hasSolid         bool
 	hasCutout        bool
 
-	staticItems      []StaticDrawItem
-	instancedItems   []InstancedDrawItem
-	transparentItems []TransparentDrawItem
+	staticItems      []*StaticDrawItem
+	staticLen        int
+	instancedItems   []*InstancedDrawItem
+	instancedLen     int
+	transparentItems []*TransparentDrawItem
+	transparentLen   int
 
 	streamingVAO    uint32
 	locInstanceMode int32
@@ -185,11 +188,13 @@ func (w *DrawCommandsRender) SetPassState(streamingVAO uint32, locInstanceMode i
 }
 
 // SetResidentDraws attaches GPU-resident static and instanced draw slices built for the current frame.
-func (w *DrawCommandsRender) SetResidentDraws(staticItems []StaticDrawItem, instancedItems []InstancedDrawItem) {
-	w.staticItems = append(w.staticItems[:0], staticItems...)
-	w.instancedItems = append(w.instancedItems[:0], instancedItems...)
-	for i := range w.staticItems {
-		sub := &w.staticItems[i].Mesh.SubMeshes[w.staticItems[i].SubIdx]
+func (w *DrawCommandsRender) SetResidentDraws(staticItems []*StaticDrawItem, staticLen int, instancedItems []*InstancedDrawItem, instancedLen int) {
+	w.staticItems = staticItems
+	w.staticLen = staticLen
+	w.instancedItems = instancedItems
+	w.instancedLen = instancedLen
+	for i := 0; i < staticLen; i++ {
+		sub := staticItems[i].Sub
 		if sub.HasCutout {
 			w.hasCutout = true
 			if sub.DepthWrite && !sub.PolygonOffset {
@@ -202,8 +207,8 @@ func (w *DrawCommandsRender) SetResidentDraws(staticItems []StaticDrawItem, inst
 			}
 		}
 	}
-	for i := range w.instancedItems {
-		sub := &w.instancedItems[i].Mesh.SubMeshes[w.instancedItems[i].SubIdx]
+	for i := 0; i < instancedLen; i++ {
+		sub := instancedItems[i].Sub
 		if sub.HasCutout {
 			w.hasCutout = true
 			if sub.DepthWrite && !sub.PolygonOffset {
@@ -219,13 +224,14 @@ func (w *DrawCommandsRender) SetResidentDraws(staticItems []StaticDrawItem, inst
 }
 
 // SetTransparentDraws stores depth-sorted translucent items across streaming, static, and instanced sources.
-func (w *DrawCommandsRender) SetTransparentDraws(items []TransparentDrawItem) {
-	w.transparentItems = append(w.transparentItems[:0], items...)
+func (w *DrawCommandsRender) SetTransparentDraws(items []*TransparentDrawItem, itemsLen int) {
+	w.transparentItems = items
+	w.transparentLen = itemsLen
 }
 
 // HasCommands returns true if there are streaming or resident render commands available to process.
 func (w *DrawCommandsRender) HasCommands() bool {
-	return w.batchesLen > 0 || len(w.staticItems) > 0 || len(w.instancedItems) > 0 || len(w.transparentItems) > 0
+	return w.batchesLen > 0 || w.staticLen > 0 || w.instancedLen > 0 || w.transparentLen > 0
 }
 
 // GetName retrieves the name of the DrawCommandsRender instance.
@@ -257,9 +263,12 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.hasCutoutPrepass = false
 	w.hasSolid = false
 	w.hasCutout = false
-	w.staticItems = w.staticItems[:0]
-	w.instancedItems = w.instancedItems[:0]
-	w.transparentItems = w.transparentItems[:0]
+	w.staticItems = nil
+	w.staticLen = 0
+	w.instancedItems = nil
+	w.instancedLen = 0
+	w.transparentItems = nil
+	w.transparentLen = 0
 
 	if len(dc) == 0 {
 		return
@@ -375,13 +384,13 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 		w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, dw, po)
 	}
 
-	// 1. Resident static meshes (u_instanceMode = 0)
-	if len(w.staticItems) > 0 {
+	// Resident static meshes (u_instanceMode = 0)
+	if w.staticLen > 0 {
 		w.setInstanceMode(InstanceModeStatic)
 		var boundVAO uint32
-		for i := range w.staticItems {
-			item := &w.staticItems[i]
-			sub := &item.Mesh.SubMeshes[item.SubIdx]
+		for i := 0; i < w.staticLen; i++ {
+			item := w.staticItems[i]
+			sub := item.Sub
 			if cutoutFilter >= 0 && ((cutoutFilter == 1) != sub.HasCutout) {
 				continue
 			}
@@ -403,12 +412,12 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 		}
 	}
 
-	// 2. Resident instanced rigid meshes (u_instanceMode = 1)
-	if len(w.instancedItems) > 0 {
+	// Resident instanced rigid meshes (u_instanceMode = 1)
+	if w.instancedLen > 0 {
 		w.setInstanceMode(InstanceModeInstanced)
-		for i := range w.instancedItems {
-			item := &w.instancedItems[i]
-			sub := &item.Mesh.SubMeshes[item.SubIdx]
+		for i := 0; i < w.instancedLen; i++ {
+			item := w.instancedItems[i]
+			sub := item.Sub
 			if cutoutFilter >= 0 && ((cutoutFilter == 1) != sub.HasCutout) {
 				continue
 			}
@@ -427,7 +436,7 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 		}
 	}
 
-	// 3. Streaming CPU batches (morphing models, billboards, UI; u_instanceMode = 2)
+	// Streaming CPU batches (morphing models, billboards, UI; u_instanceMode = 2)
 	if w.batchesLen > 0 {
 		didBindStreaming := false
 		for i := 0; i < w.batchesLen; i++ {
@@ -482,12 +491,12 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 	}
 	curCull := cullStateUnset
 
-	if len(w.staticItems) > 0 {
+	if w.staticLen > 0 {
 		var boundVAO uint32
 		didMode := false
-		for i := range w.staticItems {
-			item := &w.staticItems[i]
-			sub := &item.Mesh.SubMeshes[item.SubIdx]
+		for i := 0; i < w.staticLen; i++ {
+			item := w.staticItems[i]
+			sub := item.Sub
 			if !sub.DepthWrite || sub.PolygonOffset || sub.HasCutout != cutout {
 				continue
 			}
@@ -504,11 +513,11 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 		}
 	}
 
-	if len(w.instancedItems) > 0 {
+	if w.instancedLen > 0 {
 		didMode := false
-		for i := range w.instancedItems {
-			item := &w.instancedItems[i]
-			sub := &item.Mesh.SubMeshes[item.SubIdx]
+		for i := 0; i < w.instancedLen; i++ {
+			item := w.instancedItems[i]
+			sub := item.Sub
 			if !sub.DepthWrite || sub.PolygonOffset || sub.HasCutout != cutout {
 				continue
 			}
@@ -551,12 +560,10 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 	if !w.HasCommands() {
 		return
 	}
+	prepassDepthFunc := uint32(api.EQUAL)
 	wantCutout := 0
 	if cutout {
 		wantCutout = 1
-	}
-	prepassDepthFunc := uint32(api.EQUAL)
-	if cutout {
 		prepassDepthFunc = api.LEQUAL
 	}
 
@@ -580,12 +587,12 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 		curCull = ApplyMaterialCullState(w.ctx, curCull, cullMode, hasCutout, false)
 	}
 
-	if len(w.staticItems) > 0 {
+	if w.staticLen > 0 {
 		var boundVAO uint32
 		didMode := false
-		for i := range w.staticItems {
-			item := &w.staticItems[i]
-			sub := &item.Mesh.SubMeshes[item.SubIdx]
+		for i := 0; i < w.staticLen; i++ {
+			item := w.staticItems[i]
+			sub := item.Sub
 			if sub.HasCutout != cutout {
 				continue
 			}
@@ -610,11 +617,11 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 		}
 	}
 
-	if len(w.instancedItems) > 0 {
+	if w.instancedLen > 0 {
 		didMode := false
-		for i := range w.instancedItems {
-			item := &w.instancedItems[i]
-			sub := &item.Mesh.SubMeshes[item.SubIdx]
+		for i := 0; i < w.instancedLen; i++ {
+			item := w.instancedItems[i]
+			sub := item.Sub
 			if sub.HasCutout != cutout {
 				continue
 			}
@@ -671,15 +678,15 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 
 // RenderTransparent executes depth-sorted translucent items strictly back-to-front.
 func (w *DrawCommandsRender) RenderTransparent() {
-	if len(w.transparentItems) == 0 {
+	if w.transparentLen == 0 {
 		return
 	}
 	curCull := cullStateUnset
 	curPoly := -1
 	var boundVAO uint32
 
-	for i := range w.transparentItems {
-		it := &w.transparentItems[i]
+	for i := 0; i < w.transparentLen; i++ {
+		it := w.transparentItems[i]
 		po := 0
 		if it.PolygonOffset {
 			po = 1
@@ -702,13 +709,13 @@ func (w *DrawCommandsRender) RenderTransparent() {
 				w.ctx.BindVertexArray(it.Mesh.VAO)
 				boundVAO = it.Mesh.VAO
 			}
-			sub := &it.Mesh.SubMeshes[it.SubIdx]
+			sub := it.Sub
 			w.ctx.DrawElements(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4))
 		case TransparentInstanced:
 			w.setInstanceMode(InstanceModeInstanced)
 			it.Mesh.BindInstanced(it.InstanceVBO, it.BaseByteOffset)
 			boundVAO = it.Mesh.VAOInstanced
-			sub := &it.Mesh.SubMeshes[it.SubIdx]
+			sub := it.Sub
 			w.ctx.DrawElementsInstanced(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4), it.InstanceCount)
 		default:
 			w.setInstanceMode(InstanceModeStreaming)

@@ -12,8 +12,9 @@ import (
 
 // Context represents an abstraction for managing OpenGL state and issuing rendering commands.
 type Context struct {
-	win *Window
-	cfg WindowConfig
+	win            *Window
+	cfg            WindowConfig
+	currentProgram uint32
 }
 
 // NewContext creates and returns a new instance of Context.
@@ -454,6 +455,10 @@ func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, 
 
 // UseProgram activates the specified OpenGL shader program for rendering tasks in the current context.
 func (d *Context) UseProgram(program uint32) {
+	if d.currentProgram == program {
+		return
+	}
+	d.currentProgram = program
 	gl.UseProgram(program)
 }
 

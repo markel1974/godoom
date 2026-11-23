@@ -42,13 +42,14 @@ type BuilderVolume struct {
 	playerId            uint64
 	player              *things.Player
 
-	cachedRawVols   []*volumes.Volume
-	cachedSky       *textures.Material
-	staticGen       uint64
-	staticVertBytes int
-	staticIdxBytes  int
-	frameGen        uint64
-	lastPreparedGen uint64
+	cachedRawVols    []*volumes.Volume
+	cachedRawVolsLen int
+	cachedSky        *textures.Material
+	staticGen        uint64
+	staticVertBytes  int
+	staticIdxBytes   int
+	frameGen         uint64
+	lastPreparedGen  uint64
 
 	thingsRender *ThingsRender
 
@@ -56,21 +57,22 @@ type BuilderVolume struct {
 	thingMeshes map[uint64][]*shaders.ResidentMesh
 	texLookupFn func(*textures.Texture) (float32, bool)
 
-	staticOpaque   []shaders.StaticDrawItem
-	staticLiquid   []shaders.StaticDrawItem
-	staticAdditive []shaders.StaticDrawItem
-	staticTransSrc []shaders.TransparentDrawItem
+	staticOpaque   shaders.PtrPool[shaders.StaticDrawItem]
+	staticLiquid   shaders.PtrPool[shaders.StaticDrawItem]
+	staticAdditive shaders.PtrPool[shaders.StaticDrawItem]
+	staticTransSrc shaders.PtrPool[shaders.TransparentDrawItem]
 
 	instancePool     *shaders.InstancePool
-	instGroups       []rigidInstanceGroup
-	numInstGroups    int
-	instGroupMap     map[*shaders.ResidentMesh]int
-	instOpaque       []shaders.InstancedDrawItem
-	instLiquid       []shaders.InstancedDrawItem
-	instAdditive     []shaders.InstancedDrawItem
-	instTransSrc     []rigidTransItem
+	instGroups       shaders.PtrPool[rigidInstanceGroup]
+	instFrame        uint64
+	instOpaque       shaders.PtrPool[shaders.InstancedDrawItem]
+	instLiquid       shaders.PtrPool[shaders.InstancedDrawItem]
+	instAdditive     shaders.PtrPool[shaders.InstancedDrawItem]
+	instTransSrc     shaders.PtrPool[rigidTransItem]
 	lastInstVBO      uint32
-	transparentItems []shaders.TransparentDrawItem
+	transDynPool     shaders.PtrPool[shaders.TransparentDrawItem]
+	transparentItems []*shaders.TransparentDrawItem
+	transparentLen   int
 	lastCamGLX       float32
 	lastCamGLY       float32
 	lastCamGLZ       float32
@@ -84,13 +86,13 @@ type rigidInstance struct {
 
 type rigidInstanceGroup struct {
 	mesh           *shaders.ResidentMesh
-	instances      []rigidInstance
+	instances      shaders.PtrPool[rigidInstance]
 	baseByteOffset int32
 }
 
 type rigidTransItem struct {
 	mesh           *shaders.ResidentMesh
-	subIdx         int
+	sub            *shaders.ResidentSubMesh
 	baseByteOffset int32
 	cx, cy, cz     float32
 }
@@ -119,14 +121,14 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, p
 		occlusion:           NewOcclusionHW(ctx, 4096),
 		frustumFront:        metrics.NewFrustum(),
 		lightBB:             aabb.NewBoundingBox(),
-		cachedRawVols:       make([]*volumes.Volume, 0, 8192),
+		cachedRawVols:       make([]*volumes.Volume, 8192),
 		thingsRender:        NewThingsRender(),
 		volMeshes:           make(map[*volumes.Faces]*shaders.ResidentMesh, 1024),
 		thingMeshes:         make(map[uint64][]*shaders.ResidentMesh, 256),
 		instancePool:        shaders.NewInstancePool(ctx, 256),
-		instGroups:          make([]rigidInstanceGroup, 32),
-		instGroupMap:        make(map[*shaders.ResidentMesh]int, 64),
+		transparentItems:    make([]*shaders.TransparentDrawItem, 64),
 	}
+	bv.instGroups.Init(32)
 	bv.texLookupFn = bv.lookupTexLayer
 	prjScale := bv.cal.PrjScale
 	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)
@@ -207,51 +209,55 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 	}
 	if w.lastPreparedGen != w.frameGen {
 		w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
-		w.dcRenderOpaque.SetResidentDraws(w.staticOpaque, w.instOpaque)
+		w.dcRenderOpaque.SetResidentDraws(w.staticOpaque.Items, w.staticOpaque.Len, w.instOpaque.Items, w.instOpaque.Len)
 
 		w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
-		w.dcRenderAdditive.SetResidentDraws(w.staticAdditive, w.instAdditive)
+		w.dcRenderAdditive.SetResidentDraws(w.staticAdditive.Items, w.staticAdditive.Len, w.instAdditive.Items, w.instAdditive.Len)
 
 		w.dcRenderLiquid.Prepare(w.dcLiquid.GetDrawCommands())
-		w.dcRenderLiquid.SetResidentDraws(w.staticLiquid, w.instLiquid)
+		w.dcRenderLiquid.SetResidentDraws(w.staticLiquid.Items, w.staticLiquid.Len, w.instLiquid.Items, w.instLiquid.Len)
 		w.lastPreparedGen = w.frameGen
 	}
 
 	camGLX, camGLY, camGLZ := float32(px), float32(pz), float32(-py)
 	transCmds := w.dcTransparent.GetDrawCommands()
-	hasTrans := len(w.staticTransSrc) > 0 || len(w.instTransSrc) > 0 || len(transCmds) > 0
+	hasTrans := w.staticTransSrc.Len > 0 || w.instTransSrc.Len > 0 || len(transCmds) > 0
 	camMoved := camGLX != w.lastCamGLX || camGLY != w.lastCamGLY || camGLZ != w.lastCamGLZ
 	if hasTrans {
-		if staticChanged || thingsChanged || camMoved || len(w.transparentItems) == 0 {
-			w.transparentItems = w.transparentItems[:0]
-			for i := range w.staticTransSrc {
-				it := w.staticTransSrc[i]
-				sub := &it.Mesh.SubMeshes[it.SubIdx]
+		if staticChanged || thingsChanged || camMoved || w.transparentLen == 0 {
+			prevTransLen := w.transparentLen
+			w.transparentLen = 0
+			w.transDynPool.Reset()
+			for i := 0; i < w.staticTransSrc.Len; i++ {
+				it := w.staticTransSrc.Items[i]
+				sub := it.Sub
 				dx := sub.CentroidX - camGLX
 				dy := sub.CentroidY - camGLY
 				dz := sub.CentroidZ - camGLZ
 				it.DistSq = dx*dx + dy*dy + dz*dz
-				w.transparentItems = append(w.transparentItems, it)
+				w.addTransparentItem(it)
 			}
-			for i := range w.instTransSrc {
-				rt := &w.instTransSrc[i]
-				sub := &rt.mesh.SubMeshes[rt.subIdx]
+			for i := 0; i < w.instTransSrc.Len; i++ {
+				rt := w.instTransSrc.Items[i]
+				sub := rt.sub
 				dx := rt.cx - camGLX
 				dy := rt.cy - camGLY
 				dz := rt.cz - camGLZ
-				w.transparentItems = append(w.transparentItems, shaders.TransparentDrawItem{
-					Kind:           shaders.TransparentInstanced,
-					DistSq:         dx*dx + dy*dy + dz*dz,
-					SortOrder:      sub.SortOrder,
-					CullMode:       sub.CullMode,
-					HasCutout:      sub.HasCutout,
-					PolygonOffset:  sub.PolygonOffset,
-					Mesh:           rt.mesh,
-					SubIdx:         rt.subIdx,
-					InstanceVBO:    w.lastInstVBO,
-					BaseByteOffset: rt.baseByteOffset,
-					InstanceCount:  1,
-				})
+				it := w.transDynPool.Acquire()
+				it.Kind = shaders.TransparentInstanced
+				it.DistSq = dx*dx + dy*dy + dz*dz
+				it.SortOrder = sub.SortOrder
+				it.CullMode = sub.CullMode
+				it.HasCutout = sub.HasCutout
+				it.PolygonOffset = sub.PolygonOffset
+				it.FirstIndex = 0
+				it.IndexCount = 0
+				it.Mesh = rt.mesh
+				it.Sub = sub
+				it.InstanceVBO = w.lastInstVBO
+				it.BaseByteOffset = rt.baseByteOffset
+				it.InstanceCount = 1
+				w.addTransparentItem(it)
 			}
 			for _, cmd := range transCmds {
 				if cmd.GetIndexCount() == 0 {
@@ -272,25 +278,47 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 					hasCutout = mat.HasCutout()
 					polyOff = mat.GetPolygonOffset()
 				}
-				w.transparentItems = append(w.transparentItems, shaders.TransparentDrawItem{
-					Kind:          shaders.TransparentStreaming,
-					DistSq:        dx*dx + dy*dy + dz*dz,
-					SortOrder:     sortOrder,
-					CullMode:      cullMode,
-					HasCutout:     hasCutout,
-					PolygonOffset: polyOff,
-					FirstIndex:    cmd.GetFirstIndex(),
-					IndexCount:    cmd.GetIndexCount(),
-				})
+				it := w.transDynPool.Acquire()
+				it.Kind = shaders.TransparentStreaming
+				it.DistSq = dx*dx + dy*dy + dz*dz
+				it.SortOrder = sortOrder
+				it.CullMode = cullMode
+				it.HasCutout = hasCutout
+				it.PolygonOffset = polyOff
+				it.FirstIndex = cmd.GetFirstIndex()
+				it.IndexCount = cmd.GetIndexCount()
+				it.Mesh = nil
+				it.Sub = nil
+				it.InstanceVBO = 0
+				it.BaseByteOffset = 0
+				it.InstanceCount = 0
+				w.addTransparentItem(it)
 			}
-			shaders.SortTransparentDrawItems(w.transparentItems)
-			w.dcRenderTransparent.SetTransparentDraws(w.transparentItems)
+			for i := w.transparentLen; i < prevTransLen; i++ {
+				w.transparentItems[i] = nil
+			}
+			shaders.SortTransparentDrawItems(w.transparentItems, w.transparentLen)
+			w.dcRenderTransparent.SetTransparentDraws(w.transparentItems, w.transparentLen)
 		}
-	} else if len(w.transparentItems) > 0 {
-		w.transparentItems = w.transparentItems[:0]
-		w.dcRenderTransparent.SetTransparentDraws(nil)
+	} else if w.transparentLen > 0 {
+		for i := 0; i < w.transparentLen; i++ {
+			w.transparentItems[i] = nil
+		}
+		w.transparentLen = 0
+		w.dcRenderTransparent.SetTransparentDraws(nil, 0)
 	}
 	w.lastCamGLX, w.lastCamGLY, w.lastCamGLZ = camGLX, camGLY, camGLZ
+}
+
+func (w *BuilderVolume) addTransparentItem(it *shaders.TransparentDrawItem) {
+	if w.transparentLen >= len(w.transparentItems) {
+		newLen := max(len(w.transparentItems)*2, 32)
+		grown := make([]*shaders.TransparentDrawItem, newLen)
+		copy(grown, w.transparentItems)
+		w.transparentItems = grown
+	}
+	w.transparentItems[w.transparentLen] = it
+	w.transparentLen++
 }
 
 // pushQVolumes updates GPU-resident static volume meshes only when the visible volume set, geometry, or animated wall textures change.
@@ -310,7 +338,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	})
 
 	visLen := w.visibleVol.Len()
-	canReuse := w.staticGen > 0 && visLen == len(w.cachedRawVols)
+	canReuse := w.staticGen > 0 && visLen == w.cachedRawVolsLen
 	if canReuse {
 		for i := 0; i < visLen; i++ {
 			vol := w.visibleVol.At(i)
@@ -352,23 +380,25 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	}
 	w.cSky = nil
 
-	if cap(w.cachedRawVols) < visLen {
-		w.cachedRawVols = make([]*volumes.Volume, visLen)
+	if len(w.cachedRawVols) < visLen {
+		w.cachedRawVols = make([]*volumes.Volume, max(len(w.cachedRawVols)*2, visLen))
 	} else {
-		for i := visLen; i < len(w.cachedRawVols); i++ {
+		for i := visLen; i < w.cachedRawVolsLen; i++ {
 			w.cachedRawVols[i] = nil
 		}
-		w.cachedRawVols = w.cachedRawVols[:visLen]
 	}
-	copy(w.cachedRawVols, w.visibleVol.RawSlice())
+	w.cachedRawVolsLen = visLen
+	for i := 0; i < visLen; i++ {
+		w.cachedRawVols[i] = w.visibleVol.At(i)
+	}
 
 	// Sort front-to-back for early-Z static submission order.
 	w.visibleVol.Sort()
 
-	w.staticOpaque = w.staticOpaque[:0]
-	w.staticLiquid = w.staticLiquid[:0]
-	w.staticAdditive = w.staticAdditive[:0]
-	w.staticTransSrc = w.staticTransSrc[:0]
+	w.staticOpaque.Reset()
+	w.staticLiquid.Reset()
+	w.staticAdditive.Reset()
+	w.staticTransSrc.Reset()
 
 	for vIdx := 0; vIdx < visLen; vIdx++ {
 		vol := w.visibleVol.At(vIdx)
@@ -390,28 +420,39 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		if rm.SkyMaterial != nil {
 			w.cSky = rm.SkyMaterial
 		}
-		for sIdx := range rm.SubMeshes {
-			sub := &rm.SubMeshes[sIdx]
+		for sIdx := 0; sIdx < rm.SubMeshesLen; sIdx++ {
+			sub := rm.SubMeshes[sIdx]
 			if sub.IndexCount == 0 {
 				continue
 			}
 			switch sub.BlendMode {
 			case config.BlendModeLiquid:
-				w.staticLiquid = append(w.staticLiquid, shaders.StaticDrawItem{Mesh: rm, SubIdx: sIdx})
+				item := w.staticLiquid.Acquire()
+				item.Mesh = rm
+				item.Sub = sub
 			case config.BlendModeAdditive:
-				w.staticAdditive = append(w.staticAdditive, shaders.StaticDrawItem{Mesh: rm, SubIdx: sIdx})
+				item := w.staticAdditive.Acquire()
+				item.Mesh = rm
+				item.Sub = sub
 			case config.BlendModeTransparent:
-				w.staticTransSrc = append(w.staticTransSrc, shaders.TransparentDrawItem{
-					Kind:          shaders.TransparentStatic,
-					SortOrder:     sub.SortOrder,
-					CullMode:      sub.CullMode,
-					HasCutout:     sub.HasCutout,
-					PolygonOffset: sub.PolygonOffset,
-					Mesh:          rm,
-					SubIdx:        sIdx,
-				})
+				item := w.staticTransSrc.Acquire()
+				item.Kind = shaders.TransparentStatic
+				item.DistSq = 0
+				item.SortOrder = sub.SortOrder
+				item.CullMode = sub.CullMode
+				item.HasCutout = sub.HasCutout
+				item.PolygonOffset = sub.PolygonOffset
+				item.FirstIndex = 0
+				item.IndexCount = 0
+				item.Mesh = rm
+				item.Sub = sub
+				item.InstanceVBO = 0
+				item.BaseByteOffset = 0
+				item.InstanceCount = 0
 			default:
-				w.staticOpaque = append(w.staticOpaque, shaders.StaticDrawItem{Mesh: rm, SubIdx: sIdx})
+				item := w.staticOpaque.Acquire()
+				item.Mesh = rm
+				item.Sub = sub
 			}
 		}
 	}
@@ -441,9 +482,6 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	if w.meshFrame == 0 {
 		w.meshFrame = 1
 	}
-	if w.instGroupMap == nil {
-		w.instGroupMap = make(map[*shaders.ResidentMesh]int, 64)
-	}
 	if w.instancePool == nil {
 		w.instancePool = shaders.NewInstancePool(w.ctx, 256)
 	}
@@ -451,29 +489,32 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		w.texLookupFn = w.lookupTexLayer
 	}
 	w.thingsRender.Prepare()
-	w.numInstGroups = 0
-	clear(w.instGroupMap)
+	w.instFrame++
+	w.instGroups.Reset()
 
 	tick := textures.GlobalTick()
 
 	things.StagePrepare()
 
 	addRigidInstance := func(rm *shaders.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
-		gIdx, exists := w.instGroupMap[rm]
-		if !exists {
-			gIdx = w.numInstGroups
-			w.numInstGroups++
-			if gIdx >= len(w.instGroups) {
-				w.instGroups = append(w.instGroups, rigidInstanceGroup{})
-			}
-			w.instGroupMap[rm] = gIdx
-			w.instGroups[gIdx].mesh = rm
-			w.instGroups[gIdx].instances = w.instGroups[gIdx].instances[:0]
+		var g *rigidInstanceGroup
+		if rm.InstGroupFrame == w.instFrame {
+			g = w.instGroups.Items[rm.InstGroupIdx]
+		} else {
+			rm.InstGroupFrame = w.instFrame
+			rm.InstGroupIdx = w.instGroups.Len
+			g = w.instGroups.Acquire()
+			g.mesh = rm
+			g.instances.Reset()
 		}
-		w.instGroups[gIdx].instances = append(w.instGroups[gIdx].instances, rigidInstance{
-			cx: cx, cy: cy, cz: cz,
-			qx: qx, qy: qy, qz: qz, qw: qw,
-		})
+		inst := g.instances.Acquire()
+		inst.cx = cx
+		inst.cy = cy
+		inst.cz = cz
+		inst.qx = qx
+		inst.qy = qy
+		inst.qz = qz
+		inst.qw = qw
 	}
 
 	pushPassThing := func(thing ithing.IThing) {
@@ -493,7 +534,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 					entry2.AssignRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw)
 				}
 				w.thingsRender.AddRef(entry2)
-				if len(rm.SubMeshes) > 0 {
+				if rm.SubMeshesLen > 0 {
 					addRigidInstance(rm, tPosX, tPosY, zBot, qx, qy, qz, qw)
 				}
 				return
@@ -664,74 +705,72 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	thingsChanged := w.thingsRender.Commit()
 	if thingsChanged || w.frameGen == 0 {
-		w.instOpaque = w.instOpaque[:0]
-		w.instLiquid = w.instLiquid[:0]
-		w.instAdditive = w.instAdditive[:0]
-		w.instTransSrc = w.instTransSrc[:0]
+		w.instOpaque.Reset()
+		w.instLiquid.Reset()
+		w.instAdditive.Reset()
+		w.instTransSrc.Reset()
 
 		w.instancePool.Reset()
-		for gi := 0; gi < w.numInstGroups; gi++ {
-			g := &w.instGroups[gi]
-			cnt := len(g.instances)
+		for gi := 0; gi < w.instGroups.Len; gi++ {
+			g := w.instGroups.Items[gi]
+			cnt := g.instances.Len
 			if cnt == 0 {
 				continue
 			}
 			baseByteOff, baseFloat := w.instancePool.Reserve(cnt)
 			g.baseByteOffset = baseByteOff
-			for k, inst := range g.instances {
+			for k := 0; k < cnt; k++ {
+				inst := g.instances.Items[k]
 				w.instancePool.WriteTransformAt(baseFloat+k*shaders.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
 			}
 		}
 		instVBO := w.instancePool.Upload()
 		w.lastInstVBO = instVBO
 
-		for gi := 0; gi < w.numInstGroups; gi++ {
-			g := &w.instGroups[gi]
-			cnt := int32(len(g.instances))
+		for gi := 0; gi < w.instGroups.Len; gi++ {
+			g := w.instGroups.Items[gi]
+			cnt := int32(g.instances.Len)
 			if cnt == 0 {
 				continue
 			}
-			for sIdx := range g.mesh.SubMeshes {
-				sub := &g.mesh.SubMeshes[sIdx]
+			for sIdx := 0; sIdx < g.mesh.SubMeshesLen; sIdx++ {
+				sub := g.mesh.SubMeshes[sIdx]
 				if sub.IndexCount == 0 {
 					continue
 				}
 				switch sub.BlendMode {
 				case config.BlendModeLiquid:
-					w.instLiquid = append(w.instLiquid, shaders.InstancedDrawItem{
-						Mesh:           g.mesh,
-						SubIdx:         sIdx,
-						InstanceVBO:    instVBO,
-						BaseByteOffset: g.baseByteOffset,
-						InstanceCount:  cnt,
-					})
+					item := w.instLiquid.Acquire()
+					item.Mesh = g.mesh
+					item.Sub = sub
+					item.InstanceVBO = instVBO
+					item.BaseByteOffset = g.baseByteOffset
+					item.InstanceCount = cnt
 				case config.BlendModeAdditive:
-					w.instAdditive = append(w.instAdditive, shaders.InstancedDrawItem{
-						Mesh:           g.mesh,
-						SubIdx:         sIdx,
-						InstanceVBO:    instVBO,
-						BaseByteOffset: g.baseByteOffset,
-						InstanceCount:  cnt,
-					})
+					item := w.instAdditive.Acquire()
+					item.Mesh = g.mesh
+					item.Sub = sub
+					item.InstanceVBO = instVBO
+					item.BaseByteOffset = g.baseByteOffset
+					item.InstanceCount = cnt
 				case config.BlendModeTransparent:
-					for k, inst := range g.instances {
-						w.instTransSrc = append(w.instTransSrc, rigidTransItem{
-							mesh:           g.mesh,
-							subIdx:         sIdx,
-							baseByteOffset: g.baseByteOffset + int32(k*shaders.InstanceMatrixFloats*4),
-							cx:             float32(inst.cx),
-							cy:             float32(inst.cz),
-							cz:             float32(-inst.cy),
-						})
+					for k := 0; k < int(cnt); k++ {
+						inst := g.instances.Items[k]
+						rt := w.instTransSrc.Acquire()
+						rt.mesh = g.mesh
+						rt.sub = sub
+						rt.baseByteOffset = g.baseByteOffset + int32(k*shaders.InstanceMatrixFloats*4)
+						rt.cx = float32(inst.cx)
+						rt.cy = float32(inst.cz)
+						rt.cz = float32(-inst.cy)
 					}
 				default:
-					w.instOpaque = append(w.instOpaque, shaders.InstancedDrawItem{
-						Mesh:           g.mesh,
-						SubIdx:         sIdx,
-						InstanceVBO:    instVBO,
-						BaseByteOffset: g.baseByteOffset,
-						InstanceCount:  cnt,
-					})
+					item := w.instOpaque.Acquire()
+					item.Mesh = g.mesh
+					item.Sub = sub
+					item.InstanceVBO = instVBO
+					item.BaseByteOffset = g.baseByteOffset
+					item.InstanceCount = cnt
 				}
 			}
 		}
@@ -779,18 +818,18 @@ func (w *BuilderVolume) GetDrawCommandsTransparent() *shaders.DrawCommandsRender
 }
 
 // GetOpaqueInstancedItems returns the active rigid instanced opaque draw items for inspection.
-func (w *BuilderVolume) GetOpaqueInstancedItems() []shaders.InstancedDrawItem {
-	return w.instOpaque
+func (w *BuilderVolume) GetOpaqueInstancedItems() []*shaders.InstancedDrawItem {
+	return w.instOpaque.Items[:w.instOpaque.Len]
 }
 
 // GetResidentVolumeCount returns the number of active resident static volume submesh draws.
 func (w *BuilderVolume) GetResidentVolumeCount() int {
-	return len(w.staticOpaque) + len(w.staticLiquid) + len(w.staticAdditive) + len(w.staticTransSrc)
+	return w.staticOpaque.Len + w.staticLiquid.Len + w.staticAdditive.Len + w.staticTransSrc.Len
 }
 
 // GetInstancedDrawCount returns the number of active GPU-instanced submesh draw groups.
 func (w *BuilderVolume) GetInstancedDrawCount() int {
-	return len(w.instOpaque) + len(w.instLiquid) + len(w.instAdditive) + len(w.instTransSrc)
+	return w.instOpaque.Len + w.instLiquid.Len + w.instAdditive.Len + w.instTransSrc.Len
 }
 
 // GetStreamingVertexCount returns the current vertex count stored in the CPU streaming buffer.

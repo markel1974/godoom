@@ -675,6 +675,15 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 		}
 	}
 
+	if s.shadows != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
+	if clusterTex != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
+
 	s.ctx.BindVertexArray(0)
 }
 
@@ -722,6 +731,15 @@ func (s *Main) RenderTransparent(dc *DrawCommandsRender, ambient float32, flashX
 	)
 	dc.SetPassState(streamVAO, s.solidPrg.table[MainLocInstanceMode])
 	dc.RenderTransparent()
+
+	if s.shadows != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
+	if clusterTex != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
 
 	s.ctx.BindVertexArray(0)
 	s.ctx.Disable(api.BLEND)

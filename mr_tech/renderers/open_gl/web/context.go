@@ -43,6 +43,8 @@ type Context struct {
 	rbos     ResourceTracker
 	queries  ResourceTracker
 
+	currentProgram uint32
+
 	uniforms []js.Value
 
 	ptrMap   map[uintptr]interface{}
@@ -1238,6 +1240,10 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 
 // UseProgram sets the active shader program to the one specified by the given program ID.
 func (d *Context) UseProgram(program uint32) {
+	if d.currentProgram == program {
+		return
+	}
+	d.currentProgram = program
 	d.fn_useProgram.Invoke(d.programs.Get(program))
 }
 

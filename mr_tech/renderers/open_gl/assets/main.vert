@@ -1,5 +1,7 @@
 #version 330 core
 
+invariant gl_Position;
+
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aTexCoords;
 layout (location = 2) in vec3 aOrigin;

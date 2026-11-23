@@ -111,6 +111,8 @@ type Depth struct {
 	handler             *Handler
 	prg                 uint32
 	table               [DepthLocLast]int32
+	prgSolid            uint32
+	tableSolid          [DepthLocLast]int32
 	sWidth              int32
 	sHeight             int32
 	shadowAtlasMap      *DepthMap
@@ -211,39 +213,54 @@ func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, *float32) {
 	return s.shadowAtlasMap.tex, s.shadowAtlasMap.fbo, lMatrix
 }
 
-// Compile initializes and compiles the shader program using vertex and fragment sources, and sets up uniform locations.
+// Compile initializes and compiles the cutout and solid depth shader programs for shadow atlas rendering.
 func (s *Depth) Compile(assets IAssets) error {
-	const vertId = "depth.vert"
-	const fragId = "depth.frag"
-	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertId, fragId)
+	var err error
+	s.prg, s.table, err = s.compileDepthProgram(assets, "depth.vert", "depth.frag", "depth", true)
 	if err != nil {
 		return err
 	}
-
-	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
+	s.prgSolid, s.tableSolid, err = s.compileDepthProgram(assets, "depth.vert", "zprepass.frag", "depth_solid", false)
 	if err != nil {
 		return err
-	}
-	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
-	if err != nil {
-		s.ctx.DeleteShader(vertexShader)
-		return err
-	}
-	s.prg, err = ShaderCreateProgram(s.ctx, "depth", vertexShader, fragmentShader)
-	if err != nil {
-		return err
-	}
-	s.table[DepthLocLightSpaceMatrix] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_lightSpaceMatrix\x00"))
-	s.table[DepthLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
-	s.table[DepthLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
-	s.table[DepthLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
-
-	for idx, v := range s.table {
-		if v < 0 {
-			return fmt.Errorf("invalid uniform location in depth: %d", idx)
-		}
 	}
 	return nil
+}
+
+func (s *Depth) compileDepthProgram(assets IAssets, vertID, fragID, progName string, requireTexture bool) (uint32, [DepthLocLast]int32, error) {
+	var table [DepthLocLast]int32
+	vertexSrc, fragmentSrc, err := assets.ReadMulti(vertID, fragID)
+	if err != nil {
+		return 0, table, err
+	}
+
+	vertexShader, err := ShaderCompile(s.ctx, vertID, string(vertexSrc), api.VERTEX_SHADER)
+	if err != nil {
+		return 0, table, err
+	}
+	fragmentShader, err := ShaderCompile(s.ctx, fragID, string(fragmentSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		s.ctx.DeleteShader(vertexShader)
+		return 0, table, err
+	}
+	prg, err := ShaderCreateProgram(s.ctx, progName, vertexShader, fragmentShader)
+	if err != nil {
+		return 0, table, err
+	}
+	table[DepthLocLightSpaceMatrix] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_lightSpaceMatrix\x00"))
+	table[DepthLocTime] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_time\x00"))
+	table[DepthLocTexture] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_texture\x00"))
+	table[DepthLocView] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_view\x00"))
+
+	for idx, v := range table {
+		if idx == int(DepthLocTexture) && !requireTexture {
+			continue
+		}
+		if v < 0 {
+			return 0, table, fmt.Errorf("invalid uniform location in %s: %d", progName, idx)
+		}
+	}
+	return prg, table, nil
 }
 
 // Prepare updates the uniform matrix values for room and flashlight space transformations for the shader.
@@ -254,8 +271,8 @@ func (s *Depth) Prepare() {
 }
 
 // Render performs the depth render into the unified master shadow atlas.
-func (s *Depth) Render(renderScene func()) {
-	if !s.shadows {
+func (s *Depth) Render(dc *DrawCommandsRender) {
+	if !s.shadows || dc == nil || !dc.HasCommands() {
 		return
 	}
 
@@ -278,24 +295,43 @@ func (s *Depth) Render(renderScene func()) {
 	s.ctx.Viewport(0, 0, atlasSize, atlasSize)
 	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
 
-	s.ctx.UseProgram(s.GetProgram())
-	s.ctx.Uniform1f(s.GetUniform(DepthLocTime), float32(textures.GlobalTick())*0.05)
-	// Player view matrix
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocView), 1, false, s.viewMatrixPtr)
+	interval := float32(textures.GlobalTick()) * 0.05
+	if dc.HasSolid() {
+		s.renderAtlasPass(s.prgSolid, &s.tableSolid, interval, func() {
+			dc.RenderCutoutFiltered(false)
+		})
+	}
+	if dc.HasCutout() {
+		s.renderAtlasPass(s.prg, &s.table, interval, func() {
+			dc.RenderCutoutFiltered(true)
+		})
+	}
+
+	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
+	s.ctx.Disable(api.DEPTH_CLAMP)
+	s.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	s.ctx.Viewport(0, 0, fbW, fbH)
+}
+
+func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval float32, renderSubset func()) {
+	s.ctx.UseProgram(prg)
+	s.ctx.Uniform1f(table[DepthLocTime], interval)
+	s.ctx.UniformMatrix4fv(table[DepthLocView], 1, false, s.viewMatrixPtr)
+
+	locLightSpace := table[DepthLocLightSpaceMatrix]
 
 	// OMBRA STANZA (Ortografica - Tile 1024x1024 in alto a sinistra: X: 0..1024, Y: 1024..2048)
 	s.ctx.Viewport(0, 1024, 1024, 1024)
 	s.ctx.PolygonOffset(2.0, 4.0)
-	s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.roomSpaceMatrix)
-	renderScene()
+	s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.roomSpaceMatrix)
+	renderSubset()
 
 	// OMBRE TORCIA (Prospettica - Tile 1024x1024 in alto a destra: X: 1024..2048, Y: 1024..2048)
-	// Renderizza solo se la torcia è effettivamente accesa
 	if s.flash != nil && s.flash.GetIntensity() > 0.001 {
 		s.ctx.Viewport(1024, 1024, 1024, 1024)
 		s.ctx.PolygonOffset(0.5, 1.0)
-		s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, s.flashSpaceMatrix)
-		renderScene()
+		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.flashSpaceMatrix)
+		renderSubset()
 	}
 
 	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
@@ -310,16 +346,11 @@ func (s *Depth) Render(renderScene func()) {
 				col := int32(x % 4)
 				row := int32(x / 4)
 				s.ctx.Viewport(col*512, row*512, 512, 512)
-				s.ctx.UniformMatrix4fv(s.GetUniform(DepthLocLightSpaceMatrix), 1, false, lMatrix)
-				renderScene()
+				s.ctx.UniformMatrix4fv(locLightSpace, 1, false, lMatrix)
+				renderSubset()
 			}
 		}
 	}
-
-	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
-	s.ctx.Disable(api.DEPTH_CLAMP)
-	s.ctx.Disable(api.POLYGON_OFFSET_FILL)
-	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
 // allocate configures the unified master shadow map atlas dimensions.

@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"fmt"
+	"strings"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -60,12 +61,41 @@ type shadowLightLocs struct {
 	lightSpace   int32
 }
 
+type mainProgram struct {
+	prg             uint32
+	table           [MainLocLast]int32
+	shadowLightLocs [metrics.ShadowLightsCount]shadowLightLocs
+}
+
+type zPrepassProgram struct {
+	prg     uint32
+	locView int32
+	locProj int32
+	locTime int32
+	locTex  int32
+}
+
+type transformedShadowLight struct {
+	vx, vy, vz    float32
+	intensity     float32
+	dvx, dvy, dvz float32
+	falloff       float32
+	r, g, b       float32
+	kind          float32
+	outerCutOff   float32
+	cutOff        float32
+	effRadiusSq   float32
+	invScale      float32
+	lightSpace    *float32
+}
+
 // Main represents the central structure for managing rendering states and operations.
 type Main struct {
 	ctx                 api.IContext
-	prgOpaque           uint32
-	tableOpaque         [MainLocLast]int32
-	shadowLightLocs     [metrics.ShadowLightsCount]*shadowLightLocs
+	solidPrg            mainProgram
+	cutoutPrg           mainProgram
+	zPrepassSolid       zPrepassProgram
+	zPrepassCutout      zPrepassProgram
 	mainVAO             [mainDoubleBuffer]uint32
 	mainVBO             [mainDoubleBuffer]uint32
 	mainEBO             [mainDoubleBuffer]uint32
@@ -97,16 +127,11 @@ type Main struct {
 
 // NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
 func NewMain(stride int32) *Main {
-	m := &Main{
-		prgOpaque:   0,
+	return &Main{
 		stride:      stride,
 		shadows:     0,
 		debugLights: 0,
 	}
-	for i := range m.shadowLightLocs {
-		m.shadowLightLocs[i] = &shadowLightLocs{}
-	}
-	return m
 }
 
 // Setup initializes the Main instance by setting its context using the provided Handler and returns an error if any.
@@ -210,14 +235,29 @@ func (s *Main) Init() error {
 	return nil
 }
 
-// GetProgramOpaque returns the program ID used for rendering opaque objects.
+// GetProgramOpaque returns the program ID used for rendering solid opaque objects without discard.
 func (s *Main) GetProgramOpaque() uint32 {
-	return s.prgOpaque
+	return s.solidPrg.prg
+}
+
+// GetProgramCutout returns the program ID used for rendering alpha-cutout opaque objects.
+func (s *Main) GetProgramCutout() uint32 {
+	return s.cutoutPrg.prg
+}
+
+// GetProgramZPrepassSolid returns the program ID used for the solid Z-prepass.
+func (s *Main) GetProgramZPrepassSolid() uint32 {
+	return s.zPrepassSolid.prg
+}
+
+// GetProgramZPrepassCutout returns the program ID used for the cutout Z-prepass.
+func (s *Main) GetProgramZPrepassCutout() uint32 {
+	return s.zPrepassCutout.prg
 }
 
 // GetUniformOpaque retrieves the uniform location for the opaque shader program using the given MainLoc identifier.
 func (s *Main) GetUniformOpaque(id MainLoc) int32 {
-	return s.tableOpaque[id]
+	return s.solidPrg.table[id]
 }
 
 // GetVAO returns the Vertex Array Object (VAO) associated with the current frame index.
@@ -225,97 +265,158 @@ func (s *Main) GetVAO() uint32 {
 	return s.mainVAO[s.frameIdx]
 }
 
-func (s *Main) GetLocView() int32 { return s.tableOpaque[MainLocView] }
+func (s *Main) GetLocView() int32 { return s.solidPrg.table[MainLocView] }
 
-func (s *Main) GetLocProj() int32 { return s.tableOpaque[MainLocProjection] }
+func (s *Main) GetLocProj() int32 { return s.solidPrg.table[MainLocProjection] }
 
-// SetupSamplers initializes sampler uniforms for opaque forward shader.
+// SetupSamplers initializes sampler uniforms for opaque, cutout, and Z-prepass shader programs.
 func (s *Main) SetupSamplers() error {
 	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
 	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2, api.TexUnitNormalBase + 3}
 	emissiveUnits := []int32{api.TexUnitEmissiveBase, api.TexUnitEmissiveBase + 1, api.TexUnitEmissiveBase + 2, api.TexUnitEmissiveBase + 3}
 
-	s.ctx.UseProgram(s.prgOpaque)
-	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocTexture), 4, &diffuseUnits[0])
-	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocNormalMap), 4, &normalUnits[0])
-	s.ctx.Uniform1iv(s.GetUniformOpaque(MainLocEmissiveMap), 4, &emissiveUnits[0])
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocShadowAtlas), api.TexUnitShadowAtlas)
+	programs := [2]*mainProgram{&s.solidPrg, &s.cutoutPrg}
+	for _, p := range programs {
+		s.ctx.UseProgram(p.prg)
+		s.ctx.Uniform1iv(p.table[MainLocTexture], 4, &diffuseUnits[0])
+		s.ctx.Uniform1iv(p.table[MainLocNormalMap], 4, &normalUnits[0])
+		s.ctx.Uniform1iv(p.table[MainLocEmissiveMap], 4, &emissiveUnits[0])
+		s.ctx.Uniform1i(p.table[MainLocShadowAtlas], api.TexUnitShadowAtlas)
+	}
+
+	if s.zPrepassCutout.prg != 0 && s.zPrepassCutout.locTex >= 0 {
+		s.ctx.UseProgram(s.zPrepassCutout.prg)
+		s.ctx.Uniform1iv(s.zPrepassCutout.locTex, 4, &diffuseUnits[0])
+	}
 
 	return nil
 }
 
-// Compile initializes and compiles shader programs for opaque forward rendering using provided asset sources.
+func injectShaderDefine(src string, defineLine string) string {
+	const header = "#version 330 core"
+	if strings.Contains(src, header) {
+		return strings.Replace(src, header, header+"\n"+defineLine, 1)
+	}
+	return defineLine + "\n" + src
+}
+
+// Compile initializes and compiles shader programs for Z-prepass and opaque/cutout forward rendering.
 func (s *Main) Compile(a IAssets) error {
 	const vertId = "main.vert"
 	const fragOpaqueId = "main_opaque.frag"
+	const fragZSolidId = "zprepass.frag"
+	const fragZCutoutId = "depth.frag"
 
 	vertexSrc, fragmentOpaqueSrc, err := a.ReadMulti(vertId, fragOpaqueId)
 	if err != nil {
 		return err
 	}
-
-	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
+	zSolidSrc, err := a.Read(fragZSolidId)
+	if err != nil {
+		return err
+	}
+	zCutoutSrc, err := a.Read(fragZCutoutId)
 	if err != nil {
 		return err
 	}
 
-	// Compile Opaque Program
-	fragOpaqueShader, err := ShaderCompile(s.ctx, fragOpaqueId, string(fragmentOpaqueSrc), api.FRAGMENT_SHADER)
+	if err := s.compileForwardProgram(&s.solidPrg, "main_opaque", vertId, vertexSrc, fragOpaqueId, fragmentOpaqueSrc); err != nil {
+		return err
+	}
+	cutoutSrc := injectShaderDefine(string(fragmentOpaqueSrc), "#define ALPHA_CUTOUT 1")
+	if err := s.compileForwardProgram(&s.cutoutPrg, "main_cutout", vertId, vertexSrc, fragOpaqueId, []byte(cutoutSrc)); err != nil {
+		return err
+	}
+	if err := s.compileZPrepassProgram(&s.zPrepassSolid, "zprepass_solid", vertId, vertexSrc, fragZSolidId, zSolidSrc, false); err != nil {
+		return err
+	}
+	if err := s.compileZPrepassProgram(&s.zPrepassCutout, "zprepass_cutout", vertId, vertexSrc, fragZCutoutId, zCutoutSrc, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Main) compileForwardProgram(dst *mainProgram, progName, vertID string, vertSrc []byte, fragID string, fragSrc []byte) error {
+	vertexShader, err := ShaderCompile(s.ctx, vertID, string(vertSrc), api.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fragShader, err := ShaderCompile(s.ctx, fragID, string(fragSrc), api.FRAGMENT_SHADER)
 	if err != nil {
 		s.ctx.DeleteShader(vertexShader)
 		return err
 	}
-	s.prgOpaque, err = ShaderCreateProgram(s.ctx, "main_opaque", vertexShader, fragOpaqueShader)
+	dst.prg, err = ShaderCreateProgram(s.ctx, progName, vertexShader, fragShader)
 	if err != nil {
 		return err
 	}
 
-	// Setup Uniforms Opaque
-	s.tableOpaque[MainLocView] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_view\x00"))
-	s.tableOpaque[MainLocInvView] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_invView\x00"))
-	s.tableOpaque[MainLocProjection] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_projection\x00"))
-	s.tableOpaque[MainLocRoomSpaceMatrix] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_roomSpaceMatrix\x00"))
-	s.tableOpaque[MainLocFlashSpaceMatrix] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashSpaceMatrix\x00"))
-	s.tableOpaque[MainLocTime] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_time\x00"))
-	s.tableOpaque[MainLocScreenResolution] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_screenResolution\x00"))
-	s.tableOpaque[MainLocTexture] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_texture\x00"))
-	s.tableOpaque[MainLocNormalMap] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_normalMap\x00"))
-	s.tableOpaque[MainLocEmissiveMap] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_emissiveMap\x00"))
-	s.tableOpaque[MainLocRoomShadowMap] = -1
-	s.tableOpaque[MainLocFlashShadowMap] = -1
-	s.tableOpaque[MainLocShadowAtlas] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_shadowAtlas\x00"))
-	s.tableOpaque[MainLocEmissiveIntensity] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_emissiveIntensity\x00"))
-	s.tableOpaque[MainLocAmbientLight] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_ambient_light\x00"))
-	s.tableOpaque[MainLocEnableShadows] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_enableShadows\x00"))
-	s.tableOpaque[MainLocDebugLights] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_debugLights\x00"))
+	prg := dst.prg
+	dst.table[MainLocView] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_view\x00"))
+	dst.table[MainLocInvView] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_invView\x00"))
+	dst.table[MainLocProjection] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_projection\x00"))
+	dst.table[MainLocRoomSpaceMatrix] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_roomSpaceMatrix\x00"))
+	dst.table[MainLocFlashSpaceMatrix] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashSpaceMatrix\x00"))
+	dst.table[MainLocTime] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_time\x00"))
+	dst.table[MainLocScreenResolution] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_screenResolution\x00"))
+	dst.table[MainLocTexture] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_texture\x00"))
+	dst.table[MainLocNormalMap] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_normalMap\x00"))
+	dst.table[MainLocEmissiveMap] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_emissiveMap\x00"))
+	dst.table[MainLocRoomShadowMap] = -1
+	dst.table[MainLocFlashShadowMap] = -1
+	dst.table[MainLocShadowAtlas] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_shadowAtlas\x00"))
+	dst.table[MainLocEmissiveIntensity] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_emissiveIntensity\x00"))
+	dst.table[MainLocAmbientLight] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_ambient_light\x00"))
+	dst.table[MainLocEnableShadows] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_enableShadows\x00"))
+	dst.table[MainLocDebugLights] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_debugLights\x00"))
 
-	// Flashlight
-	s.tableOpaque[MainLocEnableFlashlight] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_enableFlashlight\x00"))
-	s.tableOpaque[MainLocFlashPosView] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashPosView\x00"))
-	s.tableOpaque[MainLocFlashDir] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashDir\x00"))
-	s.tableOpaque[MainLocFlashIntensityFactor] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashIntensityFactor\x00"))
-	s.tableOpaque[MainLocFlashFalloff] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashFalloff\x00"))
-	s.tableOpaque[MainLocFlashConeStart] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashConeStart\x00"))
-	s.tableOpaque[MainLocFlashConeEnd] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_flashConeEnd\x00"))
+	dst.table[MainLocEnableFlashlight] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_enableFlashlight\x00"))
+	dst.table[MainLocFlashPosView] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashPosView\x00"))
+	dst.table[MainLocFlashDir] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashDir\x00"))
+	dst.table[MainLocFlashIntensityFactor] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashIntensityFactor\x00"))
+	dst.table[MainLocFlashFalloff] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashFalloff\x00"))
+	dst.table[MainLocFlashConeStart] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashConeStart\x00"))
+	dst.table[MainLocFlashConeEnd] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_flashConeEnd\x00"))
 
-	// Dynamic Shadow Lights
-	s.tableOpaque[MainLocNumShadowLights] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_numShadowLights\x00"))
-	for i := 0; i < 8; i++ {
-		s.shadowLightLocs[i].posIntensity = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].pos_intensity\x00", i)))
-		s.shadowLightLocs[i].dirFalloff = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].dir_falloff\x00", i)))
-		s.shadowLightLocs[i].colorType = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].color_type\x00", i)))
-		s.shadowLightLocs[i].spotParams = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].spot_params\x00", i)))
-		s.shadowLightLocs[i].lightSpace = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].lightSpace\x00", i)))
+	dst.table[MainLocNumShadowLights] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_numShadowLights\x00"))
+	for i := 0; i < metrics.ShadowLightsCount; i++ {
+		dst.shadowLightLocs[i].posIntensity = s.ctx.GetUniformLocation(prg, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].pos_intensity\x00", i)))
+		dst.shadowLightLocs[i].dirFalloff = s.ctx.GetUniformLocation(prg, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].dir_falloff\x00", i)))
+		dst.shadowLightLocs[i].colorType = s.ctx.GetUniformLocation(prg, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].color_type\x00", i)))
+		dst.shadowLightLocs[i].spotParams = s.ctx.GetUniformLocation(prg, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].spot_params\x00", i)))
+		dst.shadowLightLocs[i].lightSpace = s.ctx.GetUniformLocation(prg, s.ctx.Str(fmt.Sprintf("u_shadowLights[%d].lightSpace\x00", i)))
 	}
 
-	// Dynamic UBO Lights
-	s.tableOpaque[MainLocNumLights] = s.ctx.GetUniformLocation(s.prgOpaque, s.ctx.Str("u_numLights\x00"))
+	dst.table[MainLocNumLights] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_numLights\x00"))
 
-	blockIndex := s.ctx.GetUniformBlockIndex(s.prgOpaque, s.ctx.Str("LightsBlock\x00"))
+	blockIndex := s.ctx.GetUniformBlockIndex(prg, s.ctx.Str("LightsBlock\x00"))
 	if blockIndex != api.INVALID_INDEX {
-		s.ctx.UniformBlockBinding(s.prgOpaque, blockIndex, 0)
+		s.ctx.UniformBlockBinding(prg, blockIndex, 0)
 	}
+	return nil
+}
 
+func (s *Main) compileZPrepassProgram(dst *zPrepassProgram, progName, vertID string, vertSrc []byte, fragID string, fragSrc []byte, withTexture bool) error {
+	vertexShader, err := ShaderCompile(s.ctx, vertID, string(vertSrc), api.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fragShader, err := ShaderCompile(s.ctx, fragID, string(fragSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		s.ctx.DeleteShader(vertexShader)
+		return err
+	}
+	dst.prg, err = ShaderCreateProgram(s.ctx, progName, vertexShader, fragShader)
+	if err != nil {
+		return err
+	}
+	dst.locView = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_view\x00"))
+	dst.locProj = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_projection\x00"))
+	dst.locTime = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_time\x00"))
+	dst.locTex = -1
+	if withTexture {
+		dst.locTex = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_texture\x00"))
+	}
 	return nil
 }
 
@@ -392,8 +493,73 @@ func (s *Main) PrepareFrame(vPtr unsafe.Pointer, vSize int, staticVertBytes int,
 	s.ctx.BindVertexArray(0)
 }
 
-// Render executes the single-pass forward rendering pipeline, combining all lights and shadows directly onto geometry.
-func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, flashSensitivity float32) {
+func (s *Main) bindZPrepassProgram(zp *zPrepassProgram, view, proj *float32, interval float32) {
+	s.ctx.UseProgram(zp.prg)
+	s.ctx.UniformMatrix4fv(zp.locView, 1, false, view)
+	s.ctx.UniformMatrix4fv(zp.locProj, 1, false, proj)
+	s.ctx.Uniform1f(zp.locTime, interval)
+}
+
+func (s *Main) bindForwardUniforms(
+	p *mainProgram,
+	view, invView, proj, roomSpace, flashSpace *float32,
+	fbW, fbH int32,
+	interval, ambient, flashX, flashY, flashSensitivity float32,
+	numShadowLights int,
+	shadowLights *[metrics.ShadowLightsCount]transformedShadowLight,
+) {
+	s.ctx.UseProgram(p.prg)
+
+	// Matrices
+	s.ctx.UniformMatrix4fv(p.table[MainLocView], 1, false, view)
+	s.ctx.UniformMatrix4fv(p.table[MainLocInvView], 1, false, invView)
+	s.ctx.UniformMatrix4fv(p.table[MainLocProjection], 1, false, proj)
+	s.ctx.UniformMatrix4fv(p.table[MainLocRoomSpaceMatrix], 1, false, roomSpace)
+	s.ctx.UniformMatrix4fv(p.table[MainLocFlashSpaceMatrix], 1, false, flashSpace)
+	s.ctx.Uniform1f(p.table[MainLocTime], interval)
+
+	// Environment & Material
+	s.ctx.Uniform2f(p.table[MainLocScreenResolution], float32(fbW), float32(fbH))
+	s.ctx.Uniform1f(p.table[MainLocEmissiveIntensity], s.emissiveIntensity)
+	s.ctx.Uniform1f(p.table[MainLocAmbientLight], ambient)
+	s.ctx.Uniform1i(p.table[MainLocEnableShadows], s.shadows)
+	s.ctx.Uniform1i(p.table[MainLocDebugLights], int32(s.debugLights))
+
+	// Flashlight
+	flashIntensity := float32(s.flash.GetIntensity())
+	if flashIntensity > 0.001 {
+		s.ctx.Uniform1i(p.table[MainLocEnableFlashlight], 1)
+		s.ctx.Uniform3f(p.table[MainLocFlashPosView], flashX, flashY, 0.0)
+		dirX := float32(s.flash.GetOffsetX()) - (flashX * flashSensitivity)
+		dirY := float32(s.flash.GetOffsetY()) + (flashY * flashSensitivity)
+		s.ctx.Uniform3f(p.table[MainLocFlashDir], dirX, dirY, -1.0)
+		s.ctx.Uniform1f(p.table[MainLocFlashIntensityFactor], flashIntensity)
+		s.ctx.Uniform1f(p.table[MainLocFlashFalloff], float32(s.flash.GetFalloff()))
+		s.ctx.Uniform1f(p.table[MainLocFlashConeStart], float32(s.flash.GetConeStart()))
+		s.ctx.Uniform1f(p.table[MainLocFlashConeEnd], float32(s.flash.GetConeEnd()))
+	} else {
+		s.ctx.Uniform1i(p.table[MainLocEnableFlashlight], 0)
+	}
+
+	// Dynamic Shadow Lights (already view-space transformed on CPU)
+	s.ctx.Uniform1i(p.table[MainLocNumShadowLights], int32(numShadowLights))
+	for i := 0; i < numShadowLights; i++ {
+		tl := &shadowLights[i]
+		loc := &p.shadowLightLocs[i]
+		s.ctx.Uniform4f(loc.posIntensity, tl.vx, tl.vy, tl.vz, tl.intensity)
+		s.ctx.Uniform4f(loc.dirFalloff, tl.dvx, tl.dvy, tl.dvz, tl.falloff)
+		s.ctx.Uniform4f(loc.colorType, tl.r, tl.g, tl.b, tl.kind)
+		s.ctx.Uniform4f(loc.spotParams, tl.outerCutOff, tl.cutOff, tl.effRadiusSq, tl.invScale)
+		s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, tl.lightSpace)
+	}
+
+	// Dynamic UBO Lights
+	s.ctx.Uniform1i(p.table[MainLocNumLights], s.lights.GetActiveLightsCount())
+	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.lights.GetActiveUBO())
+}
+
+// Render executes a Z-prepass followed by Early-Z forward opaque shading and conditional alpha-cutout shading.
+func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
 	targetFbo := s.post.GetFBO()
 	view := s.metrics.GetViewPtr()
 	invView := s.metrics.GetInvViewPtr()
@@ -409,58 +575,56 @@ func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, fl
 	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0)
 	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
 
-	s.ctx.UseProgram(s.GetProgramOpaque())
-
-	// Matrices
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocView), 1, false, view)
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocInvView), 1, false, invView)
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocProjection), 1, false, proj)
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocRoomSpaceMatrix), 1, false, roomSpace)
-	s.ctx.UniformMatrix4fv(s.GetUniformOpaque(MainLocFlashSpaceMatrix), 1, false, flashSpace)
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocTime), interval)
-
-	// Environment & Material
-	s.ctx.Uniform2f(s.GetUniformOpaque(MainLocScreenResolution), float32(fbW), float32(fbH))
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocEmissiveIntensity), s.emissiveIntensity)
-	s.ctx.Uniform1f(s.GetUniformOpaque(MainLocAmbientLight), ambient)
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocEnableShadows), s.shadows)
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocDebugLights), int32(s.debugLights))
-
-	// Flashlight
-	flashIntensity := float32(s.flash.GetIntensity())
-	if flashIntensity > 0.001 {
-		s.ctx.Uniform1i(s.GetUniformOpaque(MainLocEnableFlashlight), 1)
-		s.ctx.Uniform3f(s.GetUniformOpaque(MainLocFlashPosView), flashX, flashY, 0.0)
-		dirX := float32(s.flash.GetOffsetX()) - (flashX * flashSensitivity)
-		dirY := float32(s.flash.GetOffsetY()) + (flashY * flashSensitivity)
-		s.ctx.Uniform3f(s.GetUniformOpaque(MainLocFlashDir), dirX, dirY, -1.0)
-		s.ctx.Uniform1f(s.GetUniformOpaque(MainLocFlashIntensityFactor), flashIntensity)
-		s.ctx.Uniform1f(s.GetUniformOpaque(MainLocFlashFalloff), float32(s.flash.GetFalloff()))
-		s.ctx.Uniform1f(s.GetUniformOpaque(MainLocFlashConeStart), float32(s.flash.GetConeStart()))
-		s.ctx.Uniform1f(s.GetUniformOpaque(MainLocFlashConeEnd), float32(s.flash.GetConeEnd()))
-	} else {
-		s.ctx.Uniform1i(s.GetUniformOpaque(MainLocEnableFlashlight), 0)
+	if dc == nil || !dc.HasCommands() {
+		return
 	}
 
-	// Dynamic Shadow Lights
-	//shadowLights, numShadowLights := s.shadowLightsMetrics.GetLights()
-	numShadowLights := s.shadowLightsMetrics.GetLightCount()
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocNumShadowLights), int32(numShadowLights))
-	if numShadowLights > 0 {
-		for i := 0; i < int(numShadowLights); i++ {
-			l, lMatrix := s.shadowLightsMetrics.GetLight(i)
-			loc := s.shadowLightLocs[i]
-			s.ctx.Uniform4f(loc.posIntensity, l.X, l.Y, l.Z, l.Intensity)
-			s.ctx.Uniform4f(loc.dirFalloff, l.DirX, l.DirY, l.DirZ, l.Falloff)
-			s.ctx.Uniform4f(loc.colorType, l.R, l.G, l.B, l.Kind)
-			s.ctx.Uniform4f(loc.spotParams, l.OuterCutOff, l.CutOff, 0.0, 0.0)
-			s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, lMatrix)
+	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
+
+	// Pass 1: Z-Prepass populates front-most depth before running heavy lighting/shadows.
+	if dc.HasSolidPrepass() || dc.HasCutoutPrepass() {
+		s.ctx.ColorMask(false, false, false, false)
+		s.ctx.DepthMask(true)
+		s.ctx.DepthFunc(api.LESS)
+		s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
+		s.ctx.Disable(api.POLYGON_OFFSET_FILL)
+
+		if dc.HasSolidPrepass() {
+			s.bindZPrepassProgram(&s.zPrepassSolid, view, proj, interval)
+			dc.RenderPrepass(false)
+		}
+		if dc.HasCutoutPrepass() {
+			s.bindZPrepassProgram(&s.zPrepassCutout, view, proj, interval)
+			dc.RenderPrepass(true)
+		}
+		s.ctx.ColorMask(true, true, true, true)
+	}
+
+	// Precompute view-space shadow lights once on CPU for solid and cutout passes.
+	numShadowLights := int(s.shadowLightsMetrics.GetLightCount())
+	if numShadowLights > metrics.ShadowLightsCount {
+		numShadowLights = metrics.ShadowLightsCount
+	}
+	var transformed [metrics.ShadowLightsCount]transformedShadowLight
+	for i := 0; i < numShadowLights; i++ {
+		l, lMatrix := s.shadowLightsMetrics.GetLight(i)
+		vx, vy, vz := s.metrics.TransformPointToView(l.X, l.Y, l.Z)
+		dvx, dvy, dvz := s.metrics.TransformDirectionNormalizedToView(l.DirX, l.DirY, l.DirZ)
+		effRadiusSq, invScale := metrics.ComputeLightAttenuation(l.Intensity, l.Falloff)
+		transformed[i] = transformedShadowLight{
+			vx: vx, vy: vy, vz: vz,
+			intensity: l.Intensity,
+			dvx:       dvx, dvy: dvy, dvz: dvz,
+			falloff: l.Falloff,
+			r:       l.R, g: l.G, b: l.B,
+			kind:        l.Kind,
+			outerCutOff: l.OuterCutOff,
+			cutOff:      l.CutOff,
+			effRadiusSq: effRadiusSq,
+			invScale:    invScale,
+			lightSpace:  lMatrix,
 		}
 	}
-
-	// Dynamic UBO Lights
-	s.ctx.Uniform1i(s.GetUniformOpaque(MainLocNumLights), s.lights.GetActiveLightsCount())
-	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.lights.GetActiveUBO())
 
 	// Shadow Texture (Master Shadow Atlas)
 	if s.shadows != 0 {
@@ -468,15 +632,35 @@ func (s *Main) Render(renderGeometry func(), ambient float32, flashX, flashY, fl
 		s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
 	}
 
-	s.ctx.DepthMask(true)
-	s.ctx.DepthFunc(api.LESS)
+	// Pass 2a: Solid geometry (no discard -> hardware Early-Z enabled; DepthFunc(EQUAL) on prepassed batches)
+	if dc.HasSolid() {
+		s.bindForwardUniforms(
+			&s.solidPrg,
+			view, invView, proj, roomSpace, flashSpace,
+			fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
+			numShadowLights, &transformed,
+		)
+		s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
+		dc.RenderShade(false)
+	}
 
-	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
+	// Pass 2b: Alpha-cutout geometry (discard enabled; Alpha-to-Coverage only when MSAA > 0)
+	if dc.HasCutout() {
+		s.bindForwardUniforms(
+			&s.cutoutPrg,
+			view, invView, proj, roomSpace, flashSpace,
+			fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
+			numShadowLights, &transformed,
+		)
+		useAlphaToCoverage := s.post.GetSamples() > 0
+		if useAlphaToCoverage {
+			s.ctx.Enable(api.SAMPLE_ALPHA_TO_COVERAGE)
+		}
+		dc.RenderShade(true)
+		if useAlphaToCoverage {
+			s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
+		}
+	}
 
-	// Enable Alpha To Coverage only for the main geometry
-	s.ctx.Enable(api.SAMPLE_ALPHA_TO_COVERAGE)
-	renderGeometry()
-	// Disable it immediately so subsequent passes are not affected
-	s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
 	s.ctx.BindVertexArray(0)
 }

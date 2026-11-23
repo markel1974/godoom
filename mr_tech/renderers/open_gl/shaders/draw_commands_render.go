@@ -62,6 +62,7 @@ type RenderBatch struct {
 	mi            []uintptr
 	depthWrite    int
 	polygonOffset int
+	hasCutout     int
 	len           int
 	mcPtr         *int32
 	miPtr         *unsafe.Pointer
@@ -79,11 +80,12 @@ func NewRenderBatch() *RenderBatch {
 	return rb
 }
 
-// Reset resets the RenderBatch, clearing its length and setting depthWrite and polygonOffset to the provided values.
-func (rb *RenderBatch) Reset(depthWrite int, polygonOffset int) {
+// Reset resets the RenderBatch, clearing its length and setting depthWrite, polygonOffset, and cutout mode.
+func (rb *RenderBatch) Reset(depthWrite int, polygonOffset int, hasCutout int) {
 	rb.len = 0
 	rb.depthWrite = depthWrite
 	rb.polygonOffset = polygonOffset
+	rb.hasCutout = hasCutout
 }
 
 // Add appends a new draw command to the RenderBatch with specified index count and EBO byte offset.
@@ -118,14 +120,18 @@ func (rb *RenderBatch) grow() {
 
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
 type DrawCommandsRender struct {
-	ctx          api.IContext
-	batches      []*RenderBatch
-	batchesLen   int
-	isAdditive   bool
-	name         string
-	profiler     *GpuProfiler
-	totalDraws   uint64
-	totalIndices uint64
+	ctx              api.IContext
+	batches          []*RenderBatch
+	batchesLen       int
+	isAdditive       bool
+	name             string
+	profiler         *GpuProfiler
+	totalDraws       uint64
+	totalIndices     uint64
+	hasSolidPrepass  bool
+	hasCutoutPrepass bool
+	hasSolid         bool
+	hasCutout        bool
 }
 
 // NewDrawCommandsRender creates and initializes a new DrawCommandsRender with specified context and batch type.
@@ -158,9 +164,25 @@ func (w *DrawCommandsRender) GetName() string {
 	return w.name
 }
 
+// HasSolidPrepass returns true if at least one solid depth-writing batch qualifies for the Z-prepass.
+func (w *DrawCommandsRender) HasSolidPrepass() bool { return w.hasSolidPrepass }
+
+// HasCutoutPrepass returns true if at least one alpha-cutout depth-writing batch qualifies for the Z-prepass.
+func (w *DrawCommandsRender) HasCutoutPrepass() bool { return w.hasCutoutPrepass }
+
+// HasSolid returns true if at least one non-cutout batch exists.
+func (w *DrawCommandsRender) HasSolid() bool { return w.hasSolid }
+
+// HasCutout returns true if at least one alpha-cutout batch exists.
+func (w *DrawCommandsRender) HasCutout() bool { return w.hasCutout }
+
 // Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.
 func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.batchesLen = 0
+	w.hasSolidPrepass = false
+	w.hasCutoutPrepass = false
+	w.hasSolid = false
+	w.hasCutout = false
 
 	if len(dc) == 0 {
 		return
@@ -168,6 +190,7 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 
 	currentDepthWrite := -1
 	currentPolygonOffset := -1
+	currentHasCutout := -1
 
 	var currentBatch *RenderBatch
 
@@ -181,6 +204,7 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 
 		depthWrite := 0
 		polygonOffset := 0
+		hasCutout := 0
 
 		if cmd.material != nil {
 			if !w.isAdditive && cmd.material.GetDepthWrite() {
@@ -189,28 +213,60 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 			if cmd.material.GetPolygonOffset() {
 				polygonOffset = 1
 			}
+			if !w.isAdditive && cmd.material.HasCutout() {
+				hasCutout = 1
+			}
 		} else {
 			if !w.isAdditive {
 				depthWrite = 1
 			}
 		}
 
-		if depthWrite != currentDepthWrite || polygonOffset != currentPolygonOffset || currentBatch == nil {
+		if hasCutout == 1 {
+			w.hasCutout = true
+			if depthWrite == 1 && polygonOffset == 0 {
+				w.hasCutoutPrepass = true
+			}
+		} else {
+			w.hasSolid = true
+			if depthWrite == 1 && polygonOffset == 0 {
+				w.hasSolidPrepass = true
+			}
+		}
+
+		if depthWrite != currentDepthWrite || polygonOffset != currentPolygonOffset || hasCutout != currentHasCutout || currentBatch == nil {
 			if w.batchesLen >= len(w.batches) {
 				w.grow()
 			}
 			currentBatch = w.batches[w.batchesLen]
-			currentBatch.Reset(depthWrite, polygonOffset)
+			currentBatch.Reset(depthWrite, polygonOffset, hasCutout)
 			w.batchesLen++
 			currentDepthWrite = depthWrite
 			currentPolygonOffset = polygonOffset
+			currentHasCutout = hasCutout
 		}
 		currentBatch.Add(cmd.indexCount, cmd.firstIndex*4)
 	}
 }
 
-// Render executes the rendering process for all batched draw commands, managing depth writes and polygon offset states.
-func (w *DrawCommandsRender) Render() {
+func (w *DrawCommandsRender) applyDepthState(curDepthWrite, curPolygonOffset *int, depthWrite, polygonOffset int) {
+	if depthWrite != *curDepthWrite {
+		w.ctx.DepthMask(depthWrite == 1)
+		*curDepthWrite = depthWrite
+	}
+
+	if polygonOffset != *curPolygonOffset {
+		if polygonOffset == 1 {
+			w.ctx.Enable(api.POLYGON_OFFSET_FILL)
+			w.ctx.PolygonOffset(-1.0, -1.0)
+		} else {
+			w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+		}
+		*curPolygonOffset = polygonOffset
+	}
+}
+
+func (w *DrawCommandsRender) renderFiltered(cutoutFilter int) {
 	if w.batchesLen == 0 {
 		return
 	}
@@ -220,22 +276,10 @@ func (w *DrawCommandsRender) Render() {
 
 	for i := 0; i < w.batchesLen; i++ {
 		b2 := w.batches[i]
-		if b2.depthWrite != currentDepthWrite {
-			w.ctx.DepthMask(b2.depthWrite == 1)
-			currentDepthWrite = b2.depthWrite
+		if cutoutFilter >= 0 && b2.hasCutout != cutoutFilter {
+			continue
 		}
-
-		if b2.polygonOffset != currentPolygonOffset {
-			if b2.polygonOffset == 1 {
-				w.ctx.Enable(api.POLYGON_OFFSET_FILL)
-				w.ctx.PolygonOffset(-1.0, -1.0)
-			} else {
-				w.ctx.Disable(api.POLYGON_OFFSET_FILL)
-			}
-
-			currentPolygonOffset = b2.polygonOffset
-		}
-
+		w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, b2.depthWrite, b2.polygonOffset)
 		w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 	}
 
@@ -245,6 +289,88 @@ func (w *DrawCommandsRender) Render() {
 
 	if currentPolygonOffset == 1 {
 		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	}
+}
+
+// Render executes the rendering process for all batched draw commands, managing depth writes and polygon offset states.
+func (w *DrawCommandsRender) Render() {
+	w.renderFiltered(-1)
+}
+
+// RenderCutoutFiltered renders only solid (cutout=false) or alpha-cutout (cutout=true) batches.
+func (w *DrawCommandsRender) RenderCutoutFiltered(cutout bool) {
+	if cutout {
+		w.renderFiltered(1)
+		return
+	}
+	w.renderFiltered(0)
+}
+
+// RenderPrepass draws prepass-eligible (depth-writing, non-offset) batches filtered by cutout mode.
+// Caller must set ColorMask(false, false, false, false), DepthMask(true), DepthFunc(LESS), and disable POLYGON_OFFSET_FILL.
+func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
+	if w.batchesLen == 0 {
+		return
+	}
+	wantCutout := 0
+	if cutout {
+		wantCutout = 1
+	}
+	for i := 0; i < w.batchesLen; i++ {
+		b2 := w.batches[i]
+		if b2.depthWrite == 1 && b2.polygonOffset == 0 && b2.hasCutout == wantCutout {
+			w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
+		}
+	}
+}
+
+// RenderShade draws the color shading pass for either solid (cutout=false) or alpha-cutout (cutout=true) batches
+// after Z-Prepass has populated depth for depth-writing non-offset batches.
+func (w *DrawCommandsRender) RenderShade(cutout bool) {
+	if w.batchesLen == 0 {
+		return
+	}
+	wantCutout := 0
+	if cutout {
+		wantCutout = 1
+	}
+	prepassDepthFunc := uint32(api.EQUAL)
+	if cutout {
+		prepassDepthFunc = api.LEQUAL
+	}
+
+	curDepthFunc := uint32(0)
+	curDepthWrite := -1
+	curPolygonOffset := -1
+
+	for i := 0; i < w.batchesLen; i++ {
+		b2 := w.batches[i]
+		if b2.hasCutout != wantCutout {
+			continue
+		}
+		targetDepthFunc := uint32(api.LEQUAL)
+		targetDepthWrite := b2.depthWrite
+		targetPolygonOffset := b2.polygonOffset
+		if b2.depthWrite == 1 && b2.polygonOffset == 0 {
+			targetDepthFunc = prepassDepthFunc
+			targetDepthWrite = 0
+		}
+		if targetDepthFunc != curDepthFunc {
+			w.ctx.DepthFunc(targetDepthFunc)
+			curDepthFunc = targetDepthFunc
+		}
+		w.applyDepthState(&curDepthWrite, &curPolygonOffset, targetDepthWrite, targetPolygonOffset)
+		w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
+	}
+
+	if curPolygonOffset == 1 {
+		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	}
+	if curDepthWrite != 1 && !w.isAdditive {
+		w.ctx.DepthMask(true)
+	}
+	if curDepthFunc != 0 {
+		w.ctx.DepthFunc(api.LESS)
 	}
 }
 

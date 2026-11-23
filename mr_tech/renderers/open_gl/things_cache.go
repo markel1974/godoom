@@ -207,10 +207,7 @@ func (w *ThingsRender) Commit() bool {
 // growEntries expands the cache entry pool and free-slot stack if capacity is exceeded.
 func (w *ThingsRender) growEntries() {
 	oldCap := len(w.entries)
-	newCap := oldCap * 2
-	if newCap < 16 {
-		newCap = 16
-	}
+	newCap := max(oldCap*2, 16)
 	newEntries := make([]*ThingRenderCache, newCap)
 	copy(newEntries, w.entries)
 	for i := oldCap; i < newCap; i++ {
@@ -226,10 +223,7 @@ func (w *ThingsRender) growEntries() {
 // growRefs expands both reference tracking buffers together if active things per frame exceed initial capacity.
 func (w *ThingsRender) growRefs() {
 	oldCap := len(w.currThingRefs)
-	newCap := oldCap * 2
-	if newCap < 16 {
-		newCap = 16
-	}
+	newCap := max(oldCap*2, 16)
 	newCurr := make([]ThingCacheRef, newCap)
 	copy(newCurr, w.currThingRefs[:w.currLen])
 	w.currThingRefs = newCurr

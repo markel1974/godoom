@@ -117,8 +117,9 @@ func (hw *OcclusionHW) GetState(id uint64) *OcclusionState {
 	return state
 }
 
-// Reset clears all AABB tests stored in the OcclusionHW instance and advances the frame counter.
+// Reset reads back completed queries from previous frames, clears all AABB tests, and advances the frame counter.
 func (hw *OcclusionHW) Reset() {
+	hw.Readback()
 	hw.testsLen = 0
 	hw.frameCounter++
 }
@@ -193,7 +194,7 @@ func (hw *OcclusionHW) Readback() {
 		}
 		var available uint32
 		hw.ctx.GetQueryObjectuiv(state.QueryID, api.QUERY_RESULT_AVAILABLE, &available)
-		if available == 1 {
+		if available != 0 {
 			var passed uint32
 			hw.ctx.GetQueryObjectuiv(state.QueryID, api.QUERY_RESULT, &passed)
 
@@ -376,9 +377,6 @@ func (hw *OcclusionHW) Render() {
 			hw.ctx.BindBuffer(api.ARRAY_BUFFER, 0)
 		}
 	}
-
-	// DEFERRED READ-BACK (Non-blocking)
-	hw.Readback()
 }
 
 // growAllVertices doubles the capacity of the allVertices slice and updates the associated pointer in the GPU context.

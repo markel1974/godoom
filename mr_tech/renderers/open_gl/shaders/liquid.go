@@ -152,8 +152,8 @@ func (s *Liquid) Init() error {
 // Render handles the rendering logic for the liquid, applying shaders, setting up textures, and drawing geometry based on parameters.
 func (s *Liquid) Render(renderGeometry func()) {
 	vao := s.main.GetVAO()
-	refractionTex := s.post.GetColorBuffer()
-	depthTex := s.post.GetDepthBuffer()
+	refractionTex := s.post.GetRefractionColorBuffer()
+	depthTex := s.post.GetRefractionDepthBuffer()
 	view := s.metrics.GetViewPtr()
 	proj := s.metrics.GetProjPtr()
 	fbW, fbH := s.handler.GetSize()

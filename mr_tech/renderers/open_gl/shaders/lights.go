@@ -53,28 +53,35 @@ const (
 
 // Lights represents a collection of light data and OpenGL resources for managing and rendering dynamic scene lighting.
 type Lights struct {
-	ctx          api.IContext
-	prg          uint32
-	table        [LightLocLast]int32
-	uboLights    [lightsDoubleBuffer]uint32
-	frameIdx     int
-	activeLights int32
-	shadows      int32
-	stride       int32
-	handler      *Handler
-	cal          *model.Calibration
-	main         *Main
-	depth        *Depth
-	mapMetrics   *metrics.Map
-	debugLights  int
+	ctx           api.IContext
+	prg           uint32
+	table         [LightLocLast]int32
+	uboLights     [lightsDoubleBuffer]uint32
+	viewLights    []float32
+	viewLightsPtr unsafe.Pointer
+	frameIdx      int
+	activeLights  int32
+	shadows       int32
+	stride        int32
+	handler       *Handler
+	cal           *model.Calibration
+	main          *Main
+	depth         *Depth
+	mapMetrics    *metrics.Map
+	debugLights   int
 }
+
+const lightFloatsPerEntry = 16
 
 // NewLights initializes and returns a new instance of Lights with default settings.
 func NewLights(stride int32) *Lights {
+	viewLights := make([]float32, 1024*lightFloatsPerEntry)
 	return &Lights{
-		stride:      stride,
-		frameIdx:    0,
-		debugLights: 0,
+		stride:        stride,
+		viewLights:    viewLights,
+		viewLightsPtr: unsafe.Pointer(&viewLights[0]),
+		frameIdx:      0,
+		debugLights:   0,
 	}
 }
 
@@ -172,16 +179,46 @@ func (s *Lights) Compile(a IAssets) error {
 	return nil
 }
 
-// Prepare updates the uniform buffer object (UBO) with lighting data for rendering and sets the active lights count.
+// Prepare pre-transforms active lights into camera view space, packs squared range and
+// inverse falloff into spot_params.zw, and uploads the inactive UBO buffer cleanly.
 func (s *Lights) Prepare(frameLights unsafe.Pointer, lightSize int32, numLights int32) {
 	s.activeLights = numLights
 	s.frameIdx = (s.frameIdx + 1) % lightsDoubleBuffer
-	if numLights > 0 {
-		s.ctx.BindBuffer(api.UNIFORM_BUFFER, s.uboLights[s.frameIdx])
-		// Scrittura asincrona garantita sull'UBO inattivo
-		s.ctx.BufferSubData(api.UNIFORM_BUFFER, 0, int(lightSize), frameLights)
-		s.ctx.BindBuffer(api.UNIFORM_BUFFER, 0)
+	if numLights <= 0 || frameLights == nil {
+		return
 	}
+	const floatsPerLight = 16
+	neededFloats := int(numLights) * floatsPerLight
+	if neededFloats > len(s.viewLights) {
+		s.viewLights = make([]float32, neededFloats)
+		s.viewLightsPtr = unsafe.Pointer(&s.viewLights[0])
+	}
+	src := unsafe.Slice((*float32)(frameLights), neededFloats)
+	dst := s.viewLights[:neededFloats]
+	for i := 0; i < int(numLights); i++ {
+		off := i * floatsPerLight
+		if s.mapMetrics != nil {
+			dst[off], dst[off+1], dst[off+2] = s.mapMetrics.TransformPointToView(src[off], src[off+1], src[off+2])
+			dst[off+8], dst[off+9], dst[off+10] = s.mapMetrics.TransformDirectionNormalizedToView(src[off+8], src[off+9], src[off+10])
+		} else {
+			dst[off], dst[off+1], dst[off+2] = src[off], src[off+1], src[off+2]
+			dst[off+8], dst[off+9], dst[off+10] = src[off+8], src[off+9], src[off+10]
+		}
+		dst[off+3] = src[off+3]
+		dst[off+4] = src[off+4]
+		dst[off+5] = src[off+5]
+		dst[off+6] = src[off+6]
+		dst[off+7] = src[off+7]
+		dst[off+11] = src[off+11]
+		dst[off+12] = src[off+12]
+		dst[off+13] = src[off+13]
+		dst[off+14], dst[off+15] = metrics.ComputeLightAttenuation(src[off+7], src[off+11])
+	}
+
+	s.ctx.BindBuffer(api.UNIFORM_BUFFER, s.uboLights[s.frameIdx])
+	// Scrittura asincrona garantita sull'UBO inattivo
+	s.ctx.BufferSubData(api.UNIFORM_BUFFER, 0, int(lightSize), s.viewLightsPtr)
+	s.ctx.BindBuffer(api.UNIFORM_BUFFER, 0)
 }
 
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
@@ -292,28 +329,35 @@ const (
 
 // Lights represents a collection of light data and OpenGL resources for managing and rendering dynamic scene lighting.
 type Lights struct {
-	ctx          api.IContext
-	prg          uint32
-	table        [LightLocLast]int32
-	uboLights    [lightsDoubleBuffer]uint32
-	frameIdx     int
-	activeLights int32
-	shadows      int32
-	stride       int32
-	handler      *Handler
-	cal          *model.Calibration
-	main         *Main
-	depth        *Depth
-	mapMetrics   *metrics.Map
-	debugLights  int
+	ctx           api.IContext
+	prg           uint32
+	table         [LightLocLast]int32
+	uboLights     [lightsDoubleBuffer]uint32
+	viewLights    []float32
+	viewLightsPtr unsafe.Pointer
+	frameIdx      int
+	activeLights  int32
+	shadows       int32
+	stride        int32
+	handler       *Handler
+	cal           *model.Calibration
+	main          *Main
+	depth         *Depth
+	mapMetrics    *metrics.Map
+	debugLights   int
 }
+
+const lightFloatsPerEntry = 16
 
 // NewLights initializes and returns a new instance of Lights with default settings.
 func NewLights(stride int32) *Lights {
+	viewLights := make([]float32, 1024*lightFloatsPerEntry)
 	return &Lights{
-		stride:      stride,
-		frameIdx:    0,
-		debugLights: 0,
+		stride:        stride,
+		viewLights:    viewLights,
+		viewLightsPtr: unsafe.Pointer(&viewLights[0]),
+		frameIdx:      0,
+		debugLights:   0,
 	}
 }
 

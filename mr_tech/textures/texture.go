@@ -15,6 +15,8 @@ type Texture struct {
 	emissive     [][]int
 	autoEmissive bool
 	identifier   float32
+	hasAlpha     bool
+	alphaChecked bool
 }
 
 // NewTexture creates a new Texture instance with the given name, ID, width, and height.
@@ -69,6 +71,27 @@ func (t *Texture) HasEmissive() bool {
 	return t.emissive != nil
 }
 
+// HasAlpha reports whether any pixel in the diffuse texture has alpha < 255.
+func (t *Texture) HasAlpha() bool {
+	if t == nil {
+		return false
+	}
+	if !t.alphaChecked {
+		t.hasAlpha = false
+		for x := 0; x < t.w && !t.hasAlpha; x++ {
+			col := t.diffuse[x]
+			for y := 0; y < t.h; y++ {
+				if uint8(col[y]) < 255 {
+					t.hasAlpha = true
+					break
+				}
+			}
+		}
+		t.alphaChecked = true
+	}
+	return t.hasAlpha
+}
+
 // Get retrieves the color value at the specified wrapped texture coordinates (x, y).
 func (t *Texture) Get(x int, y int) int {
 	return t.GetDiffuse(x, y)
@@ -101,6 +124,7 @@ func (t *Texture) GetEmissive(x int, y int) int {
 func (t *Texture) SetDiffuse(x int, y int, color int) {
 	x, y = t.updateCoords(x, y)
 	t.diffuse[x][y] = color
+	t.alphaChecked = false
 }
 
 // SetNormal sets the normal value at the specified coordinates (x, y) after wrapping them within texture bounds.

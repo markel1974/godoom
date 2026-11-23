@@ -24,6 +24,7 @@ const (
 	DRAW_FRAMEBUFFER           = 0x8CA9
 	DYNAMIC_DRAW               = 0x88E8
 	ELEMENT_ARRAY_BUFFER       = 0x8893
+	EQUAL                      = 0x0202
 	FALSE                      = 0
 	FLOAT                      = 0x1406
 	FRAGMENT_SHADER            = 0x8B30

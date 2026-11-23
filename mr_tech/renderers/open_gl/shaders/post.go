@@ -39,6 +39,11 @@ type Post struct {
 	texBrightBuffer uint32
 	texDepthBuffer  uint32
 
+	// Snapshot FBO created lazily only when MSAA is disabled and liquid refraction needs a copy.
+	refractFbo         uint32
+	refractColorBuffer uint32
+	refractDepthBuffer uint32
+
 	// FBO Multisampled per il rendering 3D
 	msaaFbo       uint32
 	rboColorMSAA  uint32
@@ -203,7 +208,7 @@ func (s *Post) Init() error {
 // EnsureAllocated guarantees that the scene MSAA, resolve, and optional LDR framebuffers exist at the active handler size.
 func (s *Post) EnsureAllocated() {
 	fbW, fbH := s.handler.GetSize()
-	if fbW != s.w || fbH != s.h || s.msaaFbo == 0 {
+	if fbW != s.w || fbH != s.h || s.GetFBO() == 0 {
 		s.allocate(fbW, fbH)
 	}
 }
@@ -211,6 +216,9 @@ func (s *Post) EnsureAllocated() {
 // Prepare prepares the post-processing pipeline by resolving the multisample antialiasing (MSAA) buffers to standard buffers.
 func (s *Post) Prepare() {
 	s.EnsureAllocated()
+	if s.samples == 0 {
+		return
+	}
 	// Physically resolve the multisampled FBO before 2D filters.
 	// Depth is consumed only by the liquid pass (resolved earlier), so skip it here.
 	s.ResolveMSAA(s.w, s.h, ResolveColor|ResolveBright)
@@ -276,11 +284,33 @@ const (
 var postDrawAttachments = [2]uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1}
 
 // ResolveMSAA resolves the requested attachments of the multisample (MSAA) framebuffer
-// to the standard framebuffer used for sampling. Resolving only what is actually consumed
-// matters: every MSAA blit forces a render pass break (expensive on GL-over-Metal drivers),
-// and the depth resolve is the most expensive one.
+// to the standard framebuffer used for sampling, or snapshots the single-sampled scene FBO
+// into the lazy refraction FBO when MSAA is disabled.
 func (s *Post) ResolveMSAA(fbw, fbh int32, mask ResolveMask) {
 	if mask == 0 {
+		return
+	}
+	if s.samples == 0 {
+		colorDepthMask := mask & (ResolveColor | ResolveDepth)
+		if colorDepthMask == 0 {
+			return
+		}
+		if s.refractFbo == 0 {
+			s.allocateRefraction()
+		}
+		s.ctx.BindFramebuffer(api.READ_FRAMEBUFFER, s.fbo)
+		s.ctx.BindFramebuffer(api.DRAW_FRAMEBUFFER, s.refractFbo)
+		if colorDepthMask&ResolveColor != 0 {
+			s.ctx.ReadBuffer(api.COLOR_ATTACHMENT0)
+			s.ctx.DrawBuffer(api.COLOR_ATTACHMENT0)
+			s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.COLOR_BUFFER_BIT, api.NEAREST)
+		}
+		if colorDepthMask&ResolveDepth != 0 {
+			s.ctx.BlitFramebuffer(0, 0, fbw, fbh, 0, 0, fbw, fbh, api.DEPTH_BUFFER_BIT, api.NEAREST)
+		}
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
+		s.ctx.DrawBuffers(2, &postDrawAttachments[0])
+		s.ctx.ReadBuffer(api.COLOR_ATTACHMENT0)
 		return
 	}
 	s.ctx.BindFramebuffer(api.READ_FRAMEBUFFER, s.msaaFbo)
@@ -322,11 +352,28 @@ func (s *Post) allocate(width, height int32) {
 		s.ctx.DeleteRenderbuffers(1, &s.rboColorMSAA)
 		s.ctx.DeleteRenderbuffers(1, &s.rboBrightMSAA)
 		s.ctx.DeleteRenderbuffers(1, &s.rboDepthMSAA)
-
+		s.msaaFbo = 0
+		s.rboColorMSAA = 0
+		s.rboBrightMSAA = 0
+		s.rboDepthMSAA = 0
+	}
+	if s.fbo != 0 {
 		s.ctx.DeleteFramebuffers(1, &s.fbo)
 		s.ctx.DeleteTextures(1, &s.texColorBuffer)
 		s.ctx.DeleteTextures(1, &s.texBrightBuffer)
 		s.ctx.DeleteTextures(1, &s.texDepthBuffer)
+		s.fbo = 0
+		s.texColorBuffer = 0
+		s.texBrightBuffer = 0
+		s.texDepthBuffer = 0
+	}
+	if s.refractFbo != 0 {
+		s.ctx.DeleteFramebuffers(1, &s.refractFbo)
+		s.ctx.DeleteTextures(1, &s.refractColorBuffer)
+		s.ctx.DeleteTextures(1, &s.refractDepthBuffer)
+		s.refractFbo = 0
+		s.refractColorBuffer = 0
+		s.refractDepthBuffer = 0
 	}
 	if s.ldrFbo != 0 {
 		s.ctx.DeleteFramebuffers(1, &s.ldrFbo)
@@ -335,32 +382,34 @@ func (s *Post) allocate(width, height int32) {
 		s.texLdrBuffer = 0
 	}
 
-	// --- 1. Scene FBO (MSAA when samples > 0, single-sampled otherwise) ---
-	s.ctx.GenFramebuffers(1, &s.msaaFbo)
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.msaaFbo)
+	// --- 1. MSAA Scene FBO (allocated only when MSAA is active; otherwise render directly into s.fbo) ---
+	if s.samples > 0 {
+		s.ctx.GenFramebuffers(1, &s.msaaFbo)
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.msaaFbo)
 
-	s.ctx.GenRenderbuffers(1, &s.rboColorMSAA)
-	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboColorMSAA)
-	s.renderbufferStorage(api.RGBA16F)
-	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.RENDERBUFFER, s.rboColorMSAA)
+		s.ctx.GenRenderbuffers(1, &s.rboColorMSAA)
+		s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboColorMSAA)
+		s.renderbufferStorage(api.RGBA16F)
+		s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.RENDERBUFFER, s.rboColorMSAA)
 
-	s.ctx.GenRenderbuffers(1, &s.rboBrightMSAA)
-	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboBrightMSAA)
-	s.renderbufferStorage(api.RGBA16F)
-	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.RENDERBUFFER, s.rboBrightMSAA)
+		s.ctx.GenRenderbuffers(1, &s.rboBrightMSAA)
+		s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboBrightMSAA)
+		s.renderbufferStorage(api.RGBA16F)
+		s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.RENDERBUFFER, s.rboBrightMSAA)
 
-	s.ctx.DrawBuffers(2, s.attachmentsPtr)
+		s.ctx.DrawBuffers(2, s.attachmentsPtr)
 
-	s.ctx.GenRenderbuffers(1, &s.rboDepthMSAA)
-	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepthMSAA)
-	s.renderbufferStorage(api.DEPTH_COMPONENT24)
-	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepthMSAA)
+		s.ctx.GenRenderbuffers(1, &s.rboDepthMSAA)
+		s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepthMSAA)
+		s.renderbufferStorage(api.DEPTH_COMPONENT24)
+		s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepthMSAA)
 
-	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
-		panic("post MSAA FBO not complete: " + strconv.Itoa(int(v)))
+		if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+			panic("post MSAA FBO not complete: " + strconv.Itoa(int(v)))
+		}
 	}
 
-	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing) ---
+	// --- 2. RESOLVE FBO (Target Piatto per il Post-Processing, e target diretto quando MSAA == 0) ---
 	s.ctx.ActiveTexture(api.TEXTURE0)
 	s.ctx.GenFramebuffers(1, &s.fbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
@@ -428,6 +477,38 @@ func (s *Post) renderbufferStorage(internalFormat uint32) {
 	s.ctx.RenderbufferStorage(api.RENDERBUFFER, internalFormat, s.w, s.h)
 }
 
+// allocateRefraction lazily allocates the single-sampled refraction snapshot FBO used by the liquid pass when MSAA is disabled.
+func (s *Post) allocateRefraction() {
+	s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitRefraction)
+	s.ctx.GenFramebuffers(1, &s.refractFbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.refractFbo)
+
+	s.ctx.GenTextures(1, &s.refractColorBuffer)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.refractColorBuffer)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, s.w, s.h, 0, api.RGBA, api.FLOAT, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.refractColorBuffer, 0)
+
+	s.ctx.GenTextures(1, &s.refractDepthBuffer)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.refractDepthBuffer)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.DEPTH_COMPONENT24, s.w, s.h, 0, api.DEPTH_COMPONENT, api.UNSIGNED_INT, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.TEXTURE_2D, s.refractDepthBuffer, 0)
+
+	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+		panic("post Refraction FBO not complete: " + strconv.Itoa(int(v)))
+	}
+
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
+}
+
 // GetSamples returns the MSAA sample count of the scene framebuffer (0 = MSAA disabled).
 func (s *Post) GetSamples() int32 {
 	return s.samples
@@ -443,12 +524,31 @@ func (s *Post) GetDepthBuffer() uint32 {
 	return s.texDepthBuffer
 }
 
+// GetRefractionColorBuffer returns the scene color texture safe for liquid sampling without FBO feedback loops.
+func (s *Post) GetRefractionColorBuffer() uint32 {
+	if s.samples == 0 && s.refractColorBuffer != 0 {
+		return s.refractColorBuffer
+	}
+	return s.texColorBuffer
+}
+
+// GetRefractionDepthBuffer returns the scene depth texture safe for liquid sampling without FBO feedback loops.
+func (s *Post) GetRefractionDepthBuffer() uint32 {
+	if s.samples == 0 && s.refractDepthBuffer != 0 {
+		return s.refractDepthBuffer
+	}
+	return s.texDepthBuffer
+}
+
 // GetBrightBuffer returns the texture buffer ID assigned for bloom and brightness post-processing effects.
 func (s *Post) GetBrightBuffer() uint32 {
 	return s.texBrightBuffer
 }
 
-// GetFBO returns the ID of the multisampled framebuffer object (FBO) used for 3D rendering in the post-processing pipeline.
+// GetFBO returns the active 3D scene framebuffer object (single-sampled resolve FBO directly when MSAA is disabled).
 func (s *Post) GetFBO() uint32 {
+	if s.samples == 0 {
+		return s.fbo
+	}
 	return s.msaaFbo
 }

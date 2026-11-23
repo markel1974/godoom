@@ -34,7 +34,11 @@ type Map struct {
 
 // NewMap creates and initializes a new Map instance with default settings and returns a pointer to it.
 func NewMap() *Map {
-	m := &Map{}
+	m := &Map{
+		view:    [16]float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+		proj:    [16]float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+		invView: [16]float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+	}
 	m.viewPtr = &m.view[0]
 	m.projPtr = &m.proj[0]
 	m.invViewPtr = &m.invView[0]
@@ -95,6 +99,38 @@ func (m *Map) TransformDirectionToView(normLx, normLy, normLz float32) (float32,
 	lvZ := m.view[2]*normLx + m.view[6]*normLy + m.view[10]*normLz
 	lenSq := lvX*lvX + lvY*lvY + lvZ*lvZ
 	return lvX, lvY, lvZ, lenSq
+}
+
+// TransformDirectionNormalizedToView transforms a direction vector into view space and normalizes the result.
+func (m *Map) TransformDirectionNormalizedToView(dx, dy, dz float32) (float32, float32, float32) {
+	vx, vy, vz, lenSq := m.TransformDirectionToView(dx, dy, dz)
+	if lenSq > 1e-12 {
+		invLen := float32(1.0 / math.Sqrt(float64(lenSq)))
+		return vx * invLen, vy * invLen, vz * invLen
+	}
+	return vx, vy, vz
+}
+
+// TransformPointToView transforms a 3D world-space position into camera view space.
+func (m *Map) TransformPointToView(x, y, z float32) (float32, float32, float32) {
+	vx := m.view[0]*x + m.view[4]*y + m.view[8]*z + m.view[12]
+	vy := m.view[1]*x + m.view[5]*y + m.view[9]*z + m.view[13]
+	vz := m.view[2]*x + m.view[6]*y + m.view[10]*z + m.view[14]
+	return vx, vy, vz
+}
+
+// ComputeLightAttenuation precomputes the squared effective radius and inverse attenuation scale for a light.
+func ComputeLightAttenuation(intensity, falloff float32) (effectiveRadiusSq, invScale float32) {
+	if falloff < 1.0 {
+		falloff = 1.0
+	}
+	if intensity < 0.1 {
+		intensity = 0.1
+	}
+	scale := falloff * intensity
+	invScale = float32(1.0) / scale
+	effectiveRadius := float32(4.605) * scale
+	return effectiveRadius * effectiveRadius, invScale
 }
 
 // GetInvViewPtr returns a pointer to the inverse view matrix of the map as a float32.

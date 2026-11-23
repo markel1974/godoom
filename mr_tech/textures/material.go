@@ -137,6 +137,22 @@ func (m *Material) GetDepthWrite() bool { return m.depthWrite }
 // GetAlphaTest returns the alpha threshold for discarding pixels.
 func (m *Material) GetAlphaTest() float32 { return m.alphaTest }
 
+// HasCutout reports whether rendering this material requires alpha-test discard.
+func (m *Material) HasCutout() bool {
+	if m == nil {
+		return false
+	}
+	if m.alphaTest > 0 {
+		return true
+	}
+	for _, frame := range m.frames {
+		if frame != nil && frame.HasAlpha() {
+			return true
+		}
+	}
+	return false
+}
+
 // HasFog returns whether this is a fog material.
 func (m *Material) HasFog() bool { return m.hasFog }
 

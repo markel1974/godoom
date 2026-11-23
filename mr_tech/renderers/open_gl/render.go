@@ -233,14 +233,12 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	// LIGHTS PREPARE (UBO)
 	w.lights.Prepare(lights, lightSize, lightsCount)
 	// OMBRE
-	w.depth.Render(w.dcOpaque.Render)
-	// MAIN OPAQUE (Single-Pass Forward with all lights & shadows)
-	w.main.Render(w.dcOpaque.Render, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
+	w.depth.Render(w.dcOpaque)
+	// MAIN OPAQUE (Z-Prepass + Single-Pass Forward with Early-Z)
+	w.main.Render(w.dcOpaque, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
 	// HW OCCLUSION
 	if w.hwOcc.HasDrawTests() {
 		w.occlusion.Render(w.hwOcc.Render)
-	} else {
-		w.hwOcc.Readback()
 	}
 	// SKYBOX
 	if skyMat := w.builder.GetSkyMaterial(); skyMat != nil {

@@ -40,24 +40,24 @@ uniform float u_flashFalloff;
 uniform float u_flashConeStart;
 uniform float u_flashConeEnd;
 
-// Dynamic Shadow Lights (up to 8 spotlights)
+// Dynamic Shadow Lights (up to 8 spotlights, pre-transformed to View Space on CPU)
 struct ShadowLight {
-    vec4 pos_intensity;    // xyz: world pos, w: intensity
-    vec4 dir_falloff;      // xyz: world dir, w: falloff
+    vec4 pos_intensity;    // xyz: view pos, w: intensity
+    vec4 dir_falloff;      // xyz: normalized view dir, w: falloff
     vec4 color_type;       // xyz: rgb color, w: kind
-    vec4 spot_params;      // x: outer cutoff, y: inner cutoff, z,w: padding
+    vec4 spot_params;      // x: outer cutoff, y: inner cutoff, z: effectiveRadiusSq, w: invScale
     mat4 lightSpace;       // projection * view matrix
 };
 
 uniform ShadowLight u_shadowLights[8];
 uniform int u_numShadowLights;
 
-// UBO Dynamic point/area lights (LightsBlock binding 0)
+// UBO Dynamic point/area lights (LightsBlock binding 0, pre-transformed to View Space on CPU)
 struct Light {
-    vec4 pos_type;        // xyz: World position,  w: Type (0.0=Point, 1.0=Spot, 2.0=Directional, 3.0=Ambient)
+    vec4 pos_type;        // xyz: View position,  w: Type (0.0=Point, 1.0=Spot, 2.0=Directional, 3.0=Ambient)
     vec4 color_intensity; // xyz: RGB color,       w: Intensity
-    vec4 dir_falloff;     // xyz: World direction, w: Falloff Factor
-    vec4 spot_params;     // x: inner cutoff (cos), y: outer cutoff (cos), z,w: padding
+    vec4 dir_falloff;     // xyz: Normalized view direction, w: Falloff Factor
+    vec4 spot_params;     // x: inner cutoff (cos), y: outer cutoff (cos), z: effectiveRadiusSq, w: invScale
 };
 
 layout(std140) uniform LightsBlock {
@@ -66,6 +66,7 @@ layout(std140) uniform LightsBlock {
 uniform int u_numLights;
 
 const float PI = 3.14159265359;
+const vec2 kShadowAtlasTexel = vec2(1.0 / 2048.0);
 
 vec4 getDiffuse(vec3 tc) {
     int b = int(tc.z) / 1000;
@@ -98,19 +99,15 @@ vec3 calculateNormal() {
     vec3 dp1 = dFdx(ViewPos);
     vec3 dp2 = dFdy(ViewPos);
     vec3 geoNormal = normalize(cross(dp1, dp2));
-    if (geoNormal.z < 0.0) {
-        geoNormal = -geoNormal;
-    }
     if (dot(geoNormal, ViewPos) > 0.0) {
         geoNormal = -geoNormal;
     }
 
     vec3 mapColor = getNormal(TexCoords);
-    if (length(mapColor) < 0.1) {
+    if (dot(mapColor, mapColor) < 0.01) {
         return geoNormal;
     }
-    vec3 unpacked = (mapColor * 2.0) - 1.0;
-    vec3 mapNormal = normalize(unpacked);
+    vec3 mapNormal = normalize((mapColor * 2.0) - 1.0);
 
     vec2 duv1 = dFdx(TexCoords.xy);
     vec2 duv2 = dFdy(TexCoords.xy);
@@ -119,22 +116,18 @@ vec3 calculateNormal() {
     vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
 
-    float lenT = length(T);
-    float lenB = length(B);
-    if (lenT > 1e-8 && lenB > 1e-8) {
-        T /= lenT;
+    if (dot(T, T) > 1e-16 && dot(B, B) > 1e-16) {
         T = normalize(T - geoNormal * dot(geoNormal, T));
-        B = normalize(cross(geoNormal, T));
-        mat3 TBN = mat3(T, B, geoNormal);
-        return normalize(TBN * mapNormal);
+        B = cross(geoNormal, T);
+        return normalize(mat3(T, B, geoNormal) * mapNormal);
     }
     return geoNormal;
 }
 
 float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir) {
-    float shininess = Shininess;
     float specBoost = SpecBoost;
-    if (shininess <= 0.01) {
+    float shininess = Shininess;
+    if (specBoost <= 0.001 || shininess <= 0.01) {
         return 0.0;
     }
     vec3 H = normalize(lightDir + viewDir);
@@ -170,9 +163,11 @@ float getDetailMask(vec2 uv) {
 
 void main() {
     vec4 texColor = getDiffuse(TexCoords);
+#ifdef ALPHA_CUTOUT
     if (texColor.a < 0.5) {
         discard;
     }
+#endif
 
     vec3 albedo = pow(texColor.rgb, vec3(2.2));
 
@@ -200,7 +195,7 @@ void main() {
     vec3 V = normalize(-ViewPos);
 
     //  AMBIENT & ROOM LIGHT
-    vec3 L_room_dir = normalize(mat3(u_view) * vec3(0.0, 1.0, 0.0));
+    vec3 L_room_dir = normalize(u_view[1].xyz);
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     float roomShadow = 1.0;
     if (u_enableShadows == 1 && FragPosLightRoom.w > 0.0) {
@@ -218,57 +213,55 @@ void main() {
     if (u_enableFlashlight == 1 && u_flashIntensityFactor > 0.001) {
         vec3 flashPosView = u_flashPosView;
         vec3 flashSpotDir = normalize((u_flashDir * 512.0) - flashPosView);
-        vec3 L_flash = normalize(flashPosView - ViewPos);
+        vec3 toFlash = flashPosView - ViewPos;
+        vec3 L_flash = normalize(toFlash);
         float flashCone = smoothstep(u_flashConeStart, u_flashConeEnd, dot(-L_flash, flashSpotDir));
 
         if (flashCone > 0.001) {
-            float distToLight = length(flashPosView - ViewPos);
-            float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
-            float flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
-
-            float shadowFlash = 1.0;
-            if (u_enableShadows == 1) {
-                if (FragPosLightFlash.w > 0.0) {
-                    vec3 projFlash = FragPosLightFlash.xyz / FragPosLightFlash.w * 0.5 + 0.5;
-                    if (projFlash.z <= 1.0 && projFlash.x >= 0.0 && projFlash.x <= 1.0 && projFlash.y >= 0.0 && projFlash.y <= 1.0) {
-                        float cosTheta = clamp(dot(finalNormal, L_flash), 0.0, 1.0);
-                        float bias = max(0.0005 * (1.0 - cosTheta), 0.00005);
-                        vec2 atlasUV = vec2(0.5 + clamp(projFlash.x, 0.001, 0.999) * 0.5, 0.5 + clamp(projFlash.y, 0.001, 0.999) * 0.5);
-                        vec2 texelSize = 1.0 / vec2(textureSize(u_shadowAtlas, 0));
-                        float s = 0.0;
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5, -0.5) * texelSize, projFlash.z - bias));
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * texelSize, projFlash.z - bias));
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * texelSize, projFlash.z - bias));
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * texelSize, projFlash.z - bias));
-                        shadowFlash = s * 0.25;
-                    } else {
-                        shadowFlash = 0.0; // Outside shadow map frustum -> no light!
-                    }
-                } else {
-                    shadowFlash = 0.0;
-                }
-            }
-
             float diffFlash = max(dot(finalNormal, L_flash), 0.0);
-            float specFlash = calculateSpecular(finalNormal, L_flash, V);
-            litFlash = (albedo * diffFlash + vec3(specFlash)) * (flashIntensity * 2.5) * shadowFlash * vec3(1.0, 0.98, 0.9);
+            if (diffFlash > 0.0) {
+                float distToLight = length(toFlash);
+                float distanceFade = smoothstep(u_flashFalloff, u_flashFalloff * 0.8, distToLight);
+                float flashIntensity = flashCone * (u_flashFalloff * u_flashIntensityFactor) * distanceFade;
+
+                float shadowFlash = 1.0;
+                if (u_enableShadows == 1) {
+                    if (FragPosLightFlash.w > 0.0) {
+                        vec3 projFlash = FragPosLightFlash.xyz / FragPosLightFlash.w * 0.5 + 0.5;
+                        if (projFlash.z <= 1.0 && projFlash.x >= 0.0 && projFlash.x <= 1.0 && projFlash.y >= 0.0 && projFlash.y <= 1.0) {
+                            float bias = max(0.0005 * (1.0 - clamp(diffFlash, 0.0, 1.0)), 0.00005);
+                            vec2 atlasUV = vec2(0.5 + clamp(projFlash.x, 0.001, 0.999) * 0.5, 0.5 + clamp(projFlash.y, 0.001, 0.999) * 0.5);
+                            float s = 0.0;
+                            s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5, -0.5) * kShadowAtlasTexel, projFlash.z - bias));
+                            s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * kShadowAtlasTexel, projFlash.z - bias));
+                            s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * kShadowAtlasTexel, projFlash.z - bias));
+                            s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * kShadowAtlasTexel, projFlash.z - bias));
+                            shadowFlash = s * 0.25;
+                        } else {
+                            shadowFlash = 0.0; // Outside shadow map frustum -> no light!
+                        }
+                    } else {
+                        shadowFlash = 0.0;
+                    }
+                }
+
+                float specFlash = calculateSpecular(finalNormal, L_flash, V);
+                litFlash = (albedo * diffFlash + vec3(specFlash)) * (flashIntensity * 2.5) * shadowFlash * vec3(1.0, 0.98, 0.9);
+            }
         }
     }
 
     // DYNAMIC SHADOW LIGHTS (Spotlights with Shadow Atlas)
     vec3 shadowLightsTotal = vec3(0.0);
     for (int i = 0; i < u_numShadowLights; ++i) {
-        int lightType = int(u_shadowLights[i].color_type.w);
         float intensity = max(u_shadowLights[i].pos_intensity.w, 0.0);
         if (intensity <= 0.001) continue;
 
-        vec3 lightColor = u_shadowLights[i].color_type.xyz;
-        vec3 lightPosView = (u_view * vec4(u_shadowLights[i].pos_intensity.xyz, 1.0)).xyz;
-        vec3 spotDirView = normalize(mat3(u_view) * u_shadowLights[i].dir_falloff.xyz);
-        float falloffFactor = max(u_shadowLights[i].dir_falloff.w, 1.0);
+        int lightType = int(u_shadowLights[i].color_type.w);
+        vec3 lightPosView = u_shadowLights[i].pos_intensity.xyz;
+        vec3 spotDirView = u_shadowLights[i].dir_falloff.xyz;
 
         vec3 L;
-        float dist;
         float falloff = 1.0;
         float spotEffect = 1.0;
 
@@ -276,12 +269,13 @@ void main() {
             L = -spotDirView;
         } else {
             vec3 diff = lightPosView - ViewPos;
-            dist = length(diff);
-            float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
-            if (dist > effectiveRadius) continue;
+            float distSq = dot(diff, diff);
+            if (distSq > u_shadowLights[i].spot_params.z) continue;
+            float dist = sqrt(distSq);
+            if (dist <= 0.0001) continue;
 
             L = diff / dist;
-            falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
+            falloff = exp(-dist * u_shadowLights[i].spot_params.w);
             if (lightType == 1) {
                 float theta = dot(-L, spotDirView);
                 float outerCutOff = u_shadowLights[i].spot_params.x;
@@ -290,6 +284,10 @@ void main() {
                 if (spotEffect <= 0.001) continue;
             }
         }
+
+        float rawNdotL = dot(finalNormal, L);
+        if (lightType != 3 && rawNdotL <= 0.0) continue;
+        float NdotL = (lightType == 3) ? mix(1.0, max(rawNdotL, 0.0), 0.5) : rawNdotL;
 
         float shadow = 1.0;
         if (u_enableShadows == 1 && lightType == 1) {
@@ -300,15 +298,14 @@ void main() {
                     float col = float(i % 4);
                     float row = float(i / 4);
                     vec2 atlasUV = vec2((clamp(proj.x, 0.001, 0.999) + col) * 0.25, (clamp(proj.y, 0.001, 0.999) + row) * 0.25);
-                    float cosTheta = clamp(dot(finalNormal, L), 0.0, 1.0);
+                    float cosTheta = clamp(NdotL, 0.0, 1.0);
                     float bias = max(0.0025 * (1.0 - cosTheta), 0.0005);
 
-                    vec2 texelSize = 1.0 / vec2(textureSize(u_shadowAtlas, 0));
                     float s = 0.0;
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5, -0.5) * texelSize, proj.z - bias));
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * texelSize, proj.z - bias));
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * texelSize, proj.z - bias));
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * texelSize, proj.z - bias));
+                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5, -0.5) * kShadowAtlasTexel, proj.z - bias));
+                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * kShadowAtlasTexel, proj.z - bias));
+                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * kShadowAtlasTexel, proj.z - bias));
+                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * kShadowAtlasTexel, proj.z - bias));
                     float shadowOcclusion = s * 0.25;
                     float edgeFade = smoothstep(0.0, 0.05, proj.x) * smoothstep(1.0, 0.95, proj.x) *
                                      smoothstep(0.0, 0.05, proj.y) * smoothstep(1.0, 0.95, proj.y);
@@ -317,7 +314,7 @@ void main() {
             }
         }
 
-        float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
+        vec3 lightColor = u_shadowLights[i].color_type.xyz;
         float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V);
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;
@@ -327,17 +324,14 @@ void main() {
     // DYNAMIC POINT/AREA/DIR LIGHTS (UBO LightsBlock)
     vec3 dynamicLightsTotal = vec3(0.0);
     for (int i = 0; i < u_numLights; ++i) {
-        int lightType = int(u_lights[i].pos_type.w);
         float intensity = max(u_lights[i].color_intensity.w, 0.0);
         if (intensity <= 0.001) continue;
 
-        vec3 lightColor = u_lights[i].color_intensity.xyz;
-        vec3 lightPosView = (u_view * vec4(u_lights[i].pos_type.xyz, 1.0)).xyz;
-        vec3 spotDirView = normalize(mat3(u_view) * u_lights[i].dir_falloff.xyz);
-        float falloffFactor = max(u_lights[i].dir_falloff.w, 1.0);
+        int lightType = int(u_lights[i].pos_type.w);
+        vec3 lightPosView = u_lights[i].pos_type.xyz;
+        vec3 spotDirView = u_lights[i].dir_falloff.xyz;
 
         vec3 L;
-        float dist;
         float falloff = 1.0;
         float spotEffect = 1.0;
 
@@ -345,12 +339,13 @@ void main() {
             L = -spotDirView;
         } else {
             vec3 diff = lightPosView - ViewPos;
-            dist = length(diff);
-            float effectiveRadius = 4.605 * falloffFactor * max(intensity, 0.1);
-            if (dist > effectiveRadius) continue;
+            float distSq = dot(diff, diff);
+            if (distSq > u_lights[i].spot_params.z) continue;
+            float dist = sqrt(distSq);
+            if (dist <= 0.0001) continue;
 
             L = diff / dist;
-            falloff = exp(-dist / (falloffFactor * max(intensity, 0.1)));
+            falloff = exp(-dist * u_lights[i].spot_params.w);
             if (lightType == 1) {
                 float theta = dot(-L, spotDirView);
                 float cutOff = u_lights[i].spot_params.x;
@@ -360,7 +355,11 @@ void main() {
             }
         }
 
-        float NdotL = (lightType == 3) ? mix(1.0, max(dot(finalNormal, L), 0.0), 0.5) : max(dot(finalNormal, L), 0.0);
+        float rawNdotL = dot(finalNormal, L);
+        if (lightType != 3 && rawNdotL <= 0.0) continue;
+        float NdotL = (lightType == 3) ? mix(1.0, max(rawNdotL, 0.0), 0.5) : rawNdotL;
+
+        vec3 lightColor = u_lights[i].color_intensity.xyz;
         float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V);
         vec3 diffuse = albedo * lightColor * NdotL;
         vec3 specular = vec3(specularPower) * lightColor;

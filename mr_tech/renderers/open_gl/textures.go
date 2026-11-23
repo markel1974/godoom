@@ -219,10 +219,16 @@ func (tx *Textures) createTextureArray(width, height int, layers int32) uint32 {
 	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_WRAP_S, gl_api.CLAMP_TO_EDGE)
 	//tx.ctx.TexParameteri(gl_api.TEXTURE_2D_ARRAY, gl_api.TEXTURE_WRAP_T, gl_api.CLAMP_TO_EDGE)
 
-	// Anisotropic filtering
+	// Anisotropic filtering (capped cleanly to avoid blowing memory bandwidth on integrated GPUs)
+	const maxAllowedAniso = float32(4.0)
 	var maxAniso float32
 	tx.ctx.GetFloatv(api.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
-	tx.ctx.TexParameterf(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_ANISOTROPY, maxAniso)
+	if maxAniso >= 1.0 {
+		if maxAniso > maxAllowedAniso {
+			maxAniso = maxAllowedAniso
+		}
+		tx.ctx.TexParameterf(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_ANISOTROPY, maxAniso)
+	}
 
 	return tex
 }

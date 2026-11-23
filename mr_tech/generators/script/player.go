@@ -37,7 +37,7 @@ func (p *Player) Build() *config.Player {
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 1.0 //mod
-	player.Bobbing.SwayOffsetX = 0.25
+	player.Bobbing.SwayOffsetX = 50
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = 0.5
 	player.Bobbing.MaxAmplitudeY = 0.6

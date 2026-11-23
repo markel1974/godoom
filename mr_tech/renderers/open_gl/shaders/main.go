@@ -543,7 +543,7 @@ func (s *Main) bindForwardUniforms(
 	if flashIntensity > 0.001 {
 		s.ctx.Uniform1i(p.table[MainLocEnableFlashlight], 1)
 		s.ctx.Uniform3f(p.table[MainLocFlashPosView], flashX, flashY, 0.0)
-		dirX, dirY, dirZ := s.flashlightMetrics.ComputeAim(flashX, flashY, flashSensitivity)
+		dirX, dirY, dirZ := s.flashlightMetrics.ResolveAim(flashX, flashY, flashSensitivity)
 		s.ctx.Uniform3f(p.table[MainLocFlashDir], dirX, dirY, dirZ)
 		s.ctx.Uniform1f(p.table[MainLocFlashIntensityFactor], flashIntensity)
 		s.ctx.Uniform1f(p.table[MainLocFlashFalloff], float32(s.flash.GetFalloff()))

@@ -621,7 +621,7 @@ func (v *MultiElement3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, de
 func (v *MultiElement3D) createConfigJoints(cfg *config.Model3D, elements *Elements) ([]*articulated_dynamics.Joint, error) {
 	numParts := len(cfg.Parts)
 	joints := make([]*articulated_dynamics.Joint, numParts)
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		element := elements.GetEntry(i)
 		if element == nil {
 			return nil, fmt.Errorf("entry %d is nil", i)
@@ -661,7 +661,7 @@ func (v *MultiElement3D) createConfigJoints(cfg *config.Model3D, elements *Eleme
 func (v *MultiElement3D) createConfigLinks(cfg *config.Model3D) ([]*articulated_dynamics.Link, error) {
 	numParts := len(cfg.Parts)
 	links := make([]*articulated_dynamics.Link, numParts)
-	for i := 0; i < numParts; i++ {
+	for i := range numParts {
 		parent, tag := articulated_dynamics.LinkInvalidIndex, ""
 		if i < len(cfg.Links) {
 			parent, tag = cfg.Links[i].Parent, cfg.Links[i].Tag

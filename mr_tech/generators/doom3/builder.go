@@ -292,7 +292,7 @@ func (br *Builder) createPlayer(playerPos geometry.XYZ, playerAngle float64) *co
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 1.0 //mod
-	player.Bobbing.SwayOffsetX = 6.0
+	player.Bobbing.SwayOffsetX = 50
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	player.Bobbing.MaxAmplitudeY = 5.5

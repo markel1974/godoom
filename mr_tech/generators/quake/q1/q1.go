@@ -399,7 +399,7 @@ func (q1 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.Flash.OffsetX = 0.2
 	root.Player.Flash.OffsetY = 0.1
 	root.Player.Bobbing.SwayScale = 1.0 //mod
-	root.Player.Bobbing.SwayOffsetX = 5.0
+	root.Player.Bobbing.SwayOffsetX = 50
 	root.Player.Bobbing.SwayOffsetY = -0.9
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5

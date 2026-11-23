@@ -384,7 +384,7 @@ func (b *Things) createPlayer(pos geometry.XYZ) *config.Player {
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 1.0 //mod
-	player.Bobbing.SwayOffsetX = 0.75
+	player.Bobbing.SwayOffsetX = 50
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = 2.0 // Keep lateral bobbing within playerRadius (2.5) so camera never clips behind walls
 	player.Bobbing.MaxAmplitudeY = 5.5

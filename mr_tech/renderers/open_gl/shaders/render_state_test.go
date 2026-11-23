@@ -977,6 +977,26 @@ func TestFlashlightShadowAlignmentAndDepthPrecision(t *testing.T) {
 	if pz >= 0.992 || pz <= 0.9 {
 		t.Fatalf("unexpected depth value pz=%.6f at d=200 (want tighter near-plane resolution <0.992)", pz)
 	}
+
+	// Verify UpdateWithAim aligns shadow camera from wall-clamped origin (14, -0.9, 0) toward raw SwayOffsetX=50 target.
+	flM.UpdateWithAim(&identityView[0], 14.0, flashY, 50.0, flashY, sens)
+	ax, ay, az := flM.ResolveAim(14.0, flashY, sens)
+	wantAimX := float32(flashCfg.OffsetX) - 50.0*sens
+	if math.Abs(float64(ax-wantAimX)) > 1e-5 {
+		t.Fatalf("ResolveAim did not preserve configured raw sway direction: got %v, want %v", ax, wantAimX)
+	}
+	atx, aty, atz := ax*512.0-14.0, ay*512.0-flashY, az*512.0
+	atLen := float32(math.Sqrt(float64(atx*atx + aty*aty + atz*atz)))
+	wx2, wy2, wz2 := 14.0+(atx/atLen)*dist, flashY+(aty/atLen)*dist, (atz/atLen)*dist
+	copy(fSpace[:], (*[16]float32)(unsafe.Pointer(flM.GetShadowSpacePtr()))[:])
+	cx2 := fSpace[0]*wx2 + fSpace[4]*wy2 + fSpace[8]*wz2 + fSpace[12]
+	cy2 := fSpace[1]*wx2 + fSpace[5]*wy2 + fSpace[9]*wz2 + fSpace[13]
+	cw2 := fSpace[3]*wx2 + fSpace[7]*wy2 + fSpace[11]*wz2 + fSpace[15]
+	px2 := (cx2/cw2)*0.5 + 0.5
+	py2 := (cy2/cw2)*0.5 + 0.5
+	if cw2 <= 0 || math.Abs(float64(px2-0.5)) > 1e-3 || math.Abs(float64(py2-0.5)) > 1e-3 {
+		t.Fatalf("UpdateWithAim shadow center misaligned: got uv=(%.4f,%.4f), w=%v", px2, py2, cw2)
+	}
 }
 
 func TestMatrixInverse4x4ExactIdentity(t *testing.T) {

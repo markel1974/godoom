@@ -211,7 +211,7 @@ func (wp *Parser) Parse(texProvider *Textures, width int, height int, md []uint1
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 2.0
-	player.Bobbing.SwayOffsetX = 5.0
+	player.Bobbing.SwayOffsetX = 20
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = playerHeight * 0.2
 	player.Bobbing.MaxAmplitudeY = playerHeight * 0.2

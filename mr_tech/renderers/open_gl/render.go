@@ -1,6 +1,8 @@
 package open_gl
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
@@ -225,13 +227,12 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
 
 	swayX, swayY, swaySensitivity := w.vi.GetSway()
-	flashX, flashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
-	if w.player != nil {
-		if ent := w.player.GetEntity(); ent != nil {
-			flashX, flashY = clampFlashOffset(flashX, flashY, float32(ent.GetWidth()), float32(ent.GetDepth()))
-		}
+	rawFlashX, rawFlashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
+	flashX, flashY := rawFlashX, rawFlashY
+	if w.engine != nil {
+		flashX, flashY = resolveFlashOrigin(w.engine.GetVolumes(), w.mapMetrics.GetInvView(), rawFlashX, rawFlashY)
 	}
-	w.flashlightMetrics.Update(w.mapMetrics.GetViewPtr(), flashX, flashY, flashSensitivity)
+	w.flashlightMetrics.UpdateWithAim(w.mapMetrics.GetViewPtr(), flashX, flashY, rawFlashX, rawFlashY, flashSensitivity)
 
 	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
 
@@ -373,22 +374,41 @@ func (w *RenderOpenGL) SetBoundingBoxDebug(debug bool) {
 	w.handler.SetBoundingBoxDebug(w.enableBoundingBoxDebug)
 }
 
-// clampFlashOffset constrains the view-space flashlight sway origin inside the player collision volume
-// so the shadow camera never protrudes behind adjacent walls or doorframes.
-func clampFlashOffset(flashX, flashY, entWidth, entDepth float32) (float32, float32) {
-	if maxOffX := entWidth * 0.30; maxOffX > 0 {
-		if flashX > maxOffX {
-			flashX = maxOffX
-		} else if flashX < -maxOffX {
-			flashX = -maxOffX
-		}
+type solidRaycaster interface {
+	RaycastSolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool)
+}
+
+// resolveFlashOrigin preserves the configured view-space shoulder offset (flashX, flashY)
+// unless solid world geometry physically blocks the line between the camera eye and that offset.
+func resolveFlashOrigin(raycaster solidRaycaster, invView [16]float32, flashX, flashY float32) (float32, float32) {
+	if raycaster == nil {
+		return flashX, flashY
 	}
-	if maxOffY := entDepth * 0.20; maxOffY > 0 {
-		if flashY > maxOffY {
-			flashY = maxOffY
-		} else if flashY < -maxOffY {
-			flashY = -maxOffY
-		}
+	offGLX := flashX*invView[0] + flashY*invView[4]
+	offGLY := flashX*invView[1] + flashY*invView[5]
+	offGLZ := flashX*invView[2] + flashY*invView[6]
+	dirEngX := float64(offGLX)
+	dirEngY := -float64(offGLZ)
+	dirEngZ := float64(offGLY)
+	offLen := math.Sqrt(dirEngX*dirEngX + dirEngY*dirEngY + dirEngZ*dirEngZ)
+	if offLen <= 1e-4 {
+		return flashX, flashY
 	}
-	return flashX, flashY
+	eyeX := float64(invView[12])
+	eyeY := -float64(invView[14])
+	eyeZ := float64(invView[13])
+	const wallClearance = 4.0
+	hitDist, _, _, _, hit := raycaster.RaycastSolid(eyeX, eyeY, eyeZ, dirEngX/offLen, dirEngY/offLen, dirEngZ/offLen, offLen+wallClearance)
+	if !hit {
+		return flashX, flashY
+	}
+	safeDist := hitDist - wallClearance
+	if safeDist < 0 {
+		safeDist = 0
+	}
+	if safeDist >= offLen {
+		return flashX, flashY
+	}
+	scale := float32(safeDist / offLen)
+	return flashX * scale, flashY * scale
 }

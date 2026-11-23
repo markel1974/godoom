@@ -27,6 +27,11 @@ type Flashlight struct {
 	shadowViewPtr      *float32
 	shadowViewLocalPtr *float32
 
+	hasAim bool
+	aimX   float32
+	aimY   float32
+	aimZ   float32
+
 	flash *things.Flash
 }
 
@@ -74,16 +79,33 @@ func (m *Flashlight) ComputeAim(flashOffsetX, flashOffsetY, flashSensitivity flo
 	return dirX, dirY, -1.0
 }
 
-// Update recalculates the shadow-space matrix using the main view matrix and flashlight offset values.
-func (m *Flashlight) Update(mainView *float32, flashOffsetX, flashOffsetY, flashSensitivity float32) {
-	m.createShadowSpace(mainView, flashOffsetX, flashOffsetY, flashSensitivity)
+// ResolveAim returns the view-space aim direction computed by UpdateWithAim if active,
+// falling back to ComputeAim for callers using legacy Update or direct shading calls.
+func (m *Flashlight) ResolveAim(flashOffsetX, flashOffsetY, flashSensitivity float32) (float32, float32, float32) {
+	if m.hasAim {
+		return m.aimX, m.aimY, m.aimZ
+	}
+	return m.ComputeAim(flashOffsetX, flashOffsetY, flashSensitivity)
 }
 
-// CreateShadowSpace computes the shadow-space matrix by integrating view and projection matrices for shadow mapping.
-func (m *Flashlight) createShadowSpace(mainView *float32, flashOffsetX, flashOffsetY, flashSensitivity float32) {
+// Update recalculates the shadow-space matrix using the main view matrix and flashlight offset values.
+func (m *Flashlight) Update(mainView *float32, flashOffsetX, flashOffsetY, flashSensitivity float32) {
+	m.hasAim = false
+	m.createShadowSpace(mainView, flashOffsetX, flashOffsetY, flashOffsetX, flashOffsetY, flashSensitivity)
+}
+
+// UpdateWithAim recalculates the shadow-space matrix from origin (posX, posY, 0) while aiming using (aimX, aimY).
+func (m *Flashlight) UpdateWithAim(mainView *float32, posOffsetX, posOffsetY, aimOffsetX, aimOffsetY, flashSensitivity float32) {
+	m.aimX, m.aimY, m.aimZ = m.ComputeAim(aimOffsetX, aimOffsetY, flashSensitivity)
+	m.hasAim = true
+	m.createShadowSpace(mainView, posOffsetX, posOffsetY, aimOffsetX, aimOffsetY, flashSensitivity)
+}
+
+// createShadowSpace computes the shadow-space matrix by integrating view and projection matrices for shadow mapping.
+func (m *Flashlight) createShadowSpace(mainView *float32, posOffsetX, posOffsetY, aimOffsetX, aimOffsetY, flashSensitivity float32) {
 	// Local ShadowLight Space aligned identically to main shader's flashSpotDir
-	posViewX, posViewY, posViewZ := flashOffsetX, flashOffsetY, float32(0.0)
-	aimX, aimY, aimZ := m.ComputeAim(flashOffsetX, flashOffsetY, flashSensitivity)
+	posViewX, posViewY, posViewZ := posOffsetX, posOffsetY, float32(0.0)
+	aimX, aimY, aimZ := m.ComputeAim(aimOffsetX, aimOffsetY, flashSensitivity)
 	targetX, targetY, targetZ := aimX*flashAimDistance, aimY*flashAimDistance, aimZ*flashAimDistance
 
 	ffX, ffY, ffZ := normalize(targetX-posViewX, targetY-posViewY, targetZ-posViewZ)

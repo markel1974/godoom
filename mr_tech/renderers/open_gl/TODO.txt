@@ -29,3 +29,11 @@ Main.bindForwardUniforms invia decine di matrici/vettori (e fino a 8 struct u_sh
 2) Spostare matrici per-frame e u_shadowLights in un UBO per azzerare le decine di Uniform* su bridge JS in WebGL2.
 
 3) Indice vero (deduplica vertici) nei ResidentMesh e culling / throttling per-luce in Depth.Render.
+
+4) Mega-VBO / chunk statici (pochi VAO/VBO per l'intero mondo statico invece che uno per volume) + batching continuo/MultiDrawElements anche sugli statici.
+
+5) Vertex sharing reale nell'index buffer dei ResidentMesh.
+
+6) UBO per uniform per-frame e shadow lights (meno chiamate syscall/js per frame).
+
+7) Shadow culling per luce + cache statica nell'atlante ombre.

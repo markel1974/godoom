@@ -7,98 +7,56 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 )
 
-// TransparentKind identifies how a transparent draw item is sourced and rendered.
-type TransparentKind uint8
-
-// TransparentKind values define how transparent geometry is rendered.
-const (
-	TransparentStreaming TransparentKind = iota
-	TransparentStatic
-	TransparentInstanced
-)
-
-// StaticDrawItem pairs a GPU-resident mesh with one of its submesh ranges for static rendering.
-type StaticDrawItem struct {
-	Mesh *ResidentMesh
-	Sub  *ResidentSubMesh
-}
-
-// InstancedDrawItem describes an instanced draw command for a resident submesh and its instance buffer range.
-type InstancedDrawItem struct {
-	Mesh           *ResidentMesh
-	Sub            *ResidentSubMesh
-	InstanceVBO    uint32
-	BaseByteOffset int32
-	InstanceCount  int32
-}
-
-// TransparentDrawItem describes a queued transparent draw with sorting and render-state metadata.
-type TransparentDrawItem struct {
-	Kind           TransparentKind
-	DistSq         float32
-	SortOrder      int
-	CullMode       int
-	HasCutout      bool
-	PolygonOffset  bool
-	FirstIndex     int32
-	IndexCount     int32
-	Mesh           *ResidentMesh
-	Sub            *ResidentSubMesh
-	InstanceVBO    uint32
-	BaseByteOffset int32
-	InstanceCount  int32
-}
-
-// TransparentDrawItems manages a reusable collection of transparent draw items for sorting and rendering.
-type TransparentDrawItems struct {
-	data           []*TransparentDrawItem
+// DrawItemsTransparent manages a reusable collection of transparent draw items for sorting and rendering.
+type DrawItemsTransparent struct {
+	data           []*DrawItemTransparent
 	transparentLen int
 	prevLen        int
-	dynPool        PtrPool[TransparentDrawItem]
+	dynPool        PtrPool[DrawItemTransparent]
 }
 
-// NewTransparentDrawItems creates an empty TransparentDrawItems collection with initial storage for n items.
-func NewTransparentDrawItems(n int) *TransparentDrawItems {
+// NewDrawItemsTransparent creates an empty DrawItemsTransparent collection with initial storage for n items.
+func NewDrawItemsTransparent(n int) *DrawItemsTransparent {
 	if n <= 0 {
 		n = 16
 	}
-	return &TransparentDrawItems{
-		data:           make([]*TransparentDrawItem, n),
+	return &DrawItemsTransparent{
+		data:           make([]*DrawItemTransparent, n),
 		transparentLen: 0,
 	}
 }
 
 // Len returns the number of active transparent draw items.
-func (w *TransparentDrawItems) Len() int {
+func (w *DrawItemsTransparent) Len() int {
 	return w.transparentLen
 }
 
 // At returns the active transparent draw item at index i.
-func (w *TransparentDrawItems) At(i int) *TransparentDrawItem {
+func (w *DrawItemsTransparent) At(i int) *DrawItemTransparent {
 	return w.data[i]
 }
 
 // Reset clears the transparent draw item list without releasing its backing storage.
-func (w *TransparentDrawItems) Reset() {
+func (w *DrawItemsTransparent) Reset() {
 	w.transparentLen = 0
 }
 
 // Begin starts a fresh transparent item collection pass while recording prior length for stale reference trimming.
-func (w *TransparentDrawItems) Begin() {
+func (w *DrawItemsTransparent) Begin() {
 	w.prevLen = w.transparentLen
 	w.transparentLen = 0
 	w.dynPool.Reset()
 }
 
 // End trims stale pointer references past the current length and sorts active items back-to-front.
-func (w *TransparentDrawItems) End() {
+func (w *DrawItemsTransparent) End() {
 	w.Trim(w.prevLen)
 	w.prevLen = 0
 	w.SortTransparentDrawItems()
 }
 
 // Clear releases all active transparent draw item references and resets pooled dynamic state.
-func (w *TransparentDrawItems) Clear() {
+func (w *DrawItemsTransparent) Clear() {
 	for i := 0; i < w.transparentLen; i++ {
 		w.data[i] = nil
 	}
@@ -108,7 +66,7 @@ func (w *TransparentDrawItems) Clear() {
 }
 
 // Trim clears stale transparent draw item references from the current length up to prevTransLen.
-func (w *TransparentDrawItems) Trim(prevTransLen int) {
+func (w *DrawItemsTransparent) Trim(prevTransLen int) {
 	limit := min(prevTransLen, len(w.data))
 	for i := w.transparentLen; i < limit; i++ {
 		w.data[i] = nil
@@ -116,10 +74,10 @@ func (w *TransparentDrawItems) Trim(prevTransLen int) {
 }
 
 // Add appends a transparent draw item, growing the internal storage when needed.
-func (w *TransparentDrawItems) Add(it *TransparentDrawItem) {
+func (w *DrawItemsTransparent) Add(it *DrawItemTransparent) {
 	if w.transparentLen >= len(w.data) {
 		newLen := max(len(w.data)*2, 32)
-		grown := make([]*TransparentDrawItem, newLen)
+		grown := make([]*DrawItemTransparent, newLen)
 		copy(grown, w.data)
 		w.data = grown
 	}
@@ -128,7 +86,7 @@ func (w *TransparentDrawItems) Add(it *TransparentDrawItem) {
 }
 
 // AddStatic queues prebuilt static transparent submesh items, updating camera-relative squared distances.
-func (w *TransparentDrawItems) AddStatic(src *PtrPool[TransparentDrawItem], camX, camY, camZ float32) {
+func (w *DrawItemsTransparent) AddStatic(src *PtrPool[DrawItemTransparent], camX, camY, camZ float32) {
 	for i := 0; i < src.Len; i++ {
 		it := src.Items[i]
 		sub := it.Sub
@@ -141,7 +99,7 @@ func (w *TransparentDrawItems) AddStatic(src *PtrPool[TransparentDrawItem], camX
 }
 
 // AddInstanced acquires a dynamic transparent item for a single rigid instance submesh and queues it for sorting.
-func (w *TransparentDrawItems) AddInstanced(mesh *ResidentMesh, sub *ResidentSubMesh, instanceVBO uint32, baseByteOffset int32, cx, cy, cz, camX, camY, camZ float32) {
+func (w *DrawItemsTransparent) AddInstanced(mesh *ResidentMesh, sub *ResidentSubMesh, instanceVBO uint32, baseByteOffset int32, cx, cy, cz, camX, camY, camZ float32) {
 	dx := cx - camX
 	dy := cy - camY
 	dz := cz - camZ
@@ -163,7 +121,7 @@ func (w *TransparentDrawItems) AddInstanced(mesh *ResidentMesh, sub *ResidentSub
 }
 
 // AddCommands acquires dynamic transparent items for streaming translucent DrawCommands and queues them for sorting.
-func (w *TransparentDrawItems) AddCommands(cmds []*DrawCommand, camX, camY, camZ float32) {
+func (w *DrawItemsTransparent) AddCommands(cmds []*DrawCommand, camX, camY, camZ float32) {
 	for _, cmd := range cmds {
 		if cmd.GetIndexCount() == 0 {
 			continue
@@ -202,12 +160,12 @@ func (w *TransparentDrawItems) AddCommands(cmds []*DrawCommand, camX, camY, camZ
 }
 
 // SortTransparentDrawItems stably orders transparent draw items back-to-front, using sort order for near-equal distances.
-func (w *TransparentDrawItems) SortTransparentDrawItems() {
+func (w *DrawItemsTransparent) SortTransparentDrawItems() {
 	n := w.transparentLen
 	if n <= 1 {
 		return
 	}
-	slices.SortStableFunc(w.data[:n], func(a, b *TransparentDrawItem) int {
+	slices.SortStableFunc(w.data[:n], func(a, b *DrawItemTransparent) int {
 		diff := a.DistSq - b.DistSq
 		if diff > 1e-2 {
 			return -1

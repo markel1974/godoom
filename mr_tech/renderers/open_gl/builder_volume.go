@@ -79,20 +79,20 @@ type BuilderVolume struct {
 	thingMeshes         map[uint64][]*gpu.ResidentMesh
 	texLookupFn         func(*textures.Texture) (float32, bool)
 
-	staticOpaque   gpu.PtrPool[gpu.StaticDrawItem]
-	staticLiquid   gpu.PtrPool[gpu.StaticDrawItem]
-	staticAdditive gpu.PtrPool[gpu.StaticDrawItem]
-	staticTransSrc gpu.PtrPool[gpu.TransparentDrawItem]
+	staticOpaque   gpu.PtrPool[gpu.DrawItemStatic]
+	staticLiquid   gpu.PtrPool[gpu.DrawItemStatic]
+	staticAdditive gpu.PtrPool[gpu.DrawItemStatic]
+	staticTransSrc gpu.PtrPool[gpu.DrawItemTransparent]
 
 	instancePool     *gpu.InstancePool
 	instGroups       gpu.PtrPool[RigidInstanceGroup]
 	instFrame        uint64
-	instOpaque       gpu.PtrPool[gpu.InstancedDrawItem]
-	instLiquid       gpu.PtrPool[gpu.InstancedDrawItem]
-	instAdditive     gpu.PtrPool[gpu.InstancedDrawItem]
+	instOpaque       gpu.PtrPool[gpu.DrawItemInstanced]
+	instLiquid       gpu.PtrPool[gpu.DrawItemInstanced]
+	instAdditive     gpu.PtrPool[gpu.DrawItemInstanced]
 	instTransSrc     gpu.PtrPool[RigidTransItem]
 	lastInstVBO      uint32
-	transparentItems *gpu.TransparentDrawItems
+	transparentItems *gpu.DrawItemsTransparent
 
 	lastCamGLX float32
 	lastCamGLY float32
@@ -138,7 +138,7 @@ func NewBuilderVolume(ctx api.IContext, tex *gpu.Textures, cal *model.Calibratio
 		volMeshes:           make(map[*volumes.Faces]*gpu.ResidentMesh, 1024),
 		thingMeshes:         make(map[uint64][]*gpu.ResidentMesh, 256),
 		instancePool:        gpu.NewInstancePool(ctx, 256),
-		transparentItems:    gpu.NewTransparentDrawItems(64),
+		transparentItems:    gpu.NewDrawItemsTransparent(64),
 	}
 	bv.instGroups.Init(32)
 	bv.texLookupFn = bv.lookupTexLayer
@@ -837,7 +837,7 @@ func (w *BuilderVolume) GetDrawCommandsTransparent() *gpu.DrawCommandsRender {
 }
 
 // GetOpaqueInstancedItems returns the active rigid instanced opaque draw items for inspection.
-func (w *BuilderVolume) GetOpaqueInstancedItems() []*gpu.InstancedDrawItem {
+func (w *BuilderVolume) GetOpaqueInstancedItems() []*gpu.DrawItemInstanced {
 	return w.instOpaque.Items[:w.instOpaque.Len]
 }
 

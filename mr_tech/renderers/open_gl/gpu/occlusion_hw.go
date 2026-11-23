@@ -7,34 +7,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
-// OcclusionState represents the state of a hardware occlusion query, including its ID, activation status, and visibility.
-type OcclusionState struct {
-	QueryID     uint32
-	QueryActive bool
-	IsVisible   bool
-	LastFrame   int
-}
-
-// NewOcclusionState creates and returns a new OcclusionState with the given query ID and initial visibility status.
-func NewOcclusionState(id uint32, isVisible bool) *OcclusionState {
-	state := &OcclusionState{
-		QueryID:     id,
-		QueryActive: false,
-		IsVisible:   isVisible,
-	}
-	return state
-}
-
-// AABBTest represents a test case for occlusion queries involving an axis-aligned bounding box and its state.
-type AABBTest struct {
-	AABB  *aabb.AABB
-	State *OcclusionState
-}
-
-func NewAABBTest() *AABBTest {
-	return &AABBTest{}
-}
-
 // OcclusionHW manages hardware-based occlusion queries using OpenGL-like graphics operations.
 type OcclusionHW struct {
 	ctx            api.IContext
@@ -213,170 +185,101 @@ func (hw *OcclusionHW) Readback() {
 
 // Render performs occlusion queries by rendering AABBs and updating their visibility status asynchronously.
 func (hw *OcclusionHW) Render() {
-	if hw.testsLen > 0 {
-		// Regenerate the VBO buffer with all valid AABBs
-		vc := 0
-		tc := 0
-		for i := 0; i < hw.testsLen; i++ {
-			test := hw.tests[i]
-			if hw.debug || !test.State.QueryActive {
-				if tc+108 >= len(hw.allVertices) {
-					hw.growAllVertices()
-				}
-				const occMargin = float32(0.05)
-				mX, mY, mZ := float32(test.AABB.GetMinX())-occMargin, float32(test.AABB.GetMinY())-occMargin, float32(test.AABB.GetMinZ())-occMargin
-				xX, xY, xZ := float32(test.AABB.GetMaxX())+occMargin, float32(test.AABB.GetMaxY())+occMargin, float32(test.AABB.GetMaxZ())+occMargin
-				nmY, nxY := -mY, -xY
-
-				dst := hw.allVertices[tc : tc+108]
-				// Bottom (Y = mZ, outward -Y)
-				dst[0] = mX
-				dst[1] = mZ
-				dst[2] = nxY
-				dst[3] = xX
-				dst[4] = mZ
-				dst[5] = nxY
-				dst[6] = xX
-				dst[7] = mZ
-				dst[8] = nmY
-				dst[9] = mX
-				dst[10] = mZ
-				dst[11] = nxY
-				dst[12] = xX
-				dst[13] = mZ
-				dst[14] = nmY
-				dst[15] = mX
-				dst[16] = mZ
-				dst[17] = nmY
-				// Right (X = xX, outward +X)
-				dst[18] = xX
-				dst[19] = mZ
-				dst[20] = nmY
-				dst[21] = xX
-				dst[22] = mZ
-				dst[23] = nxY
-				dst[24] = xX
-				dst[25] = xZ
-				dst[26] = nxY
-				dst[27] = xX
-				dst[28] = mZ
-				dst[29] = nmY
-				dst[30] = xX
-				dst[31] = xZ
-				dst[32] = nxY
-				dst[33] = xX
-				dst[34] = xZ
-				dst[35] = nmY
-				// Top (Y = xZ, outward +Y)
-				dst[36] = mX
-				dst[37] = xZ
-				dst[38] = nmY
-				dst[39] = xX
-				dst[40] = xZ
-				dst[41] = nmY
-				dst[42] = xX
-				dst[43] = xZ
-				dst[44] = nxY
-				dst[45] = mX
-				dst[46] = xZ
-				dst[47] = nmY
-				dst[48] = xX
-				dst[49] = xZ
-				dst[50] = nxY
-				dst[51] = mX
-				dst[52] = xZ
-				dst[53] = nxY
-				// Left (X = mX, outward -X)
-				dst[54] = mX
-				dst[55] = mZ
-				dst[56] = nxY
-				dst[57] = mX
-				dst[58] = mZ
-				dst[59] = nmY
-				dst[60] = mX
-				dst[61] = xZ
-				dst[62] = nmY
-				dst[63] = mX
-				dst[64] = mZ
-				dst[65] = nxY
-				dst[66] = mX
-				dst[67] = xZ
-				dst[68] = nmY
-				dst[69] = mX
-				dst[70] = xZ
-				dst[71] = nxY
-				// Back (Z = nxY, outward -Z)
-				dst[72] = xX
-				dst[73] = mZ
-				dst[74] = nxY
-				dst[75] = mX
-				dst[76] = mZ
-				dst[77] = nxY
-				dst[78] = mX
-				dst[79] = xZ
-				dst[80] = nxY
-				dst[81] = xX
-				dst[82] = mZ
-				dst[83] = nxY
-				dst[84] = mX
-				dst[85] = xZ
-				dst[86] = nxY
-				dst[87] = xX
-				dst[88] = xZ
-				dst[89] = nxY
-				// Front (Z = nmY, outward +Z)
-				dst[90] = mX
-				dst[91] = mZ
-				dst[92] = nmY
-				dst[93] = xX
-				dst[94] = mZ
-				dst[95] = nmY
-				dst[96] = xX
-				dst[97] = xZ
-				dst[98] = nmY
-				dst[99] = mX
-				dst[100] = mZ
-				dst[101] = nmY
-				dst[102] = xX
-				dst[103] = xZ
-				dst[104] = nmY
-				dst[105] = mX
-				dst[106] = xZ
-				dst[107] = nmY
-
-				tc += 108
-				vc++
+	if hw.testsLen == 0 {
+		return
+	}
+	vc := 0
+	tc := 0
+	for i := 0; i < hw.testsLen; i++ {
+		test := hw.tests[i]
+		if hw.debug || !test.State.QueryActive {
+			if tc+108 >= len(hw.allVertices) {
+				hw.growAllVertices()
 			}
-		}
-
-		if vc > 0 {
-			hw.ctx.BindVertexArray(hw.cubeVAO)
-			hw.ctx.BindBuffer(api.ARRAY_BUFFER, hw.cubeVBO)
-			hw.ctx.BufferSubData(api.ARRAY_BUFFER, 0, tc*4, hw.allVerticesPtr)
-
-			idx := int32(0)
-			for i := 0; i < hw.testsLen; i++ {
-				test := hw.tests[i]
-				if !test.State.QueryActive {
-					hw.ctx.BeginQuery(api.ANY_SAMPLES_PASSED, test.State.QueryID)
-					hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
-					hw.ctx.EndQuery(api.ANY_SAMPLES_PASSED)
-					test.State.QueryActive = true
-					if hw.activeLen >= len(hw.activeStates) {
-						hw.growActiveStates()
-					}
-					hw.activeStates[hw.activeLen] = test.State
-					hw.activeLen++
-					idx++
-				} else if hw.debug {
-					hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
-					idx++
-				}
-			}
-			hw.ctx.BindVertexArray(0)
-			hw.ctx.BindBuffer(api.ARRAY_BUFFER, 0)
+			writeOcclusionBoxVertices(hw.allVertices[tc:tc+108], test.AABB)
+			tc += 108
+			vc++
 		}
 	}
+	if vc == 0 {
+		return
+	}
+
+	hw.ctx.BindVertexArray(hw.cubeVAO)
+	hw.ctx.BindBuffer(api.ARRAY_BUFFER, hw.cubeVBO)
+	hw.ctx.BufferSubData(api.ARRAY_BUFFER, 0, tc*4, hw.allVerticesPtr)
+
+	idx := int32(0)
+	for i := 0; i < hw.testsLen; i++ {
+		test := hw.tests[i]
+		if !test.State.QueryActive {
+			hw.ctx.BeginQuery(api.ANY_SAMPLES_PASSED, test.State.QueryID)
+			hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
+			hw.ctx.EndQuery(api.ANY_SAMPLES_PASSED)
+			test.State.QueryActive = true
+			if hw.activeLen >= len(hw.activeStates) {
+				hw.growActiveStates()
+			}
+			hw.activeStates[hw.activeLen] = test.State
+			hw.activeLen++
+			idx++
+		} else if hw.debug {
+			hw.ctx.DrawArrays(api.TRIANGLES, idx*36, 36)
+			idx++
+		}
+	}
+	hw.ctx.BindVertexArray(0)
+	hw.ctx.BindBuffer(api.ARRAY_BUFFER, 0)
+}
+
+func writeOcclusionBoxVertices(dst []float32, box *aabb.AABB) {
+	const occMargin = float32(0.05)
+	mX, mY, mZ := float32(box.GetMinX())-occMargin, float32(box.GetMinY())-occMargin, float32(box.GetMinZ())-occMargin
+	xX, xY, xZ := float32(box.GetMaxX())+occMargin, float32(box.GetMaxY())+occMargin, float32(box.GetMaxZ())+occMargin
+	nmY, nxY := -mY, -xY
+
+	// Bottom (Y = mZ, outward -Y)
+	dst[0], dst[1], dst[2] = mX, mZ, nxY
+	dst[3], dst[4], dst[5] = xX, mZ, nxY
+	dst[6], dst[7], dst[8] = xX, mZ, nmY
+	dst[9], dst[10], dst[11] = mX, mZ, nxY
+	dst[12], dst[13], dst[14] = xX, mZ, nmY
+	dst[15], dst[16], dst[17] = mX, mZ, nmY
+	// Right (X = xX, outward +X)
+	dst[18], dst[19], dst[20] = xX, mZ, nmY
+	dst[21], dst[22], dst[23] = xX, mZ, nxY
+	dst[24], dst[25], dst[26] = xX, xZ, nxY
+	dst[27], dst[28], dst[29] = xX, mZ, nmY
+	dst[30], dst[31], dst[32] = xX, xZ, nxY
+	dst[33], dst[34], dst[35] = xX, xZ, nmY
+	// Top (Y = xZ, outward +Y)
+	dst[36], dst[37], dst[38] = mX, xZ, nmY
+	dst[39], dst[40], dst[41] = xX, xZ, nmY
+	dst[42], dst[43], dst[44] = xX, xZ, nxY
+	dst[45], dst[46], dst[47] = mX, xZ, nmY
+	dst[48], dst[49], dst[50] = xX, xZ, nxY
+	dst[51], dst[52], dst[53] = mX, xZ, nxY
+	// Left (X = mX, outward -X)
+	dst[54], dst[55], dst[56] = mX, mZ, nxY
+	dst[57], dst[58], dst[59] = mX, mZ, nmY
+	dst[60], dst[61], dst[62] = mX, xZ, nmY
+	dst[63], dst[64], dst[65] = mX, mZ, nxY
+	dst[66], dst[67], dst[68] = mX, xZ, nmY
+	dst[69], dst[70], dst[71] = mX, xZ, nxY
+	// Back (Z = nxY, outward -Z)
+	dst[72], dst[73], dst[74] = xX, mZ, nxY
+	dst[75], dst[76], dst[77] = mX, mZ, nxY
+	dst[78], dst[79], dst[80] = mX, xZ, nxY
+	dst[81], dst[82], dst[83] = xX, mZ, nxY
+	dst[84], dst[85], dst[86] = mX, xZ, nxY
+	dst[87], dst[88], dst[89] = xX, xZ, nxY
+	// Front (Z = nmY, outward +Z)
+	dst[90], dst[91], dst[92] = mX, mZ, nmY
+	dst[93], dst[94], dst[95] = xX, mZ, nmY
+	dst[96], dst[97], dst[98] = xX, xZ, nmY
+	dst[99], dst[100], dst[101] = mX, mZ, nmY
+	dst[102], dst[103], dst[104] = xX, xZ, nmY
+	dst[105], dst[106], dst[107] = mX, xZ, nmY
 }
 
 // growAllVertices doubles the capacity of the allVertices slice and updates the associated pointer in the GPU context.

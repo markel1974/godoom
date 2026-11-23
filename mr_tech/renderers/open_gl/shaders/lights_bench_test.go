@@ -185,9 +185,9 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 
 	staticAtlas := gpu.NewResidentMesh(ctx)
 	staticAtlas.VAO = 9001
-	staticItems := make([]*gpu.StaticDrawItem, staticCount)
+	staticItems := make([]*gpu.DrawItemStatic, staticCount)
 	for i := range staticCount {
-		staticItems[i] = &gpu.StaticDrawItem{
+		staticItems[i] = &gpu.DrawItemStatic{
 			Mesh: staticAtlas,
 			Sub: &gpu.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
@@ -202,9 +202,9 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 	instMesh := gpu.NewResidentMesh(ctx)
 	instMesh.VAO = 9002
 	instMesh.VAOInstanced = 9003
-	instItems := make([]*gpu.InstancedDrawItem, 4)
+	instItems := make([]*gpu.DrawItemInstanced, 4)
 	for i := range 4 {
-		instItems[i] = &gpu.InstancedDrawItem{
+		instItems[i] = &gpu.DrawItemInstanced{
 			Mesh: instMesh,
 			Sub: &gpu.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,

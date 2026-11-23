@@ -11,17 +11,6 @@ const materialsMax = 8
 
 var _emptyMaterial = make([]*textures.Material, materialsMax)
 
-// FrameBatch represents a single drawing batch associated with a blend mode and material.
-type FrameBatch struct {
-	blendMode  int
-	indexCount int32
-	material   *textures.Material
-	centroidX  float32
-	centroidY  float32
-	centroidZ  float32
-	centCount  int32
-}
-
 // FrameVertices represents a structure for managing vertex and index buffers for rendering geometries in frames.
 type FrameVertices struct {
 	ctx                 api.IContext
@@ -46,14 +35,6 @@ type FrameVertices struct {
 	animLen             int
 }
 
-func newFrameBatches(n int) []*FrameBatch {
-	b := make([]*FrameBatch, n)
-	for i := range b {
-		b[i] = &FrameBatch{}
-	}
-	return b
-}
-
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 	const maxStride = StreamingVertexFloats
@@ -64,7 +45,7 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 		stride:       maxStride,
 		containers:   make([]*FrameVertices, 16),
 		containerIdx: 0,
-		batches:      newFrameBatches(8),
+		batches:      NewFrameBatches(8),
 		materials:    make([]*textures.Material, materialsMax),
 	}
 	if ctx != nil {
@@ -81,7 +62,7 @@ func NewStagingFrameVertices(maxVerts int) *FrameVertices {
 		vertices:  make([]float32, maxVerts),
 		indices:   make([]uint32, maxVerts),
 		stride:    maxStride,
-		batches:   newFrameBatches(4),
+		batches:   NewFrameBatches(4),
 		materials: make([]*textures.Material, materialsMax),
 	}
 }
@@ -182,7 +163,7 @@ func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
 	baseSlot := w.verticesSlot
 	dstIndices := w.indices[w.indicesCount : w.indicesCount+iCount]
 	srcIndices := fv.indices[:iCount]
-	for i := int32(0); i < iCount; i++ {
+	for i := range iCount {
 		dstIndices[i] = srcIndices[i] + baseSlot
 	}
 
@@ -429,6 +410,7 @@ func (w *FrameVertices) growVertices() {
 	}
 }
 
+// growContainers doubles the container slice capacity, or initializes it to 128 when empty.
 func (w *FrameVertices) growContainers() {
 	newSize := len(w.containers) * 2
 	if newSize == 0 {

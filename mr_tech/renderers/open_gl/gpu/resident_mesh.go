@@ -11,164 +11,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-const (
-	// StaticVertexFloats is the float32 stride for GPU-resident static/instanced meshes (24 floats = 96 bytes).
-	StaticVertexFloats = 24
-	// StreamingVertexFloats is the float32 stride for CPU-streamed morphing/billboard/UI meshes (32 floats = 128 bytes).
-	StreamingVertexFloats = 32
-	// InstanceMatrixFloats is the float32 stride per rigid instance mat4 transform (16 floats = 64 bytes).
-	InstanceMatrixFloats = 16
-)
-
-const (
-	// InstanceModeStatic selects direct resident static geometry (locations 0..6, u_instanceMode = 0).
-	InstanceModeStatic = int32(0)
-	// InstanceModeInstanced selects GPU instanced geometry (locations 0..6 + mat4 at 10..13, u_instanceMode = 1).
-	InstanceModeInstanced = int32(1)
-	// InstanceModeStreaming selects dynamic CPU-streamed morphing/billboard/UI geometry (locations 0..9, u_instanceMode = 2).
-	InstanceModeStreaming = int32(2)
-)
-
-const (
-	CullStateUnset = -1
-	CullStateOff   = 0
-	CullStateBack  = 1
-	CullStateFront = 2
-)
-
-// ApplyMaterialCullState updates GL CULL_FACE and CullFace only when the desired state changes.
-// Returns the updated current state token.
-func ApplyMaterialCullState(ctx api.IContext, curState int, cullMode int, hasCutout bool, forceDisable bool) int {
-	want := CullStateOff
-	if !forceDisable && !hasCutout {
-		switch cullMode {
-		case config.CullFront:
-			want = CullStateBack
-		case config.CullBack:
-			want = CullStateFront
-		case config.CullNone:
-			want = CullStateOff
-		default:
-			want = CullStateBack
-		}
-	}
-	if want == curState {
-		return curState
-	}
-	switch want {
-	case CullStateOff:
-		ctx.Disable(api.CULL_FACE)
-	case CullStateBack:
-		if curState <= CullStateOff {
-			ctx.Enable(api.CULL_FACE)
-		}
-		ctx.CullFace(api.BACK)
-	case CullStateFront:
-		if curState <= CullStateOff {
-			ctx.Enable(api.CULL_FACE)
-		}
-		ctx.CullFace(api.FRONT)
-	}
-	return want
-}
-
-// ConfigureVertexAttribs configures vertex attribute pointers 0..6 (and optionally 7..9 for streaming) on the active VAO.
-func ConfigureVertexAttribs(ctx api.IContext, strideBytes int32, includeDynamic bool) {
-	// Location 0: aPos (vec3)
-	ctx.VertexAttribPointer(0, 3, api.FLOAT, false, strideBytes, ctx.PtrOffset(0))
-	ctx.EnableVertexAttribArray(0)
-	// Location 1: aTexCoords (u, v_gl, texLayer) (vec3)
-	ctx.VertexAttribPointer(1, 3, api.FLOAT, false, strideBytes, ctx.PtrOffset(3*4))
-	ctx.EnableVertexAttribArray(1)
-	// Location 2: aNormal (vec3 GL space)
-	ctx.VertexAttribPointer(2, 3, api.FLOAT, false, strideBytes, ctx.PtrOffset(6*4))
-	ctx.EnableVertexAttribArray(2)
-	// Location 3: aTangent (tx, ty, tz, sign) (vec4 GL space)
-	ctx.VertexAttribPointer(3, 4, api.FLOAT, false, strideBytes, ctx.PtrOffset(9*4))
-	ctx.EnableVertexAttribArray(3)
-	// Location 4: aLightmap (lmU, lmV, lmLayer) (vec3)
-	ctx.VertexAttribPointer(4, 3, api.FLOAT, false, strideBytes, ctx.PtrOffset(13*4))
-	ctx.EnableVertexAttribArray(4)
-	// Location 5: aMaterial (packed, specBoost, shininess, detailScale) (vec4)
-	ctx.VertexAttribPointer(5, 4, api.FLOAT, false, strideBytes, ctx.PtrOffset(16*4))
-	ctx.EnableVertexAttribArray(5)
-	// Location 6: aExtra (detailFactor, envStrength, renderMode, envTintPacked) (vec4)
-	ctx.VertexAttribPointer(6, 4, api.FLOAT, false, strideBytes, ctx.PtrOffset(20*4))
-	ctx.EnableVertexAttribArray(6)
-
-	if includeDynamic {
-		// Location 7: aOrigin (vec3)
-		ctx.VertexAttribPointer(7, 3, api.FLOAT, false, strideBytes, ctx.PtrOffset(24*4))
-		ctx.EnableVertexAttribArray(7)
-		// Location 8: aPosNext (vec3)
-		ctx.VertexAttribPointer(8, 3, api.FLOAT, false, strideBytes, ctx.PtrOffset(27*4))
-		ctx.EnableVertexAttribArray(8)
-		// Location 9: aAnimData (lerp, yaw) (vec2)
-		ctx.VertexAttribPointer(9, 2, api.FLOAT, false, strideBytes, ctx.PtrOffset(30*4))
-		ctx.EnableVertexAttribArray(9)
-	}
-}
-
-func WriteStaticVertex(dst []float32, px, py, pz, u, v float64, texLayer float32, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv float64, lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint float32) {
-	dst[0] = float32(px)
-	dst[1] = float32(pz)
-	dst[2] = float32(-py)
-	dst[3] = float32(u)
-	dst[4] = float32(-v)
-	dst[5] = texLayer
-	dst[6] = float32(nx)
-	dst[7] = float32(nz)
-	dst[8] = float32(-ny)
-	dst[9] = float32(tx)
-	dst[10] = float32(tz)
-	dst[11] = float32(-ty)
-	dst[12] = float32(tSign)
-	dst[13] = float32(lmu)
-	dst[14] = float32(lmv)
-	dst[15] = lmIDFloat
-	dst[16] = packed
-	dst[17] = spec
-	dst[18] = shininess
-	dst[19] = dScale
-	dst[20] = dFactor
-	dst[21] = envStr
-	dst[22] = renderMode
-	dst[23] = envTint
-}
-
-type faceStateKey struct {
-	blendMode     int
-	cullMode      int
-	hasCutout     bool
-	depthWrite    bool
-	polygonOffset bool
-	sortOrder     int
-}
-
-// ResidentSubMesh describes a contiguous index slice inside a ResidentMesh grouped by render state.
-type ResidentSubMesh struct {
-	BlendMode     int
-	CullMode      int
-	HasCutout     bool
-	DepthWrite    bool
-	PolygonOffset bool
-	SortOrder     int
-	CentroidX     float32
-	CentroidY     float32
-	CentroidZ     float32
-	FirstIndex    int32
-	IndexCount    int32
-}
-
-func (sub *ResidentSubMesh) FinalizeCentroid(sumX, sumY, sumZ float64, count int) {
-	if sub != nil && count > 0 {
-		inv := 1.0 / float64(count)
-		sub.CentroidX = float32(sumX * inv)
-		sub.CentroidY = float32(sumY * inv)
-		sub.CentroidZ = float32(sumZ * inv)
-	}
-}
-
 // ResidentMesh stores GPU-resident static VBO/EBO/VAO buffers and grouped submesh slices
 // shared by static world volumes and instanced rigid 3D things.
 type ResidentMesh struct {
@@ -277,9 +119,7 @@ func (rm *ResidentMesh) NeedsRebuild(faces *volumes.Faces, checkAnim bool) bool 
 	return false
 }
 
-// Rebuild uploads faces into resident static VBO/EBO buffers and builds contiguous ResidentSubMesh ranges.
-func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool)) bool {
-	rm.SrcFaces = faces
+func (rm *ResidentMesh) resetBuildState() {
 	for i := range rm.HasBlend {
 		rm.HasBlend[i] = false
 	}
@@ -288,11 +128,17 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 	rm.HasSolidPrepass = false
 	rm.HasCutoutPrepass = false
 	rm.SkyMaterial = nil
-	prevAnimLen := rm.AnimLen
 	rm.SubMeshesLen = 0
 	rm.AnimLen = 0
 	rm.vertFloatsLen = 0
 	rm.indicesLen = 0
+}
+
+// Rebuild uploads faces into resident static VBO/EBO buffers and builds contiguous ResidentSubMesh ranges.
+func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool)) bool {
+	rm.SrcFaces = faces
+	prevAnimLen := rm.AnimLen
+	rm.resetBuildState()
 
 	if faces == nil || faces.Len() == 0 {
 		for i := range prevAnimLen {
@@ -351,18 +197,7 @@ func (rm *ResidentMesh) ReserveStaticAtlas(totalFaces int) {
 // BeginStaticAtlas resets accumulated static geometry ranges before packing static map volumes.
 func (rm *ResidentMesh) BeginStaticAtlas() {
 	rm.SrcFaces = nil
-	for i := range rm.HasBlend {
-		rm.HasBlend[i] = false
-	}
-	rm.HasSolidOpaque = false
-	rm.HasCutoutOpaque = false
-	rm.HasSolidPrepass = false
-	rm.HasCutoutPrepass = false
-	rm.SkyMaterial = nil
-	rm.SubMeshesLen = 0
-	rm.AnimLen = 0
-	rm.vertFloatsLen = 0
-	rm.indicesLen = 0
+	rm.resetBuildState()
 	rm.built = false
 }
 

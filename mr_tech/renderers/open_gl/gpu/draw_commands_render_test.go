@@ -145,10 +145,10 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 	mesh.SubMeshesLen = 1
 
-	transItems := NewTransparentDrawItems(4)
-	transItems.Add(&TransparentDrawItem{Kind: TransparentStreaming, DistSq: 100.0, SortOrder: 1, CullMode: config.CullNone, FirstIndex: 10, IndexCount: 6})
-	transItems.Add(&TransparentDrawItem{Kind: TransparentStreaming, DistSq: 900.0, SortOrder: 2, CullMode: config.CullNone, FirstIndex: 40, IndexCount: 6})
-	transItems.Add(&TransparentDrawItem{Kind: TransparentStatic, DistSq: 900.0, SortOrder: 0, CullMode: config.CullNone, Mesh: mesh, Sub: mesh.SubMeshes[0]})
+	transItems := NewDrawItemsTransparent(4)
+	transItems.Add(&DrawItemTransparent{Kind: TransparentStreaming, DistSq: 100.0, SortOrder: 1, CullMode: config.CullNone, FirstIndex: 10, IndexCount: 6})
+	transItems.Add(&DrawItemTransparent{Kind: TransparentStreaming, DistSq: 900.0, SortOrder: 2, CullMode: config.CullNone, FirstIndex: 40, IndexCount: 6})
+	transItems.Add(&DrawItemTransparent{Kind: TransparentStatic, DistSq: 900.0, SortOrder: 0, CullMode: config.CullNone, Mesh: mesh, Sub: mesh.SubMeshes[0]})
 	transItems.SortTransparentDrawItems()
 	dcrTrans := NewDrawCommandsRender(ctx, "trans_test", false)
 	dcrTrans.SetTransparentDraws(transItems)
@@ -171,7 +171,7 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 
 	// Verify Begin/AddStatic/AddInstanced/AddCommands/End lifecycle, stale trimming, Clear, and 0 allocs.
-	var staticSrc PtrPool[TransparentDrawItem]
+	var staticSrc PtrPool[DrawItemTransparent]
 	st := staticSrc.Acquire()
 	st.Kind = TransparentStatic
 	st.Mesh = mesh

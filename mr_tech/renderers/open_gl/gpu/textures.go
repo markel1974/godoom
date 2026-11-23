@@ -11,21 +11,6 @@ import (
 	textures3 "github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// Bucket represents a structure used for storing texture-related arrays and metadata for rendering operations.
-type Bucket struct {
-	Size          int
-	Count         int32
-	Layer         int32
-	DiffuseArray  uint32
-	NormalArray   uint32
-	EmissiveArray uint32
-}
-
-// NewBucket creates and initializes a new Bucket with the specified size and a default count of zero.
-func NewBucket(size int) *Bucket {
-	return &Bucket{Size: size, Count: 0}
-}
-
 // Textures manages a collection of 2D textures and their associated VRAM buckets for efficient rendering and sampling.
 type Textures struct {
 	ctx           api.IContext

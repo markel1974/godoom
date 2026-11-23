@@ -27,6 +27,7 @@ type ShaderLiquidLoc int
 const (
 	ShaderLiquidLocProjection = ShaderLiquidLoc(iota)
 	ShaderLiquidLocView
+	ShaderLiquidLocInvView
 	ShaderLiquidLocTime
 	ShaderLiquidLocScreenResolution
 	ShaderLiquidLocNear
@@ -34,15 +35,19 @@ const (
 	ShaderLiquidLocTexture
 	ShaderLiquidLocLightDir
 	ShaderLiquidLocInstanceMode
-	//ShaderLiquidLocLiquidType
+	ShaderLiquidLocEnvMap
+	ShaderLiquidLocEnvMaxLod
+	ShaderLiquidLocHasEnvMap
 	ShaderLiquidLocLast
 )
 
 // Liquid represents a shader program for rendering liquid effects within a 3D graphical context.
 type Liquid struct {
-	ctx   api.IContext
-	prg   uint32
-	table [ShaderLiquidLocLast]int32
+	ctx       api.IContext
+	prg       uint32
+	table     [ShaderLiquidLocLast]int32
+	hasEnvMap int32
+	envMaxLod float32
 
 	handler *Handler
 	main    *Main
@@ -53,12 +58,32 @@ type Liquid struct {
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
 func NewLiquid() *Liquid {
 	l := &Liquid{
-		prg: 0,
+		prg:       0,
+		envMaxLod: 5.0,
 	}
 	for i := range l.table {
 		l.table[i] = -1
 	}
 	return l
+}
+
+// SetEnvMapState configures whether the scene environment cubemap is bound and sets its maximum mip LOD.
+func (s *Liquid) SetEnvMapState(hasEnv bool, maxLod float32) {
+	if hasEnv {
+		s.hasEnvMap = 1
+	} else {
+		s.hasEnvMap = 0
+	}
+	if maxLod < 0 {
+		maxLod = 0
+	}
+	s.envMaxLod = maxLod
+	if s.prg != 0 && s.ctx != nil {
+		if loc := s.GetUniform(ShaderLiquidLocHasEnvMap); loc >= 0 {
+			s.ctx.UseProgram(s.prg)
+			s.ctx.Uniform1i(loc, s.hasEnvMap)
+		}
+	}
 }
 
 // Setup initializes the Lights instance by assigning the rendering context from the provided Handler.
@@ -75,11 +100,11 @@ func (s *Liquid) Setup(h *Handler) error {
 func (s *Liquid) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 
-	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
+	diffuseUnits := [3]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
 	if loc := s.GetUniform(ShaderLiquidLocTexture); loc != -1 {
-		s.ctx.Uniform1iv(loc, 4, &diffuseUnits[0])
+		s.ctx.Uniform1iv(loc, 3, &diffuseUnits[0])
 	}
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 3; i++ {
 		loc := s.ctx.GetUniformLocation(s.prg, s.ctx.Str(fmt.Sprintf("u_texture[%d]\x00", i)))
 		if loc != -1 {
 			s.ctx.Uniform1i(loc, api.TexUnitDiffuseBase+int32(i))
@@ -94,6 +119,12 @@ func (s *Liquid) SetupSamplers() error {
 	locDepth := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_depthTex\x00"))
 	if locDepth != -1 {
 		s.ctx.Uniform1i(locDepth, api.TexUnitShadowMap)
+	}
+	if loc := s.GetUniform(ShaderLiquidLocEnvMap); loc >= 0 {
+		s.ctx.Uniform1i(loc, api.TexUnitEnvMap)
+	}
+	if loc := s.GetUniform(ShaderLiquidLocHasEnvMap); loc >= 0 {
+		s.ctx.Uniform1i(loc, s.hasEnvMap)
 	}
 	if loc := s.GetUniform(ShaderLiquidLocInstanceMode); loc >= 0 {
 		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
@@ -138,6 +169,7 @@ func (s *Liquid) Compile(a IAssets) error {
 	}
 
 	s.table[ShaderLiquidLocView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_view\x00"))
+	s.table[ShaderLiquidLocInvView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_invView\x00"))
 	s.table[ShaderLiquidLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	s.table[ShaderLiquidLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
 	s.table[ShaderLiquidLocScreenResolution] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_resolution\x00"))
@@ -150,7 +182,9 @@ func (s *Liquid) Compile(a IAssets) error {
 	s.table[ShaderLiquidLocTexture] = locTex
 	s.table[ShaderLiquidLocLightDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_lightDir\x00"))
 	s.table[ShaderLiquidLocInstanceMode] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_instanceMode\x00"))
-	//s.table[ShaderLiquidLocLiquidType] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_liquidType\x00"))
+	s.table[ShaderLiquidLocEnvMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_envMap\x00"))
+	s.table[ShaderLiquidLocEnvMaxLod] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_envMaxLod\x00"))
+	s.table[ShaderLiquidLocHasEnvMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_hasEnvMap\x00"))
 
 	return nil
 }
@@ -190,11 +224,17 @@ func (s *Liquid) Render(renderGeometry func()) {
 	s.ctx.DepthFunc(api.LEQUAL)
 
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocView), 1, false, view)
+	if loc := s.GetUniform(ShaderLiquidLocInvView); loc >= 0 {
+		s.ctx.UniformMatrix4fv(loc, 1, false, s.metrics.GetInvViewPtr())
+	}
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderLiquidLocProjection), 1, false, proj)
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocTime), interval)
 	s.ctx.Uniform2f(s.GetUniform(ShaderLiquidLocScreenResolution), float32(fbW), float32(fbH))
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocNear), s.metrics.GetRoomZNear())
 	s.ctx.Uniform1f(s.GetUniform(ShaderLiquidLocFar), s.metrics.GetRoomZFar())
+	if loc := s.GetUniform(ShaderLiquidLocEnvMaxLod); loc >= 0 {
+		s.ctx.Uniform1f(loc, s.envMaxLod)
+	}
 
 	if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
 		const (

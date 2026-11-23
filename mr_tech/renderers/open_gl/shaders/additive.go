@@ -61,8 +61,8 @@ func (s *Additive) Init() error {
 // SetupSamplers assigns texture sampler units to the shader program and binds them to the appropriate uniform locations.
 func (s *Additive) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
-	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
-	s.ctx.Uniform1iv(s.GetUniform(ShaderAdditiveLocTexture), 4, &diffuseUnits[0])
+	diffuseUnits := [3]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
+	s.ctx.Uniform1iv(s.GetUniform(ShaderAdditiveLocTexture), 3, &diffuseUnits[0])
 	if loc := s.GetUniform(ShaderAdditiveLocInstanceMode); loc >= 0 {
 		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
 	}

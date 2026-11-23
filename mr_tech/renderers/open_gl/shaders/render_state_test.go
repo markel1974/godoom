@@ -65,6 +65,16 @@ type recordingCtx struct {
 	drawScissors       [][4]int32
 	activeTexUnit      uint32
 	boundTex2D         [16]uint32
+	boundDrawFBO       uint32
+	blendActive        bool
+	lastBlendMode      uint32
+	lastBlendSrc       uint32
+	lastBlendDst       uint32
+	multiDrawFBOs      []uint32
+	multiDrawSSAO      []uint32
+	drawArraysPrograms []uint32
+	drawArraysFBOs     []uint32
+	drawArraysBlend    []bool
 }
 
 func newRecordingCtx() *recordingCtx {
@@ -92,6 +102,11 @@ func (c *recordingCtx) resetLogs() {
 	c.drawPolyOffsets = c.drawPolyOffsets[:0]
 	c.drawDepthClamps = c.drawDepthClamps[:0]
 	c.drawScissors = c.drawScissors[:0]
+	c.multiDrawFBOs = c.multiDrawFBOs[:0]
+	c.multiDrawSSAO = c.multiDrawSSAO[:0]
+	c.drawArraysPrograms = c.drawArraysPrograms[:0]
+	c.drawArraysFBOs = c.drawArraysFBOs[:0]
+	c.drawArraysBlend = c.drawArraysBlend[:0]
 }
 
 func (c *recordingCtx) allocIDs(n int32, out *uint32) {
@@ -114,15 +129,19 @@ func (c *recordingCtx) AttachShader(prg, sh uint32) {
 	c.programShaders[prg] = append(c.programShaders[prg], sh)
 }
 func (c *recordingCtx) BindBufferBase(_ uint32, _ uint32, _ uint32) {}
-func (c *recordingCtx) BindFramebuffer(_ uint32, _ uint32)          {}
-func (c *recordingCtx) BindRenderbuffer(_ uint32, _ uint32)         {}
+func (c *recordingCtx) BindFramebuffer(target uint32, fbo uint32) {
+	if target == api.FRAMEBUFFER || target == api.DRAW_FRAMEBUFFER {
+		c.boundDrawFBO = fbo
+	}
+}
+func (c *recordingCtx) BindRenderbuffer(_ uint32, _ uint32) {}
 func (c *recordingCtx) BindTexture(target uint32, tex uint32) {
 	if target == api.TEXTURE_2D && int(c.activeTexUnit) < len(c.boundTex2D) {
 		c.boundTex2D[c.activeTexUnit] = tex
 	}
 }
-func (c *recordingCtx) BlendEquation(_ uint32) {}
-func (c *recordingCtx) BlendFunc(_, _ uint32)  {}
+func (c *recordingCtx) BlendEquation(mode uint32) { c.lastBlendMode = mode }
+func (c *recordingCtx) BlendFunc(src, dst uint32) { c.lastBlendSrc, c.lastBlendDst = src, dst }
 func (c *recordingCtx) BlitFramebuffer(_, _, _, _, _, _, _, _ int32, mask, _ uint32) {
 	c.blitCalls++
 	c.lastBlitMask = mask
@@ -152,17 +171,25 @@ func (c *recordingCtx) Disable(cap uint32) {
 		c.polyOffsetActive = false
 	} else if cap == api.DEPTH_CLAMP {
 		c.depthClampActive = false
+	} else if cap == api.BLEND {
+		c.blendActive = false
 	}
 }
-func (c *recordingCtx) DrawArrays(_ uint32, _ int32, _ int32) {}
-func (c *recordingCtx) DrawBuffer(_ uint32)                   {}
-func (c *recordingCtx) DrawBuffers(_ int32, _ *uint32)        {}
+func (c *recordingCtx) DrawArrays(_ uint32, _ int32, _ int32) {
+	c.drawArraysPrograms = append(c.drawArraysPrograms, c.boundProgram)
+	c.drawArraysFBOs = append(c.drawArraysFBOs, c.boundDrawFBO)
+	c.drawArraysBlend = append(c.drawArraysBlend, c.blendActive)
+}
+func (c *recordingCtx) DrawBuffer(_ uint32)            {}
+func (c *recordingCtx) DrawBuffers(_ int32, _ *uint32) {}
 func (c *recordingCtx) Enable(cap uint32) {
 	c.enabledHistory = append(c.enabledHistory, cap)
 	if cap == api.POLYGON_OFFSET_FILL {
 		c.polyOffsetActive = true
 	} else if cap == api.DEPTH_CLAMP {
 		c.depthClampActive = true
+	} else if cap == api.BLEND {
+		c.blendActive = true
 	}
 }
 func (c *recordingCtx) EnableVertexAttribArray(_ uint32)                {}
@@ -178,18 +205,24 @@ func (c *recordingCtx) GetProgramiv(_ uint32, _ uint32, params *int32)  { *param
 func (c *recordingCtx) LinkProgram(_ uint32)                            {}
 func (c *recordingCtx) DrawElements(_ uint32, _ int32, _ uint32, _ unsafe.Pointer) {
 	c.multiDrawPrograms = append(c.multiDrawPrograms, c.boundProgram)
+	c.multiDrawFBOs = append(c.multiDrawFBOs, c.boundDrawFBO)
+	c.multiDrawSSAO = append(c.multiDrawSSAO, c.boundTex2D[api.TexUnitSSAO])
 	c.drawPolyOffsets = append(c.drawPolyOffsets, c.polyOffsetActive)
 	c.drawDepthClamps = append(c.drawDepthClamps, c.depthClampActive)
 	c.drawScissors = append(c.drawScissors, c.curScissor)
 }
 func (c *recordingCtx) MultiDrawElements(_ uint32, _ *int32, _ uint32, _ *unsafe.Pointer, _ int32) {
 	c.multiDrawPrograms = append(c.multiDrawPrograms, c.boundProgram)
+	c.multiDrawFBOs = append(c.multiDrawFBOs, c.boundDrawFBO)
+	c.multiDrawSSAO = append(c.multiDrawSSAO, c.boundTex2D[api.TexUnitSSAO])
 	c.drawPolyOffsets = append(c.drawPolyOffsets, c.polyOffsetActive)
 	c.drawDepthClamps = append(c.drawDepthClamps, c.depthClampActive)
 	c.drawScissors = append(c.drawScissors, c.curScissor)
 }
 func (c *recordingCtx) DrawElementsInstanced(_ uint32, _ int32, _ uint32, _ unsafe.Pointer, _ int32) {
 	c.multiDrawPrograms = append(c.multiDrawPrograms, c.boundProgram)
+	c.multiDrawFBOs = append(c.multiDrawFBOs, c.boundDrawFBO)
+	c.multiDrawSSAO = append(c.multiDrawSSAO, c.boundTex2D[api.TexUnitSSAO])
 	c.drawPolyOffsets = append(c.drawPolyOffsets, c.polyOffsetActive)
 	c.drawDepthClamps = append(c.drawDepthClamps, c.depthClampActive)
 	c.drawScissors = append(c.drawScissors, c.curScissor)
@@ -1112,8 +1145,8 @@ func TestDepthDoubleBufferShadowAtlasAndUnbinds(t *testing.T) {
 	dcr := draws.NewDrawCommandsRender(ctx, "atlas_dbl", false)
 	dcr.Prepare([]*draws.DrawCommand{cmdSolid})
 
-	// Simulate Textures.BindBuckets() leaving unit 11/13 active before Depth.Render creates atlas.
-	ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEmissiveBase + 3)
+	// Simulate Textures.BindBuckets() leaving emissive unit active before Depth.Render creates atlas.
+	ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEmissiveBase + 2)
 	d.SetShadowsEnabled(true)
 	h.GetMain().SetShadowsEnabled(true)
 	d.Prepare()
@@ -1123,9 +1156,10 @@ func TestDepthDoubleBufferShadowAtlasAndUnbinds(t *testing.T) {
 	if tex1 == 0 {
 		t.Fatalf("expected non-zero shadow atlas texture on frame 1")
 	}
-	if ctx.boundTex2D[api.TexUnitShadowAtlas] != 0 || ctx.boundTex2D[api.TexUnitEmissiveBase+3] != 0 {
-		t.Fatalf("DepthMap.Update leaked TEXTURE_2D binding: unit14=%d unit11=%d",
-			ctx.boundTex2D[api.TexUnitShadowAtlas], ctx.boundTex2D[api.TexUnitEmissiveBase+3])
+	if ctx.boundTex2D[api.TexUnitShadowAtlas] != 0 || ctx.boundTex2D[api.TexUnitEmissiveBase+2] != 0 {
+		t.Fatalf("DepthMap.Update leaked TEXTURE_2D binding: unit%d=%d unit%d=%d",
+			api.TexUnitShadowAtlas, ctx.boundTex2D[api.TexUnitShadowAtlas],
+			api.TexUnitEmissiveBase+2, ctx.boundTex2D[api.TexUnitEmissiveBase+2])
 	}
 
 	h.GetMain().Render(dcr, 0.25, 0, 0, 1)
@@ -1158,5 +1192,202 @@ func TestDepthDoubleBufferShadowAtlasAndUnbinds(t *testing.T) {
 	})
 	if allocs > 0 {
 		t.Fatalf("Depth.Render allocated %.2f objects/op, want 0", allocs)
+	}
+}
+
+func TestForwardSSAOZPrepassAndMSAAIntegration(t *testing.T) {
+	solidMat, cutoutMat := makeSolidAndCutoutMaterials(t)
+	cmdSolid := draws.NewDrawCommand()
+	cmdSolid.SetFirstIndex(0)
+	cmdSolid.SetIndexCount(6)
+	cmdSolid.SetMaterial(solidMat)
+	cmdCutout := draws.NewDrawCommand()
+	cmdCutout.SetFirstIndex(6)
+	cmdCutout.SetIndexCount(6)
+	cmdCutout.SetMaterial(cutoutMat)
+
+	for _, samples := range []int{0, 4} {
+		ctx := newRecordingCtx()
+		h := newTestHandlerWithMSAA(t, ctx, samples)
+		m := h.GetMain()
+		ssao := h.GetSSAO()
+		p := h.GetPost()
+		if err := m.Init(); err != nil {
+			t.Fatalf("Main.Init(samples=%d) failed: %v", samples, err)
+		}
+		if err := m.Compile(diskAssets{}); err != nil {
+			t.Fatalf("Main.Compile(samples=%d) failed: %v", samples, err)
+		}
+		_ = m.SetupSamplers()
+		if err := h.GetLights().Init(); err != nil {
+			t.Fatalf("Lights.Init failed: %v", err)
+		}
+		if err := ssao.Compile(diskAssets{}); err != nil {
+			t.Fatalf("SSAO.Compile(samples=%d) failed: %v", samples, err)
+		}
+		if err := ssao.Init(); err != nil {
+			t.Fatalf("SSAO.Init(samples=%d) failed: %v", samples, err)
+		}
+		if err := ssao.SetupSamplers(); err != nil {
+			t.Fatalf("SSAO.SetupSamplers(samples=%d) failed: %v", samples, err)
+		}
+		p.EnsureAllocated()
+
+		dcr := draws.NewDrawCommandsRender(ctx, "ssao_test", false)
+		dcr.Prepare([]*draws.DrawCommand{cmdSolid, cmdCutout})
+
+		ctx.resetLogs()
+		ctx.blitCalls = 0
+		ctx.lastBlitMask = 0
+
+		m.Render(dcr, 0.25, 0, 0, 1)
+
+		if samples == 0 {
+			if ctx.blitCalls != 0 {
+				t.Fatalf("samples=0: expected 0 depth resolve blits before SSAO, got %d", ctx.blitCalls)
+			}
+		} else {
+			if ctx.blitCalls != 1 || ctx.lastBlitMask != api.DEPTH_BUFFER_BIT {
+				t.Fatalf("samples=%d: expected 1 DEPTH_BUFFER_BIT blit before SSAO, got count=%d mask=%#x", samples, ctx.blitCalls, ctx.lastBlitMask)
+			}
+		}
+
+		// Two SSAO quad passes (horizon SAO + bilateral blur) must execute between Z-prepass and shading.
+		if len(ctx.drawArraysPrograms) != 2 || ctx.drawArraysPrograms[0] != ssao.prg || ctx.drawArraysPrograms[1] != ssao.blurPrg {
+			t.Fatalf("samples=%d: unexpected SSAO quad passes: got %v, want [%d, %d]", samples, ctx.drawArraysPrograms, ssao.prg, ssao.blurPrg)
+		}
+
+		wantTargetFBO := p.GetFBO()
+		if len(ctx.multiDrawPrograms) != 4 {
+			t.Fatalf("samples=%d: expected 4 geometry draws (2 zprepass + 2 shade), got %d", samples, len(ctx.multiDrawPrograms))
+		}
+		for i := 0; i < 4; i++ {
+			if ctx.multiDrawFBOs[i] != wantTargetFBO {
+				t.Fatalf("samples=%d: draw %d drew into FBO %d, want scene FBO %d", samples, i, ctx.multiDrawFBOs[i], wantTargetFBO)
+			}
+		}
+		for i := 2; i < 4; i++ {
+			if ctx.multiDrawSSAO[i] != ssao.GetSSAOBlurTexture() || ssao.GetSSAOBlurTexture() == 0 {
+				t.Fatalf("samples=%d: shade draw %d did not bind blurred SSAO texture (%d != %d)", samples, i, ctx.multiDrawSSAO[i], ssao.GetSSAOBlurTexture())
+			}
+		}
+		if ctx.boundTex2D[api.TexUnitSSAO] != 0 {
+			t.Fatalf("samples=%d: expected TexUnitSSAO unbound after Main.Render, got %d", samples, ctx.boundTex2D[api.TexUnitSSAO])
+		}
+	}
+}
+
+func TestPyramidalBloomDownsampleAndAdditiveUpsample(t *testing.T) {
+	ctx := newRecordingCtx()
+	h := newTestHandlerWithMSAA(t, ctx, 0)
+	p := h.GetPost()
+	b := h.GetBloom()
+
+	if err := b.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Bloom.Compile failed: %v", err)
+	}
+	if err := b.SetupSamplers(); err != nil {
+		t.Fatalf("Bloom.SetupSamplers failed: %v", err)
+	}
+	p.EnsureAllocated()
+
+	ctx.resetLogs()
+	b.Render()
+
+	if b.GetBloomTexture() == 0 || b.GetBloomTexture() != b.mips[0].tex {
+		t.Fatalf("expected non-zero mip[0] bloom texture")
+	}
+	if b.mips[0].w != 320 || b.mips[0].h != 240 || b.mips[4].w != 20 || b.mips[4].h != 15 {
+		t.Fatalf("unexpected 640x480 bloom pyramid dimensions: mip0=%dx%d mip4=%dx%d",
+			b.mips[0].w, b.mips[0].h, b.mips[4].w, b.mips[4].h)
+	}
+
+	// 5 downsample passes (blend off) + 4 additive upsample passes (blend on, FUNC_ADD, ONE/ONE) = 9 total draws.
+	if len(ctx.drawArraysPrograms) != 9 {
+		t.Fatalf("expected 9 bloom pyramid passes (5 down + 4 up), got %d", len(ctx.drawArraysPrograms))
+	}
+	for i := 0; i < 5; i++ {
+		if ctx.drawArraysBlend[i] {
+			t.Fatalf("downsample pass %d unexpectedly had BLEND enabled", i)
+		}
+		if ctx.drawArraysFBOs[i] != b.mips[i].fbo {
+			t.Fatalf("downsample pass %d targeted FBO %d, want mip[%d].fbo %d", i, ctx.drawArraysFBOs[i], i, b.mips[i].fbo)
+		}
+	}
+	for i := 0; i < 4; i++ {
+		passIdx := 5 + i
+		if !ctx.drawArraysBlend[passIdx] {
+			t.Fatalf("upsample pass %d missing additive BLEND enabled", i)
+		}
+		wantDst := 3 - i
+		if ctx.drawArraysFBOs[passIdx] != b.mips[wantDst].fbo {
+			t.Fatalf("upsample pass %d targeted FBO %d, want mip[%d].fbo %d", i, ctx.drawArraysFBOs[passIdx], wantDst, b.mips[wantDst].fbo)
+		}
+	}
+	if ctx.lastBlendMode != api.FUNC_ADD || ctx.lastBlendSrc != api.ONE || ctx.lastBlendDst != api.ONE {
+		t.Fatalf("unexpected bloom upsample blend mode/func: mode=%#x src=%#x dst=%#x", ctx.lastBlendMode, ctx.lastBlendSrc, ctx.lastBlendDst)
+	}
+	if ctx.blendActive {
+		t.Fatalf("Bloom.Render left BLEND enabled on exit")
+	}
+	if ctx.boundTex2D[0] != 0 {
+		t.Fatalf("Bloom.Render left unit 0 bound to %d", ctx.boundTex2D[0])
+	}
+}
+
+func TestShaderSourcesGGXPBRVogelPCFSoftBloomAndSamplerBudget(t *testing.T) {
+	assets := diskAssets{}
+
+	opaqueBytes, err := assets.Read("main_opaque.frag")
+	if err != nil {
+		t.Fatalf("Read main_opaque.frag failed: %v", err)
+	}
+	opaque := string(opaqueBytes)
+	for _, needle := range []string{
+		"u_texture[3]",
+		"u_normalMap[3]",
+		"u_emissiveMap[3]",
+		"u_ssao",
+		"u_envMaxLod",
+		"computeSurfacePBR",
+		"evalPBRDirect",
+		"textureLod(u_envMap",
+		"sampleShadowAtlasVogel8",
+		"sampleShadowAtlasVogel6",
+		"extractBloom",
+	} {
+		if !strings.Contains(opaque, needle) {
+			t.Fatalf("main_opaque.frag missing expected feature token %q", needle)
+		}
+	}
+	if strings.Contains(opaque, "calculateSpecular") {
+		t.Fatalf("main_opaque.frag still contains legacy Blinn-Phong calculateSpecular")
+	}
+
+	liqBytes, err := assets.Read("main_liquid.frag")
+	if err != nil {
+		t.Fatalf("Read main_liquid.frag failed: %v", err)
+	}
+	liq := string(liqBytes)
+	for _, needle := range []string{"u_texture[3]", "u_envMap", "evalGGXLiquid", "sampleEnvLiquid"} {
+		if !strings.Contains(liq, needle) {
+			t.Fatalf("main_liquid.frag missing expected token %q", needle)
+		}
+	}
+
+	ssaoBytes, err := assets.Read("ssao.frag")
+	if err != nil {
+		t.Fatalf("Read ssao.frag failed: %v", err)
+	}
+	if !strings.Contains(string(ssaoBytes), "reconstructBestFitNormal") || strings.Contains(string(ssaoBytes), "u_position") {
+		t.Fatalf("ssao.frag must be depth-only without legacy G-Buffer u_position")
+	}
+
+	bloomBytes, err := assets.Read("bloom.frag")
+	if err != nil {
+		t.Fatalf("Read bloom.frag failed: %v", err)
+	}
+	if !strings.Contains(string(bloomBytes), "karisWeight") || !strings.Contains(string(bloomBytes), "upsampleBloom") {
+		t.Fatalf("bloom.frag missing Jimenez Karis downsample / tent upsample")
 	}
 }

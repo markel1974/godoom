@@ -168,7 +168,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.liquid = w.handler.GetLiquid()
 	w.enableShadows = false
 	w.enableBoundingBoxDebug = false
-	w.container = append(w.container, w.main, w.sky, w.depth, w.lights, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
+	w.container = append(w.container, w.main, w.sky, w.depth, w.lights, w.post, w.bloom, w.ssao, w.occlusion, w.additive, w.liquid)
 	w.SetShadowsEnabled(w.cal.EnableShadows)
 
 	for _, s := range w.container {
@@ -190,6 +190,9 @@ func (w *RenderOpenGL) RenderPrepare() error {
 		return err
 	}
 	w.tex.UploadEnvironment(w.engine.GetEnvMaps())
+	envMaxLod := w.tex.GetEnvMapMaxLod()
+	w.main.SetEnvMaxLod(envMaxLod)
+	w.liquid.SetEnvMapState(w.tex.GetEnvMapTexture() != 0, envMaxLod)
 	w.tex.UploadLightmaps(w.engine.GetLightmaps())
 	return nil
 }

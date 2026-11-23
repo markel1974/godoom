@@ -8,10 +8,11 @@ flat in float Material;
 layout (location = 0) out vec4 FragColor;
 layout (location = 1) out vec4 BrightColor;
 
-uniform sampler2DArray u_texture[4];
+uniform sampler2DArray u_texture[3];
 
 uniform sampler2D u_refractionTex;
 uniform sampler2D u_depthTex;
+uniform samplerCube u_envMap;
 
 uniform vec2 u_resolution;
 uniform float u_time;
@@ -20,7 +21,12 @@ uniform float u_near;
 uniform float u_far;
 
 uniform mat4 u_view;
+uniform mat4 u_invView;
 uniform vec3 u_lightDir;
+uniform float u_envMaxLod;
+uniform int u_hasEnvMap;
+
+const float LIQUID_PI = 3.14159265359;
 
 const uint LIQUID_WATER = 2u; // Acqua limpida
 const uint LIQUID_SEA   = 3u; // Mare con onde ampie e schiuma su creste e riva
@@ -34,7 +40,7 @@ const uint LIQUID_FOG   = 7u; // Nebbia volumetrica atmosferica
 // Water Colors (Lush Caribbean turquoise to deep sapphire blue)
 const vec3 waterColorShallow = vec3(0.10, 0.62, 0.82);
 const vec3 waterColorDeep    = vec3(0.03, 0.30, 0.52);
-// Environment reflection (Lush sky & ambient sheen)
+// Environment reflection fallback
 const vec3 envHorizon    = vec3(0.42, 0.68, 0.88);
 const vec3 envZenith     = vec3(0.18, 0.38, 0.65);
 
@@ -50,10 +56,35 @@ vec4 getDiffuse(vec3 tc) {
     if (b == 1) {
         return texture(u_texture[1], vec3(tc.xy, l));
     }
-    if (b == 2) {
-        return texture(u_texture[2], vec3(tc.xy, l));
+    return texture(u_texture[2], vec3(tc.xy, l));
+}
+
+float evalGGXLiquid(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotL = max(dot(N, L), 0.0);
+    if (NdotL <= 0.0) {
+        return 0.0;
     }
-    return texture(u_texture[3], vec3(tc.xy, l));
+    float NdotV = max(dot(N, V), 0.001);
+    vec3 H = normalize(L + V);
+    float NdotH = max(dot(N, H), 0.0);
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    float NDF = a2 / (LIQUID_PI * max(d * d, 1e-6));
+    float r = roughness + 1.0;
+    float k = (r * r) * 0.125;
+    float G = (NdotV / (NdotV * (1.0 - k) + k)) * (NdotL / (NdotL * (1.0 - k) + k));
+    return min(((NDF * G) / max(4.0 * NdotV * NdotL, 0.001)) * NdotL, 4.5);
+}
+
+vec3 sampleEnvLiquid(vec3 N, vec3 V, float roughness, vec3 fallbackColor) {
+    vec3 R_view = reflect(-V, N);
+    if (u_hasEnvMap == 1) {
+        vec3 R_world = normalize(mat3(u_invView) * R_view);
+        float maxLod = max(u_envMaxLod, 1.0);
+        return pow(max(textureLod(u_envMap, R_world, roughness * maxLod).rgb, vec3(0.0)), vec3(2.2));
+    }
+    return mix(fallbackColor, mix(envHorizon, envZenith, clamp(R_view.y * 0.5 + 0.5, 0.0, 1.0)), 0.65);
 }
 
 // 2D Hash
@@ -210,8 +241,6 @@ void renderSlime(bool isSolid) {
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
     float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 4.0);
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
-    vec3 H = normalize(L + V);
-    float NdotH = max(dot(waveNormal, H), 0.0);
 
     vec3 slimeTint = vec3(0.18, 0.85, 0.15);
     vec3 slimeSurface = (length(texColor) > 0.04) ? mix(slimeTint, texColor, 0.60) : slimeTint;
@@ -250,7 +279,9 @@ void renderSlime(bool isSolid) {
         finalSlime = mix(bedBase * waveLight, slimeSurface, 0.45);
     }
 
-    float spec = pow(NdotH, 32.0) * 0.40 * (0.30 + 0.70 * fresnel);
+    vec3 envSlime = sampleEnvLiquid(waveNormal, V, 0.25, slimeTint * 0.35);
+    finalSlime = mix(finalSlime, envSlime * vec3(0.65, 1.0, 0.60), fresnel * 0.30);
+    float spec = evalGGXLiquid(waveNormal, V, L, 0.24) * 0.45 * (0.20 + 0.80 * fresnel);
     finalSlime += vec3(0.8, 1.0, 0.6) * spec;
     float slimeGlow = finalSlime.g;
     vec3 bloomSlime = slimeGlow > 0.75 ? vec3(0.12, 0.55, 0.08) * (slimeGlow - 0.75) * 2.0 : vec3(0.0);
@@ -305,8 +336,6 @@ void renderBlood(bool isSolid) {
     float NdotV = clamp(dot(waveNormal, V), 0.0, 1.0);
     float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 4.0);
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
-    vec3 H = normalize(L + V);
-    float NdotH = max(dot(waveNormal, H), 0.0);
 
     vec3 bloodTint = vec3(0.65, 0.05, 0.03);
     vec3 bloodSurface = (length(texColor) > 0.04) ? mix(bloodTint, texColor, 0.60) : bloodTint;
@@ -345,7 +374,9 @@ void renderBlood(bool isSolid) {
         finalBlood = mix(bedBase * waveLight, bloodSurface, 0.45);
     }
 
-    float spec = pow(NdotH, 48.0) * 0.50 * (0.35 + 0.65 * fresnel);
+    vec3 envBlood = sampleEnvLiquid(waveNormal, V, 0.16, bloodTint * 0.35);
+    finalBlood = mix(finalBlood, envBlood * vec3(0.95, 0.45, 0.45), fresnel * 0.35);
+    float spec = evalGGXLiquid(waveNormal, V, L, 0.18) * 0.55 * (0.25 + 0.75 * fresnel);
     finalBlood += vec3(1.0, 0.85, 0.85) * spec;
     FragColor = vec4(finalBlood, 1.0);
     BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -467,9 +498,6 @@ void renderWater(bool isSolid, bool isSea) {
     float fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
     // Sunlight and reflection vectors
     vec3 L = length(u_lightDir) > 0.1 ? normalize(u_lightDir) : normalize(vec3(0.35, 0.85, 0.40));
-    vec3 H = normalize(L + V);
-    float NdotH = max(dot(waveNormal, H), 0.0);
-    vec3 R = reflect(-V, waveNormal);
 
     // Water Colors: lush aquatic tones blended with material texture if valid
     vec3 shallowColor = waterColorShallow;
@@ -480,10 +508,10 @@ void renderWater(bool isSolid, bool isSea) {
         deepColor    = mix(waterColorDeep, texColor * 0.50, 0.40);
     }
 
-    // Environment reflection (ambient sheen and sky gradient)
+    // Prefiltered environment cubemap reflection blended with aquatic ambient sheen
     vec3 ambientReflection = mix(vec3(0.20, 0.28, 0.32), shallowColor * 0.85, 0.40);
-    vec3 skyReflection     = mix(envHorizon, envZenith, clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
-    vec3 envReflection     = mix(ambientReflection, skyReflection, 0.65);
+    vec3 skyEnv            = sampleEnvLiquid(waveNormal, V, isSea ? 0.12 : 0.06, ambientReflection);
+    vec3 envReflection     = mix(ambientReflection, skyEnv, 0.75);
 
     vec3 finalWater;
 
@@ -566,10 +594,9 @@ void renderWater(bool isSolid, bool isSea) {
         }
     }
 
-    // Specular sunlight glints (Blinn-Phong sun path)
-    float specBroad = pow(NdotH, 32.0) * 0.30;
-    float specCore  = pow(NdotH, 160.0) * 1.80;
-    vec3 sunSpecular = vec3(1.0, 0.98, 0.92) * (specBroad + specCore) * (0.25 + 0.75 * fresnel);
+    // Specular sunlight glints (GGX microfacet sun highlight)
+    float ggxSun = evalGGXLiquid(waveNormal, V, L, isSea ? 0.10 : 0.07);
+    vec3 sunSpecular = vec3(1.0, 0.98, 0.92) * ggxSun * (0.20 + 0.80 * fresnel);
     finalWater += sunSpecular;
 
     FragColor = vec4(finalWater, 1.0);

@@ -10,8 +10,8 @@ in vec4 FragPosLightRoom;
 in vec4 FragPosLightFlash;
 in float IsFullbright;
 
-uniform sampler2DArray u_texture[4];
-uniform sampler2DArray u_normalMap[4];
+uniform sampler2DArray u_texture[3];
+uniform sampler2DArray u_normalMap[3];
 
 //uniform sampler2DShadow u_roomShadowMap;
 uniform mat4 u_view;
@@ -54,10 +54,7 @@ vec4 getDiffuse(vec3 tc) {
     if (b == 1) {
         return texture(u_texture[1], vec3(tc.xy, l));
     }
-    if (b == 2) {
-        return texture(u_texture[2], vec3(tc.xy, l));
-    }
-    return texture(u_texture[3], vec3(tc.xy, l));
+    return texture(u_texture[2], vec3(tc.xy, l));
 }
 
 vec3 getNormal(vec3 tc) {
@@ -69,10 +66,7 @@ vec3 getNormal(vec3 tc) {
     if (b == 1) {
         return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
     }
-    if (b == 2) {
-        return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
-    }
-    return texture(u_normalMap[3], vec3(tc.xy, l)).rgb;
+    return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
 }
 
 float randomNoise(vec2 co) {

@@ -52,8 +52,8 @@ func (s *Sky) Setup(h *Handler) error {
 func (s *Sky) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 
-	skyUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
-	s.ctx.Uniform1iv(s.GetUniform(ShaderSkyLocSky), 4, &skyUnits[0])
+	skyUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
+	s.ctx.Uniform1iv(s.GetUniform(ShaderSkyLocSky), 3, &skyUnits[0])
 
 	s.ctx.GenVertexArrays(1, &s.skyVAO)
 	s.ctx.BindVertexArray(s.skyVAO)

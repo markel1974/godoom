@@ -181,8 +181,8 @@ func (s *Depth) Setup(h *Handler) error {
 // SetupSamplers initializes or configures the sampler bindings for the Depth program.
 func (s *Depth) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
-	diffuseUnits := []int32{0, 1, 2, 3}
-	s.ctx.Uniform1iv(s.GetUniform(DepthLocTexture), 4, &diffuseUnits[0])
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
+	s.ctx.Uniform1iv(s.GetUniform(DepthLocTexture), 3, &diffuseUnits[0])
 	return nil
 }
 

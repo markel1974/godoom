@@ -9,9 +9,9 @@ in vec3 TexCoords;
 in float FragDepth;
 in float IsFullbright;
 
-uniform sampler2DArray u_texture[4];
-uniform sampler2DArray u_normalMap[4];
-uniform sampler2DArray u_emissiveMap[4];
+uniform sampler2DArray u_texture[3];
+uniform sampler2DArray u_normalMap[3];
+uniform sampler2DArray u_emissiveMap[3];
 uniform float u_emissiveIntensity;
 
 vec3 getNormal(vec3 tc) {
@@ -19,8 +19,7 @@ vec3 getNormal(vec3 tc) {
     float l = mod(tc.z, 1000.0);
     if (b == 0) return texture(u_normalMap[0], vec3(tc.xy, l)).rgb;
     if (b == 1) return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
-    if (b == 2) return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
-    return texture(u_normalMap[3], vec3(tc.xy, l)).rgb;
+    return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
 }
 
 vec4 getDiffuse(vec3 tc) {
@@ -28,8 +27,7 @@ vec4 getDiffuse(vec3 tc) {
     float l = mod(tc.z, 1000.0);
     if (b == 0) return texture(u_texture[0], vec3(tc.xy, l));
     if (b == 1) return texture(u_texture[1], vec3(tc.xy, l));
-    if (b == 2) return texture(u_texture[2], vec3(tc.xy, l));
-    return texture(u_texture[3], vec3(tc.xy, l));
+    return texture(u_texture[2], vec3(tc.xy, l));
 }
 
 vec3 getEmissive(vec3 tc) {
@@ -37,8 +35,7 @@ vec3 getEmissive(vec3 tc) {
     float l = mod(tc.z, 1000.0);
     if (b == 0) return texture(u_emissiveMap[0], vec3(tc.xy, l)).rgb;
     if (b == 1) return texture(u_emissiveMap[1], vec3(tc.xy, l)).rgb;
-    if (b == 2) return texture(u_emissiveMap[2], vec3(tc.xy, l)).rgb;
-    return texture(u_emissiveMap[3], vec3(tc.xy, l)).rgb;
+    return texture(u_emissiveMap[2], vec3(tc.xy, l)).rgb;
 }
 
 void main() {

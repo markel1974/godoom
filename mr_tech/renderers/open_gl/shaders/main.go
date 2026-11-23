@@ -59,6 +59,10 @@ const (
 	MainLocClusterNear
 	MainLocClusterLogScale
 	MainLocNumGlobalLights
+	MainLocSSAO
+	MainLocEnableSSAO
+	MainLocAoFactor
+	MainLocEnvMaxLod
 	MainLocLast
 )
 
@@ -133,14 +137,18 @@ type Main struct {
 	depth               *Depth
 	lights              *Lights
 	post                *Post
+	ssao                *SSAO
+	aoFactor            float32
+	envMaxLod           float32
 }
 
 // NewMain initializes and returns a new instance of Main with the provided context, stride, and metrics.
 func NewMain(stride int32) *Main {
 	return &Main{
-		stride:      stride,
-		shadows:     0,
-		debugLights: 0,
+		stride:    stride,
+		shadows:   0,
+		aoFactor:  0.8,
+		envMaxLod: 5.0,
 	}
 }
 
@@ -156,10 +164,21 @@ func (s *Main) Setup(h *Handler) error {
 	s.depth = h.GetDepth()
 	s.lights = h.GetLights()
 	s.post = h.GetPost()
+	s.ssao = h.GetSSAO()
+	s.aoFactor = h.GetAoFactor()
+	s.envMaxLod = 5.0
 	s.emissiveIntensity = h.GetEmissiveIntensity()
 	s.shadows = 0
 
 	return nil
+}
+
+// SetEnvMaxLod updates the maximum mipmap LOD index available on the environment cubemap.
+func (s *Main) SetEnvMaxLod(lod float32) {
+	if lod < 0 {
+		lod = 0
+	}
+	s.envMaxLod = lod
 }
 
 // SetShadowsEnabled enables or disables shadow evaluation in the main shader.
@@ -237,16 +256,16 @@ func (s *Main) GetLocProj() int32 { return s.solidPrg.table[MainLocProjection] }
 
 // SetupSamplers initializes sampler uniforms for opaque, cutout, and Z-prepass shader programs.
 func (s *Main) SetupSamplers() error {
-	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
-	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2, api.TexUnitNormalBase + 3}
-	emissiveUnits := []int32{api.TexUnitEmissiveBase, api.TexUnitEmissiveBase + 1, api.TexUnitEmissiveBase + 2, api.TexUnitEmissiveBase + 3}
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
+	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2}
+	emissiveUnits := []int32{api.TexUnitEmissiveBase, api.TexUnitEmissiveBase + 1, api.TexUnitEmissiveBase + 2}
 
 	programs := [2]*mainProgram{&s.solidPrg, &s.cutoutPrg}
 	for _, p := range programs {
 		s.ctx.UseProgram(p.prg)
-		s.ctx.Uniform1iv(p.table[MainLocTexture], 4, &diffuseUnits[0])
-		s.ctx.Uniform1iv(p.table[MainLocNormalMap], 4, &normalUnits[0])
-		s.ctx.Uniform1iv(p.table[MainLocEmissiveMap], 4, &emissiveUnits[0])
+		s.ctx.Uniform1iv(p.table[MainLocTexture], 3, &diffuseUnits[0])
+		s.ctx.Uniform1iv(p.table[MainLocNormalMap], 3, &normalUnits[0])
+		s.ctx.Uniform1iv(p.table[MainLocEmissiveMap], 3, &emissiveUnits[0])
 		s.ctx.Uniform1i(p.table[MainLocShadowAtlas], api.TexUnitShadowAtlas)
 		if p.table[MainLocEnvMap] >= 0 {
 			s.ctx.Uniform1i(p.table[MainLocEnvMap], api.TexUnitEnvMap)
@@ -257,11 +276,14 @@ func (s *Main) SetupSamplers() error {
 		if p.table[MainLocClusterData] >= 0 {
 			s.ctx.Uniform1i(p.table[MainLocClusterData], api.TexUnitClusterData)
 		}
+		if p.table[MainLocSSAO] >= 0 {
+			s.ctx.Uniform1i(p.table[MainLocSSAO], api.TexUnitSSAO)
+		}
 	}
 
 	if s.zPrepassCutout.prg != 0 && s.zPrepassCutout.locTex >= 0 {
 		s.ctx.UseProgram(s.zPrepassCutout.prg)
-		s.ctx.Uniform1iv(s.zPrepassCutout.locTex, 4, &diffuseUnits[0])
+		s.ctx.Uniform1iv(s.zPrepassCutout.locTex, 3, &diffuseUnits[0])
 	}
 
 	return nil
@@ -370,6 +392,10 @@ func (s *Main) compileForwardProgram(dst *mainProgram, progName, vertID string, 
 	dst.table[MainLocClusterNear] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_clusterNear\x00"))
 	dst.table[MainLocClusterLogScale] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_clusterLogScale\x00"))
 	dst.table[MainLocNumGlobalLights] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_numGlobalLights\x00"))
+	dst.table[MainLocSSAO] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_ssao\x00"))
+	dst.table[MainLocEnableSSAO] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_enableSSAO\x00"))
+	dst.table[MainLocAoFactor] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_aoFactor\x00"))
+	dst.table[MainLocEnvMaxLod] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_envMaxLod\x00"))
 
 	blockIndex := s.ctx.GetUniformBlockIndex(prg, s.ctx.Str("LightsBlock\x00"))
 	if blockIndex != api.INVALID_INDEX {
@@ -522,6 +548,7 @@ func (s *Main) bindForwardUniforms(
 	shadowLights *[metrics.ShadowLightsCount]transformedShadowLight,
 	clusterNear, clusterLogScale float32,
 	numGlobalLights int32,
+	enableSSAO int32,
 ) {
 	s.ctx.UseProgram(p.prg)
 
@@ -539,6 +566,15 @@ func (s *Main) bindForwardUniforms(
 	s.ctx.Uniform1f(p.table[MainLocAmbientLight], ambient)
 	s.ctx.Uniform1i(p.table[MainLocEnableShadows], s.shadows)
 	s.ctx.Uniform1i(p.table[MainLocDebugLights], int32(s.debugLights))
+	if loc := p.table[MainLocEnableSSAO]; loc >= 0 {
+		s.ctx.Uniform1i(loc, enableSSAO)
+	}
+	if loc := p.table[MainLocAoFactor]; loc >= 0 {
+		s.ctx.Uniform1f(loc, s.aoFactor)
+	}
+	if loc := p.table[MainLocEnvMaxLod]; loc >= 0 {
+		s.ctx.Uniform1f(loc, s.envMaxLod)
+	}
 
 	// Flashlight
 	flashIntensity := float32(s.flash.GetIntensity())
@@ -633,10 +669,33 @@ func (s *Main) Render(dc *draws.DrawCommandsRender, ambient float32, flashX, fla
 	numShadowLights := s.prepareShadowLights(&transformed)
 	clusterTex, clusterNear, clusterLogScale, numGlobalLights := s.lights.PrepareClusters()
 
+	// Half-res Depth SSAO between Z-Prepass and Early-Z forward shading.
+	enableSSAO := int32(0)
+	var ssaoTex uint32
+	if s.ssao != nil && s.ssao.IsReady() {
+		if s.post.GetSamples() > 0 {
+			s.post.ResolveMSAA(fbW, fbH, ResolveDepth)
+		}
+		s.ssao.RenderDepth(s.post.GetDepthBuffer(), fbW, fbH)
+		ssaoTex = s.ssao.GetSSAOBlurTexture()
+		if ssaoTex != 0 {
+			enableSSAO = 1
+		}
+		s.ctx.BindFramebuffer(api.FRAMEBUFFER, targetFbo)
+		s.ctx.Viewport(0, 0, fbW, fbH)
+		s.ctx.BindVertexArray(streamVAO)
+	} else if s.ssao != nil {
+		ssaoTex = s.ssao.GetFallbackTexture()
+	}
+
 	// Shadow Texture (Master Shadow Atlas)
 	if s.shadows != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
 		s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
+	}
+	if ssaoTex != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitSSAO)
+		s.ctx.BindTexture(api.TEXTURE_2D, ssaoTex)
 	}
 	if clusterTex != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
@@ -651,6 +710,7 @@ func (s *Main) Render(dc *draws.DrawCommandsRender, ambient float32, flashX, fla
 			fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
 			numShadowLights, &transformed,
 			clusterNear, clusterLogScale, numGlobalLights,
+			enableSSAO,
 		)
 		dc.SetPassState(streamVAO, s.solidPrg.table[MainLocInstanceMode])
 		s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
@@ -665,6 +725,7 @@ func (s *Main) Render(dc *draws.DrawCommandsRender, ambient float32, flashX, fla
 			fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
 			numShadowLights, &transformed,
 			clusterNear, clusterLogScale, numGlobalLights,
+			enableSSAO,
 		)
 		dc.SetPassState(streamVAO, s.cutoutPrg.table[MainLocInstanceMode])
 		useAlphaToCoverage := s.post.GetSamples() > 0
@@ -679,6 +740,10 @@ func (s *Main) Render(dc *draws.DrawCommandsRender, ambient float32, flashX, fla
 
 	if s.shadows != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
+	if ssaoTex != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitSSAO)
 		s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	}
 	if clusterTex != 0 {
@@ -706,9 +771,18 @@ func (s *Main) RenderTransparent(dc *draws.DrawCommandsRender, ambient float32, 
 	numShadowLights := s.prepareShadowLights(&transformed)
 	clusterTex, clusterNear, clusterLogScale, numGlobalLights := s.lights.PrepareClusters()
 
+	var ssaoFallback uint32
+	if s.ssao != nil {
+		ssaoFallback = s.ssao.GetFallbackTexture()
+	}
+
 	if s.shadows != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
 		s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
+	}
+	if ssaoFallback != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitSSAO)
+		s.ctx.BindTexture(api.TEXTURE_2D, ssaoFallback)
 	}
 	if clusterTex != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
@@ -730,12 +804,17 @@ func (s *Main) RenderTransparent(dc *draws.DrawCommandsRender, ambient float32, 
 		fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
 		numShadowLights, &transformed,
 		clusterNear, clusterLogScale, numGlobalLights,
+		0,
 	)
 	dc.SetPassState(streamVAO, s.solidPrg.table[MainLocInstanceMode])
 	dc.RenderTransparent()
 
 	if s.shadows != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
+	if ssaoFallback != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitSSAO)
 		s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	}
 	if clusterTex != 0 {

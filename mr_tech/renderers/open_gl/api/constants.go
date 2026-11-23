@@ -107,14 +107,14 @@ const (
 
 const (
 	TexUnitDiffuseBase  = 0
-	TexUnitNormalBase   = 4
-	TexUnitEmissiveBase = 8
-	TexUnitRefraction   = 12
-	TexUnitEnvMap       = 12
-	TexUnitShadowMap    = 13
-	TexUnitLightmap     = 13
-	TexUnitShadowAtlas  = 14
-	TexUnitRoomShadow   = 14
-	TexUnitSSAO         = 15
-	TexUnitClusterData  = 15
+	TexUnitNormalBase   = 3
+	TexUnitEmissiveBase = 6
+	TexUnitEnvMap       = 9
+	TexUnitLightmap     = 10
+	TexUnitShadowAtlas  = 11
+	TexUnitRoomShadow   = 11
+	TexUnitSSAO         = 12
+	TexUnitClusterData  = 13
+	TexUnitRefraction   = 14
+	TexUnitShadowMap    = 15
 )

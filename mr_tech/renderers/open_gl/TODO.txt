@@ -7,6 +7,10 @@ STATO ATTUALE (già implementato)
 [x] Clustered Forward Lighting 16x9x16 su texture RGBA16UI + UBO LightsBlock (shaders/lights.go)
 [x] Master Shadow Atlas 2048x2048 double-buffered con pass separati depth_solid / depth cutout
 [x] Pipeline HDR (RGBA16F MSAA) + ACES Luminance Tonemapping + FXAA opzionale (Post)
+[x] Shading PBR GGX (roughness/metalness) + cubemap u_envMap con mip chain prefiltrata (gpu/vramtex/textures.go, assets/main_opaque.frag, assets/main_liquid.frag)
+[x] Depth-only Half-Res SSAO + blur cross-bilaterale tra Z-Prepass e shading forward con ResolveDepth MSAA (shaders/ssao.go, assets/ssao.frag, assets/ssao_blur.frag, shaders/main.go, render.go)
+[x] Ombre PCF morbide con Vogel disk ruotato per pixel su stanza, torcia e u_shadowLights (assets/main_opaque.frag)
+[x] Bloom piramidale su 5 livelli (Jimenez downsample con Karis average + additive tent upsample) + soft knee quadratico (assets/bloom.frag, shaders/bloom.go, assets/main_opaque.frag)
 
 
 OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
@@ -35,39 +39,17 @@ OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
 - Da fare: sweep periodico con Dispose() su mesh/stati stale e riciclo degli ID query (più batching/riduzione chiamate per occlusion).
 
 
-UPGRADE RESA VISIVA (SHADER & POST-PROCESSING)
-----------------------------------------------
-
-5) Ombre più morbide: PCF ruotato (Poisson / Vogel disk)
-- In assets/main_opaque.frag, roomShadow esegue un solo lookup su u_shadowAtlas e torcia/u_shadowLights usano una griglia fissa 2x2 su 4 texel.
-- Sostituire con sampling PCF ruotato per pixel (Poisson/Vogel disk + jitter spaziale) per eliminare scalettature e banding sui tile 512x512 e sulla stanza.
-
-6) Bloom piramidale (mip downsample/upsample) + soft knee
-- assets/bloom.frag usa un blur gaussiano a singola risoluzione (fbW/2, 5 passaggi ping-pong) e main_opaque.frag taglia BrightColor con soglia secca (> 3.0).
-- Passare a una catena mip piramidale (Dual-Kawase o Jimenez downsample/upsample su 4-5 livelli) con soft threshold knee per un glow ampio e naturale a costo minore di fillrate.
-
-7) GTAO / SSAO half-res sul Depth del Z-Prepass
-- Il forward attuale (main_opaque.frag) non applica AO di contatto su spigoli e giunzioni muro/pavimento.
-- Riutilizzare il depth buffer già riempito dal Z-Prepass (+ Post.ResolveMSAA con ResolveDepth se MSAA attivo) per un pass GTAO/SSAO half-res prima dello shading forward, senza G-buffer.
-
-8) Modello PBR leggero (GGX) + mipmap su cubemap riflessioni
-- main_opaque.frag usa ancora speculare Blinn-Phong (SpecBoost/Shininess) e u_envMap campionata senza roughness/mip (Textures.UploadEnvironment in gpu/vramtex/textures.go non genera mipmap prefiltrate).
-- Introdurre BRDF GGX (roughness/metalness) + mip chain/convolution sulla cubemap u_envMap.
-
-
 PULIZIA CODICE LEGACY
 ---------------------
 
-9) Rimozione residui della vecchia pipeline deferred
-- Handler (shaders/handler.go) e RenderOpenGL (render.go) istanziano ancora geometry, ssao, blur, deferred e shadowLight senza aggiungerli a w.container né compilarli (e SetShadowsEnabled aggiorna tuttora w.flashlight inutilizzato).
-- Rimuovere i pass morti (o sostituire ssao/blur con i nuovi pass basati su Z-Prepass e bloom piramidale).
+5) Rimozione residui della vecchia pipeline deferred
+- Handler (shaders/handler.go) e RenderOpenGL (render.go) mantengono ancora riferimenti legacy (geometry, blur, deferred, shadowLight non attivi in w.container, e flashlight/SetShadowsEnabled). Nota: ssao è stato riattivato e integrato nella pipeline forward tramite RenderDepth su Z-Prepass.
+- Rimuovere i pass deferred non più usati.
 
 
 PRIORITÀ CONSIGLIATA
 --------------------
-1. Per-light frustum culling + static tile caching in Depth.Render
-2. UBO PerFrame / ShadowLights in Main
-3. Bloom piramidale + PCF ruotato nelle ombre
-4. GTAO/SSAO sul depth prepass + pulizia pass deferred legacy
-5. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU
-6. Shading GGX + envMap con mipmap prefiltrate
+1. Per-light frustum culling + static tile caching in Depth.Render (e supporto static atlas con HasStreamer() attivo)
+2. UBO PerFrame / ShadowLights in Main (riduzione chiamate uniform in WebGL2)
+3. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU / pool OcclusionHW
+4. Rimozione residui della vecchia pipeline deferred (geometry, blur, deferred, shadowLight)

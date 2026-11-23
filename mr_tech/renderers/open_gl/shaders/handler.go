@@ -69,8 +69,8 @@ func NewHandler(vStride, lStride int32) *Handler {
 
 		kernelSize:       64, //GPU ITERATION
 		noiseTextureSize: 4 * 4,
-		radius:           12.0,
-		bias:             0.025,
+		radius:           24.0,
+		bias:             0.08,
 
 		hvPassages:       5,
 		internalPassages: 3, //GPU ITERATION
@@ -99,6 +99,9 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *things.
 	h.flash = flash
 	h.fbW = fbW
 	h.fbH = fbH
+	if cal != nil && cal.AoFactor > 0 {
+		h.aoFactor = float32(cal.AoFactor)
+	}
 
 	h.profiler = queries.NewGpuProfiler(h.ctx, rigid_body.GetFps())
 	h.mapMetrics = metrics.NewMap()

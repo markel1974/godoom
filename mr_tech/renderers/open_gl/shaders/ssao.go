@@ -2,369 +2,348 @@ package shaders
 
 import (
 	"fmt"
-	"math"
-	rnd "math/rand"
+	"strconv"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
-const maxSAOSamples = 64 * 2 // defined in
-
-// SSAOLoc represents an identifier for accessing SSAO shader uniform locations.
+// SSAOLoc enumerates uniform locations for the depth-only screen-space ambient occlusion shader.
 type SSAOLoc int
 
-// ShaderSSAOLocGPosition represents the location of the G-position attribute in the SSAO shader.
-// ShaderSSAOLocGNormal represents the location of the G-normal attribute in the SSAO shader.
-// ShaderSSAOLocTexNoise represents the location of the texture noise attribute in the SSAO shader.
-// ShaderSSAOLocSamples represents the location of the SSAO samples attribute in the shader.
-// ShaderSSAOLocProjection represents the location of the projection matrix attribute in the SSAO shader.
-// ShaderSSAOLocLast marks the end of the SSAOLoc constants.
 const (
-	SSAOLocPosition = SSAOLoc(iota)
-	SSAOLocNormal
-	SSAOLocTexNoise
-	SSAOLocSamples
-	SSAOLocProjection
-	SSAOLocKernelSize
+	SSAOLocDepthTex = SSAOLoc(iota)
+	SSAOLocProjParams
+	SSAOLocTexelSize
 	SSAOLocRadius
 	SSAOLocBias
 	SSAOLocLast
 )
 
-// SSAO represents a shader implementation for Screen Space Ambient Occlusion (SSAO).
-type SSAO struct {
-	ctx              api.IContext
-	prg              uint32
-	table            [SSAOLocLast]int32
-	noiseTex         uint32    // Texture di rumore 4x4
-	samples          []float32 // 64 campioni vec3
-	samplesPtr       *float32
-	noiseTextureSize int32
-	bufferFbo        uint32
-	positionDepth    uint32
-	kernelSize       int32
-	radius           float32
-	bias             float32
-	normal           uint32
-	albedo           uint32
-	emissive         uint32
-	fbo              uint32
-	colorBuffer      uint32
-	blurTexture      uint32
-	blurFbo          uint32
-	rboDepth         uint32
-	w                int32
-	h                int32
-	attachments      []uint32
-	attachmentsPtr   *uint32
+// ssaoBlurLoc enumerates uniform locations for the depth-aware bilateral blur shader.
+type ssaoBlurLoc int
 
+const (
+	ssaoBlurLocInput = ssaoBlurLoc(iota)
+	ssaoBlurLocDepthTex
+	ssaoBlurLocTexelSize
+	ssaoBlurLocProjParams
+	ssaoBlurLocLast
+)
+
+// SSAO executes a half-resolution depth-only Horizon/SAO pass followed by a cross-bilateral
+// edge-preserving blur between Z-Prepass and forward shading.
+type SSAO struct {
+	ctx        api.IContext
+	prg        uint32
+	table      [SSAOLocLast]int32
+	blurPrg    uint32
+	blurTable  [ssaoBlurLocLast]int32
+	aoFbo      uint32
+	aoTex      uint32
+	blurFbo    uint32
+	blurTex    uint32
+	fallback   uint32
+	quadVAO    uint32
+	quadVBO    uint32
+	quad       []float32
+	quadPtr    unsafe.Pointer
+	radius     float32
+	bias       float32
+	fullW      int32
+	fullH      int32
+	halfW      int32
+	halfH      int32
 	handler    *Handler
-	blur       *Blur
-	main       *Main
-	sky        *Sky
-	post       *Post
 	mapMetrics *metrics.Map
 }
 
-// NewSSAO initializes and returns a new instance of SSAO with default values.
+// NewSSAO initializes and returns a new SSAO pass instance.
 func NewSSAO() *SSAO {
-	s := &SSAO{
-		prg:         0,
-		rboDepth:    0,
-		attachments: []uint32{api.COLOR_ATTACHMENT0, api.COLOR_ATTACHMENT1, api.COLOR_ATTACHMENT2, api.COLOR_ATTACHMENT3},
-	}
-	s.attachmentsPtr = &s.attachments[0]
-	return s
+	return &SSAO{}
 }
 
-// Setup initializes the Sky instance by assigning the rendering context from the provided Handler.
+// Setup connects the SSAO pass to Handler and camera projection metrics.
 func (s *SSAO) Setup(h *Handler) error {
 	s.handler = h
 	s.ctx = h.GetContext()
-	s.kernelSize = h.GetKernelSize()
-	s.noiseTextureSize = h.GetNoiseTextureSize()
+	s.mapMetrics = h.GetMapMetrics()
 	s.radius = h.GetRadius()
 	s.bias = h.GetBias()
-
-	s.blur = h.GetBlur()
-	s.main = h.GetMain()
-	s.sky = h.GetSky()
-	s.post = h.GetPost()
-
-	s.mapMetrics = h.GetMapMetrics()
+	s.quad = []float32{-1, -1, 1, -1, -1, 1, 1, 1}
+	s.quadPtr = s.ctx.Ptr(s.quad)
 	return nil
 }
 
-// SetupSamplers configures the SSAO samplers for the shader, binding texture slots and initializing kernel samples.
-func (s *SSAO) SetupSamplers() error {
-	s.ctx.UseProgram(s.prg)
-	s.ctx.Uniform1i(s.GetUniform(SSAOLocPosition), 0)
-	s.ctx.Uniform1i(s.GetUniform(SSAOLocNormal), 1)
-	s.ctx.Uniform1i(s.GetUniform(SSAOLocTexNoise), 2)
-	s.ctx.Uniform3fv(s.GetUniform(SSAOLocSamples), s.kernelSize, s.samplesPtr)
-	s.ctx.Uniform1i(s.GetUniform(SSAOLocKernelSize), s.kernelSize)
-	s.ctx.Uniform1f(s.GetUniform(SSAOLocRadius), s.radius)
-	s.ctx.Uniform1f(s.GetUniform(SSAOLocBias), s.bias)
+// Compile compiles both the depth-only AO pass (ssao.frag) and bilateral blur (ssao_blur.frag).
+func (s *SSAO) Compile(a IAssets) error {
+	const vertID = "post.vert"
+	const aoFragID = "ssao.frag"
+	const blurFragID = "ssao_blur.frag"
+
+	vertSrc, aoFragSrc, err := a.ReadMulti(vertID, aoFragID)
+	if err != nil {
+		return err
+	}
+	vSh, err := ShaderCompile(s.ctx, vertID, string(vertSrc), api.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	fSh, err := ShaderCompile(s.ctx, aoFragID, string(aoFragSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		s.ctx.DeleteShader(vSh)
+		return err
+	}
+	s.prg, err = ShaderCreateProgram(s.ctx, "ssao", vSh, fSh)
+	if err != nil {
+		return err
+	}
+
+	s.table[SSAOLocDepthTex] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_depthTex\x00"))
+	s.table[SSAOLocProjParams] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projParams\x00"))
+	s.table[SSAOLocTexelSize] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texelSize\x00"))
+	s.table[SSAOLocRadius] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_radius\x00"))
+	s.table[SSAOLocBias] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_bias\x00"))
+	for idx, loc := range s.table {
+		if loc < 0 {
+			return fmt.Errorf("invalid uniform location in ssao: %d", idx)
+		}
+	}
+
+	blurFragSrc, err := a.Read(blurFragID)
+	if err != nil {
+		return err
+	}
+	bvSh, err := ShaderCompile(s.ctx, vertID, string(vertSrc), api.VERTEX_SHADER)
+	if err != nil {
+		return err
+	}
+	bfSh, err := ShaderCompile(s.ctx, blurFragID, string(blurFragSrc), api.FRAGMENT_SHADER)
+	if err != nil {
+		s.ctx.DeleteShader(bvSh)
+		return err
+	}
+	s.blurPrg, err = ShaderCreateProgram(s.ctx, "ssao_blur", bvSh, bfSh)
+	if err != nil {
+		return err
+	}
+
+	s.blurTable[ssaoBlurLocInput] = s.ctx.GetUniformLocation(s.blurPrg, s.ctx.Str("u_ssaoInput\x00"))
+	s.blurTable[ssaoBlurLocDepthTex] = s.ctx.GetUniformLocation(s.blurPrg, s.ctx.Str("u_depthTex\x00"))
+	s.blurTable[ssaoBlurLocTexelSize] = s.ctx.GetUniformLocation(s.blurPrg, s.ctx.Str("u_texelSize\x00"))
+	s.blurTable[ssaoBlurLocProjParams] = s.ctx.GetUniformLocation(s.blurPrg, s.ctx.Str("u_projParams\x00"))
+	for idx, loc := range s.blurTable {
+		if loc < 0 {
+			return fmt.Errorf("invalid uniform location in ssao_blur: %d", idx)
+		}
+	}
 	return nil
 }
 
-// Init initializes the SSAO instance by setting up necessary resources and ensuring its readiness for rendering.
+// Init creates the full-screen quad VAO/VBO and 1x1 white fallback AO texture.
 func (s *SSAO) Init() error {
+	s.ensureFallbackAndQuad()
 	return nil
 }
 
-// GetGBufferTextures returns the G-buffer textures: position-depth and normal as uint32 values.
-func (s *SSAO) GetGBufferTextures() (uint32, uint32) {
-	return s.positionDepth, s.normal
+// SetupSamplers binds fixed sampler unit indices and default parameters for SSAO programs.
+func (s *SSAO) SetupSamplers() error {
+	if s.prg != 0 {
+		s.ctx.UseProgram(s.prg)
+		s.ctx.Uniform1i(s.table[SSAOLocDepthTex], 0)
+		s.ctx.Uniform1f(s.table[SSAOLocRadius], s.radius)
+		s.ctx.Uniform1f(s.table[SSAOLocBias], s.bias)
+	}
+	if s.blurPrg != 0 {
+		s.ctx.UseProgram(s.blurPrg)
+		s.ctx.Uniform1i(s.blurTable[ssaoBlurLocInput], 0)
+		s.ctx.Uniform1i(s.blurTable[ssaoBlurLocDepthTex], 1)
+	}
+	return nil
 }
 
-// GetPositionDepthTexture returns the positionDepth texture ID.
-func (s *SSAO) GetPositionDepthTexture() uint32 {
-	return s.positionDepth
+func (s *SSAO) ensureFallbackAndQuad() {
+	if s.fallback == 0 && s.ctx != nil {
+		white := []byte{255, 255, 255, 255}
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitSSAO)
+		s.ctx.GenTextures(1, &s.fallback)
+		s.ctx.BindTexture(api.TEXTURE_2D, s.fallback)
+		s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA8, 1, 1, 0, api.RGBA, api.UNSIGNED_BYTE, s.ctx.Ptr(white))
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+		s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+		s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	}
+	if s.quadVAO == 0 && s.ctx != nil {
+		if len(s.quad) == 0 {
+			s.quad = []float32{-1, -1, 1, -1, -1, 1, 1, 1}
+			s.quadPtr = s.ctx.Ptr(s.quad)
+		}
+		s.ctx.GenVertexArrays(1, &s.quadVAO)
+		s.ctx.BindVertexArray(s.quadVAO)
+		s.ctx.GenBuffers(1, &s.quadVBO)
+		s.ctx.BindBuffer(api.ARRAY_BUFFER, s.quadVBO)
+		s.ctx.BufferData(api.ARRAY_BUFFER, len(s.quad)*4, s.quadPtr, api.STATIC_DRAW)
+		s.ctx.VertexAttribPointer(0, 2, api.FLOAT, false, 0, nil)
+		s.ctx.EnableVertexAttribArray(0)
+		s.ctx.BindVertexArray(0)
+	}
 }
 
-// GetNormalTexture returns the normal texture ID.
-func (s *SSAO) GetNormalTexture() uint32 {
-	return s.normal
+// IsReady reports whether the depth-only SSAO and blur programs are compiled and ready to execute.
+func (s *SSAO) IsReady() bool {
+	return s.prg != 0 && s.blurPrg != 0
 }
 
-// GetAlbedoTexture returns the albedo texture ID.
-func (s *SSAO) GetAlbedoTexture() uint32 {
-	return s.albedo
-}
-
-// GetEmissiveTexture returns the emissive texture ID.
-func (s *SSAO) GetEmissiveTexture() uint32 {
-	return s.emissive
-}
-
-// GetSSAOResources returns the ID of the texture containing the SSAO noise pattern.
-func (s *SSAO) GetSSAOResources() uint32 {
-	return s.noiseTex
-}
-
-// GetSSAOBlurTexture returns the texture ID of the blurred SSAO texture used in the rendering pipeline.
-func (s *SSAO) GetSSAOBlurTexture() uint32 {
-	return s.blurTexture
-}
-
-// GetProgram returns the OpenGL program identifier associated with the SSAO instance.
+// GetProgram returns the SSAO shader program ID.
 func (s *SSAO) GetProgram() uint32 {
 	return s.prg
 }
 
-// GetUniform retrieves the location of a uniform variable in the shader program by its identifier.
-func (s *SSAO) GetUniform(id SSAOLoc) int32 {
-	return s.table[id]
+// GetPositionDepthTexture returns 0 (depth-only forward SSAO uses no G-Buffer).
+func (s *SSAO) GetPositionDepthTexture() uint32 { return 0 }
+
+// GetNormalTexture returns 0 (depth-only forward SSAO uses no G-Buffer).
+func (s *SSAO) GetNormalTexture() uint32 { return 0 }
+
+// GetAlbedoTexture returns 0 (depth-only forward SSAO uses no G-Buffer).
+func (s *SSAO) GetAlbedoTexture() uint32 { return 0 }
+
+// GetEmissiveTexture returns 0 (depth-only forward SSAO uses no G-Buffer).
+func (s *SSAO) GetEmissiveTexture() uint32 { return 0 }
+
+// GetSSAOBlurTexture returns the blurred ambient occlusion texture ID (or a 1x1 white fallback if not yet rendered).
+func (s *SSAO) GetSSAOBlurTexture() uint32 {
+	if s.blurTex != 0 {
+		return s.blurTex
+	}
+	return s.fallback
 }
 
-// Compile initializes and compiles the SSAO shader program, sets up buffers, and validates uniform locations.
-func (s *SSAO) Compile(a IAssets) error {
-	const vertId = "ssao.vert"
-	const fragId = "ssao.frag"
-
-	vertexSrc, fragmentSrc, err := a.ReadMulti(vertId, fragId)
-	if err != nil {
-		return err
-	}
-	vertexShader, err := ShaderCompile(s.ctx, vertId, string(vertexSrc), api.VERTEX_SHADER)
-	if err != nil {
-		return err
-	}
-	fragmentShader, err := ShaderCompile(s.ctx, fragId, string(fragmentSrc), api.FRAGMENT_SHADER)
-	if err != nil {
-		s.ctx.DeleteShader(vertexShader)
-		return err
-	}
-	s.prg, err = ShaderCreateProgram(s.ctx, "ssao", vertexShader, fragmentShader)
-	if err != nil {
-		return err
-	}
-	s.table[SSAOLocPosition] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_position\x00"))
-	s.table[SSAOLocNormal] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_normal\x00"))
-	s.table[SSAOLocTexNoise] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texNoise\x00"))
-	s.table[SSAOLocSamples] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_samples\x00"))
-	s.table[SSAOLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
-	s.table[SSAOLocKernelSize] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_kernelSize\x00"))
-	s.table[SSAOLocRadius] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_radius\x00"))
-	s.table[SSAOLocBias] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_bias\x00"))
-
-	for idx, v := range s.table {
-		if v < 0 {
-			return fmt.Errorf("invalid uniform location in ssao: %d", idx)
-		}
-	}
-	if err = s.createKernel(); err != nil {
-		return err
-	}
-
-	return nil
+// GetFallbackTexture returns the 1x1 white fallback texture for safe unbound sampling when SSAO is disabled.
+func (s *SSAO) GetFallbackTexture() uint32 {
+	s.ensureFallbackAndQuad()
+	return s.fallback
 }
 
-// createKernel generates the kernel samples and noise texture required for performing SSAO calculations.
-func (s *SSAO) createKernel() error {
-	s.samples = make([]float32, s.kernelSize*3)
-	s.samplesPtr = &s.samples[0]
-	for i := int32(0); i < s.kernelSize; i++ {
-		sample := [3]float32{
-			(rnd.Float32() * 2.0) - 1.0,
-			(rnd.Float32() * 2.0) - 1.0,
-			rnd.Float32(), // Emisfero orientato verso Z+
-		}
-		// Normalizzazione
-		mag := float32(math.Sqrt(float64(sample[0]*sample[0] + sample[1]*sample[1] + sample[2]*sample[2])))
-		z := float32(i) / float32(s.kernelSize)
-		scale := 0.1 + (z*z)*(1.0-0.1) // Lerp per concentrare i campioni vicino all'origine
-		s.samples[i*3] = (sample[0] / mag) * scale
-		s.samples[i*3+1] = (sample[1] / mag) * scale
-		s.samples[i*3+2] = (sample[2] / mag) * scale
+// RenderDepth computes half-resolution depth-only SSAO from depthTex and runs the cross-bilateral blur pass.
+func (s *SSAO) RenderDepth(depthTex uint32, fullW, fullH int32) {
+	if !s.IsReady() || depthTex == 0 || fullW <= 0 || fullH <= 0 {
+		return
+	}
+	s.ensureFallbackAndQuad()
+	if fullW != s.fullW || fullH != s.fullH || s.aoFbo == 0 || s.blurFbo == 0 {
+		s.allocate(fullW, fullH)
 	}
 
-	// SSAO: GENERAZIONE NOISE TEXTURE (4x4)
-	noiseData := make([]float32, s.noiseTextureSize*3)
-	for i := int32(0); i < s.noiseTextureSize; i++ {
-		noiseData[i*3] = rnd.Float32()*2.0 - 1.0
-		noiseData[i*3+1] = rnd.Float32()*2.0 - 1.0
-		noiseData[i*3+2] = 0.0
+	proj := s.mapMetrics.GetProjMatrix()
+	p0, p5, p10, p14 := proj[0], proj[5], proj[10], proj[14]
+	if p0 == 0 {
+		p0 = 1
 	}
-
-	s.ctx.GenTextures(1, &s.noiseTex)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGB32F, 4, 4, 0, api.RGB, api.FLOAT, s.ctx.Ptr(noiseData))
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.REPEAT)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.REPEAT)
-
-	return nil
-}
-
-// Prepare initializes the framebuffer and clears buffers to set up for SSAO rendering.
-func (s *SSAO) Prepare() {
-	fbW, fbH := s.handler.GetSize()
-	if fbW != s.w || fbH != s.h {
-		s.allocate(fbW, fbH)
+	if p5 == 0 {
+		p5 = 1
 	}
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.bufferFbo)
-	// Sfondo lontanissimo per evitare che il cielo occluda la geometria
-	s.ctx.ClearColor(0.0, 0.0, -100000.0, 1.0)
-	s.ctx.Clear(api.COLOR_BUFFER_BIT | api.DEPTH_BUFFER_BIT)
-	s.ctx.ClearColor(0.0, 0.0, 0.0, 1.0) // Ripristina per eventuali pass successivi
-}
+	invP0 := 1.0 / p0
+	invP5 := 1.0 / p5
 
-// Render performs the screen-space ambient occlusion rendering and applies a blur pass to smooth the results.
-func (s *SSAO) Render() {
-	blurPgr := s.blur.GetProgram()
-	quadVAO := s.sky.GetVAO()
-	projPtr := s.mapMetrics.GetProjPtr()
+	s.ctx.Disable(api.DEPTH_TEST)
+	s.ctx.Disable(api.CULL_FACE)
+	s.ctx.Disable(api.BLEND)
+	s.ctx.DepthMask(false)
+	s.ctx.ColorMask(true, true, true, true)
+	s.ctx.BindVertexArray(s.quadVAO)
 
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
-	s.ctx.Clear(api.COLOR_BUFFER_BIT)
-
-	s.ctx.UseProgram(s.GetProgram())
-
+	// Pass 1: Half-res horizon SAO from Z-Prepass depth.
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.aoFbo)
+	s.ctx.Viewport(0, 0, s.halfW, s.halfH)
+	s.ctx.UseProgram(s.prg)
+	s.ctx.Uniform1i(s.table[SSAOLocDepthTex], 0)
+	s.ctx.Uniform4f(s.table[SSAOLocProjParams], invP0, invP5, p10, p14)
+	s.ctx.Uniform2f(s.table[SSAOLocTexelSize], 1.0/float32(s.fullW), 1.0/float32(s.fullH))
+	s.ctx.Uniform1f(s.table[SSAOLocRadius], s.radius)
+	s.ctx.Uniform1f(s.table[SSAOLocBias], s.bias)
 	s.ctx.ActiveTexture(api.TEXTURE0)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.positionDepth)
-	s.ctx.ActiveTexture(api.TEXTURE1)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.normal)
-	s.ctx.ActiveTexture(api.TEXTURE2)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.noiseTex)
-
-	s.ctx.UniformMatrix4fv(s.GetUniform(SSAOLocProjection), 1, false, projPtr)
-	s.ctx.BindVertexArray(quadVAO)
+	s.ctx.BindTexture(api.TEXTURE_2D, depthTex)
 	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 
+	// Pass 2: Edge-preserving cross-bilateral blur.
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.blurFbo)
-	s.ctx.Clear(api.COLOR_BUFFER_BIT)
-
-	s.ctx.UseProgram(blurPgr)
+	s.ctx.Viewport(0, 0, s.halfW, s.halfH)
+	s.ctx.UseProgram(s.blurPrg)
+	s.ctx.Uniform1i(s.blurTable[ssaoBlurLocInput], 0)
+	s.ctx.Uniform1i(s.blurTable[ssaoBlurLocDepthTex], 1)
+	s.ctx.Uniform2f(s.blurTable[ssaoBlurLocTexelSize], 1.0/float32(s.halfW), 1.0/float32(s.halfH))
+	s.ctx.Uniform4f(s.blurTable[ssaoBlurLocProjParams], invP0, invP5, p10, p14)
 	s.ctx.ActiveTexture(api.TEXTURE0)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.colorBuffer)
-	s.ctx.BindVertexArray(quadVAO)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.aoTex)
+	s.ctx.ActiveTexture(api.TEXTURE1)
+	s.ctx.BindTexture(api.TEXTURE_2D, depthTex)
 	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
+
+	// Restore texture units and state cleanly for forward shading.
+	s.ctx.ActiveTexture(api.TEXTURE1)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	s.ctx.ActiveTexture(api.TEXTURE0)
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
+	s.ctx.BindVertexArray(0)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
+	s.ctx.Viewport(0, 0, fullW, fullH)
 }
 
-// allocate initializes or reinitializes framebuffers, textures, and renderbuffers for the given width and height.
 func (s *SSAO) allocate(width, height int32) {
-	s.w = width
-	s.h = height
+	s.fullW = width
+	s.fullH = height
+	s.halfW = max(width/2, 1)
+	s.halfH = max(height/2, 1)
 
-	// Prevenzione memory leak: distruzione esplicita dei buffer precedenti
-	if s.bufferFbo != 0 {
-		s.ctx.DeleteFramebuffers(1, &s.bufferFbo)
-		s.ctx.DeleteTextures(1, &s.positionDepth)
-		s.ctx.DeleteTextures(1, &s.normal)
-		s.ctx.DeleteTextures(1, &s.albedo)
-		s.ctx.DeleteTextures(1, &s.emissive)
-		s.ctx.DeleteRenderbuffers(1, &s.rboDepth)
-
-		s.ctx.DeleteFramebuffers(1, &s.fbo)
-		s.ctx.DeleteTextures(1, &s.colorBuffer)
-
+	if s.aoFbo != 0 {
+		s.ctx.DeleteFramebuffers(1, &s.aoFbo)
+		s.ctx.DeleteTextures(1, &s.aoTex)
+		s.aoFbo = 0
+		s.aoTex = 0
+	}
+	if s.blurFbo != 0 {
 		s.ctx.DeleteFramebuffers(1, &s.blurFbo)
-		s.ctx.DeleteTextures(1, &s.blurTexture)
+		s.ctx.DeleteTextures(1, &s.blurTex)
+		s.blurFbo = 0
+		s.blurTex = 0
 	}
 
-	// 1. G-Buffer
-	s.ctx.GenFramebuffers(1, &s.bufferFbo)
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.bufferFbo)
+	s.ctx.ActiveTexture(api.TEXTURE0)
 
-	// Position + depth (RGBA32F per precisione spaziale ed eliminazione flickering)
-	s.ctx.GenTextures(1, &s.positionDepth)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.positionDepth)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA32F, width, height, 0, api.RGBA, api.FLOAT, nil)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.positionDepth, 0)
+	s.ctx.GenFramebuffers(1, &s.aoFbo)
+	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.aoFbo)
+	s.ctx.GenTextures(1, &s.aoTex)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.aoTex)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA8, s.halfW, s.halfH, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.aoTex, 0)
+	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+		panic("ssao FBO not complete: " + strconv.Itoa(int(v)))
+	}
 
-	// Normals
-	s.ctx.GenTextures(1, &s.normal)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.normal)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, width, height, 0, api.RGBA, api.FLOAT, nil)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT1, api.TEXTURE_2D, s.normal, 0)
-
-	// Albedo + Specular
-	s.ctx.GenTextures(1, &s.albedo)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.albedo)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA, width, height, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT2, api.TEXTURE_2D, s.albedo, 0)
-
-	// Emissive + Fullbright flag
-	s.ctx.GenTextures(1, &s.emissive)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.emissive)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA16F, width, height, 0, api.RGBA, api.FLOAT, nil)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.NEAREST)
-	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.NEAREST)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT3, api.TEXTURE_2D, s.emissive, 0)
-
-	// Depth Renderbuffer (salvato nella struct)
-	s.ctx.GenRenderbuffers(1, &s.rboDepth)
-	s.ctx.BindRenderbuffer(api.RENDERBUFFER, s.rboDepth)
-	s.ctx.RenderbufferStorage(api.RENDERBUFFER, api.DEPTH_COMPONENT24, width, height)
-	s.ctx.FramebufferRenderbuffer(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.RENDERBUFFER, s.rboDepth)
-
-	s.ctx.DrawBuffers(4, s.attachmentsPtr)
-
-	// SSAO FBO
-	s.ctx.GenFramebuffers(1, &s.fbo)
-	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.fbo)
-	s.ctx.GenTextures(1, &s.colorBuffer)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.colorBuffer)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RED, width, height, 0, api.RED, api.FLOAT, nil)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.colorBuffer, 0)
-
-	// SSAO Blur FBO
 	s.ctx.GenFramebuffers(1, &s.blurFbo)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.blurFbo)
-	s.ctx.GenTextures(1, &s.blurTexture)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.blurTexture)
-	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RED, width, height, 0, api.RED, api.FLOAT, nil)
-	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.blurTexture, 0)
+	s.ctx.GenTextures(1, &s.blurTex)
+	s.ctx.BindTexture(api.TEXTURE_2D, s.blurTex)
+	s.ctx.TexImage2D(api.TEXTURE_2D, 0, api.RGBA8, s.halfW, s.halfH, 0, api.RGBA, api.UNSIGNED_BYTE, nil)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	s.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+	s.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.COLOR_ATTACHMENT0, api.TEXTURE_2D, s.blurTex, 0)
+	if v := s.ctx.CheckFramebufferStatus(api.FRAMEBUFFER); v != api.FRAMEBUFFER_COMPLETE {
+		panic("ssao blur FBO not complete: " + strconv.Itoa(int(v)))
+	}
 
+	s.ctx.BindTexture(api.TEXTURE_2D, 0)
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
 }

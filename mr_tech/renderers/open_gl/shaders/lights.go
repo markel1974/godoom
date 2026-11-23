@@ -168,10 +168,10 @@ func (s *Lights) SetupSamplers() error {
 		return nil
 	}
 	s.ctx.UseProgram(s.prg)
-	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
-	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2, api.TexUnitNormalBase + 3}
-	s.ctx.Uniform1iv(s.GetUniform(LightLocTexture), 4, &diffuseUnits[0]) // FlashLocTexture in shadow_light.go
-	s.ctx.Uniform1iv(s.GetUniform(LightLocNormalMap), 4, &normalUnits[0])
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
+	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2}
+	s.ctx.Uniform1iv(s.GetUniform(LightLocTexture), 3, &diffuseUnits[0]) // FlashLocTexture in shadow_light.go
+	s.ctx.Uniform1iv(s.GetUniform(LightLocNormalMap), 3, &normalUnits[0])
 	//s.ctx.Uniform1i(s.GetUniform(LightLocRoomShadowMap), 12) // gl_api.TEXTURE12 per Room, gl_api.TEXTURE13 per Flash
 	return nil
 }

@@ -18,12 +18,13 @@ in vec4 ViewTangent;
 in vec3 LightmapUV;
 in vec4 EnvParams;
 
-uniform sampler2DArray u_texture[4];
-uniform sampler2DArray u_normalMap[4];
-uniform sampler2DArray u_emissiveMap[4];
+uniform sampler2DArray u_texture[3];
+uniform sampler2DArray u_normalMap[3];
+uniform sampler2DArray u_emissiveMap[3];
 uniform samplerCube u_envMap;
 uniform sampler2DArray u_lightmaps;
 uniform sampler2DShadow u_shadowAtlas;
+uniform sampler2D u_ssao;
 uniform usampler2D u_clusterData;
 
 uniform mat4 u_view;
@@ -35,6 +36,9 @@ uniform vec2 u_screenResolution;
 uniform float u_emissiveIntensity;
 uniform float u_ambient_light;
 uniform int u_enableShadows;
+uniform int u_enableSSAO;
+uniform float u_aoFactor;
+uniform float u_envMaxLod;
 
 uniform int u_debugLights;
 
@@ -83,8 +87,7 @@ vec4 getDiffuse(vec3 tc) {
     float l = mod(tc.z, 1000.0);
     if (b == 0) return texture(u_texture[0], vec3(tc.xy, l));
     if (b == 1) return texture(u_texture[1], vec3(tc.xy, l));
-    if (b == 2) return texture(u_texture[2], vec3(tc.xy, l));
-    return texture(u_texture[3], vec3(tc.xy, l));
+    return texture(u_texture[2], vec3(tc.xy, l));
 }
 
 vec3 getNormal(vec3 tc) {
@@ -92,8 +95,7 @@ vec3 getNormal(vec3 tc) {
     float l = mod(tc.z, 1000.0);
     if (b == 0) return texture(u_normalMap[0], vec3(tc.xy, l)).rgb;
     if (b == 1) return texture(u_normalMap[1], vec3(tc.xy, l)).rgb;
-    if (b == 2) return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
-    return texture(u_normalMap[3], vec3(tc.xy, l)).rgb;
+    return texture(u_normalMap[2], vec3(tc.xy, l)).rgb;
 }
 
 vec3 getEmissive(vec3 tc) {
@@ -101,8 +103,7 @@ vec3 getEmissive(vec3 tc) {
     float l = mod(tc.z, 1000.0);
     if (b == 0) return texture(u_emissiveMap[0], vec3(tc.xy, l)).rgb;
     if (b == 1) return texture(u_emissiveMap[1], vec3(tc.xy, l)).rgb;
-    if (b == 2) return texture(u_emissiveMap[2], vec3(tc.xy, l)).rgb;
-    return texture(u_emissiveMap[3], vec3(tc.xy, l)).rgb;
+    return texture(u_emissiveMap[2], vec3(tc.xy, l)).rgb;
 }
 
 vec3 calculateNormal() {
@@ -128,20 +129,87 @@ vec3 calculateNormal() {
     return N;
 }
 
-float calculateSpecular(vec3 normal, vec3 lightDir, vec3 viewDir) {
-    float specBoost = SpecBoost;
-    float shininess = Shininess;
-    if (specBoost <= 0.001 || shininess <= 0.01) {
-        return 0.0;
-    }
-    vec3 H = normalize(lightDir + viewDir);
-    float NdotH = max(dot(normal, H), 0.0);
-
-    float energyConservation = (shininess + 2.0) / (8.0 * PI);
-    return clamp(pow(NdotH, shininess) * specBoost, 0.0, 1.0) * energyConservation;
+float ignShadowAngle(vec2 fragXY) {
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(fragXY, magic.xy))) * 6.2831853;
 }
 
-vec3 evalDynamicLight(int i, vec3 albedo, vec3 finalNormal, vec3 V) {
+float sampleShadowAtlasVogel8(vec2 tileMin, vec2 tileSize, vec2 projXY, float compareZ, float bias, float spreadTexels, float noiseAngle) {
+    const float GOLDEN_ANGLE = 2.39996323;
+    vec2 baseUV = tileMin + projXY * tileSize;
+    vec2 minClamp = tileMin + kShadowAtlasTexel * 0.75;
+    vec2 maxClamp = tileMin + tileSize - kShadowAtlasTexel * 0.75;
+    float shadow = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        float r = sqrt(float(i) + 0.5) * 0.35355339;
+        float theta = float(i) * GOLDEN_ANGLE + noiseAngle;
+        vec2 offset = vec2(cos(theta), sin(theta)) * (r * spreadTexels) * kShadowAtlasTexel;
+        vec2 uv = clamp(baseUV + offset, minClamp, maxClamp);
+        shadow += texture(u_shadowAtlas, vec3(uv, compareZ - bias));
+    }
+    return shadow * 0.125;
+}
+
+float sampleShadowAtlasVogel6(vec2 tileMin, vec2 tileSize, vec2 projXY, float compareZ, float bias, float spreadTexels, float noiseAngle) {
+    const float GOLDEN_ANGLE = 2.39996323;
+    vec2 baseUV = tileMin + projXY * tileSize;
+    vec2 minClamp = tileMin + kShadowAtlasTexel * 0.75;
+    vec2 maxClamp = tileMin + tileSize - kShadowAtlasTexel * 0.75;
+    float shadow = 0.0;
+    for (int i = 0; i < 6; ++i) {
+        float r = sqrt(float(i) + 0.5) * 0.40824829;
+        float theta = float(i) * GOLDEN_ANGLE + noiseAngle;
+        vec2 offset = vec2(cos(theta), sin(theta)) * (r * spreadTexels) * kShadowAtlasTexel;
+        vec2 uv = clamp(baseUV + offset, minClamp, maxClamp);
+        shadow += texture(u_shadowAtlas, vec3(uv, compareZ - bias));
+    }
+    return shadow * 0.16666667;
+}
+
+void computeSurfacePBR(vec3 albedo, vec3 envTint, out float roughness, out float metalness, out vec3 F0, out float specScale) {
+    float shininess = max(Shininess, 0.0);
+    float envStrength = clamp(EnvParams.x, 0.0, 1.0);
+    roughness = clamp(pow(2.0 / (shininess + 2.0), 0.28), 0.08, 0.95);
+    if (envStrength > 0.001) {
+        roughness = mix(roughness, max(roughness * 0.55, 0.05), envStrength);
+    }
+    float specBoost = max(SpecBoost, 0.0);
+    metalness = clamp((specBoost - 0.65) / 0.65, 0.0, 0.85) * mix(0.35, 1.0, envStrength);
+    vec3 dielectricF0 = (specBoost > 0.001 || envStrength > 0.001)
+        ? vec3(0.04 * clamp(specBoost / 0.35, 0.25, 1.5))
+        : vec3(0.0);
+    F0 = mix(dielectricF0, albedo * envTint, metalness);
+    specScale = (specBoost > 0.001 || envStrength > 0.001) ? clamp(max(specBoost, envStrength * 0.65), 0.15, 1.25) : 0.0;
+}
+
+vec3 evalPBRDirect(vec3 N, vec3 V, vec3 L, float NdotL, vec3 albedo, vec3 lightColor, float roughness, float metalness, vec3 F0, float specScale) {
+    if (specScale <= 0.001 && metalness <= 0.001) {
+        return albedo * lightColor * NdotL;
+    }
+    vec3 H = normalize(L + V);
+    float NdotV = max(dot(N, V), 0.001);
+    float NdotH = max(dot(N, H), 0.0);
+    float HdotV = clamp(dot(H, V), 0.0, 1.0);
+
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    float NDF = a2 / (PI * max(d * d, 1e-6));
+
+    float r = roughness + 1.0;
+    float k = (r * r) * 0.125;
+    float ggxV = NdotV / (NdotV * (1.0 - k) + k);
+    float ggxL = NdotL / (NdotL * (1.0 - k) + k);
+    float G = ggxV * ggxL;
+
+    vec3 F = F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
+    vec3 kD = (1.0 - F) * (1.0 - metalness);
+
+    vec3 specular = min(((NDF * G * F) / max(4.0 * NdotV * NdotL, 0.001)) * PI * specScale, vec3(6.0));
+    return (kD * albedo * NdotL + specular * NdotL) * lightColor;
+}
+
+vec3 evalDynamicLight(int i, vec3 albedo, vec3 finalNormal, vec3 V, float roughness, float metalness, vec3 F0, float specScale) {
     float intensity = max(u_lights[i].color_intensity.w, 0.0);
     if (intensity <= 0.001) return vec3(0.0);
 
@@ -175,16 +243,26 @@ vec3 evalDynamicLight(int i, vec3 albedo, vec3 finalNormal, vec3 V) {
 
     float rawNdotL = dot(finalNormal, L);
     if (lightType != 3 && rawNdotL <= 0.0) return vec3(0.0);
-    float NdotL = (lightType == 3) ? mix(1.0, max(rawNdotL, 0.0), 0.5) : rawNdotL;
 
     vec3 lightColor = u_lights[i].color_intensity.xyz;
-    float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V);
-    vec3 diffuse = albedo * lightColor * NdotL;
-    vec3 specular = vec3(specularPower) * lightColor;
-    return (diffuse + specular) * intensity * falloff * spotEffect;
+    if (lightType == 3) {
+        float wrapNdotL = mix(1.0, max(rawNdotL, 0.0), 0.5);
+        return albedo * lightColor * (wrapNdotL * intensity * falloff * spotEffect);
+    }
+    vec3 contrib = evalPBRDirect(finalNormal, V, L, rawNdotL, albedo, lightColor, roughness, metalness, F0, specScale);
+    return contrib * (intensity * falloff * spotEffect);
 }
 
-
+// Quadratic soft-knee bloom extraction eliminates hard threshold popping/flicker.
+vec3 extractBloom(vec3 color) {
+    const float threshold = 1.6;
+    const float knee = 0.8;
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float soft = clamp(luma - threshold + knee, 0.0, 2.0 * knee);
+    soft = (soft * soft) / (4.0 * knee + 1e-4);
+    float contribution = max(soft, luma - threshold) / max(luma, 1e-4);
+    return color * clamp(contribution, 0.0, 1.0);
+}
 
 // Procedural micro-surface detail noise generator (eliminates up-close pixelation)
 float hash21(vec2 p) {
@@ -236,14 +314,26 @@ void main() {
     if (IsFullbright > 0.5) {
         vec3 fullbrightColor = albedo + getEmissive(TexCoords) * u_emissiveIntensity * edgeFade;
         FragColor = vec4(fullbrightColor, texColor.a);
-        BrightColor = vec4(dot(fullbrightColor, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? fullbrightColor : vec3(0.0), 1.0);
+        BrightColor = vec4(extractBloom(fullbrightColor), 1.0);
         return;
     }
 
     vec3 finalNormal = calculateNormal();
     vec3 V = normalize(-ViewPos);
 
-    //  AMBIENT & ROOM LIGHT
+    vec3 envTint = (EnvParams.x > 0.001) ? EnvParams.yzw : vec3(1.0);
+    float roughness, metalness, specScale;
+    vec3 F0;
+    computeSurfacePBR(albedo, envTint, roughness, metalness, F0, specScale);
+
+    float shadowNoiseAngle = ignShadowAngle(gl_FragCoord.xy);
+
+    float ao = 1.0;
+    if (u_enableSSAO == 1) {
+        ao = clamp(mix(1.0, texture(u_ssao, screenUV).r, clamp(u_aoFactor, 0.0, 1.5)), 0.05, 1.0);
+    }
+
+    // AMBIENT & ROOM LIGHT
     vec3 L_room_dir = normalize(u_view[1].xyz);
     float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
     float roomShadow = 1.0;
@@ -251,8 +341,7 @@ void main() {
         vec3 projRoom = FragPosLightRoom.xyz / FragPosLightRoom.w * 0.5 + 0.5;
         if (projRoom.z <= 1.0 && projRoom.x >= 0.0 && projRoom.x <= 1.0 && projRoom.y >= 0.0 && projRoom.y <= 1.0) {
             float roomBias = max(0.005 * (1.0 - NdotL_room), 0.001);
-            vec2 atlasUV = vec2(clamp(projRoom.x, 0.001, 0.999) * 0.5, 0.5 + clamp(projRoom.y, 0.001, 0.999) * 0.5);
-            roomShadow = texture(u_shadowAtlas, vec3(atlasUV, projRoom.z - roomBias));
+            roomShadow = sampleShadowAtlasVogel8(vec2(0.0, 0.5), vec2(0.5, 0.5), projRoom.xy, projRoom.z, roomBias, 1.75, shadowNoiseAngle);
         }
     }
     vec3 baseLight = vec3(u_ambient_light * (0.2 + 0.8 * NdotL_room * roomShadow));
@@ -261,7 +350,7 @@ void main() {
         vec3 lmLinear = pow(max(lmSample, vec3(0.0)), vec3(2.2));
         baseLight = mix(baseLight, max(lmLinear * 1.6, baseLight * 0.35), 0.85);
     }
-    vec3 litRoom = albedo * baseLight;
+    vec3 litRoom = albedo * (1.0 - metalness * 0.5) * baseLight * ao;
 
     // FLASHLIGHT
     vec3 litFlash = vec3(0.0);
@@ -290,21 +379,16 @@ void main() {
                         }
                         float cosTheta = clamp(dot(geoN, L_flash), 0.0, 1.0);
                         float bias = max(0.00012 * (1.0 - cosTheta), 0.00002);
-                        vec2 atlasUV = vec2(0.5 + clamp(projFlash.x, 0.0015, 0.9985) * 0.5, 0.5 + clamp(projFlash.y, 0.0015, 0.9985) * 0.5);
-                        float s = 0.0;
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5, -0.5) * kShadowAtlasTexel, projFlash.z - bias));
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * kShadowAtlasTexel, projFlash.z - bias));
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * kShadowAtlasTexel, projFlash.z - bias));
-                        s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * kShadowAtlasTexel, projFlash.z - bias));
-                        float shadowSample = s * 0.25;
-                        float edgeFade = smoothstep(0.0, 0.03, projFlash.x) * smoothstep(1.0, 0.97, projFlash.x) *
-                                         smoothstep(0.0, 0.03, projFlash.y) * smoothstep(1.0, 0.97, projFlash.y);
-                        shadowFlash = mix(1.0, shadowSample, edgeFade);
+                        float shadowSample = sampleShadowAtlasVogel8(vec2(0.5, 0.5), vec2(0.5, 0.5), projFlash.xy, projFlash.z, bias, 1.60, shadowNoiseAngle);
+                        float flashEdgeFade = smoothstep(0.0, 0.03, projFlash.x) * smoothstep(1.0, 0.97, projFlash.x) *
+                                              smoothstep(0.0, 0.03, projFlash.y) * smoothstep(1.0, 0.97, projFlash.y);
+                        shadowFlash = mix(1.0, shadowSample, flashEdgeFade);
                     }
                 }
 
-                float specFlash = calculateSpecular(finalNormal, L_flash, V);
-                litFlash = (albedo * diffFlash + vec3(specFlash)) * (flashIntensity * 2.5) * shadowFlash * vec3(1.0, 0.98, 0.9);
+                vec3 flashRadiance = vec3(1.0, 0.98, 0.9);
+                vec3 pbrFlash = evalPBRDirect(finalNormal, V, L_flash, diffFlash, albedo, flashRadiance, roughness, metalness, F0, specScale);
+                litFlash = pbrFlash * (flashIntensity * 2.5) * shadowFlash;
             }
         }
     }
@@ -345,7 +429,6 @@ void main() {
 
         float rawNdotL = dot(finalNormal, L);
         if (lightType != 3 && rawNdotL <= 0.0) continue;
-        float NdotL = (lightType == 3) ? mix(1.0, max(rawNdotL, 0.0), 0.5) : rawNdotL;
 
         float shadow = 1.0;
         if (u_enableShadows == 1 && lightType == 1) {
@@ -355,28 +438,24 @@ void main() {
                 if (proj.z <= 1.0 && proj.x >= 0.0 && proj.x <= 1.0 && proj.y >= 0.0 && proj.y <= 1.0) {
                     float col = float(i % 4);
                     float row = float(i / 4);
-                    vec2 atlasUV = vec2((clamp(proj.x, 0.001, 0.999) + col) * 0.25, (clamp(proj.y, 0.001, 0.999) + row) * 0.25);
-                    float cosTheta = clamp(NdotL, 0.0, 1.0);
+                    float cosTheta = clamp(max(rawNdotL, 0.0), 0.0, 1.0);
                     float bias = max(0.0025 * (1.0 - cosTheta), 0.0005);
-
-                    float s = 0.0;
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5, -0.5) * kShadowAtlasTexel, proj.z - bias));
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5, -0.5) * kShadowAtlasTexel, proj.z - bias));
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2(-0.5,  0.5) * kShadowAtlasTexel, proj.z - bias));
-                    s += texture(u_shadowAtlas, vec3(atlasUV + vec2( 0.5,  0.5) * kShadowAtlasTexel, proj.z - bias));
-                    float shadowOcclusion = s * 0.25;
-                    float edgeFade = smoothstep(0.0, 0.05, proj.x) * smoothstep(1.0, 0.95, proj.x) *
-                                     smoothstep(0.0, 0.05, proj.y) * smoothstep(1.0, 0.95, proj.y);
-                    shadow = mix(1.0, shadowOcclusion, edgeFade);
+                    float shadowOcclusion = sampleShadowAtlasVogel6(vec2(col * 0.25, row * 0.25), vec2(0.25, 0.25), proj.xy, proj.z, bias, 1.50, shadowNoiseAngle);
+                    float spotEdgeFade = smoothstep(0.0, 0.05, proj.x) * smoothstep(1.0, 0.95, proj.x) *
+                                         smoothstep(0.0, 0.05, proj.y) * smoothstep(1.0, 0.95, proj.y);
+                    shadow = mix(1.0, shadowOcclusion, spotEdgeFade);
                 }
             }
         }
 
         vec3 lightColor = u_shadowLights[i].color_type.xyz;
-        float specularPower = (lightType == 3) ? 0.0 : calculateSpecular(finalNormal, L, V);
-        vec3 diffuse = albedo * lightColor * NdotL;
-        vec3 specular = vec3(specularPower) * lightColor;
-        shadowLightsTotal += (diffuse + specular) * intensity * falloff * spotEffect * shadow;
+        if (lightType == 3) {
+            float wrapNdotL = mix(1.0, max(rawNdotL, 0.0), 0.5);
+            shadowLightsTotal += albedo * lightColor * (wrapNdotL * intensity * falloff * spotEffect * shadow);
+        } else {
+            vec3 pbrLight = evalPBRDirect(finalNormal, V, L, rawNdotL, albedo, lightColor, roughness, metalness, F0, specScale);
+            shadowLightsTotal += pbrLight * (intensity * falloff * spotEffect * shadow);
+        }
     }
 
     // DYNAMIC POINT/AREA/DIR LIGHTS (Clustered Forward + LightsBlock)
@@ -395,7 +474,7 @@ void main() {
                 uvec4 packedIdx = texelFetch(u_clusterData, ivec2(int(texelLinear & 127u), int(texelLinear >> 7u)), 0);
                 uint ch = uint(gi) & 3u;
                 int lightIdx = int(ch == 0u ? packedIdx.r : (ch == 1u ? packedIdx.g : (ch == 2u ? packedIdx.b : packedIdx.a)));
-                dynamicLightsTotal += evalDynamicLight(lightIdx, albedo, finalNormal, V);
+                dynamicLightsTotal += evalDynamicLight(lightIdx, albedo, finalNormal, V, roughness, metalness, F0, specScale);
             }
 
             uint offset = header.r | (header.b << 16u);
@@ -406,24 +485,26 @@ void main() {
                 uvec4 packedIdx = texelFetch(u_clusterData, ivec2(int(texelLinear & 127u), int(texelLinear >> 7u)), 0);
                 uint ch = slot & 3u;
                 int lightIdx = int(ch == 0u ? packedIdx.r : (ch == 1u ? packedIdx.g : (ch == 2u ? packedIdx.b : packedIdx.a)));
-                dynamicLightsTotal += evalDynamicLight(lightIdx, albedo, finalNormal, V);
+                dynamicLightsTotal += evalDynamicLight(lightIdx, albedo, finalNormal, V, roughness, metalness, F0, specScale);
             }
         } else {
             for (int i = 0; i < u_numLights; ++i) {
-                dynamicLightsTotal += evalDynamicLight(i, albedo, finalNormal, V);
+                dynamicLightsTotal += evalDynamicLight(i, albedo, finalNormal, V, roughness, metalness, F0, specScale);
             }
         }
     }
 
-    // ENVIRONMENT CUBEMAP REFLECTION (Fresnel Schlick)
+    // PREFILTERED ENVIRONMENT CUBEMAP IBL REFLECTION (Roughness MIP + Schlick Fresnel)
     vec3 envReflection = vec3(0.0);
-    if (EnvParams.x > 0.001) {
+    float specEnvMask = max(EnvParams.x, (SpecBoost > 0.35 ? clamp((SpecBoost - 0.35) * 0.45, 0.0, 0.35) : 0.0));
+    if (specEnvMask > 0.001) {
         vec3 R_view = reflect(-V, finalNormal);
         vec3 R_world = normalize(mat3(u_invView) * R_view);
-        vec3 envSample = texture(u_envMap, R_world).rgb;
-        float fresnel = mix(0.04, 1.0, pow(1.0 - max(dot(finalNormal, V), 0.0), 4.0));
-        float specScale = clamp(0.25 + SpecBoost * 0.5, 0.25, 1.5);
-        envReflection = envSample * EnvParams.yzw * EnvParams.x * fresnel * specScale;
+        float maxLod = max(u_envMaxLod, 1.0);
+        vec3 envSample = pow(max(textureLod(u_envMap, R_world, roughness * maxLod).rgb, vec3(0.0)), vec3(2.2));
+        float NdotV = max(dot(finalNormal, V), 0.0);
+        vec3 F_ibl = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+        envReflection = envSample * envTint * F_ibl * specEnvMask * mix(1.0, ao, 0.65);
     }
 
     // EMISSIVE
@@ -437,5 +518,5 @@ void main() {
     }
 
     FragColor = vec4(finalColor, outAlpha);
-    BrightColor = vec4(dot(finalColor, vec3(0.2126, 0.7152, 0.0722)) > 3.0 ? finalColor : vec3(0.0), 1.0);
+    BrightColor = vec4(extractBloom(finalColor), 1.0);
 }

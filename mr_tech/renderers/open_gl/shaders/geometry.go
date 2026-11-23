@@ -52,12 +52,12 @@ func (s *Geometry) Setup(h *Handler) error {
 // SetupSamplers initializes and configures texture samplers for the Geometry instance.
 func (s *Geometry) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
-	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
-	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2, api.TexUnitNormalBase + 3}
-	emissiveUnits := []int32{api.TexUnitEmissiveBase, api.TexUnitEmissiveBase + 1, api.TexUnitEmissiveBase + 2, api.TexUnitEmissiveBase + 3}
-	s.ctx.Uniform1iv(s.GetUniform(GeometryLocTexture), 4, &diffuseUnits[0])
-	s.ctx.Uniform1iv(s.GetUniform(GeometryLocNormalMap), 4, &normalUnits[0])
-	s.ctx.Uniform1iv(s.GetUniform(GeometryLocEmissiveMap), 4, &emissiveUnits[0])
+	diffuseUnits := []int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2}
+	normalUnits := []int32{api.TexUnitNormalBase, api.TexUnitNormalBase + 1, api.TexUnitNormalBase + 2}
+	emissiveUnits := []int32{api.TexUnitEmissiveBase, api.TexUnitEmissiveBase + 1, api.TexUnitEmissiveBase + 2}
+	s.ctx.Uniform1iv(s.GetUniform(GeometryLocTexture), 3, &diffuseUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(GeometryLocNormalMap), 3, &normalUnits[0])
+	s.ctx.Uniform1iv(s.GetUniform(GeometryLocEmissiveMap), 3, &emissiveUnits[0])
 	return nil
 }
 

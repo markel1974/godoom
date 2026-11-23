@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -94,7 +95,7 @@ func (s *Liquid) SetupSamplers() error {
 		s.ctx.Uniform1i(locDepth, api.TexUnitShadowMap)
 	}
 	if loc := s.GetUniform(ShaderLiquidLocInstanceMode); loc >= 0 {
-		s.ctx.Uniform1i(loc, InstanceModeStreaming)
+		s.ctx.Uniform1i(loc, gpu.InstanceModeStreaming)
 	}
 
 	return nil

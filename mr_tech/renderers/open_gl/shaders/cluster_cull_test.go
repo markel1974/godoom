@@ -8,6 +8,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -289,9 +290,9 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 
 	// Verify back-to-front transparent sorting (far before near, SortOrder ascending tie-breaker).
-	mesh := NewResidentMesh(ctx)
+	mesh := gpu.NewResidentMesh(ctx)
 	mesh.VAO = 77
-	mesh.SubMeshes = []*ResidentSubMesh{
+	mesh.SubMeshes = []*gpu.ResidentSubMesh{
 		{FirstIndex: 30, IndexCount: 6, SortOrder: 2, CullMode: config.CullNone},
 	}
 	mesh.SubMeshesLen = 1
@@ -322,17 +323,17 @@ func TestPerMaterialCullStateAndShadowDoubleSidedAndTransparentSort(t *testing.T
 	}
 
 	// Verify Begin/AddStatic/AddInstanced/AddCommands/End lifecycle, stale trimming, Clear, and 0 allocs.
-	var staticSrc PtrPool[TransparentDrawItem]
+	var staticSrc gpu.PtrPool[TransparentDrawItem]
 	st := staticSrc.Acquire()
 	st.Kind = TransparentStatic
 	st.Mesh = mesh
-	st.Sub = &ResidentSubMesh{FirstIndex: 30, IndexCount: 6, CentroidX: 10, CentroidY: 0, CentroidZ: 0, SortOrder: 1, CullMode: config.CullNone}
+	st.Sub = &gpu.ResidentSubMesh{FirstIndex: 30, IndexCount: 6, CentroidX: 10, CentroidY: 0, CentroidZ: 0, SortOrder: 1, CullMode: config.CullNone}
 	transCmd := NewDrawCommand()
 	transCmd.SetFirstIndex(10)
 	transCmd.SetIndexCount(6)
 	transCmd.SetCentroid(3, 0, 0)
 	transCmds := []*DrawCommand{transCmd}
-	subInst := &ResidentSubMesh{FirstIndex: 60, IndexCount: 6, SortOrder: 0, CullMode: config.CullNone}
+	subInst := &gpu.ResidentSubMesh{FirstIndex: 60, IndexCount: 6, SortOrder: 0, CullMode: config.CullNone}
 
 	runCycle := func(withInst bool) {
 		transItems.Begin()

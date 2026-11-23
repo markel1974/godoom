@@ -13,6 +13,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -24,14 +25,14 @@ type RigidInstance struct {
 }
 
 type RigidInstanceGroup struct {
-	mesh           *shaders.ResidentMesh
-	instances      shaders.PtrPool[RigidInstance]
+	mesh           *gpu.ResidentMesh
+	instances      gpu.PtrPool[RigidInstance]
 	baseByteOffset int32
 }
 
 type RigidTransItem struct {
-	mesh           *shaders.ResidentMesh
-	sub            *shaders.ResidentSubMesh
+	mesh           *gpu.ResidentMesh
+	sub            *gpu.ResidentSubMesh
 	baseByteOffset int32
 	cx, cy, cz     float32
 }
@@ -71,26 +72,26 @@ type BuilderVolume struct {
 
 	thingsRender *ThingsRender
 
-	volMeshes           map[*volumes.Faces]*shaders.ResidentMesh
-	staticAtlas         *shaders.ResidentMesh
+	volMeshes           map[*volumes.Faces]*gpu.ResidentMesh
+	staticAtlas         *gpu.ResidentMesh
 	staticEntries       map[*volumes.Faces]*staticVolumeEntry
 	staticAtlasBuilt    bool
 	staticAtlasVolCount int
-	thingMeshes         map[uint64][]*shaders.ResidentMesh
+	thingMeshes         map[uint64][]*gpu.ResidentMesh
 	texLookupFn         func(*textures.Texture) (float32, bool)
 
-	staticOpaque   shaders.PtrPool[shaders.StaticDrawItem]
-	staticLiquid   shaders.PtrPool[shaders.StaticDrawItem]
-	staticAdditive shaders.PtrPool[shaders.StaticDrawItem]
-	staticTransSrc shaders.PtrPool[shaders.TransparentDrawItem]
+	staticOpaque   gpu.PtrPool[shaders.StaticDrawItem]
+	staticLiquid   gpu.PtrPool[shaders.StaticDrawItem]
+	staticAdditive gpu.PtrPool[shaders.StaticDrawItem]
+	staticTransSrc gpu.PtrPool[shaders.TransparentDrawItem]
 
-	instancePool     *shaders.InstancePool
-	instGroups       shaders.PtrPool[RigidInstanceGroup]
+	instancePool     *gpu.InstancePool
+	instGroups       gpu.PtrPool[RigidInstanceGroup]
 	instFrame        uint64
-	instOpaque       shaders.PtrPool[shaders.InstancedDrawItem]
-	instLiquid       shaders.PtrPool[shaders.InstancedDrawItem]
-	instAdditive     shaders.PtrPool[shaders.InstancedDrawItem]
-	instTransSrc     shaders.PtrPool[RigidTransItem]
+	instOpaque       gpu.PtrPool[shaders.InstancedDrawItem]
+	instLiquid       gpu.PtrPool[shaders.InstancedDrawItem]
+	instAdditive     gpu.PtrPool[shaders.InstancedDrawItem]
+	instTransSrc     gpu.PtrPool[RigidTransItem]
 	lastInstVBO      uint32
 	transparentItems *shaders.TransparentDrawItems
 
@@ -135,9 +136,9 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, p
 		lightBB:             aabb.NewBoundingBox(),
 		cachedRawVols:       make([]*volumes.Volume, 8192),
 		thingsRender:        NewThingsRender(),
-		volMeshes:           make(map[*volumes.Faces]*shaders.ResidentMesh, 1024),
-		thingMeshes:         make(map[uint64][]*shaders.ResidentMesh, 256),
-		instancePool:        shaders.NewInstancePool(ctx, 256),
+		volMeshes:           make(map[*volumes.Faces]*gpu.ResidentMesh, 1024),
+		thingMeshes:         make(map[uint64][]*gpu.ResidentMesh, 256),
+		instancePool:        gpu.NewInstancePool(ctx, 256),
 		transparentItems:    shaders.NewTransparentDrawItems(64),
 	}
 	bv.instGroups.Init(32)
@@ -259,7 +260,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 // pushQVolumes updates GPU-resident static volume meshes only when the visible volume set, geometry, or animated wall textures change.
 func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
 	if w.volMeshes == nil {
-		w.volMeshes = make(map[*volumes.Faces]*shaders.ResidentMesh, 256)
+		w.volMeshes = make(map[*volumes.Faces]*gpu.ResidentMesh, 256)
 	}
 	if w.texLookupFn == nil {
 		w.texLookupFn = w.lookupTexLayer
@@ -367,7 +368,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		}
 		rm := w.volMeshes[faces]
 		if rm == nil {
-			rm = shaders.NewResidentMesh(w.ctx)
+			rm = gpu.NewResidentMesh(w.ctx)
 			w.volMeshes[faces] = rm
 		}
 		rm.LastSeenFrame = w.meshFrame
@@ -420,7 +421,7 @@ func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
 		return
 	}
 	if w.staticAtlas == nil {
-		w.staticAtlas = shaders.NewResidentMesh(w.ctx)
+		w.staticAtlas = gpu.NewResidentMesh(w.ctx)
 	}
 	w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, len(rawVols))
 	w.staticAtlas.ReserveStaticAtlas(totalFaces)
@@ -454,7 +455,7 @@ func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
 	}
 }
 
-func (w *BuilderVolume) pushStaticSubMesh(rm *shaders.ResidentMesh, sub *shaders.ResidentSubMesh) {
+func (w *BuilderVolume) pushStaticSubMesh(rm *gpu.ResidentMesh, sub *gpu.ResidentSubMesh) {
 	if sub.IndexCount == 0 {
 		return
 	}
@@ -496,13 +497,13 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		w.thingsRender = NewThingsRender()
 	}
 	if w.thingMeshes == nil {
-		w.thingMeshes = make(map[uint64][]*shaders.ResidentMesh, 256)
+		w.thingMeshes = make(map[uint64][]*gpu.ResidentMesh, 256)
 	}
 	if w.meshFrame == 0 {
 		w.meshFrame = 1
 	}
 	if w.instancePool == nil {
-		w.instancePool = shaders.NewInstancePool(w.ctx, 256)
+		w.instancePool = gpu.NewInstancePool(w.ctx, 256)
 	}
 	if w.texLookupFn == nil {
 		w.texLookupFn = w.lookupTexLayer
@@ -515,7 +516,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	things.StagePrepare()
 
-	addRigidInstance := func(rm *shaders.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
+	addRigidInstance := func(rm *gpu.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
 		var g *RigidInstanceGroup
 		if rm.InstGroupFrame == w.instFrame {
 			g = w.instGroups.Items[rm.InstGroupIdx]
@@ -740,7 +741,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			g.baseByteOffset = baseByteOff
 			for k := range cnt {
 				inst := g.instances.Items[k]
-				w.instancePool.WriteTransformAt(baseFloat+k*shaders.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
+				w.instancePool.WriteTransformAt(baseFloat+k*gpu.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
 			}
 		}
 		instVBO := w.instancePool.Upload()
@@ -778,7 +779,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 						rt := w.instTransSrc.Acquire()
 						rt.mesh = g.mesh
 						rt.sub = sub
-						rt.baseByteOffset = g.baseByteOffset + int32(k*shaders.InstanceMatrixFloats*4)
+						rt.baseByteOffset = g.baseByteOffset + int32(k*gpu.InstanceMatrixFloats*4)
 						rt.cx = float32(inst.cx)
 						rt.cy = float32(inst.cz)
 						rt.cz = float32(-inst.cy)
@@ -854,7 +855,7 @@ func (w *BuilderVolume) GetInstancedDrawCount() int {
 // GetStreamingVertexCount returns the current vertex count stored in the CPU streaming buffer.
 func (w *BuilderVolume) GetStreamingVertexCount() int {
 	_, _, vCount, _, _, _ := w.fv.GetVertices()
-	return int(vCount) / shaders.StreamingVertexFloats
+	return int(vCount) / gpu.StreamingVertexFloats
 }
 
 // GetHWOcclusion retrieves the hardware-based occlusion object associated with the BuilderVolume.
@@ -864,7 +865,7 @@ func (w *BuilderVolume) GetHWOcclusion() *OcclusionHW {
 
 // retrieveThingMesh returns a resident mesh for the given faces, reusing or rebuilding cached mesh data when needed.
 // The returned bool reports whether the mesh was rebuilt during the current mesh frame.
-func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*shaders.ResidentMesh, bool) {
+func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*gpu.ResidentMesh, bool) {
 	gh := rigidFaces.GetGeomHash()
 	bucket := w.thingMeshes[gh]
 	for _, rm := range bucket {
@@ -879,7 +880,7 @@ func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*shaders.R
 			return rm, rm.RebuiltFrame == w.meshFrame
 		}
 	}
-	rm := shaders.NewResidentMesh(w.ctx)
+	rm := gpu.NewResidentMesh(w.ctx)
 	rm.LastSeenFrame = w.meshFrame
 	rm.RebuiltFrame = w.meshFrame
 	rm.Rebuild(rigidFaces, w.texLookupFn)

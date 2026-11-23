@@ -1,8 +1,7 @@
-package shaders
+package gpu
 
 import (
 	"cmp"
-	"math"
 	"slices"
 	"unsafe"
 
@@ -31,41 +30,41 @@ const (
 )
 
 const (
-	cullStateUnset = -1
-	cullStateOff   = 0
-	cullStateBack  = 1
-	cullStateFront = 2
+	CullStateUnset = -1
+	CullStateOff   = 0
+	CullStateBack  = 1
+	CullStateFront = 2
 )
 
 // ApplyMaterialCullState updates GL CULL_FACE and CullFace only when the desired state changes.
 // Returns the updated current state token.
 func ApplyMaterialCullState(ctx api.IContext, curState int, cullMode int, hasCutout bool, forceDisable bool) int {
-	want := cullStateOff
+	want := CullStateOff
 	if !forceDisable && !hasCutout {
 		switch cullMode {
 		case config.CullFront:
-			want = cullStateBack
+			want = CullStateBack
 		case config.CullBack:
-			want = cullStateFront
+			want = CullStateFront
 		case config.CullNone:
-			want = cullStateOff
+			want = CullStateOff
 		default:
-			want = cullStateBack
+			want = CullStateBack
 		}
 	}
 	if want == curState {
 		return curState
 	}
 	switch want {
-	case cullStateOff:
+	case CullStateOff:
 		ctx.Disable(api.CULL_FACE)
-	case cullStateBack:
-		if curState <= cullStateOff {
+	case CullStateBack:
+		if curState <= CullStateOff {
 			ctx.Enable(api.CULL_FACE)
 		}
 		ctx.CullFace(api.BACK)
-	case cullStateFront:
-		if curState <= cullStateOff {
+	case CullStateFront:
+		if curState <= CullStateOff {
 			ctx.Enable(api.CULL_FACE)
 		}
 		ctx.CullFace(api.FRONT)
@@ -110,6 +109,42 @@ func ConfigureVertexAttribs(ctx api.IContext, strideBytes int32, includeDynamic 
 	}
 }
 
+func WriteStaticVertex(dst []float32, px, py, pz, u, v float64, texLayer float32, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv float64, lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint float32) {
+	dst[0] = float32(px)
+	dst[1] = float32(pz)
+	dst[2] = float32(-py)
+	dst[3] = float32(u)
+	dst[4] = float32(-v)
+	dst[5] = texLayer
+	dst[6] = float32(nx)
+	dst[7] = float32(nz)
+	dst[8] = float32(-ny)
+	dst[9] = float32(tx)
+	dst[10] = float32(tz)
+	dst[11] = float32(-ty)
+	dst[12] = float32(tSign)
+	dst[13] = float32(lmu)
+	dst[14] = float32(lmv)
+	dst[15] = lmIDFloat
+	dst[16] = packed
+	dst[17] = spec
+	dst[18] = shininess
+	dst[19] = dScale
+	dst[20] = dFactor
+	dst[21] = envStr
+	dst[22] = renderMode
+	dst[23] = envTint
+}
+
+type faceStateKey struct {
+	blendMode     int
+	cullMode      int
+	hasCutout     bool
+	depthWrite    bool
+	polygonOffset bool
+	sortOrder     int
+}
+
 // ResidentSubMesh describes a contiguous index slice inside a ResidentMesh grouped by render state.
 type ResidentSubMesh struct {
 	BlendMode     int
@@ -132,15 +167,6 @@ func (sub *ResidentSubMesh) FinalizeCentroid(sumX, sumY, sumZ float64, count int
 		sub.CentroidY = float32(sumY * inv)
 		sub.CentroidZ = float32(sumZ * inv)
 	}
-}
-
-type faceStateKey struct {
-	blendMode     int
-	cullMode      int
-	hasCutout     bool
-	depthWrite    bool
-	polygonOffset bool
-	sortOrder     int
 }
 
 // ResidentMesh stores GPU-resident static VBO/EBO/VAO buffers and grouped submesh slices
@@ -355,6 +381,9 @@ func (rm *ResidentMesh) EndStaticAtlas() {
 	rm.built = true
 }
 
+// appendFacesRange appends renderable faces to the resident mesh, grouping them into submeshes by render state.
+// It skips invalid, sky, or missing-texture faces and records the sky material when present.
+// It returns the added submesh range, sky material, animation rejection state, and success flag.
 func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool), rejectAnimated bool) (subStart int, subCount int, skyMat *textures.Material, hasAnim bool, ok bool) {
 	nFaces := faces.Len()
 	if len(rm.faceOrder) < nFaces {
@@ -543,11 +572,11 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 		centSumZ += -(p0y + p1y + p2y) / 3.0
 		centCount++
 
-		writeStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		WriteStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
 		fOut += StaticVertexFloats
-		writeStaticVertex(rm.VertFloats[fOut:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		WriteStaticVertex(rm.VertFloats[fOut:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
 		fOut += StaticVertexFloats
-		writeStaticVertex(rm.VertFloats[fOut:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		WriteStaticVertex(rm.VertFloats[fOut:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
 		fOut += StaticVertexFloats
 
 		rm.Indices[vIdx] = vIdx
@@ -562,6 +591,7 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 	return subStart, rm.SubMeshesLen - subStart, skyMat, false, true
 }
 
+// uploadToGPU creates GPU buffers when needed, uploads mesh vertex and index data, and resets instanced bindings.
 func (rm *ResidentMesh) uploadToGPU() {
 	if rm.VAO == 0 {
 		rm.ctx.GenVertexArrays(1, &rm.VAO)
@@ -638,158 +668,4 @@ func (rm *ResidentMesh) Dispose() {
 		rm.ctx.DeleteBuffers(1, &rm.EBO)
 		rm.EBO = 0
 	}
-}
-
-// InstancePool accumulates per-instance 4x4 transform matrices for the active frame
-// and uploads them once per frame into a double-buffered GPU VBO.
-type InstancePool struct {
-	ctx      api.IContext
-	data     []float32
-	ptr      unsafe.Pointer
-	count    int32
-	vbo      [2]uint32
-	vboCap   [2]int
-	frameIdx int
-}
-
-// NewInstancePool allocates an InstancePool with initial instance matrix capacity.
-func NewInstancePool(ctx api.IContext, initInstances int) *InstancePool {
-	if initInstances < 64 {
-		initInstances = 64
-	}
-	data := make([]float32, initInstances*InstanceMatrixFloats)
-	return &InstancePool{
-		ctx:  ctx,
-		data: data,
-		ptr:  unsafe.Pointer(&data[0]),
-	}
-}
-
-// Reset clears the instance list at the start of a frame while advancing the double-buffer slot.
-func (p *InstancePool) Reset() {
-	p.count = 0
-	p.frameIdx = (p.frameIdx + 1) & 1
-}
-
-// Reserve allocates consecutive matrix slots and returns the base byte offset and base float index.
-func (p *InstancePool) Reserve(numInstances int) (baseByteOffset int32, baseFloat int) {
-	needed := (int(p.count) + numInstances) * InstanceMatrixFloats
-	if needed > len(p.data) {
-		newLen := len(p.data) * 2
-		for newLen < needed {
-			newLen *= 2
-		}
-		grown := make([]float32, newLen)
-		copy(grown, p.data[:int(p.count)*InstanceMatrixFloats])
-		p.data = grown
-		p.ptr = unsafe.Pointer(&p.data[0])
-	}
-	baseByteOffset = p.count * (InstanceMatrixFloats * 4)
-	baseFloat = int(p.count) * InstanceMatrixFloats
-	p.count += int32(numInstances)
-	return baseByteOffset, baseFloat
-}
-
-// WriteTransformAt converts world position (cx, cy, cz) and physics quaternion (qx, qy, qz, qw)
-// into a column-major GL mat4 at float offset baseFloat.
-func (p *InstancePool) WriteTransformAt(baseFloat int, cx, cy, cz, qx, qy, qz, qw float64) {
-	// Normalize quaternion defensively
-	n2 := qx*qx + qy*qy + qz*qz + qw*qw
-	if n2 > 1e-12 && math.Abs(n2-1.0) > 1e-6 {
-		inv := 1.0 / math.Sqrt(n2)
-		qx, qy, qz, qw = qx*inv, qy*inv, qz*inv, qw*inv
-	} else if n2 <= 1e-12 {
-		qx, qy, qz, qw = 0, 0, 0, 1
-	}
-
-	xx, yy, zz := qx*qx, qy*qy, qz*qz
-	xy, xz, yz := qx*qy, qx*qz, qy*qz
-	wx, wy, wz := qw*qx, qw*qy, qw*qz
-
-	r00 := 1.0 - 2.0*(yy+zz)
-	r01 := 2.0 * (xy - wz)
-	r02 := 2.0 * (xz + wy)
-
-	r10 := 2.0 * (xy + wz)
-	r11 := 1.0 - 2.0*(xx+zz)
-	r12 := 2.0 * (yz - wx)
-
-	r20 := 2.0 * (xz - wy)
-	r21 := 2.0 * (yz + wx)
-	r22 := 1.0 - 2.0*(xx+yy)
-
-	d := p.data[baseFloat : baseFloat+16]
-	// Col 0
-	d[0] = float32(r00)
-	d[1] = float32(r20)
-	d[2] = float32(-r10)
-	d[3] = 0
-	// Col 1
-	d[4] = float32(r02)
-	d[5] = float32(r22)
-	d[6] = float32(-r12)
-	d[7] = 0
-	// Col 2
-	d[8] = float32(-r01)
-	d[9] = float32(-r21)
-	d[10] = float32(r11)
-	d[11] = 0
-	// Col 3
-	d[12] = float32(cx)
-	d[13] = float32(cz)
-	d[14] = float32(-cy)
-	d[15] = 1
-}
-
-// ActiveVBO returns the current double-buffered GPU buffer ID containing this frame's instance matrices.
-func (p *InstancePool) ActiveVBO() uint32 {
-	return p.vbo[p.frameIdx]
-}
-
-// Upload transfers accumulated instance matrices to the active GPU VBO in one buffer call.
-func (p *InstancePool) Upload() uint32 {
-	if p.count == 0 {
-		return 0
-	}
-	idx := p.frameIdx
-	if p.vbo[idx] == 0 {
-		p.ctx.GenBuffers(1, &p.vbo[idx])
-	}
-	bytesNeeded := int(p.count) * (InstanceMatrixFloats * 4)
-	p.ctx.BindBuffer(api.ARRAY_BUFFER, p.vbo[idx])
-	if bytesNeeded > p.vboCap[idx] {
-		newCap := max(bytesNeeded*2, 64*InstanceMatrixFloats*4)
-		p.ctx.BufferData(api.ARRAY_BUFFER, newCap, nil, api.DYNAMIC_DRAW)
-		p.vboCap[idx] = newCap
-	}
-	p.ctx.BufferSubData(api.ARRAY_BUFFER, 0, bytesNeeded, p.ptr)
-	p.ctx.BindBuffer(api.ARRAY_BUFFER, 0)
-	return p.vbo[idx]
-}
-
-func writeStaticVertex(dst []float32, px, py, pz, u, v float64, texLayer float32, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv float64, lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint float32) {
-	dst[0] = float32(px)
-	dst[1] = float32(pz)
-	dst[2] = float32(-py)
-	dst[3] = float32(u)
-	dst[4] = float32(-v)
-	dst[5] = texLayer
-	dst[6] = float32(nx)
-	dst[7] = float32(nz)
-	dst[8] = float32(-ny)
-	dst[9] = float32(tx)
-	dst[10] = float32(tz)
-	dst[11] = float32(-ty)
-	dst[12] = float32(tSign)
-	dst[13] = float32(lmu)
-	dst[14] = float32(lmv)
-	dst[15] = lmIDFloat
-	dst[16] = packed
-	dst[17] = spec
-	dst[18] = shininess
-	dst[19] = dScale
-	dst[20] = dFactor
-	dst[21] = envStr
-	dst[22] = renderMode
-	dst[23] = envTint
 }

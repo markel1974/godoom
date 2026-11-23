@@ -2,6 +2,7 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
@@ -62,7 +63,7 @@ func (s *Additive) SetupSamplers() error {
 	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
 	s.ctx.Uniform1iv(s.GetUniform(ShaderAdditiveLocTexture), 4, &diffuseUnits[0])
 	if loc := s.GetUniform(ShaderAdditiveLocInstanceMode); loc >= 0 {
-		s.ctx.Uniform1i(loc, InstanceModeStreaming)
+		s.ctx.Uniform1i(loc, gpu.InstanceModeStreaming)
 	}
 	return nil
 }

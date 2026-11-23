@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -190,7 +191,7 @@ func (s *Main) Init() error {
 		s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
 		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, api.DYNAMIC_DRAW)
 
-		ConfigureVertexAttribs(s.ctx, s.stride, true)
+		gpu.ConfigureVertexAttribs(s.ctx, s.stride, true)
 	}
 
 	s.ctx.BindVertexArray(0)
@@ -480,7 +481,7 @@ func (s *Main) bindZPrepassProgram(zp *zPrepassProgram, view, proj *float32, int
 	s.ctx.UniformMatrix4fv(zp.locProj, 1, false, proj)
 	s.ctx.Uniform1f(zp.locTime, interval)
 	if zp.locInstanceMode >= 0 {
-		s.ctx.Uniform1i(zp.locInstanceMode, InstanceModeStreaming)
+		s.ctx.Uniform1i(zp.locInstanceMode, gpu.InstanceModeStreaming)
 	}
 }
 
@@ -577,7 +578,7 @@ func (s *Main) bindForwardUniforms(
 		s.ctx.Uniform1i(loc, numGlobalLights)
 	}
 	if loc := p.table[MainLocInstanceMode]; loc >= 0 {
-		s.ctx.Uniform1i(loc, InstanceModeStreaming)
+		s.ctx.Uniform1i(loc, gpu.InstanceModeStreaming)
 	}
 	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.lights.GetActiveUBO())
 }

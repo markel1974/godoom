@@ -7,7 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -83,9 +83,9 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 	// Verify GL (u, -v) tangent & handedness sign + ResidentMesh 24-float GPU vertex packing.
 	fA.SetLightmap(2, 0.25, 0.75, 0.5, 0.75, 0.25, 0.5)
 	ctx := &noopRenderCtx{}
-	rm := shaders.NewResidentMesh(ctx)
+	rm := gpu.NewResidentMesh(ctx)
 	ok := rm.Rebuild(faces, func(_ *textures.Texture) (float32, bool) { return 3.0, true })
-	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%shaders.StaticVertexFloats != 0 {
+	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%gpu.StaticVertexFloats != 0 {
 		t.Fatalf("expected valid 24-float ResidentMesh vertex buffer, ok=%v floats=%d", ok, len(rm.VertFloats))
 	}
 
@@ -97,7 +97,7 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 	}
 
 	// Verify ResidentMesh uploaded GL normal (nx, nz, -ny) and lightmap (0.25, 0.75, 2) for fA vertex 0.
-	vf := rm.VertFloats[:shaders.StaticVertexFloats]
+	vf := rm.VertFloats[:gpu.StaticVertexFloats]
 	if math.Abs(float64(vf[13]-0.25)) > 1e-5 || math.Abs(float64(vf[14]-0.75)) > 1e-5 || math.Abs(float64(vf[15]-2.0)) > 1e-5 {
 		t.Fatalf("unexpected lightmap attribute in ResidentMesh vertex: (%v, %v, %v)", vf[13], vf[14], vf[15])
 	}
@@ -122,7 +122,7 @@ func TestResidentMeshAndFrameVerticesZeroAllocsSteadyState(t *testing.T) {
 	faces.Rebuild()
 
 	ctx := &noopRenderCtx{}
-	rm := shaders.NewResidentMesh(ctx)
+	rm := gpu.NewResidentMesh(ctx)
 	texFn := func(_ *textures.Texture) (float32, bool) { return 1.0, true }
 	if !rm.Rebuild(faces, texFn) {
 		t.Fatalf("expected initial ResidentMesh.Rebuild to succeed")

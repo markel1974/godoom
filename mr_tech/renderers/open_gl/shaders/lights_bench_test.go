@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
@@ -182,13 +183,13 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 	h.GetShadowLightsMetrics().Update(shadowLights, metrics.ShadowLightsCount)
 	d.Prepare()
 
-	staticAtlas := NewResidentMesh(ctx)
+	staticAtlas := gpu.NewResidentMesh(ctx)
 	staticAtlas.VAO = 9001
 	staticItems := make([]*StaticDrawItem, staticCount)
 	for i := range staticCount {
 		staticItems[i] = &StaticDrawItem{
 			Mesh: staticAtlas,
-			Sub: &ResidentSubMesh{
+			Sub: &gpu.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
 				CullMode:   config.CullFront,
 				DepthWrite: true,
@@ -198,14 +199,14 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 		}
 	}
 
-	instMesh := NewResidentMesh(ctx)
+	instMesh := gpu.NewResidentMesh(ctx)
 	instMesh.VAO = 9002
 	instMesh.VAOInstanced = 9003
 	instItems := make([]*InstancedDrawItem, 4)
 	for i := range 4 {
 		instItems[i] = &InstancedDrawItem{
 			Mesh: instMesh,
-			Sub: &ResidentSubMesh{
+			Sub: &gpu.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
 				CullMode:   config.CullFront,
 				DepthWrite: true,

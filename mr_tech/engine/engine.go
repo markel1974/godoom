@@ -16,6 +16,8 @@ type Engine struct {
 	volumes     *model.Volumes
 	lights      *model.Lights
 	calibration *model.Calibration
+	lightmaps   []*config.Lightmap
+	envMaps     map[string][6][]byte
 }
 
 // NewEngine creates and initializes a new Engine instance with the specified width, height, and maximum queue size.
@@ -75,6 +77,8 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.lights = compiler.GetLights()
 	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()
+	e.lightmaps = compiler.GetLightmaps()
+	e.envMaps = compiler.GetEnvMaps()
 	return nil
 }
 
@@ -105,4 +109,14 @@ func (e *Engine) GetCalibration() *model.Calibration {
 // GetVolumes returns the Volumes instance currently managed by the Engine.
 func (e *Engine) GetVolumes() *model.Volumes {
 	return e.volumes
+}
+
+// GetLightmaps returns baked 2D lightmap images associated with the world.
+func (e *Engine) GetLightmaps() []*config.Lightmap {
+	return e.lightmaps
+}
+
+// GetEnvMaps returns configured 6-face environment cubemaps associated with the world.
+func (e *Engine) GetEnvMaps() map[string][6][]byte {
+	return e.envMaps
 }

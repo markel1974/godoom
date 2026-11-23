@@ -88,7 +88,7 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 		sa.currentDist = sa.cfg.TargetArmLength
 	}
 
-	// 1. Rotation Lag
+	// Rotation Lag
 	if sa.cfg.RotationLagSpeed > 0.0 && dt > 0.0 && sa.initialized {
 		rAlpha := 1.0 - math.Exp(-sa.cfg.RotationLagSpeed*dt)
 		if rAlpha > 1.0 {
@@ -101,7 +101,7 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 		sa.currentPitch = targetPitch
 	}
 
-	// 2. Compute View Vectors
+	// Compute View Vectors
 	sinYaw := math.Sin(sa.currentYaw)
 	cosYaw := math.Cos(sa.currentYaw)
 	sinPitch := math.Sin(sa.currentPitch)
@@ -118,7 +118,7 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 	upY := -sinPitch * sinYaw
 	upZ := cosPitch
 
-	// 3. Compute Pivot Start Position
+	// Compute Pivot Start Position
 	pivotX := targetX + sa.cfg.TargetOffset.X
 	pivotY := targetY + sa.cfg.TargetOffset.Y
 	pivotZ := targetZ + sa.cfg.TargetOffset.Z
@@ -134,7 +134,7 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 		desiredArm += speed * sa.cfg.SpeedStretchFactor
 	}
 
-	// 5. Anti-Clip Raycast towards the Triangle Soup
+	// Anti-Clip Raycast towards the Triangle Soup
 	// Boom direction points backwards from the forward gaze
 	backDirX := -fwdX
 	backDirY := -fwdY
@@ -155,7 +155,7 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 		}
 	}
 
-	// 6. Distance Spring
+	// Distance Spring
 	// If obstructed, pull camera in INSTANTLY to guarantee zero clipping
 	// When unobstructed, smoothly spring back out to desired arm length
 	if blockedDist < sa.currentDist {
@@ -170,12 +170,12 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 		sa.currentDist = blockedDist
 	}
 
-	// 7. Calculate Final Camera Position
+	// Calculate Final Camera Position
 	targetCamX := startX + backDirX*sa.currentDist
 	targetCamY := startY + backDirY*sa.currentDist
 	targetCamZ := startZ + backDirZ*sa.currentDist
 
-	// 8. Position Lag (for smooth car inertia / camera breathing)
+	// Position Lag (for smooth car inertia / camera breathing)
 	if sa.cfg.PositionLagSpeed > 0.0 && dt > 0.0 && sa.initialized && !sa.hitWall {
 		pAlpha := 1.0 - math.Exp(-sa.cfg.PositionLagSpeed*dt)
 		if pAlpha > 1.0 {

@@ -282,6 +282,80 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		return false
 	}
 
+	_, _, skyMat, _, ok := rm.appendFacesRange(faces, texLookup, false)
+	for i := rm.AnimLen; i < prevAnimLen; i++ {
+		rm.AnimMats[i] = nil
+		rm.AnimFrames[i] = nil
+	}
+	rm.SkyMaterial = skyMat
+	rm.Version = faces.GetVersion()
+	rm.GeomHash = faces.GetGeomHash()
+	rm.FaceCount = faces.Len()
+	if !ok {
+		rm.built = true
+		return false
+	}
+
+	rm.uploadToGPU()
+	rm.built = true
+	return rm.SubMeshesLen > 0
+}
+
+// ReserveStaticAtlas preallocates vertex, index, and submesh capacity for static atlas batching.
+func (rm *ResidentMesh) ReserveStaticAtlas(totalFaces int) {
+	if totalFaces <= 0 {
+		return
+	}
+	neededVerts := totalFaces * 3
+	neededFloats := neededVerts * StaticVertexFloats
+	if len(rm.VertFloats) < neededFloats {
+		rm.VertFloats = make([]float32, neededFloats)
+		if rm.ctx != nil {
+			rm.vertFloatsPtr = rm.ctx.Ptr(rm.VertFloats)
+		}
+	}
+	if len(rm.Indices) < neededVerts {
+		rm.Indices = make([]uint32, neededVerts)
+		if rm.ctx != nil {
+			rm.indicesPtr = rm.ctx.Ptr(rm.Indices)
+		}
+	}
+}
+
+// BeginStaticAtlas resets accumulated static geometry ranges before packing static map volumes.
+func (rm *ResidentMesh) BeginStaticAtlas() {
+	rm.SrcFaces = nil
+	for i := range rm.HasBlend {
+		rm.HasBlend[i] = false
+	}
+	rm.HasSolidOpaque = false
+	rm.HasCutoutOpaque = false
+	rm.HasSolidPrepass = false
+	rm.HasCutoutPrepass = false
+	rm.SkyMaterial = nil
+	rm.SubMeshesLen = 0
+	rm.AnimLen = 0
+	rm.vertFloatsLen = 0
+	rm.indicesLen = 0
+	rm.built = false
+}
+
+// AppendStaticFaces appends a non-animated Faces volume into this static atlas mesh and returns its submesh range.
+// If any valid face uses an animated material, no geometry is committed and hasAnim is returned as true.
+func (rm *ResidentMesh) AppendStaticFaces(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool)) (subStart int, subCount int, skyMat *textures.Material, hasAnim bool, ok bool) {
+	if faces == nil || faces.Len() == 0 {
+		return 0, 0, nil, false, false
+	}
+	return rm.appendFacesRange(faces, texLookup, true)
+}
+
+// EndStaticAtlas uploads accumulated static atlas vertices and indices into one shared VAO/VBO/EBO.
+func (rm *ResidentMesh) EndStaticAtlas() {
+	rm.uploadToGPU()
+	rm.built = true
+}
+
+func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool), rejectAnimated bool) (subStart int, subCount int, skyMat *textures.Material, hasAnim bool, ok bool) {
 	nFaces := faces.Len()
 	if len(rm.faceOrder) < nFaces {
 		rm.faceOrder = make([]int, max(len(rm.faceOrder)*2, nFaces))
@@ -308,17 +382,20 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 			continue
 		}
 		if mat.GetKind() == int(config.MaterialKindSky) {
-			rm.SkyMaterial = mat
+			skyMat = mat
 			continue
 		}
 		tex := mat.GetCurrentFrame()
 		if tex == nil {
 			continue
 		}
-		if _, ok := texLookup(tex); !ok {
+		if _, texOK := texLookup(tex); !texOK {
 			continue
 		}
 		if mat.IsAnimated() {
+			if rejectAnimated {
+				return 0, 0, nil, true, false
+			}
 			rm.addAnimRef(mat, tex)
 		}
 		bm := mat.GetBlendMode()
@@ -337,17 +414,11 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		validCount++
 	}
 
-	for i := rm.AnimLen; i < prevAnimLen; i++ {
-		rm.AnimMats[i] = nil
-		rm.AnimFrames[i] = nil
+	if skyMat != nil {
+		rm.SkyMaterial = skyMat
 	}
-
 	if validCount == 0 {
-		rm.Version = faces.GetVersion()
-		rm.GeomHash = faces.GetGeomHash()
-		rm.FaceCount = nFaces
-		rm.built = true
-		return false
+		return 0, 0, skyMat, false, false
 	}
 
 	slices.SortStableFunc(rm.faceOrder[:validCount], func(a, b int) int {
@@ -382,28 +453,35 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 
 	neededVerts := validCount * 3
 	neededFloats := neededVerts * StaticVertexFloats
-	if len(rm.VertFloats) < neededFloats {
-		rm.VertFloats = make([]float32, max(len(rm.VertFloats)*2, neededFloats))
+	reqFloats := rm.vertFloatsLen + neededFloats
+	reqVerts := rm.indicesLen + neededVerts
+	if len(rm.VertFloats) < reqFloats {
+		newLen := max(len(rm.VertFloats)*2, reqFloats)
+		grown := make([]float32, newLen)
+		copy(grown, rm.VertFloats[:rm.vertFloatsLen])
+		rm.VertFloats = grown
 		if rm.ctx != nil {
 			rm.vertFloatsPtr = rm.ctx.Ptr(rm.VertFloats)
 		}
 	}
-	if len(rm.Indices) < neededVerts {
-		rm.Indices = make([]uint32, max(len(rm.Indices)*2, neededVerts))
+	if len(rm.Indices) < reqVerts {
+		newLen := max(len(rm.Indices)*2, reqVerts)
+		grown := make([]uint32, newLen)
+		copy(grown, rm.Indices[:rm.indicesLen])
+		rm.Indices = grown
 		if rm.ctx != nil {
 			rm.indicesPtr = rm.ctx.Ptr(rm.Indices)
 		}
 	}
-	rm.vertFloatsLen = neededFloats
-	rm.indicesLen = neededVerts
 
+	subStart = rm.SubMeshesLen
 	var curSub *ResidentSubMesh
 	var curKey faceStateKey
 	var centSumX, centSumY, centSumZ float64
 	var centCount int
 
-	vIdx := uint32(0)
-	fOut := 0
+	vIdx := uint32(rm.indicesLen)
+	fOut := rm.vertFloatsLen
 	for k := 0; k < validCount; k++ {
 		fi := rm.faceOrder[k]
 		face := faces.At(fi)
@@ -479,13 +557,9 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 		curSub.IndexCount += 3
 	}
 	curSub.FinalizeCentroid(centSumX, centSumY, centSumZ, centCount)
-
-	rm.uploadToGPU()
-	rm.Version = faces.GetVersion()
-	rm.GeomHash = faces.GetGeomHash()
-	rm.FaceCount = nFaces
-	rm.built = true
-	return rm.SubMeshesLen > 0
+	rm.vertFloatsLen = fOut
+	rm.indicesLen = int(vIdx)
+	return subStart, rm.SubMeshesLen - subStart, skyMat, false, true
 }
 
 func (rm *ResidentMesh) uploadToGPU() {
@@ -511,6 +585,11 @@ func (rm *ResidentMesh) uploadToGPU() {
 
 // BindInstanced binds rm.VAOInstanced with per-instance mat4 attributes (locations 10..13) pointing into instanceVBO.
 func (rm *ResidentMesh) BindInstanced(instanceVBO uint32, baseByteOffset int32) {
+	rm.BindInstancedWithCache(instanceVBO, baseByteOffset, 0)
+}
+
+// BindInstancedWithCache binds rm.VAOInstanced only when it differs from boundVAO, returning rm.VAOInstanced.
+func (rm *ResidentMesh) BindInstancedWithCache(instanceVBO uint32, baseByteOffset int32, boundVAO uint32) uint32 {
 	if rm.VAOInstanced == 0 {
 		rm.ctx.GenVertexArrays(1, &rm.VAOInstanced)
 		rm.ctx.BindVertexArray(rm.VAOInstanced)
@@ -519,7 +598,7 @@ func (rm *ResidentMesh) BindInstanced(instanceVBO uint32, baseByteOffset int32) 
 		ConfigureVertexAttribs(rm.ctx, StaticVertexFloats*4, false)
 		rm.boundInstVBO = 0
 		rm.lastInstByteOffset = -1
-	} else {
+	} else if boundVAO != rm.VAOInstanced {
 		rm.ctx.BindVertexArray(rm.VAOInstanced)
 	}
 
@@ -538,6 +617,7 @@ func (rm *ResidentMesh) BindInstanced(instanceVBO uint32, baseByteOffset int32) 
 		rm.boundInstVBO = instanceVBO
 		rm.lastInstByteOffset = baseByteOffset
 	}
+	return rm.VAOInstanced
 }
 
 // Dispose releases GPU buffers owned by this ResidentMesh.

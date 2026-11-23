@@ -74,6 +74,25 @@ func newRecordingCtx() *recordingCtx {
 	}
 }
 
+func (c *recordingCtx) resetLogs() {
+	c.vaoHistory = c.vaoHistory[:0]
+	c.eboBindVAO = c.eboBindVAO[:0]
+	c.subDataCalls = c.subDataCalls[:0]
+	c.programHistory = c.programHistory[:0]
+	c.colorMaskCalls = c.colorMaskCalls[:0]
+	c.depthMaskCalls = c.depthMaskCalls[:0]
+	c.depthFuncCalls = c.depthFuncCalls[:0]
+	c.enabledHistory = c.enabledHistory[:0]
+	c.disabledHistory = c.disabledHistory[:0]
+	c.multiDrawPrograms = c.multiDrawPrograms[:0]
+	c.scissorCalls = c.scissorCalls[:0]
+	c.viewportCalls = c.viewportCalls[:0]
+	c.polygonOffsetCalls = c.polygonOffsetCalls[:0]
+	c.drawPolyOffsets = c.drawPolyOffsets[:0]
+	c.drawDepthClamps = c.drawDepthClamps[:0]
+	c.drawScissors = c.drawScissors[:0]
+}
+
 func (c *recordingCtx) allocIDs(n int32, out *uint32) {
 	if out == nil || n <= 0 {
 		return

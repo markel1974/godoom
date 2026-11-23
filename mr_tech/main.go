@@ -164,7 +164,7 @@ func main() {
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.IntVar(&mode, "m", 2, helpModes.String())
 	flag.IntVar(&level, "l", 1, "level number")
-	flag.IntVar(&fps, "fps", 120, "fps")
+	flag.IntVar(&fps, "fps", 60, "fps")
 	flag.IntVar(&width, "width", 640, "width")
 	flag.IntVar(&height, "height", 480, "height")
 	flag.IntVar(&enableShadows, "shadows", 1, "enable shadows")

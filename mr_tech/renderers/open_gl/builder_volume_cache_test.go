@@ -554,3 +554,93 @@ func TestBuilderVolumeRigidInstancingAndTransparentSorting(t *testing.T) {
 		t.Fatalf("expected streaming vertex count unchanged (%d) after moving/rotating rigid prop, got %d", baseStreamVerts, got)
 	}
 }
+
+func TestBuilderVolumeStaticAtlasCoalescesVolumesAndDetachesDirty(t *testing.T) {
+	tA := textures.NewTexture("ATLAS_W", 1, 64, 64, false)
+	texH := &multiTexHandler{frames: []*textures.Texture{tA}}
+
+	cal := config.NewConfigCalibration()
+	cal.AspectRatio = 1.1
+	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	matWall := config.NewConfigMaterial("atlas_wall", []string{"ATLAS_W"}, config.MaterialKindSolid)
+
+	sec := config.NewConfigSector("0", 1.0, config.LightKindAmbient, 100)
+	sec.FloorY = 0
+	sec.CeilY = 200
+	sec.Floor = matWall
+	sec.Ceil = matWall
+	sec.Segments = []*config.Segment{
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -400, Y: -400}, geometry.XY{X: 400, Y: -400})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 400, Y: -400}, geometry.XY{X: 400, Y: 400})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 400, Y: 400}, geometry.XY{X: -400, Y: 400})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -400, Y: 400}, geometry.XY{X: -400, Y: -400})
+			s.Middle = matWall
+			return s
+		}(),
+	}
+
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+
+	root := config.NewConfigRoot(cal, []*config.Sector{sec}, p, nil, scale, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+
+	pl := en.GetPlayer()
+	vi := engine.NewViewMatrix()
+	vi.Update(pl)
+	mCal := en.GetCalibration()
+
+	rCtx := &noopRenderCtx{}
+	glTex := NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv.Compute(640, 480, vi, en)
+
+	if bv.staticAtlas == nil || bv.staticAtlas.VAO == 0 {
+		t.Fatalf("expected built staticAtlas with valid VAO, got %+v", bv.staticAtlas)
+	}
+	if bv.staticOpaque.Len == 0 {
+		t.Fatalf("expected non-zero staticOpaque items")
+	}
+	for i := 0; i < bv.staticOpaque.Len; i++ {
+		if bv.staticOpaque.Items[i].Mesh != bv.staticAtlas {
+			t.Fatalf("expected static item %d to share staticAtlas VAO, got separate mesh", i)
+		}
+	}
+
+	// Dirtying volume 0 must detach only that volume cleanly into volMeshes while advancing staticGen.
+	_, _, sGen1, _ := bv.GetUploadHints()
+	v0 := en.GetVolumes().GetVolumes().Get(0)
+	v0.SetDirty(true)
+	bv.Compute(640, 480, vi, en)
+	_, _, sGen2, _ := bv.GetUploadHints()
+	if sGen2 <= sGen1 {
+		t.Fatalf("expected staticGen advance on dirty volume detach, got %d -> %d", sGen1, sGen2)
+	}
+	entry0 := bv.staticEntries[v0.GetFaces()]
+	if entry0 == nil || !entry0.detached {
+		t.Fatalf("expected dirty volume 0 marked detached from staticAtlas")
+	}
+	if len(bv.volMeshes) != 1 {
+		t.Fatalf("expected exactly 1 detached fallback mesh in volMeshes, got %d", len(bv.volMeshes))
+	}
+}

@@ -366,7 +366,8 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 	s.ctx.Disable(api.DEPTH_CLAMP)
 
 	// OMBRE TORCIA (Prospettica - Tile 1024x1024 in alto a destra: X: 1024..2048, Y: 1024..2048)
-	if s.flash != nil && s.flash.GetIntensity() > 0.001 {
+	hasFlash := s.flash != nil && s.flash.GetIntensity() > 0.001
+	if hasFlash {
 		s.ctx.Viewport(1024, 1024, 1024, 1024)
 		s.ctx.Scissor(1024, 1024, 1024, 1024)
 		s.ctx.PolygonOffset(1.5, 2.0)
@@ -377,7 +378,9 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
 	if s.shadowLights {
 		if shadowLightCount := s.shadowLightsMetrics.GetLightCount(); shadowLightCount > 0 {
-			s.ctx.PolygonOffset(1.5, 2.0)
+			if !hasFlash {
+				s.ctx.PolygonOffset(1.5, 2.0)
+			}
 			for x := 0; x < int(shadowLightCount); x++ {
 				shadowLights, lMatrix := s.shadowLightsMetrics.GetLight(x)
 				if shadowLights.Intensity <= 0.001 {

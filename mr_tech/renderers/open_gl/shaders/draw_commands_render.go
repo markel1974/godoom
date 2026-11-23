@@ -1,7 +1,9 @@
 package shaders
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -136,11 +138,100 @@ func (rb *RenderBatch) grow() {
 	copy(rb.mi, mi)
 }
 
+type staticMultiDrawBatch struct {
+	vao            uint32
+	depthWrite     int
+	polygonOffset  int
+	cullMode       int
+	hasCutout      bool
+	mc             []int32
+	mi             []uintptr
+	len            int32
+	mcPtr          *int32
+	miPtr          *unsafe.Pointer
+	firstOffsetPtr unsafe.Pointer
+	lastEndIndex   int32
+}
+
+func newStaticMultiDrawBatch() *staticMultiDrawBatch {
+	const initCap = 64
+	b := &staticMultiDrawBatch{
+		mc: make([]int32, initCap),
+		mi: make([]uintptr, initCap),
+	}
+	b.mcPtr = &b.mc[0]
+	b.miPtr = (*unsafe.Pointer)(unsafe.Pointer(&b.mi[0]))
+	return b
+}
+
+func (b *staticMultiDrawBatch) reset(vao uint32, depthWrite, polygonOffset, cullMode int, hasCutout bool) {
+	b.vao = vao
+	b.depthWrite = depthWrite
+	b.polygonOffset = polygonOffset
+	b.cullMode = cullMode
+	b.hasCutout = hasCutout
+	b.len = 0
+	b.lastEndIndex = -1
+	b.firstOffsetPtr = nil
+}
+
+func (b *staticMultiDrawBatch) appendRange(ctx api.IContext, firstIndex, indexCount int32) {
+	if b.len > 0 && b.lastEndIndex == firstIndex {
+		b.mc[b.len-1] += indexCount
+		b.lastEndIndex += indexCount
+		return
+	}
+	if int(b.len) >= len(b.mc) {
+		newLen := len(b.mc) * 2
+		if newLen < 64 {
+			newLen = 64
+		}
+		newMC := make([]int32, newLen)
+		copy(newMC, b.mc[:b.len])
+		newMI := make([]uintptr, newLen)
+		copy(newMI, b.mi[:b.len])
+		b.mc = newMC
+		b.mi = newMI
+		b.mcPtr = &b.mc[0]
+		b.miPtr = (*unsafe.Pointer)(unsafe.Pointer(&b.mi[0]))
+	}
+	if b.len == 0 {
+		b.firstOffsetPtr = ctx.PtrOffset(int(firstIndex) * 4)
+	}
+	b.mc[b.len] = indexCount
+	b.mi[b.len] = uintptr(firstIndex) * 4
+	b.len++
+	b.lastEndIndex = firstIndex + indexCount
+}
+
+func (b *staticMultiDrawBatch) draw(ctx api.IContext) {
+	if b.len == 1 {
+		ctx.DrawElements(api.TRIANGLES, b.mc[0], api.UNSIGNED_INT, b.firstOffsetPtr)
+		return
+	}
+	ctx.MultiDrawElements(api.TRIANGLES, b.mcPtr, api.UNSIGNED_INT, b.miPtr, b.len)
+}
+
+type instShadowCmd struct {
+	mesh           *ResidentMesh
+	instanceVBO    uint32
+	baseByteOffset int32
+	instanceCount  int32
+	indexCount     int32
+	indexOffsetPtr unsafe.Pointer
+	depthWrite     int
+	polygonOffset  int
+	cullMode       int
+	hasCutout      bool
+}
+
 // DrawCommandsRender organizes and manages render batches for executing draw commands in a graphics context.
 type DrawCommandsRender struct {
 	ctx              api.IContext
 	batches          []*RenderBatch
 	batchesLen       int
+	streamSolid      int
+	streamCutout     int
 	isAdditive       bool
 	name             string
 	profiler         *GpuProfiler
@@ -156,6 +247,31 @@ type DrawCommandsRender struct {
 	instancedItems   []*InstancedDrawItem
 	instancedLen     int
 	transparentItems *TransparentDrawItems
+
+	staticScratch []*StaticDrawItem
+
+	shadowSolidStatic     []*staticMultiDrawBatch
+	shadowSolidStaticLen  int
+	shadowCutoutStatic    []*staticMultiDrawBatch
+	shadowCutoutStaticLen int
+
+	prepassSolidStatic     []*staticMultiDrawBatch
+	prepassSolidStaticLen  int
+	prepassCutoutStatic    []*staticMultiDrawBatch
+	prepassCutoutStaticLen int
+
+	shadeSolidStatic     []*staticMultiDrawBatch
+	shadeSolidStaticLen  int
+	shadeCutoutStatic    []*staticMultiDrawBatch
+	shadeCutoutStaticLen int
+
+	renderAllStatic    []*staticMultiDrawBatch
+	renderAllStaticLen int
+
+	shadowSolidInst     []instShadowCmd
+	shadowSolidInstLen  int
+	shadowCutoutInst    []instShadowCmd
+	shadowCutoutInstLen int
 
 	streamingVAO    uint32
 	locInstanceMode int32
@@ -184,6 +300,173 @@ func (w *DrawCommandsRender) SetPassState(streamingVAO uint32, locInstanceMode i
 	w.streamingVAO = streamingVAO
 	w.locInstanceMode = locInstanceMode
 	w.curInstanceMode = -1
+}
+
+func (w *DrawCommandsRender) acquireStaticBatch(pool *[]*staticMultiDrawBatch, count *int) *staticMultiDrawBatch {
+	idx := *count
+	if idx >= len(*pool) {
+		oldLen := len(*pool)
+		newLen := max(oldLen*2, 16)
+		grown := make([]*staticMultiDrawBatch, newLen)
+		copy(grown, *pool)
+		for i := oldLen; i < newLen; i++ {
+			grown[i] = newStaticMultiDrawBatch()
+		}
+		*pool = grown
+	}
+	b := (*pool)[idx]
+	*count = idx + 1
+	return b
+}
+
+func (w *DrawCommandsRender) compileShadowStaticBatches(cutout bool, dst *[]*staticMultiDrawBatch, dstLen *int) {
+	*dstLen = 0
+	if w.staticLen == 0 {
+		return
+	}
+	if len(w.staticScratch) < w.staticLen {
+		w.staticScratch = make([]*StaticDrawItem, max(len(w.staticScratch)*2, w.staticLen))
+	}
+	n := 0
+	for i := 0; i < w.staticLen; i++ {
+		item := w.staticItems[i]
+		sub := item.Sub
+		if sub.IndexCount > 0 && sub.HasCutout == cutout {
+			w.staticScratch[n] = item
+			n++
+		}
+	}
+	if n == 0 {
+		return
+	}
+	scratch := w.staticScratch[:n]
+	if n > 1 {
+		slices.SortFunc(scratch, func(a, b *StaticDrawItem) int {
+			if a.Mesh.VAO != b.Mesh.VAO {
+				return cmp.Compare(a.Mesh.VAO, b.Mesh.VAO)
+			}
+			dwa := 0
+			if !w.isAdditive && a.Sub.DepthWrite {
+				dwa = 1
+			}
+			dwb := 0
+			if !w.isAdditive && b.Sub.DepthWrite {
+				dwb = 1
+			}
+			if dwa != dwb {
+				// Draw DepthWrite=1 first so Depth.Render's initial DepthMask(true) avoids redundant toggles.
+				return cmp.Compare(dwb, dwa)
+			}
+			return cmp.Compare(a.Sub.FirstIndex, b.Sub.FirstIndex)
+		})
+	}
+	var curBatch *staticMultiDrawBatch
+	curVAO := uint32(0)
+	curDW := -1
+	for i := 0; i < n; i++ {
+		item := scratch[i]
+		sub := item.Sub
+		dw := 0
+		if !w.isAdditive && sub.DepthWrite {
+			dw = 1
+		}
+		if curBatch == nil || item.Mesh.VAO != curVAO || dw != curDW {
+			curVAO = item.Mesh.VAO
+			curDW = dw
+			curBatch = w.acquireStaticBatch(dst, dstLen)
+			curBatch.reset(curVAO, dw, 0, config.CullNone, cutout)
+		}
+		curBatch.appendRange(w.ctx, sub.FirstIndex, sub.IndexCount)
+	}
+}
+
+func (w *DrawCommandsRender) compileOrderedStaticBatches(cutoutFilter int, prepassOnly bool, dst *[]*staticMultiDrawBatch, dstLen *int) {
+	*dstLen = 0
+	if w.staticLen == 0 {
+		return
+	}
+	var curBatch *staticMultiDrawBatch
+	curVAO := uint32(0)
+	curDW := -1
+	curPO := -1
+	curCull := -1
+	for i := 0; i < w.staticLen; i++ {
+		item := w.staticItems[i]
+		sub := item.Sub
+		if sub.IndexCount == 0 {
+			continue
+		}
+		if cutoutFilter >= 0 && ((cutoutFilter == 1) != sub.HasCutout) {
+			continue
+		}
+		if prepassOnly && (!sub.DepthWrite || sub.PolygonOffset) {
+			continue
+		}
+		dw := 0
+		if !w.isAdditive && sub.DepthWrite {
+			dw = 1
+		}
+		po := 0
+		if sub.PolygonOffset {
+			po = 1
+		}
+		if curBatch == nil || item.Mesh.VAO != curVAO || dw != curDW || po != curPO || sub.CullMode != curCull || curBatch.hasCutout != sub.HasCutout {
+			curVAO = item.Mesh.VAO
+			curDW = dw
+			curPO = po
+			curCull = sub.CullMode
+			curBatch = w.acquireStaticBatch(dst, dstLen)
+			curBatch.reset(curVAO, dw, po, sub.CullMode, sub.HasCutout)
+		}
+		curBatch.appendRange(w.ctx, sub.FirstIndex, sub.IndexCount)
+	}
+}
+
+func (w *DrawCommandsRender) compileShadowInstanced(cutout bool, dst *[]instShadowCmd, dstLen *int) {
+	*dstLen = 0
+	if w.instancedLen == 0 {
+		return
+	}
+	if len(*dst) < w.instancedLen {
+		*dst = make([]instShadowCmd, max(len(*dst)*2, w.instancedLen))
+	}
+	out := *dst
+	n := 0
+	// Two passes put DepthWrite=1 before DepthWrite=0 without allocation.
+	for passDW := 1; passDW >= 0; passDW-- {
+		for i := 0; i < w.instancedLen; i++ {
+			item := w.instancedItems[i]
+			sub := item.Sub
+			if sub.IndexCount == 0 || sub.HasCutout != cutout {
+				continue
+			}
+			dw := 0
+			if !w.isAdditive && sub.DepthWrite {
+				dw = 1
+			}
+			if dw != passDW {
+				continue
+			}
+			po := 0
+			if sub.PolygonOffset {
+				po = 1
+			}
+			out[n] = instShadowCmd{
+				mesh:           item.Mesh,
+				instanceVBO:    item.InstanceVBO,
+				baseByteOffset: item.BaseByteOffset,
+				instanceCount:  item.InstanceCount,
+				indexCount:     sub.IndexCount,
+				indexOffsetPtr: w.ctx.PtrOffset(int(sub.FirstIndex) * 4),
+				depthWrite:     dw,
+				polygonOffset:  po,
+				cullMode:       sub.CullMode,
+				hasCutout:      sub.HasCutout,
+			}
+			n++
+		}
+	}
+	*dstLen = n
 }
 
 // SetResidentDraws attaches GPU-resident static and instanced draw slices built for the current frame.
@@ -220,6 +503,25 @@ func (w *DrawCommandsRender) SetResidentDraws(staticItems []*StaticDrawItem, sta
 			}
 		}
 	}
+
+	w.compileShadowStaticBatches(false, &w.shadowSolidStatic, &w.shadowSolidStaticLen)
+	w.compileShadowStaticBatches(true, &w.shadowCutoutStatic, &w.shadowCutoutStaticLen)
+	w.compileShadowInstanced(false, &w.shadowSolidInst, &w.shadowSolidInstLen)
+	w.compileShadowInstanced(true, &w.shadowCutoutInst, &w.shadowCutoutInstLen)
+
+	if w.isAdditive {
+		w.prepassSolidStaticLen = 0
+		w.prepassCutoutStaticLen = 0
+		w.shadeSolidStaticLen = 0
+		w.shadeCutoutStaticLen = 0
+		w.compileOrderedStaticBatches(-1, false, &w.renderAllStatic, &w.renderAllStaticLen)
+		return
+	}
+	w.renderAllStaticLen = 0
+	w.compileOrderedStaticBatches(0, true, &w.prepassSolidStatic, &w.prepassSolidStaticLen)
+	w.compileOrderedStaticBatches(1, true, &w.prepassCutoutStatic, &w.prepassCutoutStaticLen)
+	w.compileOrderedStaticBatches(0, false, &w.shadeSolidStatic, &w.shadeSolidStaticLen)
+	w.compileOrderedStaticBatches(1, false, &w.shadeCutoutStatic, &w.shadeCutoutStaticLen)
 }
 
 // SetTransparentDraws stores depth-sorted translucent items across streaming, static, and instanced sources.
@@ -257,6 +559,8 @@ func (w *DrawCommandsRender) SetProfiler(profiler *GpuProfiler) {
 // Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.
 func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.batchesLen = 0
+	w.streamSolid = 0
+	w.streamCutout = 0
 	w.hasSolidPrepass = false
 	w.hasCutoutPrepass = false
 	w.hasSolid = false
@@ -266,6 +570,15 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 	w.instancedItems = nil
 	w.instancedLen = 0
 	w.transparentItems = nil
+	w.shadowSolidStaticLen = 0
+	w.shadowCutoutStaticLen = 0
+	w.shadowSolidInstLen = 0
+	w.shadowCutoutInstLen = 0
+	w.prepassSolidStaticLen = 0
+	w.prepassCutoutStaticLen = 0
+	w.shadeSolidStaticLen = 0
+	w.shadeCutoutStaticLen = 0
+	w.renderAllStaticLen = 0
 
 	if len(dc) == 0 {
 		return
@@ -327,6 +640,11 @@ func (w *DrawCommandsRender) Prepare(dc []*DrawCommand) {
 			currentBatch = w.batches[w.batchesLen]
 			currentBatch.Reset(depthWrite, polygonOffset, hasCutout, cullMode)
 			w.batchesLen++
+			if hasCutout == 1 {
+				w.streamCutout++
+			} else {
+				w.streamSolid++
+			}
 			currentDepthWrite = depthWrite
 			currentPolygonOffset = polygonOffset
 			currentHasCutout = hasCutout
@@ -360,7 +678,8 @@ func (w *DrawCommandsRender) applyDepthState(curDepthWrite, curPolygonOffset *in
 	}
 }
 
-func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass bool) {
+// Render executes the rendering process for all batched and resident draw commands, managing depth writes, polygon offset, and culling states.
+func (w *DrawCommandsRender) Render() {
 	if !w.HasCommands() {
 		return
 	}
@@ -368,27 +687,27 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 	currentDepthWrite := -1
 	currentPolygonOffset := -1
 	curCull := cullStateUnset
-
-	// Shadow passes manage POLYGON_OFFSET_FILL per atlas tile; keep decal overrides disabled there.
-	applyShadowOrColorState := func(dw, po int) {
-		if shadowPass {
-			if dw != currentDepthWrite {
-				w.ctx.DepthMask(dw == 1)
-				currentDepthWrite = dw
-			}
-			return
-		}
-		w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, dw, po)
-	}
+	var boundVAO uint32
 
 	// Resident static meshes (u_instanceMode = 0)
-	if w.staticLen > 0 {
+	if w.renderAllStaticLen > 0 {
 		w.setInstanceMode(InstanceModeStatic)
-		var boundVAO uint32
+		for i := 0; i < w.renderAllStaticLen; i++ {
+			b := w.renderAllStatic[i]
+			w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, b.depthWrite, b.polygonOffset)
+			curCull = ApplyMaterialCullState(w.ctx, curCull, b.cullMode, b.hasCutout, false)
+			if boundVAO != b.vao {
+				w.ctx.BindVertexArray(b.vao)
+				boundVAO = b.vao
+			}
+			b.draw(w.ctx)
+		}
+	} else if w.staticLen > 0 {
+		w.setInstanceMode(InstanceModeStatic)
 		for i := 0; i < w.staticLen; i++ {
 			item := w.staticItems[i]
 			sub := item.Sub
-			if cutoutFilter >= 0 && ((cutoutFilter == 1) != sub.HasCutout) {
+			if sub.IndexCount == 0 {
 				continue
 			}
 			dw := 0
@@ -399,8 +718,8 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 			if sub.PolygonOffset {
 				po = 1
 			}
-			applyShadowOrColorState(dw, po)
-			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, shadowPass)
+			w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, dw, po)
+			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, false)
 			if boundVAO != item.Mesh.VAO {
 				w.ctx.BindVertexArray(item.Mesh.VAO)
 				boundVAO = item.Mesh.VAO
@@ -415,9 +734,6 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 		for i := 0; i < w.instancedLen; i++ {
 			item := w.instancedItems[i]
 			sub := item.Sub
-			if cutoutFilter >= 0 && ((cutoutFilter == 1) != sub.HasCutout) {
-				continue
-			}
 			dw := 0
 			if !w.isAdditive && sub.DepthWrite {
 				dw = 1
@@ -426,30 +742,23 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 			if sub.PolygonOffset {
 				po = 1
 			}
-			applyShadowOrColorState(dw, po)
-			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, shadowPass)
-			item.Mesh.BindInstanced(item.InstanceVBO, item.BaseByteOffset)
+			w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, dw, po)
+			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, false)
+			boundVAO = item.Mesh.BindInstancedWithCache(item.InstanceVBO, item.BaseByteOffset, boundVAO)
 			w.ctx.DrawElementsInstanced(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4), item.InstanceCount)
 		}
 	}
 
 	// Streaming CPU batches (morphing models, billboards, UI; u_instanceMode = 2)
 	if w.batchesLen > 0 {
-		didBindStreaming := false
+		if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
+			w.ctx.BindVertexArray(w.streamingVAO)
+		}
+		w.setInstanceMode(InstanceModeStreaming)
 		for i := 0; i < w.batchesLen; i++ {
 			b2 := w.batches[i]
-			if cutoutFilter >= 0 && b2.hasCutout != cutoutFilter {
-				continue
-			}
-			if !didBindStreaming {
-				if w.streamingVAO != 0 {
-					w.ctx.BindVertexArray(w.streamingVAO)
-				}
-				w.setInstanceMode(InstanceModeStreaming)
-				didBindStreaming = true
-			}
-			applyShadowOrColorState(b2.depthWrite, b2.polygonOffset)
-			curCull = ApplyMaterialCullState(w.ctx, curCull, b2.cullMode, b2.hasCutout == 1, shadowPass)
+			w.applyDepthState(&currentDepthWrite, &currentPolygonOffset, b2.depthWrite, b2.polygonOffset)
+			curCull = ApplyMaterialCullState(w.ctx, curCull, b2.cullMode, b2.hasCutout == 1, false)
 			w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 		}
 	}
@@ -460,53 +769,112 @@ func (w *DrawCommandsRender) renderFilteredImpl(cutoutFilter int, shadowPass boo
 	if currentDepthWrite != 1 && !w.isAdditive {
 		w.ctx.DepthMask(true)
 	}
-	if !shadowPass && currentPolygonOffset == 1 {
+	if currentPolygonOffset == 1 {
 		w.ctx.Disable(api.POLYGON_OFFSET_FILL)
 	}
 }
 
-// Render executes the rendering process for all batched and resident draw commands, managing depth writes, polygon offset, and culling states.
-func (w *DrawCommandsRender) Render() {
-	w.renderFilteredImpl(-1, false)
-}
-
 // RenderCutoutFiltered renders only solid (cutout=false) or alpha-cutout (cutout=true) batches without culling (shadow atlas pass).
 func (w *DrawCommandsRender) RenderCutoutFiltered(cutout bool) {
-	if cutout {
-		w.renderFilteredImpl(1, true)
+	if !w.HasCommands() {
 		return
 	}
-	w.renderFilteredImpl(0, true)
+
+	currentDepthWrite := 1
+	wantCutout := 0
+	streamCount := w.streamSolid
+	staticBatches := w.shadowSolidStatic
+	staticBatchLen := w.shadowSolidStaticLen
+	instCmds := w.shadowSolidInst
+	instLen := w.shadowSolidInstLen
+	if cutout {
+		wantCutout = 1
+		streamCount = w.streamCutout
+		staticBatches = w.shadowCutoutStatic
+		staticBatchLen = w.shadowCutoutStaticLen
+		instCmds = w.shadowCutoutInst
+		instLen = w.shadowCutoutInstLen
+	}
+
+	var boundVAO uint32
+	if staticBatchLen > 0 {
+		w.setInstanceMode(InstanceModeStatic)
+		for i := 0; i < staticBatchLen; i++ {
+			b := staticBatches[i]
+			if b.depthWrite != currentDepthWrite {
+				w.ctx.DepthMask(b.depthWrite == 1)
+				currentDepthWrite = b.depthWrite
+			}
+			if boundVAO != b.vao {
+				w.ctx.BindVertexArray(b.vao)
+				boundVAO = b.vao
+			}
+			b.draw(w.ctx)
+		}
+	}
+
+	if instLen > 0 {
+		w.setInstanceMode(InstanceModeInstanced)
+		for i := 0; i < instLen; i++ {
+			cmd := &instCmds[i]
+			if cmd.depthWrite != currentDepthWrite {
+				w.ctx.DepthMask(cmd.depthWrite == 1)
+				currentDepthWrite = cmd.depthWrite
+			}
+			boundVAO = cmd.mesh.BindInstancedWithCache(cmd.instanceVBO, cmd.baseByteOffset, boundVAO)
+			w.ctx.DrawElementsInstanced(api.TRIANGLES, cmd.indexCount, api.UNSIGNED_INT, cmd.indexOffsetPtr, cmd.instanceCount)
+		}
+	}
+
+	if streamCount > 0 {
+		if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
+			w.ctx.BindVertexArray(w.streamingVAO)
+		}
+		w.setInstanceMode(InstanceModeStreaming)
+		for i := 0; i < w.batchesLen; i++ {
+			b2 := w.batches[i]
+			if b2.hasCutout != wantCutout {
+				continue
+			}
+			if b2.depthWrite != currentDepthWrite {
+				w.ctx.DepthMask(b2.depthWrite == 1)
+				currentDepthWrite = b2.depthWrite
+			}
+			w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
+		}
+	}
+
+	if currentDepthWrite != 1 && !w.isAdditive {
+		w.ctx.DepthMask(true)
+	}
 }
 
 // RenderPrepass draws prepass-eligible (depth-writing, non-offset) batches across resident and streaming geometry.
 // Caller must set ColorMask(false, false, false, false), DepthMask(true), DepthFunc(LESS), and disable POLYGON_OFFSET_FILL.
 func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 	wantCutout := 0
+	streamCount := w.streamSolid
+	staticBatches := w.prepassSolidStatic
+	staticBatchLen := w.prepassSolidStaticLen
 	if cutout {
 		wantCutout = 1
+		streamCount = w.streamCutout
+		staticBatches = w.prepassCutoutStatic
+		staticBatchLen = w.prepassCutoutStaticLen
 	}
 	curCull := cullStateUnset
+	var boundVAO uint32
 
-	if w.staticLen > 0 {
-		var boundVAO uint32
-		didMode := false
-		for i := 0; i < w.staticLen; i++ {
-			item := w.staticItems[i]
-			sub := item.Sub
-			if !sub.DepthWrite || sub.PolygonOffset || sub.HasCutout != cutout {
-				continue
+	if staticBatchLen > 0 {
+		w.setInstanceMode(InstanceModeStatic)
+		for i := 0; i < staticBatchLen; i++ {
+			b := staticBatches[i]
+			curCull = ApplyMaterialCullState(w.ctx, curCull, b.cullMode, b.hasCutout, false)
+			if boundVAO != b.vao {
+				w.ctx.BindVertexArray(b.vao)
+				boundVAO = b.vao
 			}
-			if !didMode {
-				w.setInstanceMode(InstanceModeStatic)
-				didMode = true
-			}
-			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, false)
-			if boundVAO != item.Mesh.VAO {
-				w.ctx.BindVertexArray(item.Mesh.VAO)
-				boundVAO = item.Mesh.VAO
-			}
-			w.ctx.DrawElements(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4))
+			b.draw(w.ctx)
 		}
 	}
 
@@ -523,18 +891,18 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 				didMode = true
 			}
 			curCull = ApplyMaterialCullState(w.ctx, curCull, sub.CullMode, sub.HasCutout, false)
-			item.Mesh.BindInstanced(item.InstanceVBO, item.BaseByteOffset)
+			boundVAO = item.Mesh.BindInstancedWithCache(item.InstanceVBO, item.BaseByteOffset, boundVAO)
 			w.ctx.DrawElementsInstanced(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4), item.InstanceCount)
 		}
 	}
 
-	if w.batchesLen > 0 {
+	if streamCount > 0 {
 		didStream := false
 		for i := 0; i < w.batchesLen; i++ {
 			b2 := w.batches[i]
 			if b2.depthWrite == 1 && b2.polygonOffset == 0 && b2.hasCutout == wantCutout {
 				if !didStream {
-					if w.streamingVAO != 0 {
+					if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
 						w.ctx.BindVertexArray(w.streamingVAO)
 					}
 					w.setInstanceMode(InstanceModeStreaming)
@@ -551,6 +919,21 @@ func (w *DrawCommandsRender) RenderPrepass(cutout bool) {
 	}
 }
 
+func (w *DrawCommandsRender) applyShadeState(prepassDepthFunc uint32, curDepthFunc *uint32, curDepthWrite, curPolygonOffset, curCull *int, depthWrite, polygonOffset, cullMode int, hasCutout bool) {
+	targetDepthFunc := uint32(api.LEQUAL)
+	targetDepthWrite := depthWrite
+	if depthWrite == 1 && polygonOffset == 0 {
+		targetDepthFunc = prepassDepthFunc
+		targetDepthWrite = 0
+	}
+	if targetDepthFunc != *curDepthFunc {
+		w.ctx.DepthFunc(targetDepthFunc)
+		*curDepthFunc = targetDepthFunc
+	}
+	w.applyDepthState(curDepthWrite, curPolygonOffset, targetDepthWrite, polygonOffset)
+	*curCull = ApplyMaterialCullState(w.ctx, *curCull, cullMode, hasCutout, false)
+}
+
 // RenderShade draws the color shading pass for solid (cutout=false) or alpha-cutout (cutout=true) geometry
 // across resident static, instanced rigid, and streaming sources with Early-Z prepass parity.
 func (w *DrawCommandsRender) RenderShade(cutout bool) {
@@ -559,58 +942,33 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 	}
 	prepassDepthFunc := uint32(api.EQUAL)
 	wantCutout := 0
+	streamCount := w.streamSolid
+	staticBatches := w.shadeSolidStatic
+	staticBatchLen := w.shadeSolidStaticLen
 	if cutout {
 		wantCutout = 1
+		streamCount = w.streamCutout
 		prepassDepthFunc = api.LEQUAL
+		staticBatches = w.shadeCutoutStatic
+		staticBatchLen = w.shadeCutoutStaticLen
 	}
 
 	curDepthFunc := uint32(0)
 	curDepthWrite := -1
 	curPolygonOffset := -1
 	curCull := cullStateUnset
+	var boundVAO uint32
 
-	setState := func(depthWrite, polygonOffset, cullMode int, hasCutout bool) {
-		targetDepthFunc := uint32(api.LEQUAL)
-		targetDepthWrite := depthWrite
-		if depthWrite == 1 && polygonOffset == 0 {
-			targetDepthFunc = prepassDepthFunc
-			targetDepthWrite = 0
-		}
-		if targetDepthFunc != curDepthFunc {
-			w.ctx.DepthFunc(targetDepthFunc)
-			curDepthFunc = targetDepthFunc
-		}
-		w.applyDepthState(&curDepthWrite, &curPolygonOffset, targetDepthWrite, polygonOffset)
-		curCull = ApplyMaterialCullState(w.ctx, curCull, cullMode, hasCutout, false)
-	}
-
-	if w.staticLen > 0 {
-		var boundVAO uint32
-		didMode := false
-		for i := 0; i < w.staticLen; i++ {
-			item := w.staticItems[i]
-			sub := item.Sub
-			if sub.HasCutout != cutout {
-				continue
+	if staticBatchLen > 0 {
+		w.setInstanceMode(InstanceModeStatic)
+		for i := 0; i < staticBatchLen; i++ {
+			b := staticBatches[i]
+			w.applyShadeState(prepassDepthFunc, &curDepthFunc, &curDepthWrite, &curPolygonOffset, &curCull, b.depthWrite, b.polygonOffset, b.cullMode, b.hasCutout)
+			if boundVAO != b.vao {
+				w.ctx.BindVertexArray(b.vao)
+				boundVAO = b.vao
 			}
-			if !didMode {
-				w.setInstanceMode(InstanceModeStatic)
-				didMode = true
-			}
-			dw := 0
-			if sub.DepthWrite {
-				dw = 1
-			}
-			po := 0
-			if sub.PolygonOffset {
-				po = 1
-			}
-			setState(dw, po, sub.CullMode, sub.HasCutout)
-			if boundVAO != item.Mesh.VAO {
-				w.ctx.BindVertexArray(item.Mesh.VAO)
-				boundVAO = item.Mesh.VAO
-			}
-			w.ctx.DrawElements(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4))
+			b.draw(w.ctx)
 		}
 	}
 
@@ -634,27 +992,23 @@ func (w *DrawCommandsRender) RenderShade(cutout bool) {
 			if sub.PolygonOffset {
 				po = 1
 			}
-			setState(dw, po, sub.CullMode, sub.HasCutout)
-			item.Mesh.BindInstanced(item.InstanceVBO, item.BaseByteOffset)
+			w.applyShadeState(prepassDepthFunc, &curDepthFunc, &curDepthWrite, &curPolygonOffset, &curCull, dw, po, sub.CullMode, sub.HasCutout)
+			boundVAO = item.Mesh.BindInstancedWithCache(item.InstanceVBO, item.BaseByteOffset, boundVAO)
 			w.ctx.DrawElementsInstanced(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4), item.InstanceCount)
 		}
 	}
 
-	if w.batchesLen > 0 {
-		didStream := false
+	if streamCount > 0 {
+		if w.streamingVAO != 0 && boundVAO != w.streamingVAO {
+			w.ctx.BindVertexArray(w.streamingVAO)
+		}
+		w.setInstanceMode(InstanceModeStreaming)
 		for i := 0; i < w.batchesLen; i++ {
 			b2 := w.batches[i]
 			if b2.hasCutout != wantCutout {
 				continue
 			}
-			if !didStream {
-				if w.streamingVAO != 0 {
-					w.ctx.BindVertexArray(w.streamingVAO)
-				}
-				w.setInstanceMode(InstanceModeStreaming)
-				didStream = true
-			}
-			setState(b2.depthWrite, b2.polygonOffset, b2.cullMode, b2.hasCutout == 1)
+			w.applyShadeState(prepassDepthFunc, &curDepthFunc, &curDepthWrite, &curPolygonOffset, &curCull, b2.depthWrite, b2.polygonOffset, b2.cullMode, b2.hasCutout == 1)
 			w.ctx.MultiDrawElements(api.TRIANGLES, b2.mcPtr, api.UNSIGNED_INT, b2.miPtr, int32(b2.len))
 		}
 	}
@@ -714,8 +1068,7 @@ func (w *DrawCommandsRender) RenderTransparent() {
 			w.ctx.DrawElements(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4))
 		case TransparentInstanced:
 			w.setInstanceMode(InstanceModeInstanced)
-			it.Mesh.BindInstanced(it.InstanceVBO, it.BaseByteOffset)
-			boundVAO = it.Mesh.VAOInstanced
+			boundVAO = it.Mesh.BindInstancedWithCache(it.InstanceVBO, it.BaseByteOffset, boundVAO)
 			sub := it.Sub
 			w.ctx.DrawElementsInstanced(api.TRIANGLES, sub.IndexCount, api.UNSIGNED_INT, w.ctx.PtrOffset(int(sub.FirstIndex)*4), it.InstanceCount)
 		default:

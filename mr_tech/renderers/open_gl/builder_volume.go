@@ -18,6 +18,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+type RigidInstance struct {
+	cx, cy, cz     float64
+	qx, qy, qz, qw float64
+}
+
+type RigidInstanceGroup struct {
+	mesh           *shaders.ResidentMesh
+	instances      shaders.PtrPool[RigidInstance]
+	baseByteOffset int32
+}
+
+type RigidTransItem struct {
+	mesh           *shaders.ResidentMesh
+	sub            *shaders.ResidentSubMesh
+	baseByteOffset int32
+	cx, cy, cz     float32
+}
+
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
 	ctx                 api.IContext
@@ -53,9 +71,13 @@ type BuilderVolume struct {
 
 	thingsRender *ThingsRender
 
-	volMeshes   map[*volumes.Faces]*shaders.ResidentMesh
-	thingMeshes map[uint64][]*shaders.ResidentMesh
-	texLookupFn func(*textures.Texture) (float32, bool)
+	volMeshes           map[*volumes.Faces]*shaders.ResidentMesh
+	staticAtlas         *shaders.ResidentMesh
+	staticEntries       map[*volumes.Faces]*staticVolumeEntry
+	staticAtlasBuilt    bool
+	staticAtlasVolCount int
+	thingMeshes         map[uint64][]*shaders.ResidentMesh
+	texLookupFn         func(*textures.Texture) (float32, bool)
 
 	staticOpaque   shaders.PtrPool[shaders.StaticDrawItem]
 	staticLiquid   shaders.PtrPool[shaders.StaticDrawItem]
@@ -63,12 +85,12 @@ type BuilderVolume struct {
 	staticTransSrc shaders.PtrPool[shaders.TransparentDrawItem]
 
 	instancePool     *shaders.InstancePool
-	instGroups       shaders.PtrPool[rigidInstanceGroup]
+	instGroups       shaders.PtrPool[RigidInstanceGroup]
 	instFrame        uint64
 	instOpaque       shaders.PtrPool[shaders.InstancedDrawItem]
 	instLiquid       shaders.PtrPool[shaders.InstancedDrawItem]
 	instAdditive     shaders.PtrPool[shaders.InstancedDrawItem]
-	instTransSrc     shaders.PtrPool[rigidTransItem]
+	instTransSrc     shaders.PtrPool[RigidTransItem]
 	lastInstVBO      uint32
 	transparentItems *shaders.TransparentDrawItems
 
@@ -78,22 +100,13 @@ type BuilderVolume struct {
 	meshFrame  uint64
 }
 
-type rigidInstance struct {
-	cx, cy, cz     float64
-	qx, qy, qz, qw float64
-}
-
-type rigidInstanceGroup struct {
-	mesh           *shaders.ResidentMesh
-	instances      shaders.PtrPool[rigidInstance]
-	baseByteOffset int32
-}
-
-type rigidTransItem struct {
-	mesh           *shaders.ResidentMesh
-	sub            *shaders.ResidentSubMesh
-	baseByteOffset int32
-	cx, cy, cz     float32
+type staticVolumeEntry struct {
+	subStart    int
+	subCount    int
+	skyMaterial *textures.Material
+	version     uint64
+	faceCount   int
+	detached    bool
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
@@ -140,6 +153,8 @@ func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, p
 	return bv
 }
 
+// lookupTexLayer returns the texture layer identifier for tex, caching it on the texture when found.
+// lookupTexLayer reports false when tex is nil or not registered in the builder texture map.
 func (w *BuilderVolume) lookupTexLayer(tex *textures.Texture) (float32, bool) {
 	if tex == nil {
 		return 0, false
@@ -244,10 +259,13 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 // pushQVolumes updates GPU-resident static volume meshes only when the visible volume set, geometry, or animated wall textures change.
 func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
 	if w.volMeshes == nil {
-		w.volMeshes = make(map[*volumes.Faces]*shaders.ResidentMesh, 1024)
+		w.volMeshes = make(map[*volumes.Faces]*shaders.ResidentMesh, 256)
 	}
 	if w.texLookupFn == nil {
 		w.texLookupFn = w.lookupTexLayer
+	}
+	if !w.staticAtlasBuilt || (vols != nil && w.staticAtlasVolCount != vols.Len()) {
+		w.buildStaticAtlas(vols)
 	}
 	w.visibleVol.Reset(vols.Len(), pX, pY, pZ)
 
@@ -260,7 +278,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	visLen := w.visibleVol.Len()
 	canReuse := w.staticGen > 0 && visLen == w.cachedRawVolsLen
 	if canReuse {
-		for i := 0; i < visLen; i++ {
+		for i := range visLen {
 			vol := w.visibleVol.At(i)
 			if vol != w.cachedRawVols[i] || vol.IsDirty() {
 				canReuse = false
@@ -268,6 +286,13 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 			}
 			faces := vol.GetFaces()
 			if faces == nil {
+				continue
+			}
+			if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
+				if faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
+					canReuse = false
+					break
+				}
 				continue
 			}
 			rm := w.volMeshes[faces]
@@ -308,7 +333,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		}
 	}
 	w.cachedRawVolsLen = visLen
-	for i := 0; i < visLen; i++ {
+	for i := range visLen {
 		w.cachedRawVols[i] = w.visibleVol.At(i)
 	}
 
@@ -320,12 +345,25 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	w.staticAdditive.Reset()
 	w.staticTransSrc.Reset()
 
-	for vIdx := 0; vIdx < visLen; vIdx++ {
+	for vIdx := range visLen {
 		vol := w.visibleVol.At(vIdx)
 		faces := vol.GetFaces()
 		if faces == nil {
 			vol.ClearDirty()
 			continue
+		}
+		if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
+			if vol.IsDirty() || faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
+				entry.detached = true
+			} else {
+				if entry.skyMaterial != nil {
+					w.cSky = entry.skyMaterial
+				}
+				for sIdx := entry.subStart; sIdx < entry.subStart+entry.subCount; sIdx++ {
+					w.pushStaticSubMesh(w.staticAtlas, w.staticAtlas.SubMeshes[sIdx])
+				}
+				continue
+			}
 		}
 		rm := w.volMeshes[faces]
 		if rm == nil {
@@ -341,39 +379,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 			w.cSky = rm.SkyMaterial
 		}
 		for sIdx := 0; sIdx < rm.SubMeshesLen; sIdx++ {
-			sub := rm.SubMeshes[sIdx]
-			if sub.IndexCount == 0 {
-				continue
-			}
-			switch sub.BlendMode {
-			case config.BlendModeLiquid:
-				item := w.staticLiquid.Acquire()
-				item.Mesh = rm
-				item.Sub = sub
-			case config.BlendModeAdditive:
-				item := w.staticAdditive.Acquire()
-				item.Mesh = rm
-				item.Sub = sub
-			case config.BlendModeTransparent:
-				item := w.staticTransSrc.Acquire()
-				item.Kind = shaders.TransparentStatic
-				item.DistSq = 0
-				item.SortOrder = sub.SortOrder
-				item.CullMode = sub.CullMode
-				item.HasCutout = sub.HasCutout
-				item.PolygonOffset = sub.PolygonOffset
-				item.FirstIndex = 0
-				item.IndexCount = 0
-				item.Mesh = rm
-				item.Sub = sub
-				item.InstanceVBO = 0
-				item.BaseByteOffset = 0
-				item.InstanceCount = 0
-			default:
-				item := w.staticOpaque.Acquire()
-				item.Mesh = rm
-				item.Sub = sub
-			}
+			w.pushStaticSubMesh(rm, rm.SubMeshes[sIdx])
 		}
 	}
 
@@ -388,6 +394,99 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	w.staticVertBytes, w.staticIdxBytes = w.fv.FrozenBytes()
 	w.staticGen++
 	return true
+}
+
+func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
+	w.staticAtlasBuilt = true
+	w.staticAtlasVolCount = 0
+	if vols == nil {
+		return
+	}
+	w.staticAtlasVolCount = vols.Len()
+	if vols.HasStreamer() || vols.GetVolumes() == nil || vols.Len() == 0 {
+		return
+	}
+	rawVols := vols.GetVolumes().Slice()
+	totalFaces := 0
+	for _, vol := range rawVols {
+		if vol == nil {
+			continue
+		}
+		if faces := vol.GetFaces(); faces != nil {
+			totalFaces += faces.Len()
+		}
+	}
+	if totalFaces == 0 {
+		return
+	}
+	if w.staticAtlas == nil {
+		w.staticAtlas = shaders.NewResidentMesh(w.ctx)
+	}
+	w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, len(rawVols))
+	w.staticAtlas.ReserveStaticAtlas(totalFaces)
+	w.staticAtlas.BeginStaticAtlas()
+	for _, vol := range rawVols {
+		if vol == nil {
+			continue
+		}
+		faces := vol.GetFaces()
+		if faces == nil || faces.Len() == 0 {
+			continue
+		}
+		if w.staticEntries[faces] != nil {
+			vol.ClearDirty()
+			continue
+		}
+		subStart, subCount, skyMat, hasAnim, ok := w.staticAtlas.AppendStaticFaces(faces, w.texLookupFn)
+		if !hasAnim && (ok || skyMat != nil) {
+			w.staticEntries[faces] = &staticVolumeEntry{
+				subStart:    subStart,
+				subCount:    subCount,
+				skyMaterial: skyMat,
+				version:     faces.GetVersion(),
+				faceCount:   faces.Len(),
+			}
+			vol.ClearDirty()
+		}
+	}
+	if w.staticAtlas.SubMeshesLen > 0 {
+		w.staticAtlas.EndStaticAtlas()
+	}
+}
+
+func (w *BuilderVolume) pushStaticSubMesh(rm *shaders.ResidentMesh, sub *shaders.ResidentSubMesh) {
+	if sub.IndexCount == 0 {
+		return
+	}
+	switch sub.BlendMode {
+	case config.BlendModeLiquid:
+		item := w.staticLiquid.Acquire()
+		item.Mesh = rm
+		item.Sub = sub
+	case config.BlendModeAdditive:
+		item := w.staticAdditive.Acquire()
+		item.Mesh = rm
+		item.Sub = sub
+	case config.BlendModeTransparent:
+		item := w.staticTransSrc.Acquire()
+		item.Kind = shaders.TransparentStatic
+		item.DistSq = 0
+		item.SortOrder = sub.SortOrder
+		item.CullMode = sub.CullMode
+		item.HasCutout = sub.HasCutout
+		item.PolygonOffset = sub.PolygonOffset
+		item.FirstIndex = 0
+		item.IndexCount = 0
+		item.Mesh = rm
+		item.Sub = sub
+		item.InstanceVBO = 0
+		item.BaseByteOffset = 0
+		item.InstanceCount = 0
+	default:
+		item := w.staticOpaque.Acquire()
+		item.Mesh = rm
+		item.Sub = sub
+	}
 }
 
 // pushQThings processes visible things: rigid props/vehicles/buildings route into GPU instancing,
@@ -417,7 +516,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	things.StagePrepare()
 
 	addRigidInstance := func(rm *shaders.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
-		var g *rigidInstanceGroup
+		var g *RigidInstanceGroup
 		if rm.InstGroupFrame == w.instFrame {
 			g = w.instGroups.Items[rm.InstGroupIdx]
 		} else {
@@ -639,7 +738,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			}
 			baseByteOff, baseFloat := w.instancePool.Reserve(cnt)
 			g.baseByteOffset = baseByteOff
-			for k := 0; k < cnt; k++ {
+			for k := range cnt {
 				inst := g.instances.Items[k]
 				w.instancePool.WriteTransformAt(baseFloat+k*shaders.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
 			}
@@ -763,6 +862,8 @@ func (w *BuilderVolume) GetHWOcclusion() *OcclusionHW {
 	return w.occlusion
 }
 
+// retrieveThingMesh returns a resident mesh for the given faces, reusing or rebuilding cached mesh data when needed.
+// The returned bool reports whether the mesh was rebuilt during the current mesh frame.
 func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*shaders.ResidentMesh, bool) {
 	gh := rigidFaces.GetGeomHash()
 	bucket := w.thingMeshes[gh]
@@ -786,6 +887,7 @@ func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*shaders.R
 	return rm, true
 }
 
+// facesEquivalent reports whether two face collections contain the same ordered faces, materials, and points.
 func facesEquivalent(a, b *volumes.Faces) bool {
 	if a == b {
 		return true
@@ -794,7 +896,7 @@ func facesEquivalent(a, b *volumes.Faces) bool {
 		return false
 	}
 	n := a.Len()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		fa := a.At(i)
 		fb := b.At(i)
 		if fa == fb {
@@ -813,63 +915,3 @@ func facesEquivalent(a, b *volumes.Faces) bool {
 	}
 	return true
 }
-
-/*
-// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
-// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushQLights(ls *model.Lights, frustumFront, frustumRear *aabb.Frustum, pX, pY, pZ float64) {
-	w.fl.DeepReset()
-	w.fl.Prepare()
-	counter := 0
-	queryLights := func(object aabb.IObject, isFront bool, isBack bool) bool {
-		light := object.(*lights.Light)
-		if light.GetKind() == config.LightKindNone {
-			return false
-		}
-		posX, posY, posZ := light.GetPosXYZ()
-		dx := posX - pX
-		dy := posY - pY
-		dz := posZ - pZ
-		distSq := dx*dx + dy*dy + dz*dz
-		w.fl.Create(light, distSq, isFront)
-		counter++
-		return false
-	}
-	ls.QueryMultiFrustum(frustumFront, frustumRear, queryLights)
-}
-
-// pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.
-// It resets the frame lights state, prepares lighting at the given coordinates, and queries lights intersecting the frustums.
-func (w *BuilderVolume) pushLights(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, pZ float64) {
-	//TODO IMPLEMENTAZIONE CON FRUSTUM
-	w.fl.DeepReset()
-	w.fl.Prepare()
-	//counter := 0
-
-	maxDistFrontSq := w.cal.ZLightFar * w.cal.ZLightFar
-	maxDistBackSq := maxDistFrontSq
-
-	for _, light := range ls.Get() {
-		if light.GetKind() == config.LightKindNone {
-			continue
-		}
-		distSq := light.GetDistSq(pX, pY, pZ)
-		isFront := light.GetAABB().IntersectFrustum(frustumFront)
-		if isFront {
-			if distSq > maxDistFrontSq {
-				continue
-			}
-		} else {
-			if distSq > maxDistBackSq {
-				continue
-			}
-		}
-		w.fl.Create(light, distSq, isFront)
-		//counter++
-	}
-	//_, _, dynamicCount := w.fl.GetLights()
-	//_, shadowCount := w.fl.GetShadowLights()
-	//fmt.Printf("LIGHTS %d (DRAW %d -> DYNAMIC %d, SHADOW %d)\n", ls.Len(), counter, dynamicCount, shadowCount)
-}
-
-*/

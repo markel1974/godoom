@@ -4,6 +4,11 @@ import (
 	"math"
 	"testing"
 	"unsafe"
+
+	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/model"
+	"github.com/markel1974/godoom/mr_tech/model/things"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 func TestLightsPrepareZeroAllocsLargeBatchAndTransforms(t *testing.T) {
@@ -142,5 +147,122 @@ func BenchmarkLightsPrepareClustersSparse(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l.PrepareClustersWithProjPtr(&proj, 1.0, 1000.0)
+	}
+}
+
+func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *Depth, *DrawCommandsRender) {
+	t.Helper()
+	ctx := newRecordingCtx()
+	calCfg := config.NewConfigCalibration()
+	cal := model.NewCalibration(calCfg, nil)
+	cal.EnableShadowLights = true
+	cal.MSAASamples = 0
+	flashCfg := config.NewFlash()
+	flashCfg.Intensity = 0.05
+	flash := things.NewFlash(flashCfg)
+	h := NewHandler(80, 64)
+	if err := h.Setup(ctx, cal, flash, 640, 480); err != nil {
+		t.Fatalf("Handler.Setup: %v", err)
+	}
+	if err := h.GetMain().Init(); err != nil {
+		t.Fatalf("Main.Init: %v", err)
+	}
+	d := h.GetDepth()
+	if err := d.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Depth.Compile: %v", err)
+	}
+	d.SetShadowsEnabled(true)
+
+	var shadowLights [metrics.ShadowLightsCount]*metrics.Light
+	for i := range metrics.ShadowLightsCount {
+		lt := metrics.NewLight()
+		lt.Assign(float32(i*40), 50, -30, 1, 1, 1, 1, 2.0, 0, -1, 0, 10, 0.8, 0.7, 1.0)
+		shadowLights[i] = lt
+	}
+	h.GetShadowLightsMetrics().Update(shadowLights, metrics.ShadowLightsCount)
+	d.Prepare()
+
+	staticAtlas := NewResidentMesh(ctx)
+	staticAtlas.VAO = 9001
+	staticItems := make([]*StaticDrawItem, staticCount)
+	for i := range staticCount {
+		staticItems[i] = &StaticDrawItem{
+			Mesh: staticAtlas,
+			Sub: &ResidentSubMesh{
+				BlendMode:  config.BlendModeOpaque,
+				CullMode:   config.CullFront,
+				DepthWrite: true,
+				FirstIndex: int32(i * 6),
+				IndexCount: 6,
+			},
+		}
+	}
+
+	instMesh := NewResidentMesh(ctx)
+	instMesh.VAO = 9002
+	instMesh.VAOInstanced = 9003
+	instItems := make([]*InstancedDrawItem, 4)
+	for i := range 4 {
+		instItems[i] = &InstancedDrawItem{
+			Mesh: instMesh,
+			Sub: &ResidentSubMesh{
+				BlendMode:  config.BlendModeOpaque,
+				CullMode:   config.CullFront,
+				DepthWrite: true,
+				FirstIndex: int32(i * 12),
+				IndexCount: 12,
+			},
+			InstanceVBO:    77,
+			BaseByteOffset: 0,
+			InstanceCount:  8,
+		}
+	}
+
+	dcr := NewDrawCommandsRender(ctx, "depth_bench", false)
+	dcr.Prepare(nil)
+	dcr.SetResidentDraws(staticItems, len(staticItems), instItems, len(instItems))
+	return ctx, d, dcr
+}
+
+func TestDepthAtlasPassStaticCoalescedZeroAllocs(t *testing.T) {
+	ctx, d, dcr := setupDepthAtlas10TileTest(t, 1000)
+
+	// Warm up atlas FBO + instanced VAO once before measuring steady-state calls and allocs.
+	d.Render(dcr)
+
+	ctx.resetLogs()
+	d.Render(dcr)
+
+	// Across 10 tiles (Room + Flash + 8 ShadowLights):
+	// 1000 contiguous static submeshes merge into 1 DrawElements per tile = 10 static draws,
+	// plus 4 instanced submeshes per tile = 40 instanced draws -> 50 draws total instead of 10,040!
+	if got := len(ctx.multiDrawPrograms); got != 50 {
+		t.Fatalf("expected 50 coalesced draws across 10 shadow tiles (1000 static + 4 instanced), got %d", got)
+	}
+	// Each tile binds staticAtlas VAO (1) + instMesh VAOInstanced (1) once, plus Depth.Render initial mainVAO (1) = 21.
+	if got := len(ctx.vaoHistory); got != 21 {
+		t.Fatalf("expected 21 BindVertexArray calls across 10 tiles (no per-submesh VAO thrash), got %d", got)
+	}
+
+	allocs := testing.AllocsPerRun(50, func() {
+		ctx.resetLogs()
+		d.Render(dcr)
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 heap allocations in Depth.Render steady-state atlas pass, got %.2f", allocs)
+	}
+}
+
+func BenchmarkDepthRenderAtlasPass1000Static(b *testing.B) {
+	ctx, d, dcr := setupDepthAtlas10TileTest(b, 1000)
+	d.Render(dcr)
+	ctx.resetLogs()
+	d.Render(dcr)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ctx.resetLogs()
+		d.Render(dcr)
 	}
 }

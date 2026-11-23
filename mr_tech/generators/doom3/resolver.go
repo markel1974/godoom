@@ -13,7 +13,7 @@ const DefaultMonitorTexture = "models/mapobjects/filler/monitor_d"
 func ToMaterial(texNameLC string) config.MaterialKind {
 	kind := config.MaterialKindSolid
 	if texNameLC == "translucent" {
-		kind = config.MaterialKindSolid //TODO config.MaterialKindTranslucent
+		kind = config.MaterialKindTranslucent
 	} else if strings.Contains(texNameLC, "sky") {
 		kind = config.MaterialKindSky
 	} else if strings.Contains(texNameLC, "lava") || strings.Contains(texNameLC, "magma") {
@@ -45,6 +45,17 @@ func ResolveConfigMaterial(def *proc.MaterialDef) *config.Material {
 	}
 	if def.SpecularMap != "" {
 		mat.SpecularMap = def.SpecularMap
+	}
+	if def.TwoSided {
+		mat.CullMode = config.CullNone
+	}
+	if strings.EqualFold(def.SurfaceType, "glass") {
+		if mat.EnvMap == "" {
+			mat.EnvMap = "env/default"
+		}
+		if len(mat.EnvMapTint) == 0 {
+			mat.EnvMapTint = []float32{0.65, 0.78, 0.9}
+		}
 	}
 	ConfigureMaterial(mat, def.Name, def)
 	return mat

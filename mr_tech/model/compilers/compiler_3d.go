@@ -68,21 +68,47 @@ func (r *Compiler3d) compile3d() []*volumes.Volume {
 				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
 				face := volumes.NewFace(tri, cf.Tag, material)
 
-				// Map UVs if provided by the config face
-				if len(cf.UVs) > 0 {
+				// Map per-vertex UVs, explicit vertex normals, and lightmap UVs if provided by the config face
+				if len(cf.UVs) > 0 || len(cf.Normals) > 0 || len(cf.LmUVs) > 0 {
 					var triUvs [3][2]float64
+					var triNormals [3]geometry.XYZ
+					hasNormals := false
+					var triLmUvs [3][2]float64
+					hasLmUvs := false
 					for k := 0; k < 3; k++ {
 						for idx, pt := range cf.Points {
 							if pt.X == t[k].X && pt.Y == t[k].Y && pt.Z == t[k].Z {
 								if len(cf.UVs) > idx {
 									triUvs[k] = cf.UVs[idx]
 								}
+								if len(cf.Normals) > idx {
+									triNormals[k] = cf.Normals[idx]
+									hasNormals = true
+								}
+								if len(cf.LmUVs) > idx {
+									triLmUvs[k] = cf.LmUVs[idx]
+									hasLmUvs = true
+								}
 								break
 							}
 						}
 					}
-					face.SetUV(triUvs[0][0], triUvs[0][1], triUvs[1][0], triUvs[1][1], triUvs[2][0], triUvs[2][1])
-					face.LockUV(true)
+					if len(cf.UVs) > 0 {
+						face.SetUV(triUvs[0][0], triUvs[0][1], triUvs[1][0], triUvs[1][1], triUvs[2][0], triUvs[2][1])
+						face.LockUV(true)
+					}
+					if hasNormals {
+						face.SetVertexNormals(triNormals[0], triNormals[1], triNormals[2])
+					}
+					if hasLmUvs && cf.LightmapID >= 0 {
+						face.SetLightmap(cf.LightmapID, triLmUvs[0][0], triLmUvs[0][1], triLmUvs[1][0], triLmUvs[1][1], triLmUvs[2][0], triLmUvs[2][1])
+					}
+				}
+				if cf.HasExpectedNormal {
+					face.EnsureOutwardWinding(cf.ExpectedNormal)
+				} else if face.HasExplicitNormals() {
+					nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := face.GetVertexNormalsFlat()
+					face.EnsureOutwardWinding(geometry.XYZ{X: nx0 + nx1 + nx2, Y: ny0 + ny1 + ny2, Z: nz0 + nz1 + nz2})
 				}
 
 				volume.AddFace(face)

@@ -28,7 +28,7 @@ func NewVolumes(shaders *Shaders, volumesCount float64) *Volumes {
 func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, error) {
 	var centroids []geometry.XYZ
 
-	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string, raw *lumps.RawFace3) {
 		cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 		cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
 		cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
@@ -70,14 +70,44 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, e
 	}
 
 	triCounter := 0
-	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string, raw *lumps.RawFace3) {
 		if triCounter >= totalTriangles {
 			fmt.Println("max triangles reached", triCounter, "total", totalTriangles)
 			return
 		}
 		volIdx := clusterMap[triCounter]
 		triCounter++
-		volumes[volIdx].Faces = append(volumes[volIdx].Faces, config.NewConfigFace(tri, triUvs, material, matName))
+		cf := config.NewConfigFace(tri, triUvs, material, matName)
+		if raw != nil {
+			cf.LightmapID = raw.LightmapID
+			if len(raw.Normals) > 0 || len(raw.LmUVs) > 0 {
+				var triNormals []geometry.XYZ
+				var triLmUVs [][2]float64
+				if len(raw.Normals) > 0 {
+					triNormals = make([]geometry.XYZ, 3)
+				}
+				if len(raw.LmUVs) > 0 {
+					triLmUVs = make([][2]float64, 3)
+				}
+				for k := 0; k < 3; k++ {
+					pos := tri[k]
+					for idx, pt := range raw.Points {
+						if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
+							if len(raw.Normals) > idx {
+								triNormals[k] = raw.Normals[idx]
+							}
+							if len(raw.LmUVs) > idx {
+								triLmUVs[k] = raw.LmUVs[idx]
+							}
+							break
+						}
+					}
+				}
+				cf.Normals = triNormals
+				cf.LmUVs = triLmUVs
+			}
+		}
+		volumes[volIdx].Faces = append(volumes[volIdx].Faces, cf)
 	}
 
 	f.doBuild(faces, addTriangle)
@@ -85,7 +115,7 @@ func (f *Volumes) Create(mIdx int, faces []*lumps.RawFace3) ([]*config.Volume, e
 	return volumes, nil
 }
 
-func (f *Volumes) doBuild(faces []*lumps.RawFace3, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string)) {
+func (f *Volumes) doBuild(faces []*lumps.RawFace3, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string, raw *lumps.RawFace3)) {
 	for _, v := range faces {
 		animKind := config.MaterialKindSolid
 		texNameLC := strings.ToLower(v.TexName)
@@ -152,7 +182,7 @@ func (f *Volumes) doBuild(faces []*lumps.RawFace3, addTriangle func(tri []geomet
 					}
 				}
 			}
-			addTriangle(tri, triUvs, material, v.TexName)
+			addTriangle(tri, triUvs, material, v.TexName, v)
 		}
 	}
 }

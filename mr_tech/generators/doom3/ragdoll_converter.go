@@ -669,6 +669,7 @@ func (t *RagdollConverter) convertRagdoll(mesh *md5.Mesh, headMesh *md5.Mesh, he
 				}
 				frameTris[tIdx] = tri
 			}
+			config.NormalizeNormalsAndWinding(frameTris, true, 0.5)
 			parts[pIdx].Frames[fIdx].Triangles = frameTris
 		}
 	}

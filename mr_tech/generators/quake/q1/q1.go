@@ -33,6 +33,7 @@ type BSPReader struct {
 	infos       []*lumps.LumpInfo
 	palette     [256]color.RGBA
 	mipTextures []*lumps.MipTexture
+	planes      []*lumps.Plane
 	faces       []*lumps.Face
 	surfEdges   []int32
 	edges       []*lumps.Edge
@@ -81,6 +82,7 @@ func (q1 *BSPReader) Setup() error {
 	if q1.faces, err = q1.getFaces(); err != nil {
 		return err
 	}
+	q1.planes, _ = lumps.NewPlanes(q1.rs, q1.infos[lumps.LumpPlanes])
 	if q1.surfEdges, err = q1.getSurfEdges(); err != nil {
 		return err
 	}
@@ -346,6 +348,15 @@ func (q1 *BSPReader) GetRawFaces(modelIdx int) ([]*lumps.RawFace, error) {
 			uvs = append(uvs, [2]float64{u / texW, vt / texH})
 		}
 		rf := lumps.NewRawFace(points, uvs, texName, isSky)
+		if int(bspFace.PlaneID) < len(q1.planes) {
+			pl := q1.planes[bspFace.PlaneID]
+			nx, ny, nz := float64(pl.Normal[0]), float64(pl.Normal[1]), float64(pl.Normal[2])
+			if bspFace.Side != 0 {
+				nx, ny, nz = -nx, -ny, -nz
+			}
+			rf.Normal = geometry.XYZ{X: nx, Y: ny, Z: nz}
+			rf.HasNormal = true
+		}
 		rawFaces = append(rawFaces, rf)
 	}
 
@@ -388,7 +399,7 @@ func (q1 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.Flash.OffsetX = 0.2
 	root.Player.Flash.OffsetY = 0.1
 	root.Player.Bobbing.SwayScale = 1.0 //mod
-	root.Player.Bobbing.SwayOffsetX = 50
+	root.Player.Bobbing.SwayOffsetX = 5.0
 	root.Player.Bobbing.SwayOffsetY = -0.9
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5

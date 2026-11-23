@@ -222,6 +222,7 @@ func (v *MultiSprite) createFaces(material *textures.Material) ([]*volumes.Face,
 	if tex == nil {
 		return nil, fmt.Errorf("texture is nil")
 	}
+	material.SetCullMode(config.CullNone)
 	width, height := tex.GetSize()
 	halfW := width * 0.5
 	halfY := halfW

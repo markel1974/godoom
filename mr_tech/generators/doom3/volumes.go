@@ -33,7 +33,7 @@ func NewVolumes(pFile *proc.File, volumesCount float64, materials *proc.Material
 func (vs *Volumes) Build() ([]*config.Volume, error) {
 	var centroids []geometry.XYZ
 
-	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, triNormals []geometry.XYZ, material *config.Material, matName string) {
 		cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 		cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
 		cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
@@ -84,14 +84,18 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 	}
 
 	triCounter := 0
-	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, triNormals []geometry.XYZ, material *config.Material, matName string) {
 		if triCounter >= totalTriangles {
 			fmt.Println("max triangles reached", triCounter, "total", totalTriangles)
 			return
 		}
 		volIdx := clusterMap[triCounter]
 		triCounter++
-		volumes[volIdx].Faces = append(volumes[volIdx].Faces, config.NewConfigFace(tri, triUvs, material, matName))
+		cf := config.NewConfigFace(tri, triUvs, material, matName)
+		if len(triNormals) == 3 {
+			cf.Normals = triNormals
+		}
+		volumes[volIdx].Faces = append(volumes[volIdx].Faces, cf)
 	}
 
 	vs.doBuild(entitiesMap, addTriangle)
@@ -99,7 +103,7 @@ func (vs *Volumes) Build() ([]*config.Volume, error) {
 	return volumes, nil
 }
 
-func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string)) {
+func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, triNormals []geometry.XYZ, material *config.Material, matName string)) {
 	for _, model := range vs.pFile.Models {
 		// In Doom 3 .proc files, _area* models contain the static world geometry in world coordinates.
 		// Other models (func_static, func_door, movers, fractures) are entity submodels in local coordinates.
@@ -164,15 +168,26 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 
 				v0, v1, v2 := surface.Vertices[i0], surface.Vertices[i1], surface.Vertices[i2]
 				p0, p1, p2 := v0.Pos, v1.Pos, v2.Pos
+				n0, n1, n2 := v0.Normal, v1.Normal, v2.Normal
 				if ent != nil {
 					p0 = ent.TransformPoint(p0)
 					p1 = ent.TransformPoint(p1)
 					p2 = ent.TransformPoint(p2)
+					n0End := ent.TransformPoint(geometry.XYZ{X: v0.Pos.X + v0.Normal.X, Y: v0.Pos.Y + v0.Normal.Y, Z: v0.Pos.Z + v0.Normal.Z})
+					n1End := ent.TransformPoint(geometry.XYZ{X: v1.Pos.X + v1.Normal.X, Y: v1.Pos.Y + v1.Normal.Y, Z: v1.Pos.Z + v1.Normal.Z})
+					n2End := ent.TransformPoint(geometry.XYZ{X: v2.Pos.X + v2.Normal.X, Y: v2.Pos.Y + v2.Normal.Y, Z: v2.Pos.Z + v2.Normal.Z})
+					n0 = geometry.XYZ{X: n0End.X - p0.X, Y: n0End.Y - p0.Y, Z: n0End.Z - p0.Z}
+					n1 = geometry.XYZ{X: n1End.X - p1.X, Y: n1End.Y - p1.Y, Z: n1End.Z - p1.Z}
+					n2 = geometry.XYZ{X: n2End.X - p2.X, Y: n2End.Y - p2.Y, Z: n2End.Z - p2.Z}
 				}
 
 				tri := []geometry.XYZ{p0, p1, p2}
 				triUvs := [][2]float64{{v0.U, v0.V}, {v1.U, v1.V}, {v2.U, v2.V}}
-				addTriangle(tri, triUvs, material, effectiveMatName)
+				var triNormals []geometry.XYZ
+				if (n0.X != 0 || n0.Y != 0 || n0.Z != 0) && (n1.X != 0 || n1.Y != 0 || n1.Z != 0) && (n2.X != 0 || n2.Y != 0 || n2.Z != 0) {
+					triNormals = []geometry.XYZ{n0, n1, n2}
+				}
+				addTriangle(tri, triUvs, triNormals, material, effectiveMatName)
 			}
 		}
 	}
@@ -262,7 +277,7 @@ func (vs *Volumes) doBuild(entitiesMap map[string]*proc.MapEntity, addTriangle f
 
 					tri := []geometry.XYZ{p0, p2, p1}
 					triUvs := [][2]float64{{u0, v0}, {u2, v2}, {u1, v1}}
-					addTriangle(tri, triUvs, mat, matName)
+					addTriangle(tri, triUvs, nil, mat, matName)
 				}
 			}
 		}

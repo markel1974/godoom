@@ -50,6 +50,13 @@ const (
 	MainLocNumShadowLights
 	// MainLocNumLights Dynamic UBO Lights
 	MainLocNumLights
+	MainLocInstanceMode
+	MainLocEnvMap
+	MainLocLightmaps
+	MainLocClusterData
+	MainLocClusterNear
+	MainLocClusterLogScale
+	MainLocNumGlobalLights
 	MainLocLast
 )
 
@@ -68,11 +75,12 @@ type mainProgram struct {
 }
 
 type zPrepassProgram struct {
-	prg     uint32
-	locView int32
-	locProj int32
-	locTime int32
-	locTex  int32
+	prg             uint32
+	locView         int32
+	locProj         int32
+	locTime         int32
+	locTex          int32
+	locInstanceMode int32
 }
 
 type transformedShadowLight struct {
@@ -182,51 +190,7 @@ func (s *Main) Init() error {
 		s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
 		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, api.DYNAMIC_DRAW)
 
-		strideBytes := s.stride
-
-		// Location 0: aPos (x, y, z) - 3 float
-		s.ctx.VertexAttribPointer(0, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(0))
-		s.ctx.EnableVertexAttribArray(0)
-
-		// Location 1: aTexCoords (u, v, layer) - 3 float
-		s.ctx.VertexAttribPointer(1, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(3*4))
-		s.ctx.EnableVertexAttribArray(1)
-
-		// Location 2: aOrigin (worldX, worldY, worldZ) - 3 float
-		s.ctx.VertexAttribPointer(2, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(6*4))
-		s.ctx.EnableVertexAttribArray(2)
-
-		// Location 3: aRenderMode (flag) - 1 float
-		s.ctx.VertexAttribPointer(3, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(9*4))
-		s.ctx.EnableVertexAttribArray(3)
-
-		// Location 4: nextPos (x, y, z) - 3 float
-		s.ctx.VertexAttribPointer(4, 3, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(10*4))
-		s.ctx.EnableVertexAttribArray(4)
-
-		// Location 5: aLerp (t) - 1 float
-		s.ctx.VertexAttribPointer(5, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(13*4))
-		s.ctx.EnableVertexAttribArray(5)
-
-		// Location 6: aYaw (angle) - 1 float
-		s.ctx.VertexAttribPointer(6, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(14*4))
-		s.ctx.EnableVertexAttribArray(6)
-
-		// Location 7: aMaterial - 1 float
-		s.ctx.VertexAttribPointer(7, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(15*4))
-		s.ctx.EnableVertexAttribArray(7)
-
-		// Location 8: aSpecBoost - 1 float
-		s.ctx.VertexAttribPointer(8, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(16*4))
-		s.ctx.EnableVertexAttribArray(8)
-
-		// Location 9: aShininess - 1 float
-		s.ctx.VertexAttribPointer(9, 1, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(17*4))
-		s.ctx.EnableVertexAttribArray(9)
-
-		// Location 10: aDetailParams (detailScale, detailFactor) - 2 float
-		s.ctx.VertexAttribPointer(10, 2, api.FLOAT, false, strideBytes, s.ctx.PtrOffset(18*4))
-		s.ctx.EnableVertexAttribArray(10)
+		ConfigureVertexAttribs(s.ctx, s.stride, true)
 	}
 
 	s.ctx.BindVertexArray(0)
@@ -282,6 +246,15 @@ func (s *Main) SetupSamplers() error {
 		s.ctx.Uniform1iv(p.table[MainLocNormalMap], 4, &normalUnits[0])
 		s.ctx.Uniform1iv(p.table[MainLocEmissiveMap], 4, &emissiveUnits[0])
 		s.ctx.Uniform1i(p.table[MainLocShadowAtlas], api.TexUnitShadowAtlas)
+		if p.table[MainLocEnvMap] >= 0 {
+			s.ctx.Uniform1i(p.table[MainLocEnvMap], api.TexUnitEnvMap)
+		}
+		if p.table[MainLocLightmaps] >= 0 {
+			s.ctx.Uniform1i(p.table[MainLocLightmaps], api.TexUnitLightmap)
+		}
+		if p.table[MainLocClusterData] >= 0 {
+			s.ctx.Uniform1i(p.table[MainLocClusterData], api.TexUnitClusterData)
+		}
 	}
 
 	if s.zPrepassCutout.prg != 0 && s.zPrepassCutout.locTex >= 0 {
@@ -388,6 +361,13 @@ func (s *Main) compileForwardProgram(dst *mainProgram, progName, vertID string, 
 	}
 
 	dst.table[MainLocNumLights] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_numLights\x00"))
+	dst.table[MainLocInstanceMode] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_instanceMode\x00"))
+	dst.table[MainLocEnvMap] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_envMap\x00"))
+	dst.table[MainLocLightmaps] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_lightmaps\x00"))
+	dst.table[MainLocClusterData] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_clusterData\x00"))
+	dst.table[MainLocClusterNear] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_clusterNear\x00"))
+	dst.table[MainLocClusterLogScale] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_clusterLogScale\x00"))
+	dst.table[MainLocNumGlobalLights] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_numGlobalLights\x00"))
 
 	blockIndex := s.ctx.GetUniformBlockIndex(prg, s.ctx.Str("LightsBlock\x00"))
 	if blockIndex != api.INVALID_INDEX {
@@ -413,6 +393,7 @@ func (s *Main) compileZPrepassProgram(dst *zPrepassProgram, progName, vertID str
 	dst.locView = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_view\x00"))
 	dst.locProj = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_projection\x00"))
 	dst.locTime = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_time\x00"))
+	dst.locInstanceMode = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_instanceMode\x00"))
 	dst.locTex = -1
 	if withTexture {
 		dst.locTex = s.ctx.GetUniformLocation(dst.prg, s.ctx.Str("u_texture\x00"))
@@ -498,6 +479,36 @@ func (s *Main) bindZPrepassProgram(zp *zPrepassProgram, view, proj *float32, int
 	s.ctx.UniformMatrix4fv(zp.locView, 1, false, view)
 	s.ctx.UniformMatrix4fv(zp.locProj, 1, false, proj)
 	s.ctx.Uniform1f(zp.locTime, interval)
+	if zp.locInstanceMode >= 0 {
+		s.ctx.Uniform1i(zp.locInstanceMode, InstanceModeStreaming)
+	}
+}
+
+func (s *Main) prepareShadowLights(transformed *[metrics.ShadowLightsCount]transformedShadowLight) int {
+	numShadowLights := int(s.shadowLightsMetrics.GetLightCount())
+	if numShadowLights > metrics.ShadowLightsCount {
+		numShadowLights = metrics.ShadowLightsCount
+	}
+	for i := 0; i < numShadowLights; i++ {
+		l, lMatrix := s.shadowLightsMetrics.GetLight(i)
+		vx, vy, vz := s.metrics.TransformPointToView(l.X, l.Y, l.Z)
+		dvx, dvy, dvz := s.metrics.TransformDirectionNormalizedToView(l.DirX, l.DirY, l.DirZ)
+		effRadiusSq, invScale := metrics.ComputeLightAttenuation(l.Intensity, l.Falloff)
+		transformed[i] = transformedShadowLight{
+			vx: vx, vy: vy, vz: vz,
+			intensity: l.Intensity,
+			dvx:       dvx, dvy: dvy, dvz: dvz,
+			falloff: l.Falloff,
+			r:       l.R, g: l.G, b: l.B,
+			kind:        l.Kind,
+			outerCutOff: l.OuterCutOff,
+			cutOff:      l.CutOff,
+			effRadiusSq: effRadiusSq,
+			invScale:    invScale,
+			lightSpace:  lMatrix,
+		}
+	}
+	return numShadowLights
 }
 
 func (s *Main) bindForwardUniforms(
@@ -507,6 +518,8 @@ func (s *Main) bindForwardUniforms(
 	interval, ambient, flashX, flashY, flashSensitivity float32,
 	numShadowLights int,
 	shadowLights *[metrics.ShadowLightsCount]transformedShadowLight,
+	clusterNear, clusterLogScale float32,
+	numGlobalLights int32,
 ) {
 	s.ctx.UseProgram(p.prg)
 
@@ -530,9 +543,8 @@ func (s *Main) bindForwardUniforms(
 	if flashIntensity > 0.001 {
 		s.ctx.Uniform1i(p.table[MainLocEnableFlashlight], 1)
 		s.ctx.Uniform3f(p.table[MainLocFlashPosView], flashX, flashY, 0.0)
-		dirX := float32(s.flash.GetOffsetX()) - (flashX * flashSensitivity)
-		dirY := float32(s.flash.GetOffsetY()) + (flashY * flashSensitivity)
-		s.ctx.Uniform3f(p.table[MainLocFlashDir], dirX, dirY, -1.0)
+		dirX, dirY, dirZ := s.flashlightMetrics.ComputeAim(flashX, flashY, flashSensitivity)
+		s.ctx.Uniform3f(p.table[MainLocFlashDir], dirX, dirY, dirZ)
 		s.ctx.Uniform1f(p.table[MainLocFlashIntensityFactor], flashIntensity)
 		s.ctx.Uniform1f(p.table[MainLocFlashFalloff], float32(s.flash.GetFalloff()))
 		s.ctx.Uniform1f(p.table[MainLocFlashConeStart], float32(s.flash.GetConeStart()))
@@ -553,8 +565,20 @@ func (s *Main) bindForwardUniforms(
 		s.ctx.UniformMatrix4fv(loc.lightSpace, 1, false, tl.lightSpace)
 	}
 
-	// Dynamic UBO Lights
+	// Dynamic UBO Lights & Clustered Lookup
 	s.ctx.Uniform1i(p.table[MainLocNumLights], s.lights.GetActiveLightsCount())
+	if loc := p.table[MainLocClusterNear]; loc >= 0 {
+		s.ctx.Uniform1f(loc, clusterNear)
+	}
+	if loc := p.table[MainLocClusterLogScale]; loc >= 0 {
+		s.ctx.Uniform1f(loc, clusterLogScale)
+	}
+	if loc := p.table[MainLocNumGlobalLights]; loc >= 0 {
+		s.ctx.Uniform1i(loc, numGlobalLights)
+	}
+	if loc := p.table[MainLocInstanceMode]; loc >= 0 {
+		s.ctx.Uniform1i(loc, InstanceModeStreaming)
+	}
 	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.lights.GetActiveUBO())
 }
 
@@ -579,7 +603,8 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 		return
 	}
 
-	s.ctx.BindVertexArray(s.mainVAO[s.frameIdx])
+	streamVAO := s.mainVAO[s.frameIdx]
+	s.ctx.BindVertexArray(streamVAO)
 
 	// Pass 1: Z-Prepass populates front-most depth before running heavy lighting/shadows.
 	if dc.HasSolidPrepass() || dc.HasCutoutPrepass() {
@@ -591,45 +616,29 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 
 		if dc.HasSolidPrepass() {
 			s.bindZPrepassProgram(&s.zPrepassSolid, view, proj, interval)
+			dc.SetPassState(streamVAO, s.zPrepassSolid.locInstanceMode)
 			dc.RenderPrepass(false)
 		}
 		if dc.HasCutoutPrepass() {
 			s.bindZPrepassProgram(&s.zPrepassCutout, view, proj, interval)
+			dc.SetPassState(streamVAO, s.zPrepassCutout.locInstanceMode)
 			dc.RenderPrepass(true)
 		}
 		s.ctx.ColorMask(true, true, true, true)
 	}
 
-	// Precompute view-space shadow lights once on CPU for solid and cutout passes.
-	numShadowLights := int(s.shadowLightsMetrics.GetLightCount())
-	if numShadowLights > metrics.ShadowLightsCount {
-		numShadowLights = metrics.ShadowLightsCount
-	}
 	var transformed [metrics.ShadowLightsCount]transformedShadowLight
-	for i := 0; i < numShadowLights; i++ {
-		l, lMatrix := s.shadowLightsMetrics.GetLight(i)
-		vx, vy, vz := s.metrics.TransformPointToView(l.X, l.Y, l.Z)
-		dvx, dvy, dvz := s.metrics.TransformDirectionNormalizedToView(l.DirX, l.DirY, l.DirZ)
-		effRadiusSq, invScale := metrics.ComputeLightAttenuation(l.Intensity, l.Falloff)
-		transformed[i] = transformedShadowLight{
-			vx: vx, vy: vy, vz: vz,
-			intensity: l.Intensity,
-			dvx:       dvx, dvy: dvy, dvz: dvz,
-			falloff: l.Falloff,
-			r:       l.R, g: l.G, b: l.B,
-			kind:        l.Kind,
-			outerCutOff: l.OuterCutOff,
-			cutOff:      l.CutOff,
-			effRadiusSq: effRadiusSq,
-			invScale:    invScale,
-			lightSpace:  lMatrix,
-		}
-	}
+	numShadowLights := s.prepareShadowLights(&transformed)
+	clusterTex, clusterNear, clusterLogScale, numGlobalLights := s.lights.PrepareClusters()
 
 	// Shadow Texture (Master Shadow Atlas)
 	if s.shadows != 0 {
 		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
 		s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
+	}
+	if clusterTex != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
+		s.ctx.BindTexture(api.TEXTURE_2D, clusterTex)
 	}
 
 	// Pass 2a: Solid geometry (no discard -> hardware Early-Z enabled; DepthFunc(EQUAL) on prepassed batches)
@@ -639,7 +648,9 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 			view, invView, proj, roomSpace, flashSpace,
 			fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
 			numShadowLights, &transformed,
+			clusterNear, clusterLogScale, numGlobalLights,
 		)
+		dc.SetPassState(streamVAO, s.solidPrg.table[MainLocInstanceMode])
 		s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
 		dc.RenderShade(false)
 	}
@@ -651,7 +662,9 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 			view, invView, proj, roomSpace, flashSpace,
 			fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
 			numShadowLights, &transformed,
+			clusterNear, clusterLogScale, numGlobalLights,
 		)
+		dc.SetPassState(streamVAO, s.cutoutPrg.table[MainLocInstanceMode])
 		useAlphaToCoverage := s.post.GetSamples() > 0
 		if useAlphaToCoverage {
 			s.ctx.Enable(api.SAMPLE_ALPHA_TO_COVERAGE)
@@ -663,4 +676,55 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 	}
 
 	s.ctx.BindVertexArray(0)
+}
+
+// RenderTransparent executes the back-to-front depth-sorted translucent pass over the resolved opaque/liquid scene.
+func (s *Main) RenderTransparent(dc *DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
+	if dc == nil || !dc.HasCommands() {
+		return
+	}
+	view := s.metrics.GetViewPtr()
+	invView := s.metrics.GetInvViewPtr()
+	proj := s.metrics.GetProjPtr()
+	roomSpace := s.metrics.GetRoomSpacePtr()
+	flashSpace := s.flashlightMetrics.GetShadowSpacePtr()
+	fbW, fbH := s.handler.GetSize()
+	interval := float32(textures.GlobalTick()) * 0.05
+
+	var transformed [metrics.ShadowLightsCount]transformedShadowLight
+	numShadowLights := s.prepareShadowLights(&transformed)
+	clusterTex, clusterNear, clusterLogScale, numGlobalLights := s.lights.PrepareClusters()
+
+	if s.shadows != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
+		s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
+	}
+	if clusterTex != 0 {
+		s.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitClusterData)
+		s.ctx.BindTexture(api.TEXTURE_2D, clusterTex)
+	}
+
+	streamVAO := s.mainVAO[s.frameIdx]
+	s.ctx.BindVertexArray(streamVAO)
+	s.ctx.Enable(api.BLEND)
+	s.ctx.BlendFunc(api.SRC_ALPHA, api.ONE_MINUS_SRC_ALPHA)
+	s.ctx.DepthMask(false)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LEQUAL)
+	s.ctx.Disable(api.SAMPLE_ALPHA_TO_COVERAGE)
+
+	s.bindForwardUniforms(
+		&s.solidPrg,
+		view, invView, proj, roomSpace, flashSpace,
+		fbW, fbH, interval, ambient, flashX, flashY, flashSensitivity,
+		numShadowLights, &transformed,
+		clusterNear, clusterLogScale, numGlobalLights,
+	)
+	dc.SetPassState(streamVAO, s.solidPrg.table[MainLocInstanceMode])
+	dc.RenderTransparent()
+
+	s.ctx.BindVertexArray(0)
+	s.ctx.Disable(api.BLEND)
+	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
 }

@@ -6,18 +6,27 @@ import (
 	"github.com/markel1974/godoom/mr_tech/utils"
 )
 
+// Lightmap holds raw 2D baked lightmap image pixels (RGB or RGBA) for world geometry.
+type Lightmap struct {
+	Width  int     `json:"width"`
+	Height int     `json:"height"`
+	Data   []uint8 `json:"data"`
+}
+
 // Root represents the top-level configuration container, including sectors, things, player, and rendering properties.
 type Root struct {
-	Id          string           `json:"id"`
-	Calibration *Calibration     `json:"calibration"`
-	Sectors     []*Sector        `json:"sectors"`
-	Things      []*Thing         `json:"things"`
-	Player      *Player          `json:"player"`
-	ScaleFactor geometry.XYZ     `json:"scaleFactor"`
-	Vertices    geometry.Polygon `json:"vertices"`
-	Volumes     []*Volume        `json:"volumes"`
-	Lights      []*Light         `json:"lights"`
-	UI          []*Thing         `json:"ui"`
+	Id          string               `json:"id"`
+	Calibration *Calibration         `json:"calibration"`
+	Sectors     []*Sector            `json:"sectors"`
+	Things      []*Thing             `json:"things"`
+	Player      *Player              `json:"player"`
+	ScaleFactor geometry.XYZ         `json:"scaleFactor"`
+	Vertices    geometry.Polygon     `json:"vertices"`
+	Volumes     []*Volume            `json:"volumes"`
+	Lights      []*Light             `json:"lights"`
+	UI          []*Thing             `json:"ui"`
+	Lightmaps   []*Lightmap          `json:"lightmaps,omitempty"`
+	EnvMaps     map[string][6][]byte `json:"envMaps,omitempty"`
 	textures    textures.ITextures
 }
 

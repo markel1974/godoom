@@ -154,6 +154,7 @@ func bakeLWOModel(modelPath string, ent *proc.MapEntity, materials *proc.Materia
 	if len(allTriangles) == 0 {
 		return nil
 	}
+	config.NormalizeNormalsAndWinding(allTriangles, false, 0.5)
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	return model3d
@@ -196,13 +197,24 @@ func bakeProcModel(model *proc.Model, ent *proc.MapEntity, materials *proc.Mater
 				continue
 			}
 			v0, v1, v2 := surface.Vertices[i0], surface.Vertices[i1], surface.Vertices[i2]
+			p0, p1, p2 := ent.TransformPoint(v0.Pos), ent.TransformPoint(v1.Pos), ent.TransformPoint(v2.Pos)
+			n0End := ent.TransformPoint(geometry.XYZ{X: v0.Pos.X + v0.Normal.X, Y: v0.Pos.Y + v0.Normal.Y, Z: v0.Pos.Z + v0.Normal.Z})
+			n1End := ent.TransformPoint(geometry.XYZ{X: v1.Pos.X + v1.Normal.X, Y: v1.Pos.Y + v1.Normal.Y, Z: v1.Pos.Z + v1.Normal.Z})
+			n2End := ent.TransformPoint(geometry.XYZ{X: v2.Pos.X + v2.Normal.X, Y: v2.Pos.Y + v2.Normal.Y, Z: v2.Pos.Z + v2.Normal.Z})
+			n0 := geometry.XYZ{X: n0End.X - p0.X, Y: n0End.Y - p0.Y, Z: n0End.Z - p0.Z}
+			n1 := geometry.XYZ{X: n1End.X - p1.X, Y: n1End.Y - p1.Y, Z: n1End.Z - p1.Z}
+			n2 := geometry.XYZ{X: n2End.X - p2.X, Y: n2End.Y - p2.Y, Z: n2End.Z - p2.Z}
+			hasN0 := v0.Normal.X != 0 || v0.Normal.Y != 0 || v0.Normal.Z != 0
+			hasN1 := v1.Normal.X != 0 || v1.Normal.Y != 0 || v1.Normal.Z != 0
+			hasN2 := v2.Normal.X != 0 || v2.Normal.Y != 0 || v2.Normal.Z != 0
 			tri := config.NewModel3DEntryTriangle(material)
-			tri.Vertices[0] = config.Model3DEntryVertex{Pos: ent.TransformPoint(v0.Pos), U: float32(v0.U), V: float32(v0.V)}
-			tri.Vertices[1] = config.Model3DEntryVertex{Pos: ent.TransformPoint(v1.Pos), U: float32(v1.U), V: float32(v1.V)}
-			tri.Vertices[2] = config.Model3DEntryVertex{Pos: ent.TransformPoint(v2.Pos), U: float32(v2.U), V: float32(v2.V)}
+			tri.Vertices[0] = config.Model3DEntryVertex{Pos: p0, U: float32(v0.U), V: float32(v0.V), Normal: n0, HasNormal: hasN0}
+			tri.Vertices[1] = config.Model3DEntryVertex{Pos: p1, U: float32(v1.U), V: float32(v1.V), Normal: n1, HasNormal: hasN1}
+			tri.Vertices[2] = config.Model3DEntryVertex{Pos: p2, U: float32(v2.U), V: float32(v2.V), Normal: n2, HasNormal: hasN2}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
+	config.NormalizeNormalsAndWinding(allTriangles, false, 0.5)
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	return model3d

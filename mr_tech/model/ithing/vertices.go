@@ -32,6 +32,12 @@ type IVertices interface {
 	IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, geometry.XYZ, bool)
 }
 
+// IRigidRenderSource is implemented by 3D renderables whose geometry comes from an immutable local-space
+// Faces template positioned/rotated in world space via entity center and quaternion.
+type IRigidRenderSource interface {
+	GetRigidFaces() *volumes.Faces
+}
+
 // IPartOwner is implemented by articulated owners whose sub-parts live as independent nodes in Things.tree.
 type IPartOwner interface {
 	GetPartLen() int

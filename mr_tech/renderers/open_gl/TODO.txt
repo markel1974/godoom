@@ -1,0 +1,31 @@
+Frammentazione dei draw call sui volumi statici (critico in WASM/WebGL2):
+
+Ogni *volumes.Faces crea un proprio ResidentMesh con VAO, VBO ed EBO separati.
+In DrawCommandsRender.RenderPrepass, RenderShade e in ogni tile di Depth.Render, staticItems chiama un BindVertexArray + DrawElements individuale per ogni submesh di ogni volume visibile (mentre solo la path streaming usa MultiDrawElements).
+Su WASM/WebGL2, ogni cambio stato o DrawElements paga una chiamata sincrona syscall/js; su mappe con molti settori/volumi diventa rapidamente il primo collo di bottiglia CPU/bridge. Accorpare i volumi statici in un Mega-VBO/VAO statico (con offset o MultiDrawElements) eliminerebbe quasi tutti i VAO bind.
+
+Nessun riutilizzo vertici (triangle soup indicizzato) & vertex layout non compresso:
+
+In ResidentMesh.Rebuild, Indices resta sequenziale (vIdx, vIdx+1, vIdx+2): ogni triangolo scrive 3 vertici separati da 96 byte l'uno senza vertex deduplication/post-transform cache. Su mesh 3D lisce (personaggi/veicoli con migliaia di triangoli) significa ~3× trasformazioni nel vertex shader e ~3× VRAM rispetto a una vera index buffer condivisa.
+
+Shadow Atlas ricalcolato interamente ad ogni frame con lo stesso frustum della camera:
+
+Quando le ombre sono attive, Depth.Render ridisegna l'intero set dcOpaque (tutta la geometria visibile alla camera, senza frustum culling per singola luce, e con CULL_FACE disabilitato) su stanza (1024²), torcia (1024²) e fino a 8 shadow light (512²): fino a 10 ridisegni completi per frame.
+Inoltre, usando dcOpaque già cullato dal frustum della camera principale (frustumFront), oggetti/muri appena fuori dall'inquadratura del giocatore ma dentro il cono di una luce/stanza non proiettano ombra dentro la vista, e le shadow light statiche non cachano la geometria statica quando la scena non si muove.
+
+Hardware Occlusion Queries non batchate & mappe cache senza eviction:
+
+OcclusionHW.Render fa il readback asincrono correttamente, ma emette comunque una tripletta BeginQuery + DrawArrays + EndQuery per ogni singola entità testata (in WebGL2 sono 3N chiamate JS ogni 4 frame).
+Le mappe volMeshes e thingMeshes in BuilderVolume e states in OcclusionHW non liberano mai i VAO/VBO/query di volumi o entity eliminate in run lunghe o cambi mappa in-place.
+
+Uniform per-pass ancora via chiamate singole invece di UBO PerFrame / ShadowLights:
+
+Main.bindForwardUniforms invia decine di matrici/vettori (e fino a 8 struct u_shadowLights[i] = ~40 chiamate uniform) ad ogni pass (solid, cutout, transparent). Spostarli in un UBO condiviso aggiornato 1 volta per frame taglierebbe molte chiamate gl.uniform* in WebGL2.
+
+
+
+1) Unificare i volumi statici in pochi Mega-VBO/VAO (invece di un ResidentMesh per Volume) + MultiDrawElements anche sul percorso statico.
+
+2) Spostare matrici per-frame e u_shadowLights in un UBO per azzerare le decine di Uniform* su bridge JS in WebGL2.
+
+3) Indice vero (deduplica vertici) nei ResidentMesh e culling / throttling per-luce in Depth.Render.

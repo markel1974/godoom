@@ -114,6 +114,7 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 			}
 			triangles[tIdx] = cTri
 		}
+		config.NormalizeNormalsAndWinding(triangles, true, 0.5)
 		cFrame := config.NewModel3DEntryFrame(triangles)
 		cModel.Frames[idx] = cFrame
 	}
@@ -180,12 +181,13 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 						break
 					}
 				}
-				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v, Normal: bspFace.Normal, HasNormal: bspFace.HasNormal}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
+	config.NormalizeNormalsAndWinding(allTriangles, false, 0.5)
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := CreateConfigThing(classname, "", position, model3d, nil)
@@ -216,11 +218,12 @@ func (th *Things) CreateInternalBModel(rawFaces []*lumps.RawFace2, position geom
 						break
 					}
 				}
-				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v, Normal: bspFace.Normal, HasNormal: bspFace.HasNormal}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
+	config.NormalizeNormalsAndWinding(allTriangles, false, 0.5)
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	return CreateConfigThing(classname, "", position, model3d, ent), nil

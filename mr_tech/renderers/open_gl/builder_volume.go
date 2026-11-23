@@ -20,29 +20,27 @@ import (
 
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
-	ctx              api.IContext
-	tex              *Textures
-	fv               *FrameVertices
-	dcOpaque         *DrawCommands
-	dcAdditive       *DrawCommands
-	dcLiquid         *DrawCommands
-	fl               *FrameLights
-	dcRenderOpaque   *shaders.DrawCommandsRender
-	dcRenderAdditive *shaders.DrawCommandsRender
-	dcRenderLiquid   *shaders.DrawCommandsRender
-	cSky             *textures.Material
-	cal              *model.Calibration
-	visibleVol       *VisibleVolumes
-	modes            []*DrawCommands
-	occlusion        *OcclusionHW
-	frustumFront     *metrics.Frustum
-	//frustumLightFront *metrics.Frustum
-	//frustumLightRear  *metrics.Frustum
-	//lightFrontFrustum *aabb.Frustum
-	//lightRearFrustum  *aabb.Frustum
-	lightBB  *aabb.BoundingBox
-	playerId uint64
-	player   *things.Player
+	ctx                 api.IContext
+	tex                 *Textures
+	fv                  *FrameVertices
+	dcOpaque            *DrawCommands
+	dcAdditive          *DrawCommands
+	dcLiquid            *DrawCommands
+	dcTransparent       *DrawCommands
+	fl                  *FrameLights
+	dcRenderOpaque      *shaders.DrawCommandsRender
+	dcRenderAdditive    *shaders.DrawCommandsRender
+	dcRenderLiquid      *shaders.DrawCommandsRender
+	dcRenderTransparent *shaders.DrawCommandsRender
+	cSky                *textures.Material
+	cal                 *model.Calibration
+	visibleVol          *VisibleVolumes
+	modes               []*DrawCommands
+	occlusion           *OcclusionHW
+	frustumFront        *metrics.Frustum
+	lightBB             *aabb.BoundingBox
+	playerId            uint64
+	player              *things.Player
 
 	cachedRawVols   []*volumes.Volume
 	cachedSky       *textures.Material
@@ -53,49 +51,108 @@ type BuilderVolume struct {
 	lastPreparedGen uint64
 
 	thingsRender *ThingsRender
+
+	volMeshes   map[*volumes.Faces]*shaders.ResidentMesh
+	thingMeshes map[uint64][]*shaders.ResidentMesh
+	texLookupFn func(*textures.Texture) (float32, bool)
+
+	staticOpaque   []shaders.StaticDrawItem
+	staticLiquid   []shaders.StaticDrawItem
+	staticAdditive []shaders.StaticDrawItem
+	staticTransSrc []shaders.TransparentDrawItem
+
+	instancePool     *shaders.InstancePool
+	instGroups       []rigidInstanceGroup
+	numInstGroups    int
+	instGroupMap     map[*shaders.ResidentMesh]int
+	instOpaque       []shaders.InstancedDrawItem
+	instLiquid       []shaders.InstancedDrawItem
+	instAdditive     []shaders.InstancedDrawItem
+	instTransSrc     []rigidTransItem
+	lastInstVBO      uint32
+	transparentItems []shaders.TransparentDrawItem
+	lastCamGLX       float32
+	lastCamGLY       float32
+	lastCamGLZ       float32
+	meshFrame        uint64
+}
+
+type rigidInstance struct {
+	cx, cy, cz     float64
+	qx, qy, qz, qw float64
+}
+
+type rigidInstanceGroup struct {
+	mesh           *shaders.ResidentMesh
+	instances      []rigidInstance
+	baseByteOffset int32
+}
+
+type rigidTransItem struct {
+	mesh           *shaders.ResidentMesh
+	subIdx         int
+	baseByteOffset int32
+	cx, cy, cz     float32
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
 func NewBuilderVolume(ctx api.IContext, tex *Textures, cal *model.Calibration, player *things.Player) *BuilderVolume {
 	bv := &BuilderVolume{
-		ctx:              ctx,
-		tex:              tex,
-		player:           player,
-		playerId:         player.GetEntity().GetId(),
-		fv:               NewFrameVertices(ctx, 1048576),
-		dcOpaque:         NewDrawCommands(config.BlendModeOpaque, 32768),
-		dcAdditive:       NewDrawCommands(config.BlendModeAdditive, 4096),
-		dcLiquid:         NewDrawCommands(config.BlendModeLiquid, 4096),
-		fl:               NewFrameLights(ctx, 1024, cal.EnableShadowLights),
-		dcRenderOpaque:   shaders.NewDrawCommandsRender(ctx, "opaque", false),
-		dcRenderAdditive: shaders.NewDrawCommandsRender(ctx, "additive", true),
-		dcRenderLiquid:   shaders.NewDrawCommandsRender(ctx, "liquid", true),
-		cSky:             nil,
-		cal:              cal,
-		visibleVol:       NewVisibleVols(8192),
-		modes:            make([]*DrawCommands, config.BlendModeLatest),
-		occlusion:        NewOcclusionHW(ctx, 4096),
-		frustumFront:     metrics.NewFrustum(),
-		//frustumLightFront: metrics.NewFrustum(),
-		//frustumLightRear:  metrics.NewFrustum(),
-		//lightFrontFrustum: aabb.NewFrustum(),
-		//lightRearFrustum:  aabb.NewFrustum(),
-		lightBB:       aabb.NewBoundingBox(),
-		cachedRawVols: make([]*volumes.Volume, 0, 8192),
-		thingsRender:  NewThingsRender(),
+		ctx:                 ctx,
+		tex:                 tex,
+		player:              player,
+		playerId:            player.GetEntity().GetId(),
+		fv:                  NewFrameVertices(ctx, 1048576),
+		dcOpaque:            NewDrawCommands(config.BlendModeOpaque, 32768),
+		dcAdditive:          NewDrawCommands(config.BlendModeAdditive, 4096),
+		dcLiquid:            NewDrawCommands(config.BlendModeLiquid, 4096),
+		dcTransparent:       NewDrawCommands(config.BlendModeTransparent, 4096),
+		fl:                  NewFrameLights(ctx, 1024, cal.EnableShadowLights),
+		dcRenderOpaque:      shaders.NewDrawCommandsRender(ctx, "opaque", false),
+		dcRenderAdditive:    shaders.NewDrawCommandsRender(ctx, "additive", true),
+		dcRenderLiquid:      shaders.NewDrawCommandsRender(ctx, "liquid", true),
+		dcRenderTransparent: shaders.NewDrawCommandsRender(ctx, "transparent", false),
+		cSky:                nil,
+		cal:                 cal,
+		visibleVol:          NewVisibleVols(8192),
+		modes:               make([]*DrawCommands, config.BlendModeLatest),
+		occlusion:           NewOcclusionHW(ctx, 4096),
+		frustumFront:        metrics.NewFrustum(),
+		lightBB:             aabb.NewBoundingBox(),
+		cachedRawVols:       make([]*volumes.Volume, 0, 8192),
+		thingsRender:        NewThingsRender(),
+		volMeshes:           make(map[*volumes.Faces]*shaders.ResidentMesh, 1024),
+		thingMeshes:         make(map[uint64][]*shaders.ResidentMesh, 256),
+		instancePool:        shaders.NewInstancePool(ctx, 256),
+		instGroups:          make([]rigidInstanceGroup, 32),
+		instGroupMap:        make(map[*shaders.ResidentMesh]int, 64),
 	}
+	bv.texLookupFn = bv.lookupTexLayer
 	prjScale := bv.cal.PrjScale
 	bv.frustumFront.Setup(float32(bv.cal.AspectRatio), float32(bv.cal.ZFar), float32(bv.cal.ZNear), prjScale, prjScale)
-
-	//prjScaleLights := bv.cal.PrjScaleLights
-	//bv.frustumLightFront.Setup(1.0, float32(bv.cal.ZLightFar), float32(bv.cal.ZNear), prjScaleLights, prjScaleLights)
-	//.frustumLightRear.Setup(1.0, float32(bv.cal.ZLightFar), float32(bv.cal.ZNear), prjScaleLights, prjScaleLights)
 
 	bv.modes[bv.dcOpaque.GetBlendMode()] = bv.dcOpaque
 	bv.modes[bv.dcAdditive.GetBlendMode()] = bv.dcAdditive
 	bv.modes[bv.dcLiquid.GetBlendMode()] = bv.dcLiquid
+	bv.modes[bv.dcTransparent.GetBlendMode()] = bv.dcTransparent
 
 	return bv
+}
+
+func (w *BuilderVolume) lookupTexLayer(tex *textures.Texture) (float32, bool) {
+	if tex == nil {
+		return 0, false
+	}
+	tId := tex.GetIdentifier()
+	if tId < 0 {
+		var ok bool
+		tId, ok = w.tex.Get(tex)
+		if !ok {
+			return 0, false
+		}
+		tex.SetIdentifier(tId)
+	}
+	return tId, true
 }
 
 // GetShadowLights retrieves up to 8 shadow-casting lights and their count from the current frame lighting data.
@@ -130,16 +187,12 @@ func (w *BuilderVolume) GetUploadHints() (staticVertBytes, staticIdxBytes int, s
 
 // Compute processes volumes, lights, and things within the given frustum and prepares rendering draw commands.
 func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *engine.Engine) {
+	w.meshFrame++
 	px, py, pz := vi.GetView()
 	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()
-	//rAngle, rPitch, rRoll := angle+math.Pi, -pitch, -roll
 	w.frustumFront.Update(float32(px), float32(py), float32(pz), angle, pitch, roll)
-	//w.frustumLightFront.Update(float32(px), float32(py), float32(pz), angle, pitch, roll)
-	//w.frustumLightRear.Update(float32(px), float32(py), float32(pz), rAngle, rPitch, rRoll)
 
 	frustumFront := vi.GetFrontFrustum(w.frustumFront.Get())
-	//frustumLightFront := w.lightFrontFrustum.Rebuild(w.frustumLightFront.Get())
-	//frustumLightRear := w.lightRearFrustum.Rebuild(w.frustumLightRear.Get())
 	size := w.cal.ZLightFar
 	w.lightBB.RebuildCenter(px, py, pz, size, size, size)
 
@@ -154,15 +207,100 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 	}
 	if w.lastPreparedGen != w.frameGen {
 		w.dcRenderOpaque.Prepare(w.dcOpaque.GetDrawCommands())
+		w.dcRenderOpaque.SetResidentDraws(w.staticOpaque, w.instOpaque)
+
 		w.dcRenderAdditive.Prepare(w.dcAdditive.GetDrawCommands())
+		w.dcRenderAdditive.SetResidentDraws(w.staticAdditive, w.instAdditive)
+
 		w.dcRenderLiquid.Prepare(w.dcLiquid.GetDrawCommands())
+		w.dcRenderLiquid.SetResidentDraws(w.staticLiquid, w.instLiquid)
 		w.lastPreparedGen = w.frameGen
 	}
+
+	camGLX, camGLY, camGLZ := float32(px), float32(pz), float32(-py)
+	transCmds := w.dcTransparent.GetDrawCommands()
+	hasTrans := len(w.staticTransSrc) > 0 || len(w.instTransSrc) > 0 || len(transCmds) > 0
+	camMoved := camGLX != w.lastCamGLX || camGLY != w.lastCamGLY || camGLZ != w.lastCamGLZ
+	if hasTrans {
+		if staticChanged || thingsChanged || camMoved || len(w.transparentItems) == 0 {
+			w.transparentItems = w.transparentItems[:0]
+			for i := range w.staticTransSrc {
+				it := w.staticTransSrc[i]
+				sub := &it.Mesh.SubMeshes[it.SubIdx]
+				dx := sub.CentroidX - camGLX
+				dy := sub.CentroidY - camGLY
+				dz := sub.CentroidZ - camGLZ
+				it.DistSq = dx*dx + dy*dy + dz*dz
+				w.transparentItems = append(w.transparentItems, it)
+			}
+			for i := range w.instTransSrc {
+				rt := &w.instTransSrc[i]
+				sub := &rt.mesh.SubMeshes[rt.subIdx]
+				dx := rt.cx - camGLX
+				dy := rt.cy - camGLY
+				dz := rt.cz - camGLZ
+				w.transparentItems = append(w.transparentItems, shaders.TransparentDrawItem{
+					Kind:           shaders.TransparentInstanced,
+					DistSq:         dx*dx + dy*dy + dz*dz,
+					SortOrder:      sub.SortOrder,
+					CullMode:       sub.CullMode,
+					HasCutout:      sub.HasCutout,
+					PolygonOffset:  sub.PolygonOffset,
+					Mesh:           rt.mesh,
+					SubIdx:         rt.subIdx,
+					InstanceVBO:    w.lastInstVBO,
+					BaseByteOffset: rt.baseByteOffset,
+					InstanceCount:  1,
+				})
+			}
+			for _, cmd := range transCmds {
+				if cmd.GetIndexCount() == 0 {
+					continue
+				}
+				mat := cmd.GetMaterial()
+				cx, cy, cz := cmd.GetCentroid()
+				dx := cx - camGLX
+				dy := cy - camGLY
+				dz := cz - camGLZ
+				sortOrder := 0
+				cullMode := config.CullFront
+				hasCutout := false
+				polyOff := false
+				if mat != nil {
+					sortOrder = mat.GetSort()
+					cullMode = mat.GetCullMode()
+					hasCutout = mat.HasCutout()
+					polyOff = mat.GetPolygonOffset()
+				}
+				w.transparentItems = append(w.transparentItems, shaders.TransparentDrawItem{
+					Kind:          shaders.TransparentStreaming,
+					DistSq:        dx*dx + dy*dy + dz*dz,
+					SortOrder:     sortOrder,
+					CullMode:      cullMode,
+					HasCutout:     hasCutout,
+					PolygonOffset: polyOff,
+					FirstIndex:    cmd.GetFirstIndex(),
+					IndexCount:    cmd.GetIndexCount(),
+				})
+			}
+			shaders.SortTransparentDrawItems(w.transparentItems)
+			w.dcRenderTransparent.SetTransparentDraws(w.transparentItems)
+		}
+	} else if len(w.transparentItems) > 0 {
+		w.transparentItems = w.transparentItems[:0]
+		w.dcRenderTransparent.SetTransparentDraws(nil)
+	}
+	w.lastCamGLX, w.lastCamGLY, w.lastCamGLZ = camGLX, camGLY, camGLZ
 }
 
-// pushQVolumesHardware processes visible volumes, sorts them, and generates draw commands based on their material properties.
-// It extracts geometry from the provided volumes within a frustum and applies texture and blending mode filters for rendering.
+// pushQVolumes updates GPU-resident static volume meshes only when the visible volume set, geometry, or animated wall textures change.
 func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
+	if w.volMeshes == nil {
+		w.volMeshes = make(map[*volumes.Faces]*shaders.ResidentMesh, 1024)
+	}
+	if w.texLookupFn == nil {
+		w.texLookupFn = w.lookupTexLayer
+	}
 	w.visibleVol.Reset(vols.Len(), pX, pY, pZ)
 
 	// Raccolta dal DBVH (Broad-Phase)
@@ -180,8 +318,12 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 				canReuse = false
 				break
 			}
-			marker := vol.GetMarker()
-			if marker <= 0 || w.fv.Stage(marker).NeedsAnimRebuild() {
+			faces := vol.GetFaces()
+			if faces == nil {
+				continue
+			}
+			rm := w.volMeshes[faces]
+			if rm == nil || rm.NeedsRebuild(faces, true) {
 				canReuse = false
 				break
 			}
@@ -193,14 +335,21 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		w.dcOpaque.Reset()
 		w.dcAdditive.Reset()
 		w.dcLiquid.Reset()
+		if w.dcTransparent != nil {
+			w.dcTransparent.Reset()
+		}
 		w.cSky = w.cachedSky
 		return false
 	}
 
+	w.meshFrame++
 	w.fv.DeepReset()
 	w.dcOpaque.DeepReset()
 	w.dcAdditive.DeepReset()
 	w.dcLiquid.DeepReset()
+	if w.dcTransparent != nil {
+		w.dcTransparent.DeepReset()
+	}
 	w.cSky = nil
 
 	if cap(w.cachedRawVols) < visLen {
@@ -213,80 +362,58 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	}
 	copy(w.cachedRawVols, w.visibleVol.RawSlice())
 
-	//GPU CULLING HELPER
+	// Sort front-to-back for early-Z static submission order.
 	w.visibleVol.Sort()
 
-	//counter := 0
+	w.staticOpaque = w.staticOpaque[:0]
+	w.staticLiquid = w.staticLiquid[:0]
+	w.staticAdditive = w.staticAdditive[:0]
+	w.staticTransSrc = w.staticTransSrc[:0]
 
 	for vIdx := 0; vIdx < visLen; vIdx++ {
 		vol := w.visibleVol.At(vIdx)
-		marker := vol.GetMarker()
-		if marker <= 0 {
-			marker = w.fv.CreateMarker()
-			vol.SetMarker(marker)
+		faces := vol.GetFaces()
+		if faces == nil {
+			vol.ClearDirty()
+			continue
 		}
-		fv := w.fv.Stage(marker)
-		if vol.IsDirty() || fv.NeedsAnimRebuild() {
-			fv.DeepReset()
-			faces := vol.GetFaces()
-			startIdx := fv.GetIndicesLen()
-			//added := false
-			for x := 0; x < faces.Len(); x++ {
-				face := faces.At(x)
-				if face == nil {
-					continue
-				}
-				mat := face.GetMaterial()
-				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
-					continue
-				}
-				tex := mat.GetCurrentFrame()
-				if tex == nil {
-					continue
-				}
-				if mat.IsAnimated() {
-					fv.AddAnimRef(mat, tex)
-				}
-				tId := tex.GetIdentifier()
-				if tId < 0 {
-					tId, _ = w.tex.Get(tex)
-					tex.SetIdentifier(tId)
-				}
-				if mat.GetKind() == int(config.MaterialKindSky) {
-					w.cSky = mat // Nebbia volumetrica atmosferica
-					fv.SetMaterial(0, mat)
-					continue
-				}
-				faceBlendT := float32(0.0)
-				if config.MaterialKind(mat.GetKind()).ToMaterialFamily() == config.MaterialFamilyLiquid {
-					faceBlendT = 0.5
-				}
-				packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
-				p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
-				u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-				id0 := fv.AddVertex14(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
-				id1 := fv.AddVertex14(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
-				id2 := fv.AddVertex14(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, 0, 0, 0, faceBlendT, packed, spec, shininess, detailScale, detailFactor)
-				fv.AddTriangle(id0, id1, id2)
-				//w.occBuffer.RasterizeTriangle(p[0], p[1], p[2], mvp)
-				endIdx := fv.GetIndicesLen()
-				if startIdx != endIdx {
-					blendMode := mat.GetBlendMode()
-					fv.AddBatch(blendMode, endIdx-startIdx, mat)
-					startIdx = endIdx
-					//added = true
-				}
-			}
+		rm := w.volMeshes[faces]
+		if rm == nil {
+			rm = shaders.NewResidentMesh(w.ctx)
+			w.volMeshes[faces] = rm
+		}
+		rm.LastSeenFrame = w.meshFrame
+		if vol.IsDirty() || rm.NeedsRebuild(faces, true) {
+			rm.Rebuild(faces, w.texLookupFn)
 			vol.ClearDirty()
 		}
-
-		w.fv.Commit(fv, w.modes)
-		if skyMat := fv.GetMaterial(0); skyMat != nil {
-			w.cSky = skyMat
+		if rm.SkyMaterial != nil {
+			w.cSky = rm.SkyMaterial
 		}
-		//if added {
-		//	counter++
-		//}
+		for sIdx := range rm.SubMeshes {
+			sub := &rm.SubMeshes[sIdx]
+			if sub.IndexCount == 0 {
+				continue
+			}
+			switch sub.BlendMode {
+			case config.BlendModeLiquid:
+				w.staticLiquid = append(w.staticLiquid, shaders.StaticDrawItem{Mesh: rm, SubIdx: sIdx})
+			case config.BlendModeAdditive:
+				w.staticAdditive = append(w.staticAdditive, shaders.StaticDrawItem{Mesh: rm, SubIdx: sIdx})
+			case config.BlendModeTransparent:
+				w.staticTransSrc = append(w.staticTransSrc, shaders.TransparentDrawItem{
+					Kind:          shaders.TransparentStatic,
+					SortOrder:     sub.SortOrder,
+					CullMode:      sub.CullMode,
+					HasCutout:     sub.HasCutout,
+					PolygonOffset: sub.PolygonOffset,
+					Mesh:          rm,
+					SubIdx:        sIdx,
+				})
+			default:
+				w.staticOpaque = append(w.staticOpaque, shaders.StaticDrawItem{Mesh: rm, SubIdx: sIdx})
+			}
+		}
 	}
 
 	w.cachedSky = w.cSky
@@ -294,30 +421,89 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	w.dcOpaque.Freeze()
 	w.dcAdditive.Freeze()
 	w.dcLiquid.Freeze()
+	if w.dcTransparent != nil {
+		w.dcTransparent.Freeze()
+	}
 	w.staticVertBytes, w.staticIdxBytes = w.fv.FrozenBytes()
 	w.staticGen++
 	return true
 }
 
-// pushQThings processes and prepares "things" objects for rendering by querying them against the frustum and applying transformations.
+// pushQThings processes visible things: rigid props/vehicles/buildings route into GPU instancing,
+// while morphing 3D models, billboards, and UI elements route through the streaming vertex cache.
 func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) bool {
 	if w.thingsRender == nil {
 		w.thingsRender = NewThingsRender()
 	}
+	if w.thingMeshes == nil {
+		w.thingMeshes = make(map[uint64][]*shaders.ResidentMesh, 256)
+	}
+	if w.meshFrame == 0 {
+		w.meshFrame = 1
+	}
+	if w.instGroupMap == nil {
+		w.instGroupMap = make(map[*shaders.ResidentMesh]int, 64)
+	}
+	if w.instancePool == nil {
+		w.instancePool = shaders.NewInstancePool(w.ctx, 256)
+	}
+	if w.texLookupFn == nil {
+		w.texLookupFn = w.lookupTexLayer
+	}
 	w.thingsRender.Prepare()
+	w.numInstGroups = 0
+	clear(w.instGroupMap)
+
 	tick := textures.GlobalTick()
 
 	things.StagePrepare()
 
+	addRigidInstance := func(rm *shaders.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
+		gIdx, exists := w.instGroupMap[rm]
+		if !exists {
+			gIdx = w.numInstGroups
+			w.numInstGroups++
+			if gIdx >= len(w.instGroups) {
+				w.instGroups = append(w.instGroups, rigidInstanceGroup{})
+			}
+			w.instGroupMap[rm] = gIdx
+			w.instGroups[gIdx].mesh = rm
+			w.instGroups[gIdx].instances = w.instGroups[gIdx].instances[:0]
+		}
+		w.instGroups[gIdx].instances = append(w.instGroups[gIdx].instances, rigidInstance{
+			cx: cx, cy: cy, cz: cz,
+			qx: qx, qy: qy, qz: qz, qw: qw,
+		})
+	}
+
 	pushPassThing := func(thing ithing.IThing) {
 		thing.Compile(tick)
+
+		ent := thing.GetEntity()
+		entry2 := w.thingsRender.Retrieve(ent)
+
+		if rs, ok := thing.(ithing.IRigidRenderSource); ok {
+			if rigidFaces := rs.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
+				rm, meshRebuilt := w.retrieveThingMesh(rigidFaces)
+				tPosX, tPosY, zBot := ent.GetCenter()
+				qx, qy, qz, qw := ent.GetQRotation().Get()
+				oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+				fqx, fqy, fqz, fqw := float32(qx), float32(qy), float32(qz), float32(qw)
+				if meshRebuilt || !entry2.EqualRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw) {
+					entry2.AssignRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw)
+				}
+				w.thingsRender.AddRef(entry2)
+				if len(rm.SubMeshes) > 0 {
+					addRigidInstance(rm, tPosX, tPosY, zBot, qx, qy, qz, qw)
+				}
+				return
+			}
+		}
+
 		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 		if pFaces == nil || pFaces.Len() == 0 {
 			return
 		}
-
-		ent := thing.GetEntity()
-		entry2 := w.thingsRender.Retrieve(ent)
 
 		lerp := float32(lp)
 		yaw := float32(thing.GetAngle())
@@ -344,6 +530,27 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 			var currentMat *textures.Material
 			batchStart := fv.GetIndicesLen()
+			var centSumX, centSumY, centSumZ float64
+			var centCount int
+
+			flushBatch := func() {
+				currentIndices := fv.GetIndicesLen()
+				if currentIndices > batchStart && currentMat != nil {
+					var bcx, bcy, bcz float32
+					if centCount > 0 {
+						inv := 1.0 / float64(centCount)
+						bcx = float32(centSumX * inv)
+						bcy = float32(centSumY * inv)
+						bcz = float32(centSumZ * inv)
+					} else {
+						bcx, bcy, bcz = oX, oY, oZ
+					}
+					fv.AddBatchCentroid(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat, bcx, bcy, bcz)
+				}
+				batchStart = currentIndices
+				centSumX, centSumY, centSumZ = 0, 0, 0
+				centCount = 0
+			}
 
 			limit := facesLen
 			if pNextFaces != nil && nextLen < limit {
@@ -373,17 +580,29 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 				}
 
 				if mat != currentMat {
-					currentIndices := fv.GetIndicesLen()
-					if currentIndices > batchStart && currentMat != nil {
-						fv.AddBatch(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat)
-					}
-					batchStart = currentIndices
+					flushBatch()
 					currentMat = mat
 				}
 
-				packed, spec, shininess, detailScale, detailFactor := mat.GetFlat()
+				packed, spec, shininess, detailScale, detailFactor, envStr, envTint := mat.GetRenderParams()
 				p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
 				u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
+				nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := face.GetVertexNormalsFlat()
+				tx0, ty0, tz0, s0, tx1, ty1, tz1, s1, tx2, ty2, tz2, s2 := face.GetTangentsFlat()
+				lmID, lmU, lmV := face.GetLightmap()
+				lmIDFloat := float32(lmID)
+
+				if renderMode == vertices.RenderModeOpaque || renderMode == vertices.RenderModeLiquid {
+					centSumX += (p0X + p1X + p2X) / 3.0
+					centSumY += (p0Z + p1Z + p2Z) / 3.0
+					centSumZ += -(p0Y + p1Y + p2Y) / 3.0
+				} else {
+					centSumX += float64(oX)
+					centSumY += float64(oY)
+					centSumZ += float64(oZ)
+				}
+				centCount++
+
 				var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
 				if pNextFaces != nil {
 					if nf := pNextFaces.At(fx); nf != nil {
@@ -395,17 +614,13 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 					np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
 				}
 
-				id0 := fv.AddVertex20(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, oX, oY, oZ, renderModeF, float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
-				id1 := fv.AddVertex20(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, oX, oY, oZ, renderModeF, float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
-				id2 := fv.AddVertex20(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, oX, oY, oZ, renderModeF, float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor)
+				id0 := fv.AddVertexFull(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, float32(nx0), float32(nz0), float32(-ny0), float32(tx0), float32(tz0), float32(-ty0), float32(s0), float32(lmU[0]), float32(lmV[0]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+				id1 := fv.AddVertexFull(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, float32(nx1), float32(nz1), float32(-ny1), float32(tx1), float32(tz1), float32(-ty1), float32(s1), float32(lmU[1]), float32(lmV[1]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+				id2 := fv.AddVertexFull(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, float32(nx2), float32(nz2), float32(-ny2), float32(tx2), float32(tz2), float32(-ty2), float32(s2), float32(lmU[2]), float32(lmV[2]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
 				fv.AddTriangle(id0, id1, id2)
 			}
 
-			currentIndices := fv.GetIndicesLen()
-			if currentIndices > batchStart && currentMat != nil {
-				fv.AddBatch(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat)
-			}
-
+			flushBatch()
 			entry2.Assign(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ)
 		}
 
@@ -432,7 +647,6 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			w.occlusion.Add(ab, occState) // Lo vediamo, aggiungiamolo ai test GPU
 		}
 		pushPassThing(thing)
-		//counter++
 		return false
 	}
 
@@ -443,12 +657,85 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	things.StageAdd(w.player)
 
-	things.QueryStatic(qStatic) //UI Objects
+	things.QueryStatic(qStatic) // UI Objects
 	things.QueryFrustum(frustumFront, qOcclusion)
 
 	things.StageCommit()
 
 	thingsChanged := w.thingsRender.Commit()
+	if thingsChanged || w.frameGen == 0 {
+		w.instOpaque = w.instOpaque[:0]
+		w.instLiquid = w.instLiquid[:0]
+		w.instAdditive = w.instAdditive[:0]
+		w.instTransSrc = w.instTransSrc[:0]
+
+		w.instancePool.Reset()
+		for gi := 0; gi < w.numInstGroups; gi++ {
+			g := &w.instGroups[gi]
+			cnt := len(g.instances)
+			if cnt == 0 {
+				continue
+			}
+			baseByteOff, baseFloat := w.instancePool.Reserve(cnt)
+			g.baseByteOffset = baseByteOff
+			for k, inst := range g.instances {
+				w.instancePool.WriteTransformAt(baseFloat+k*shaders.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
+			}
+		}
+		instVBO := w.instancePool.Upload()
+		w.lastInstVBO = instVBO
+
+		for gi := 0; gi < w.numInstGroups; gi++ {
+			g := &w.instGroups[gi]
+			cnt := int32(len(g.instances))
+			if cnt == 0 {
+				continue
+			}
+			for sIdx := range g.mesh.SubMeshes {
+				sub := &g.mesh.SubMeshes[sIdx]
+				if sub.IndexCount == 0 {
+					continue
+				}
+				switch sub.BlendMode {
+				case config.BlendModeLiquid:
+					w.instLiquid = append(w.instLiquid, shaders.InstancedDrawItem{
+						Mesh:           g.mesh,
+						SubIdx:         sIdx,
+						InstanceVBO:    instVBO,
+						BaseByteOffset: g.baseByteOffset,
+						InstanceCount:  cnt,
+					})
+				case config.BlendModeAdditive:
+					w.instAdditive = append(w.instAdditive, shaders.InstancedDrawItem{
+						Mesh:           g.mesh,
+						SubIdx:         sIdx,
+						InstanceVBO:    instVBO,
+						BaseByteOffset: g.baseByteOffset,
+						InstanceCount:  cnt,
+					})
+				case config.BlendModeTransparent:
+					for k, inst := range g.instances {
+						w.instTransSrc = append(w.instTransSrc, rigidTransItem{
+							mesh:           g.mesh,
+							subIdx:         sIdx,
+							baseByteOffset: g.baseByteOffset + int32(k*shaders.InstanceMatrixFloats*4),
+							cx:             float32(inst.cx),
+							cy:             float32(inst.cz),
+							cz:             float32(-inst.cy),
+						})
+					}
+				default:
+					w.instOpaque = append(w.instOpaque, shaders.InstancedDrawItem{
+						Mesh:           g.mesh,
+						SubIdx:         sIdx,
+						InstanceVBO:    instVBO,
+						BaseByteOffset: g.baseByteOffset,
+						InstanceCount:  cnt,
+					})
+				}
+			}
+		}
+	}
 
 	return thingsChanged
 }
@@ -486,9 +773,86 @@ func (w *BuilderVolume) GetDrawCommandsLiquid() *shaders.DrawCommandsRender {
 	return w.dcRenderLiquid
 }
 
+// GetDrawCommandsTransparent returns the sorted transparent draw commands prepared for rendering.
+func (w *BuilderVolume) GetDrawCommandsTransparent() *shaders.DrawCommandsRender {
+	return w.dcRenderTransparent
+}
+
+// GetOpaqueInstancedItems returns the active rigid instanced opaque draw items for inspection.
+func (w *BuilderVolume) GetOpaqueInstancedItems() []shaders.InstancedDrawItem {
+	return w.instOpaque
+}
+
+// GetResidentVolumeCount returns the number of active resident static volume submesh draws.
+func (w *BuilderVolume) GetResidentVolumeCount() int {
+	return len(w.staticOpaque) + len(w.staticLiquid) + len(w.staticAdditive) + len(w.staticTransSrc)
+}
+
+// GetInstancedDrawCount returns the number of active GPU-instanced submesh draw groups.
+func (w *BuilderVolume) GetInstancedDrawCount() int {
+	return len(w.instOpaque) + len(w.instLiquid) + len(w.instAdditive) + len(w.instTransSrc)
+}
+
+// GetStreamingVertexCount returns the current vertex count stored in the CPU streaming buffer.
+func (w *BuilderVolume) GetStreamingVertexCount() int {
+	_, _, vCount, _, _, _ := w.fv.GetVertices()
+	return int(vCount) / shaders.StreamingVertexFloats
+}
+
 // GetHWOcclusion retrieves the hardware-based occlusion object associated with the BuilderVolume.
 func (w *BuilderVolume) GetHWOcclusion() *OcclusionHW {
 	return w.occlusion
+}
+
+func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*shaders.ResidentMesh, bool) {
+	gh := rigidFaces.GetGeomHash()
+	bucket := w.thingMeshes[gh]
+	for _, rm := range bucket {
+		if rm.SrcFaces == rigidFaces || (rm.FaceCount == rigidFaces.Len() && rm.SrcFaces.GetGeomHash() == gh && facesEquivalent(rigidFaces, rm.SrcFaces)) {
+			if rm.LastSeenFrame != w.meshFrame {
+				rm.LastSeenFrame = w.meshFrame
+				if (rm.SrcFaces == rigidFaces && rm.NeedsRebuild(rigidFaces, true)) || rm.NeedsAnimRebuild() {
+					rm.Rebuild(rigidFaces, w.texLookupFn)
+					rm.RebuiltFrame = w.meshFrame
+				}
+			}
+			return rm, rm.RebuiltFrame == w.meshFrame
+		}
+	}
+	rm := shaders.NewResidentMesh(w.ctx)
+	rm.LastSeenFrame = w.meshFrame
+	rm.RebuiltFrame = w.meshFrame
+	rm.Rebuild(rigidFaces, w.texLookupFn)
+	w.thingMeshes[gh] = append(bucket, rm)
+	return rm, true
+}
+
+func facesEquivalent(a, b *volumes.Faces) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil || a.Len() != b.Len() {
+		return false
+	}
+	n := a.Len()
+	for i := 0; i < n; i++ {
+		fa := a.At(i)
+		fb := b.At(i)
+		if fa == fb {
+			continue
+		}
+		if fa == nil || fb == nil || fa.GetMaterial() != fb.GetMaterial() {
+			return false
+		}
+		ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := fa.GetPointsFlat()
+		bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2 := fb.GetPointsFlat()
+		if ax0 != bx0 || ay0 != by0 || az0 != bz0 ||
+			ax1 != bx1 || ay1 != by1 || az1 != bz1 ||
+			ax2 != bx2 || ay2 != by2 || az2 != bz2 {
+			return false
+		}
+	}
+	return true
 }
 
 /*

@@ -78,3 +78,8 @@ func (t *UI) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	// Usiamo 1.1 (Spherical Billboard) in modo che lo shader originale lo processi correttamente
 	return f1, f2, lp, vertices.RenderModeInterface
 }
+
+// GetRigidFaces disables world-space instancing for screen-space UI objects so they stream with RenderModeInterface.
+func (t *UI) GetRigidFaces() *volumes.Faces {
+	return nil
+}

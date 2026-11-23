@@ -1,0 +1,15 @@
+Sì — a livello di grafo delle dipendenze mr_tech/model, engine, physics, config, textures e generators sono completamente headless: nessun package di quel blocco importa mr_tech/renderers/open_gl o librerie grafiche/finestra, quindi engine.Engine può compilare il mondo e simulare fisica, collisioni, AI e streaming senza alcun contesto GPU.
+
+Detto questo con franchezza, la separazione può essere migliorata su due livelli (uno introdotto adesso e uno già presente nel codebase):
+
+Dettagli OpenGL-specifici finiti nel modello/materiali nelle modifiche appena fatte:
+
+Tangenti in spazio UV OpenGL: in mr_tech/model/volumes/face.go, computeTangent() inverte v (dv1 := fc.v[0] - fc.v[1] con nota GL TexCoords pass V_gl = -v) assumendo la convenzione coordinate di OpenGL. Un modello davvero agnostico dovrebbe calcolare le tangenti in (u, v) standard e gestire eventuale flip/segno solo nel backend (open_gl).
+Bit-packing shader dentro Material: GetRenderParams() in mr_tech/textures/material.go impacchetta envTint (e packed) in float32 pronti per gli attributi vertex GLSL. Nel modello/textures converrebbero getter puri (EnvMap, EnvMapTint), lasciando il packing al renderer in shaders.
+Lavoro CPU grafico eseguito sempre in Rebuild(): Faces.Rebuild() (mr_tech/model/volumes/faces.go) esegue sempre computeVertexNormalsAndTangents e computeGeomHash anche in scenari solo-fisica/server dove servono solo piano, edge collision e massa, mentre mr_tech/engine/engine.go trattiene sempre lightmaps, envMaps e chiama textures.Tick().
+
+Accoppiamenti verso il rendering già preesistenti:
+
+In mr_tech/model/ithing/vertices.go e mr_tech/model/vertices/vertices.go convivono fisica e dati di presentazione (GetUIFaces, RenderModeBillboard / Model3D / Interface), e mr_tech/textures/texture.go espone SetIdentifier(float32) usato come slot GPU dal renderer.
+
+Se stai puntando a usare il modello per un server headless / simulazione pura o per supportare un altro renderer (es. WebGPU/Vulkan) senza sporcare il dominio: posso subito spostare fuori da model/textures sia il flip UV OpenGL delle tangenti sia il packing float32 di GetRenderParams, e rendere opzionali in compilazione/init le parti solo-grafiche (lightmaps, envMaps, tangenti, computeGeomHash)? Dimmi quale direzione vuoi seguire.

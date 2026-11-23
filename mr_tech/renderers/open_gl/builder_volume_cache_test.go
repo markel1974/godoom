@@ -40,13 +40,17 @@ func (c *noopRenderCtx) PtrOffset(offset int) unsafe.Pointer                    
 func (c *noopRenderCtx) GenQueries(n int32, q *uint32)                          { c.allocIDs(n, q) }
 func (c *noopRenderCtx) GenVertexArrays(n int32, a *uint32)                     { c.allocIDs(n, a) }
 func (c *noopRenderCtx) GenBuffers(n int32, b *uint32)                          { c.allocIDs(n, b) }
+func (c *noopRenderCtx) DeleteBuffers(_ int32, _ *uint32)                       {}
+func (c *noopRenderCtx) DeleteVertexArrays(_ int32, _ *uint32)                  {}
 func (c *noopRenderCtx) GenTextures(n int32, t *uint32)                         { c.allocIDs(n, t) }
 func (c *noopRenderCtx) BindVertexArray(_ uint32)                               {}
 func (c *noopRenderCtx) BindBuffer(_, _ uint32)                                 {}
 func (c *noopRenderCtx) BindTexture(_, _ uint32)                                {}
 func (c *noopRenderCtx) BufferData(_ uint32, _ int, _ unsafe.Pointer, _ uint32) {}
+func (c *noopRenderCtx) BufferSubData(_ uint32, _ int, _ int, _ unsafe.Pointer) {}
 func (c *noopRenderCtx) VertexAttribPointer(_ uint32, _ int32, _ uint32, _ bool, _ int32, _ unsafe.Pointer) {
 }
+func (c *noopRenderCtx) VertexAttribDivisor(_, _ uint32)      {}
 func (c *noopRenderCtx) EnableVertexAttribArray(_ uint32)     {}
 func (c *noopRenderCtx) TexParameteri(_, _ uint32, _ int32)   {}
 func (c *noopRenderCtx) TexParameterf(_, _ uint32, _ float32) {}
@@ -55,7 +59,12 @@ func (c *noopRenderCtx) TexImage3D(_ uint32, _ int32, _ int32, _, _, _, _ int32,
 }
 func (c *noopRenderCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uint32, _ unsafe.Pointer) {
 }
-func (c *noopRenderCtx) GenerateMipmap(_ uint32) {}
+func (c *noopRenderCtx) TexImage2D(_ uint32, _ int32, _ int32, _, _, _ int32, _, _ uint32, _ unsafe.Pointer) {
+}
+func (c *noopRenderCtx) TexSubImage2D(_ uint32, _ int32, _, _, _, _ int32, _, _ uint32, _ unsafe.Pointer) {
+}
+func (c *noopRenderCtx) DeleteTextures(_ int32, _ *uint32) {}
+func (c *noopRenderCtx) GenerateMipmap(_ uint32)           {}
 
 type multiTexHandler struct {
 	frames []*textures.Texture
@@ -161,11 +170,11 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	}
 	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
 
-	// Frame 1: builds static prefix and visible things.
+	// Frame 1: builds resident static meshes (zero streaming static prefix) and visible things.
 	bv.Compute(640, 480, vi, en)
 	sBytes1, iBytes1, sGen1, fGen1 := bv.GetUploadHints()
-	if sGen1 == 0 || fGen1 == 0 || sBytes1 <= 0 || iBytes1 <= 0 {
-		t.Fatalf("expected valid initial build hints, got sBytes=%d iBytes=%d sGen=%d fGen=%d", sBytes1, iBytes1, sGen1, fGen1)
+	if sGen1 == 0 || fGen1 == 0 || sBytes1 != 0 || iBytes1 != 0 || bv.GetResidentVolumeCount() <= 0 {
+		t.Fatalf("expected resident static volumes without CPU prefix copy, got sBytes=%d iBytes=%d sGen=%d fGen=%d resVol=%d", sBytes1, iBytes1, sGen1, fGen1, bv.GetResidentVolumeCount())
 	}
 
 	var medikitThing, ammoThing ithing.IThing
@@ -217,12 +226,15 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	}
 
 	// Frame 5: animated material frame change when tick crosses tickInterval (32) must rebuild staticGen.
-	startTick := textures.GlobalTick()
-	for textures.GlobalTick() <= startTick+32 {
+	var sGen5 uint64
+	for step := 0; step <= 32; step++ {
 		textures.Tick()
+		bv.Compute(640, 480, vi, en)
+		_, _, sGen5, _ = bv.GetUploadHints()
+		if sGen5 > sGen4 {
+			break
+		}
 	}
-	bv.Compute(640, 480, vi, en)
-	_, _, sGen5, _ := bv.GetUploadHints()
 	if sGen5 <= sGen4 {
 		t.Fatalf("expected staticGen increment when animated wall texture frame switches, got %d -> %d", sGen4, sGen5)
 	}
@@ -354,5 +366,191 @@ func TestThingsRenderZeroAllocsHotPath(t *testing.T) {
 	})
 	if allocs != 0 {
 		t.Fatalf("expected 0 heap allocations in ThingsRender hot path, got %.2f", allocs)
+	}
+}
+
+func makeRigidCrateModel(mat *config.Material) *config.Model3DEntry {
+	buildTri := func(a, b, c geometry.XYZ) config.Model3DEntryTriangle {
+		tri := config.NewModel3DEntryTriangle(mat)
+		tri.Vertices[0] = config.Model3DEntryVertex{Pos: a, U: 0, V: 0}
+		tri.Vertices[1] = config.Model3DEntryVertex{Pos: b, U: 1, V: 0}
+		tri.Vertices[2] = config.Model3DEntryVertex{Pos: c, U: 1, V: 1}
+		return tri
+	}
+	v000 := geometry.XYZ{X: -12, Y: -12, Z: 0}
+	v100 := geometry.XYZ{X: 12, Y: -12, Z: 0}
+	v110 := geometry.XYZ{X: 12, Y: 12, Z: 0}
+	v010 := geometry.XYZ{X: -12, Y: 12, Z: 0}
+	v001 := geometry.XYZ{X: -12, Y: -12, Z: 24}
+	v101 := geometry.XYZ{X: 12, Y: -12, Z: 24}
+	v111 := geometry.XYZ{X: 12, Y: 12, Z: 24}
+	v011 := geometry.XYZ{X: -12, Y: 12, Z: 24}
+
+	tris := []config.Model3DEntryTriangle{
+		// Top & bottom
+		buildTri(v001, v101, v111), buildTri(v001, v111, v011),
+		buildTri(v000, v010, v110), buildTri(v000, v110, v100),
+		// Front & back
+		buildTri(v000, v100, v101), buildTri(v000, v101, v001),
+		buildTri(v110, v010, v011), buildTri(v110, v011, v111),
+		// Left & right
+		buildTri(v010, v000, v001), buildTri(v010, v001, v011),
+		buildTri(v100, v110, v111), buildTri(v100, v111, v101),
+	}
+	entry := config.NewModel3DEntry(1, []string{"idle"}, nil)
+	entry.Frames[0] = config.NewModel3DEntryFrame(tris)
+	return entry
+}
+
+func TestBuilderVolumeRigidInstancingAndTransparentSorting(t *testing.T) {
+	rigid_body.SetFps(120)
+	textures.SetFps(120)
+	defer rigid_body.SetFps(120)
+
+	t1 := textures.NewTexture("WALL_A", 1, 64, 64, false)
+	texH := &multiTexHandler{frames: []*textures.Texture{t1}}
+
+	cal := config.NewConfigCalibration()
+	cal.AspectRatio = 1.1
+	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}
+
+	matSolid := config.NewConfigMaterial("solid_wall", []string{"WALL_A"}, config.MaterialKindSolid)
+	matGlass := config.NewConfigMaterial("glass_wall", []string{"WALL_A"}, config.MaterialKindTranslucent)
+	matCrate := config.NewConfigMaterial("crate_mat", []string{"WALL_A"}, config.MaterialKindSolid)
+
+	sec := config.NewConfigSector("0", 1.0, config.LightKindAmbient, 100)
+	sec.FloorY = 0
+	sec.CeilY = 200
+	sec.Floor = matSolid
+	sec.Ceil = matSolid
+	sec.Segments = []*config.Segment{
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -400, Y: -400}, geometry.XY{X: 400, Y: -400})
+			s.Middle = matSolid
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 400, Y: -400}, geometry.XY{X: 400, Y: 400})
+			s.Middle = matGlass
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 400, Y: 400}, geometry.XY{X: -400, Y: 400})
+			s.Middle = matSolid
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -400, Y: 400}, geometry.XY{X: -400, Y: -400})
+			s.Middle = matSolid
+			return s
+		}(),
+	}
+
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+
+	// Measure player-only HUD/streaming vertex count first so we prove walls and rigid props add 0 streaming verts.
+	baseRoot := config.NewConfigRoot(cal, []*config.Sector{sec}, p, nil, scale, texH)
+	baseEn := engine.NewEngine()
+	if err := baseEn.Setup(baseRoot); err != nil {
+		t.Fatalf("base engine setup failed: %v", err)
+	}
+	basePl := baseEn.GetPlayer()
+	baseVi := engine.NewViewMatrix()
+	baseVi.Update(basePl)
+	baseCtx := &noopRenderCtx{}
+	baseTex := NewTextures(baseCtx)
+	if err := baseTex.Setup(baseEn.GetTextures()); err != nil {
+		t.Fatalf("base textures setup failed: %v", err)
+	}
+	baseBv := NewBuilderVolume(baseCtx, baseTex, baseEn.GetCalibration(), basePl)
+	baseBv.Compute(640, 480, baseVi, baseEn)
+	baseStreamVerts := baseBv.GetStreamingVertexCount()
+
+	p2 := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p2)
+	p2.GForce = 9.8 * 50
+
+	crateA := config.NewConfigItem("crate_a", geometry.XYZ{X: 160, Y: -24, Z: 0}, 0, 10, 0)
+	crateA.Radius = 16
+	crateA.Height = 24
+	crateA.GForce = 9.8 * 50
+	crateA.Element3D = makeRigidCrateModel(matCrate)
+
+	crateB := config.NewConfigItem("crate_b", geometry.XYZ{X: 220, Y: 24, Z: 0}, 0.5, 10, 0)
+	crateB.Radius = 16
+	crateB.Height = 24
+	crateB.GForce = 9.8 * 50
+	crateB.Element3D = makeRigidCrateModel(matCrate)
+
+	crateC := config.NewConfigItem("crate_c", geometry.XYZ{X: 260, Y: -10, Z: 0}, 1.0, 10, 0)
+	crateC.Radius = 16
+	crateC.Height = 24
+	crateC.GForce = 9.8 * 50
+	crateC.Element3D = makeRigidCrateModel(matCrate)
+
+	root := config.NewConfigRoot(cal, []*config.Sector{sec}, p2, []*config.Thing{crateA, crateB, crateC}, scale, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+
+	pl := en.GetPlayer()
+	vi := engine.NewViewMatrix()
+	vi.Update(pl)
+	mCal := en.GetCalibration()
+
+	rCtx := &noopRenderCtx{}
+	glTex := NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+
+	// Frame 1: static world -> resident, three rigid crates -> single instanced batch (count=3), 0 added streaming verts.
+	bv.Compute(640, 480, vi, en)
+	if bv.GetResidentVolumeCount() == 0 {
+		t.Fatalf("expected resident static volume draws > 0")
+	}
+	if got := bv.GetStreamingVertexCount(); got != baseStreamVerts {
+		t.Fatalf("expected streaming vertex count unchanged (%d) when adding resident walls + 3 rigid props, got %d", baseStreamVerts, got)
+	}
+	instItems := bv.GetOpaqueInstancedItems()
+	if len(instItems) != 1 || instItems[0].InstanceCount != 3 {
+		t.Fatalf("expected 3 identical crates merged into 1 instanced batch with InstanceCount=3, got batches=%d (items=%+v)", len(instItems), instItems)
+	}
+	if !bv.GetDrawCommandsTransparent().HasCommands() {
+		t.Fatalf("expected translucent wall routed into transparent draw commands")
+	}
+
+	_, _, sGen1, fGen1 := bv.GetUploadHints()
+
+	// Find crate_a and move/rotate it: must keep sGen untouched and copy 0 vertices into streaming buffer.
+	var crateThingA ithing.IThing
+	en.GetThings().QueryFrustum(vi.GetFrontFrustum(bv.frustumFront.Get()), func(obj aabb.IObject) bool {
+		th := obj.(ithing.IThing)
+		if th.GetId() == "crate_a" {
+			crateThingA = th
+			return true
+		}
+		return false
+	})
+	if crateThingA == nil {
+		t.Fatalf("failed to locate crate_a in frustum")
+	}
+	crateThingA.GetEntity().MoveCenterTo(180, -10, 0)
+	crateThingA.GetEntity().SetRotationQuaternion(0, 0, 0.3826834, 0.9238795)
+
+	bv.Compute(640, 480, vi, en)
+	_, _, sGen2, fGen2 := bv.GetUploadHints()
+	if sGen2 != sGen1 {
+		t.Fatalf("expected staticGen unchanged when rigid prop moves/rotates, got %d -> %d", sGen1, sGen2)
+	}
+	if fGen2 <= fGen1 {
+		t.Fatalf("expected frameGen to advance when rigid prop moves/rotates, got %d -> %d", fGen1, fGen2)
+	}
+	if got := bv.GetStreamingVertexCount(); got != baseStreamVerts {
+		t.Fatalf("expected streaming vertex count unchanged (%d) after moving/rotating rigid prop, got %d", baseStreamVerts, got)
 	}
 }

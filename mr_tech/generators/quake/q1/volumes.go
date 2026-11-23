@@ -27,7 +27,7 @@ func NewVolumes(mIdx int, volumesCount float64) *Volumes {
 func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 	var centroids []geometry.XYZ
 
-	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	preFlight := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string, raw *lumps.RawFace) {
 		cx := (tri[0].X + tri[1].X + tri[2].X) / 3.0
 		cy := (tri[0].Y + tri[1].Y + tri[2].Y) / 3.0
 		cz := (tri[0].Z + tri[1].Z + tri[2].Z) / 3.0
@@ -68,14 +68,19 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 	}
 
 	triCounter := 0
-	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string) {
+	addTriangle := func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string, raw *lumps.RawFace) {
 		if triCounter >= totalTriangles {
 			fmt.Println("max triangles reached", triCounter, "total", totalTriangles)
 			return
 		}
 		volIdx := clusterMap[triCounter]
 		triCounter++
-		volumes[volIdx].Faces = append(volumes[volIdx].Faces, config.NewConfigFace(tri, triUvs, material, matName))
+		cf := config.NewConfigFace(tri, triUvs, material, matName)
+		if raw != nil && raw.HasNormal {
+			cf.ExpectedNormal = raw.Normal
+			cf.HasExpectedNormal = true
+		}
+		volumes[volIdx].Faces = append(volumes[volIdx].Faces, cf)
 	}
 
 	vs.doBuild(faces, addTriangle)
@@ -83,7 +88,7 @@ func (vs *Volumes) Generate(faces []*lumps.RawFace) []*config.Volume {
 	return volumes
 }
 
-func (vs *Volumes) doBuild(faces []*lumps.RawFace, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string)) {
+func (vs *Volumes) doBuild(faces []*lumps.RawFace, addTriangle func(tri []geometry.XYZ, triUvs [][2]float64, material *config.Material, matName string, raw *lumps.RawFace)) {
 	for _, v := range faces {
 		isLiquid := false
 		animKind := config.MaterialKindSolid
@@ -134,7 +139,7 @@ func (vs *Volumes) doBuild(faces []*lumps.RawFace, addTriangle func(tri []geomet
 					}
 				}
 			}
-			addTriangle([]geometry.XYZ{rawTri[0], rawTri[1], rawTri[2]}, rawTriUvs, material, v.TexName)
+			addTriangle([]geometry.XYZ{rawTri[0], rawTri[1], rawTri[2]}, rawTriUvs, material, v.TexName, v)
 		}
 	}
 }

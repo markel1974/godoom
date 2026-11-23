@@ -130,6 +130,17 @@ func (v *Part) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.entry.GetFacesA(), v.entry.GetFacesB(), v.entry.GetLerpT(), vertices.RenderModeModel3D
 }
 
+// GetRigidFaces delegates to the underlying Element3D entry for non-morphing sub-parts.
+func (v *Part) GetRigidFaces() *volumes.Faces {
+	if v.physicsFree {
+		return v.entry.GetRigidFaces()
+	}
+	if v.entry.GetLerpT() == 0 {
+		return v.entry.GetRigidFaces()
+	}
+	return nil
+}
+
 // SetAction delegates action selection on this entry.
 func (v *Part) SetAction(idx int) {
 	v.entry.SetAction(idx)

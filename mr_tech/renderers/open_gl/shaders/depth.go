@@ -35,6 +35,7 @@ const (
 	DepthLocTexture
 	DepthLocView
 	DepthLocTime
+	DepthLocInstanceMode
 	DepthLocLast
 )
 
@@ -251,6 +252,7 @@ func (s *Depth) compileDepthProgram(assets IAssets, vertID, fragID, progName str
 	table[DepthLocTime] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_time\x00"))
 	table[DepthLocTexture] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_texture\x00"))
 	table[DepthLocView] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_view\x00"))
+	table[DepthLocInstanceMode] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_instanceMode\x00"))
 
 	for idx, v := range table {
 		if idx == int(DepthLocTexture) && !requireTexture {
@@ -287,29 +289,39 @@ func (s *Depth) Render(dc *DrawCommandsRender) {
 	s.ctx.BindVertexArray(mainVao)
 
 	s.ctx.Disable(api.CULL_FACE)
+	s.ctx.Disable(api.BLEND)
+	s.ctx.Enable(api.DEPTH_TEST)
+	s.ctx.DepthFunc(api.LESS)
+	s.ctx.DepthMask(true)
 	s.ctx.Enable(api.POLYGON_OFFSET_FILL)
-	s.ctx.Enable(api.DEPTH_CLAMP)
+	s.ctx.Enable(api.SCISSOR_TEST)
 
 	// Bind single master shadow atlas FBO and clear entire depth atlas in one go
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, s.shadowAtlasMap.fbo)
 	s.ctx.Viewport(0, 0, atlasSize, atlasSize)
+	s.ctx.Scissor(0, 0, atlasSize, atlasSize)
 	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
 
 	interval := float32(textures.GlobalTick()) * 0.05
 	if dc.HasSolid() {
+		dc.SetPassState(mainVao, s.tableSolid[DepthLocInstanceMode])
 		s.renderAtlasPass(s.prgSolid, &s.tableSolid, interval, func() {
 			dc.RenderCutoutFiltered(false)
 		})
 	}
 	if dc.HasCutout() {
+		dc.SetPassState(mainVao, s.table[DepthLocInstanceMode])
 		s.renderAtlasPass(s.prg, &s.table, interval, func() {
 			dc.RenderCutoutFiltered(true)
 		})
 	}
 
 	// Ripristiniamo lo stato di default per non influenzare il resto del rendering
+	s.ctx.Disable(api.SCISSOR_TEST)
 	s.ctx.Disable(api.DEPTH_CLAMP)
 	s.ctx.Disable(api.POLYGON_OFFSET_FILL)
+	s.ctx.DepthMask(true)
+	s.ctx.DepthFunc(api.LESS)
 	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
@@ -321,15 +333,21 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 	locLightSpace := table[DepthLocLightSpaceMatrix]
 
 	// OMBRA STANZA (Ortografica - Tile 1024x1024 in alto a sinistra: X: 0..1024, Y: 1024..2048)
+	// DEPTH_CLAMP applies only to orthographic room shadows so near roofs are not clipped;
+	// perspective tiles below rely on standard near-plane clipping.
+	s.ctx.Enable(api.DEPTH_CLAMP)
 	s.ctx.Viewport(0, 1024, 1024, 1024)
+	s.ctx.Scissor(0, 1024, 1024, 1024)
 	s.ctx.PolygonOffset(2.0, 4.0)
 	s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.roomSpaceMatrix)
 	renderSubset()
+	s.ctx.Disable(api.DEPTH_CLAMP)
 
 	// OMBRE TORCIA (Prospettica - Tile 1024x1024 in alto a destra: X: 1024..2048, Y: 1024..2048)
 	if s.flash != nil && s.flash.GetIntensity() > 0.001 {
 		s.ctx.Viewport(1024, 1024, 1024, 1024)
-		s.ctx.PolygonOffset(0.5, 1.0)
+		s.ctx.Scissor(1024, 1024, 1024, 1024)
+		s.ctx.PolygonOffset(1.5, 2.0)
 		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.flashSpaceMatrix)
 		renderSubset()
 	}
@@ -337,7 +355,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 	// OMBRE LUCI DINAMICHE (Fino a 8 Tile da 512x512 nella metà inferiore: Y: 0..1024)
 	if s.shadowLights {
 		if shadowLightCount := s.shadowLightsMetrics.GetLightCount(); shadowLightCount > 0 {
-			s.ctx.PolygonOffset(0.5, 1.0)
+			s.ctx.PolygonOffset(1.5, 2.0)
 			for x := 0; x < int(shadowLightCount); x++ {
 				shadowLights, lMatrix := s.shadowLightsMetrics.GetLight(x)
 				if shadowLights.Intensity <= 0.001 {
@@ -346,6 +364,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 				col := int32(x % 4)
 				row := int32(x / 4)
 				s.ctx.Viewport(col*512, row*512, 512, 512)
+				s.ctx.Scissor(col*512, row*512, 512, 512)
 				s.ctx.UniformMatrix4fv(locLightSpace, 1, false, lMatrix)
 				renderSubset()
 			}

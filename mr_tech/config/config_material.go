@@ -28,6 +28,7 @@ const (
 	MaterialKindBlood // Sangue denso e viscoso
 	MaterialKindFog   // Nebbia volumetrica atmosferica
 	MaterialKindSky
+	MaterialKindTranslucent
 	MaterialKindLatest
 )
 
@@ -35,7 +36,7 @@ func (m MaterialKind) ToMaterialFamily() MaterialFamily {
 	switch m {
 	case MaterialKindNone:
 		return MaterialFamilyNone
-	case MaterialKindSolid:
+	case MaterialKindSolid, MaterialKindTranslucent:
 		return MaterialFamilySolid
 	case MaterialKindWater, MaterialKindSea, MaterialKindLava, MaterialKindSlime, MaterialKindBlood, MaterialKindFog:
 		return MaterialFamilyLiquid
@@ -50,6 +51,7 @@ const (
 	BlendModeOpaque = iota
 	BlendModeAdditive
 	BlendModeLiquid
+	BlendModeTransparent
 	BlendModeLatest
 )
 
@@ -155,6 +157,12 @@ func NewConfigMaterial(name string, textures []string, kind MaterialKind) *Mater
 // SetKind updates the material's kind and adjusts its properties such as blend mode, solid state, and depth write settings.
 func (m *Material) SetKind(kind MaterialKind) {
 	m.Kind = kind
+	if m.Kind == MaterialKindTranslucent {
+		m.IsSolid = true
+		m.BlendMode = BlendModeTransparent
+		m.DepthWrite = false
+		return
+	}
 	switch m.Kind.ToMaterialFamily() {
 	case MaterialFamilySolid:
 		m.IsSolid = true

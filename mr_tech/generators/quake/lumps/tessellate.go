@@ -1,6 +1,8 @@
 package lumps
 
 import (
+	"math"
+
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
@@ -12,12 +14,22 @@ func EvalBezier(p0, p1, p2 float32, t float32) float32 {
 
 // Tessellate generates a tessellated surface and its UV coordinates from a 3x3 Bezier patch and subdivision level.
 func Tessellate(cp [9]Vertex3, level int) ([]geometry.XYZ, [][2]float64) {
+	points, uvs, _, _ := TessellateWithAttributes(cp, level)
+	return points, uvs
+}
+
+// TessellateWithAttributes generates a tessellated surface with texture UVs, lightmap UVs, and interpolated vertex normals.
+func TessellateWithAttributes(cp [9]Vertex3, level int) ([]geometry.XYZ, [][2]float64, [][2]float64, []geometry.XYZ) {
 	var points []geometry.XYZ
 	var uvs [][2]float64
+	var lmUVs [][2]float64
+	var normals []geometry.XYZ
 	step := 1.0 / float32(level)
 	L := level + 1
 	grid := make([]geometry.XYZ, L*L)
 	gridUV := make([][2]float64, L*L)
+	gridLM := make([][2]float64, L*L)
+	gridN := make([]geometry.XYZ, L*L)
 
 	// Calcolo interpolazione griglia
 	for i := 0; i <= level; i++ {
@@ -25,7 +37,9 @@ func Tessellate(cp [9]Vertex3, level int) ([]geometry.XYZ, [][2]float64) {
 		for j := 0; j <= level; j++ {
 			tU := float32(j) * step
 			var p [3]geometry.XYZ
+			var pn [3]geometry.XYZ
 			var puv [3][2]float32
+			var plm [3][2]float32
 			for row := 0; row < 3; row++ {
 				idx := row * 3
 				p[row] = CreateXYZ(
@@ -33,9 +47,18 @@ func Tessellate(cp [9]Vertex3, level int) ([]geometry.XYZ, [][2]float64) {
 					float64(EvalBezier(cp[idx].Position[1], cp[idx+1].Position[1], cp[idx+2].Position[1], tU)),
 					float64(EvalBezier(cp[idx].Position[2], cp[idx+1].Position[2], cp[idx+2].Position[2], tU)),
 				)
+				pn[row] = CreateXYZ(
+					float64(EvalBezier(cp[idx].Normal[0], cp[idx+1].Normal[0], cp[idx+2].Normal[0], tU)),
+					float64(EvalBezier(cp[idx].Normal[1], cp[idx+1].Normal[1], cp[idx+2].Normal[1], tU)),
+					float64(EvalBezier(cp[idx].Normal[2], cp[idx+1].Normal[2], cp[idx+2].Normal[2], tU)),
+				)
 				puv[row] = [2]float32{
 					EvalBezier(cp[idx].TexCoord[0], cp[idx+1].TexCoord[0], cp[idx+2].TexCoord[0], tU),
 					EvalBezier(cp[idx].TexCoord[1], cp[idx+1].TexCoord[1], cp[idx+2].TexCoord[1], tU),
+				}
+				plm[row] = [2]float32{
+					EvalBezier(cp[idx].LMapCoord[0], cp[idx+1].LMapCoord[0], cp[idx+2].LMapCoord[0], tU),
+					EvalBezier(cp[idx].LMapCoord[1], cp[idx+1].LMapCoord[1], cp[idx+2].LMapCoord[1], tU),
 				}
 			}
 			grid[i*L+j] = CreateXYZ(
@@ -43,9 +66,23 @@ func Tessellate(cp [9]Vertex3, level int) ([]geometry.XYZ, [][2]float64) {
 				float64(EvalBezier(float32(p[0].Y), float32(p[1].Y), float32(p[2].Y), tV)),
 				float64(EvalBezier(float32(p[0].Z), float32(p[1].Z), float32(p[2].Z), tV)),
 			)
+			nx := float64(EvalBezier(float32(pn[0].X), float32(pn[1].X), float32(pn[2].X), tV))
+			ny := float64(EvalBezier(float32(pn[0].Y), float32(pn[1].Y), float32(pn[2].Y), tV))
+			nz := float64(EvalBezier(float32(pn[0].Z), float32(pn[1].Z), float32(pn[2].Z), tV))
+			nl := math.Sqrt(nx*nx + ny*ny + nz*nz)
+			if nl > 1e-12 {
+				nx /= nl
+				ny /= nl
+				nz /= nl
+			}
+			gridN[i*L+j] = geometry.XYZ{X: nx, Y: ny, Z: nz}
 			gridUV[i*L+j] = [2]float64{
 				float64(EvalBezier(puv[0][0], puv[1][0], puv[2][0], tV)),
 				float64(EvalBezier(puv[0][1], puv[1][1], puv[2][1], tV)),
+			}
+			gridLM[i*L+j] = [2]float64{
+				float64(EvalBezier(plm[0][0], plm[1][0], plm[2][0], tV)),
+				float64(EvalBezier(plm[0][1], plm[1][1], plm[2][1], tV)),
 			}
 		}
 	}
@@ -60,10 +97,14 @@ func Tessellate(cp [9]Vertex3, level int) ([]geometry.XYZ, [][2]float64) {
 
 			points = append(points, grid[idx0], grid[idx2], grid[idx1])
 			uvs = append(uvs, gridUV[idx0], gridUV[idx2], gridUV[idx1])
+			lmUVs = append(lmUVs, gridLM[idx0], gridLM[idx2], gridLM[idx1])
+			normals = append(normals, gridN[idx0], gridN[idx2], gridN[idx1])
 
 			points = append(points, grid[idx1], grid[idx2], grid[idx3])
 			uvs = append(uvs, gridUV[idx1], gridUV[idx2], gridUV[idx3])
+			lmUVs = append(lmUVs, gridLM[idx1], gridLM[idx2], gridLM[idx3])
+			normals = append(normals, gridN[idx1], gridN[idx2], gridN[idx3])
 		}
 	}
-	return points, uvs
+	return points, uvs, lmUVs, normals
 }

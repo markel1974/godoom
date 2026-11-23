@@ -50,6 +50,8 @@ type IContext interface {
 
 	CreateShader(xtype uint32) uint32
 
+	DeleteBuffers(n int32, buffers *uint32)
+
 	DeleteFramebuffers(n int32, framebuffers *uint32)
 
 	DeleteRenderbuffers(n int32, renderbuffers *uint32)
@@ -57,6 +59,8 @@ type IContext interface {
 	DeleteShader(shader uint32)
 
 	DeleteTextures(n int32, textures *uint32)
+
+	DeleteVertexArrays(n int32, arrays *uint32)
 
 	DepthFunc(xfunc uint32)
 
@@ -114,7 +118,10 @@ type IContext interface {
 
 	LinkProgram(program uint32)
 
+	DrawElements(mode uint32, count int32, xtype uint32, indices unsafe.Pointer)
 	MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32)
+	DrawElementsInstanced(mode uint32, count int32, xtype uint32, indices unsafe.Pointer, instancecount int32)
+	CullFace(mode uint32)
 
 	PolygonOffset(factor float32, units float32)
 
@@ -128,6 +135,8 @@ type IContext interface {
 
 	RenderbufferStorageMultisample(target uint32, samples int32, internalformat uint32, width int32, height int32)
 
+	Scissor(x int32, y int32, width int32, height int32)
+
 	ShaderSource(shader uint32, count int32, xstring **uint8, length *int32)
 
 	Str(str string) *uint8
@@ -135,6 +144,7 @@ type IContext interface {
 	Strs(strs ...string) (cstrs **uint8, free func())
 
 	TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer)
+	TexSubImage2D(target uint32, level int32, xoffset int32, yoffset int32, width int32, height int32, format uint32, xtype uint32, pixels unsafe.Pointer)
 
 	TexImage2DMultisample(target uint32, samples int32, internalformat uint32, width int32, height int32, fixedsamplelocations bool)
 
@@ -169,6 +179,7 @@ type IContext interface {
 	UseProgram(program uint32)
 
 	VertexAttribPointer(index uint32, size int32, xtype uint32, normalized bool, stride int32, pointer unsafe.Pointer)
+	VertexAttribDivisor(index uint32, divisor uint32)
 
 	Viewport(x int32, y int32, width int32, height int32)
 

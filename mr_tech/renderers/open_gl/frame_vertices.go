@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -16,6 +17,10 @@ type FrameBatch struct {
 	blendMode  int
 	indexCount int32
 	material   *textures.Material
+	centroidX  float32
+	centroidY  float32
+	centroidZ  float32
+	centCount  int32
 }
 
 // FrameVertices represents a structure for managing vertex and index buffers for rendering geometries in frames.
@@ -42,7 +47,7 @@ type FrameVertices struct {
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
-	const maxStride = 20
+	const maxStride = shaders.StreamingVertexFloats
 	fv := &FrameVertices{
 		ctx:          ctx,
 		vertices:     make([]float32, maxVerts),
@@ -62,7 +67,7 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 
 // NewStagingFrameVertices initializes a CPU-only staging FrameVertices without registering pointers with the GPU context.
 func NewStagingFrameVertices(maxVerts int) *FrameVertices {
-	const maxStride = 20
+	const maxStride = shaders.StreamingVertexFloats
 	return &FrameVertices{
 		vertices:  make([]float32, maxVerts),
 		indices:   make([]uint32, maxVerts),
@@ -91,18 +96,32 @@ func (w *FrameVertices) Stage(marker int) *FrameVertices {
 
 // AddBatch appends or merges a draw batch of indices into the FrameVertices.
 func (w *FrameVertices) AddBatch(blendMode int, count int32, mat *textures.Material) {
+	w.AddBatchCentroid(blendMode, count, mat, 0, 0, 0)
+}
+
+// AddBatchCentroid appends or merges a draw batch while tracking an approximate world centroid for transparent sorting.
+func (w *FrameVertices) AddBatchCentroid(blendMode int, count int32, mat *textures.Material, cx, cy, cz float32) {
 	if count <= 0 {
 		return
 	}
 	n := len(w.batches)
 	if n > 0 && w.batches[n-1].blendMode == blendMode && w.batches[n-1].material == mat {
-		w.batches[n-1].indexCount += count
+		b := &w.batches[n-1]
+		b.indexCount += count
+		b.centroidX += cx
+		b.centroidY += cy
+		b.centroidZ += cz
+		b.centCount++
 		return
 	}
 	w.batches = append(w.batches, FrameBatch{
 		blendMode:  blendMode,
 		indexCount: count,
 		material:   mat,
+		centroidX:  cx,
+		centroidY:  cy,
+		centroidZ:  cz,
+		centCount:  1,
 	})
 }
 
@@ -152,7 +171,14 @@ func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
 		batch := fv.batches[b]
 		endIdx := startIdx + batch.indexCount
 		targetDc := modes[batch.blendMode]
-		targetDc.Compute(startIdx, endIdx, batch.material)
+		cx, cy, cz := batch.centroidX, batch.centroidY, batch.centroidZ
+		if batch.centCount > 1 {
+			inv := 1.0 / float32(batch.centCount)
+			cx *= inv
+			cy *= inv
+			cz *= inv
+		}
+		targetDc.ComputeWithCentroid(startIdx, endIdx, batch.material, cx, cy, cz)
 		startIdx = endIdx
 	}
 
@@ -248,8 +274,27 @@ func (w *FrameVertices) AddVertex17(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	return w.AddVertex20(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, material, specBoost, shininess, 1.0, 0.0)
 }
 
-// AddVertex20 adds a vertex to the buffer with 19 parameters, including detail scale and detail factor.
+// AddVertex20 adds a streaming vertex using default flat normals and no lightmap/env reflection.
 func (w *FrameVertices) AddVertex20(x, y, z, u, v, texLayer, ox, oy, oz, isBB, nx, ny, nz, lerp, yaw, material, specBoost, shininess, detailScale, detailFactor float32) uint32 {
+	return w.AddVertexFull(
+		x, y, z, u, v, texLayer,
+		0, 1, 0, 1, 0, 0, 1,
+		0, 0, -1,
+		ox, oy, oz, isBB,
+		nx, ny, nz, lerp, yaw,
+		material, specBoost, shininess, detailScale, detailFactor, 0, 16777215,
+	)
+}
+
+// AddVertexFull appends a complete 32-float streaming vertex with explicit normal, tangent, lightmap UV, and env reflection data.
+func (w *FrameVertices) AddVertexFull(
+	x, y, z, u, v, texLayer,
+	nx, ny, nz, tx, ty, tz, tSign,
+	lmU, lmV, lmLayer,
+	ox, oy, oz, renderMode,
+	pnx, pny, pnz, lerp, yaw,
+	material, specBoost, shininess, detailScale, detailFactor, envStrength, envTint float32,
+) uint32 {
 	head := w.verticesCount
 	w.verticesCount += w.stride
 	if w.verticesCount >= int32(len(w.vertices)) {
@@ -263,29 +308,41 @@ func (w *FrameVertices) AddVertex20(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	w.vertices[head+3] = u
 	w.vertices[head+4] = v
 	w.vertices[head+5] = texLayer
-	// Location 2: aOrigin
-	w.vertices[head+6] = ox
-	w.vertices[head+7] = oy
-	w.vertices[head+8] = oz
-	// Location 3: aIsBillboard
-	w.vertices[head+9] = isBB
-	// Location 4: aPosNext
-	w.vertices[head+10] = nx
-	w.vertices[head+11] = ny
-	w.vertices[head+12] = nz
-	// Location 5: aLerp
-	w.vertices[head+13] = lerp
-	// Location 6: aYaw
-	w.vertices[head+14] = yaw
-	// Location 7: material
-	w.vertices[head+15] = material
-	// Location 7: specBoost
-	w.vertices[head+16] = specBoost
-	// Location 8: shininess
-	w.vertices[head+17] = shininess
-	// Location 9: aDetailParams
-	w.vertices[head+18] = detailScale
-	w.vertices[head+19] = detailFactor
+	// Location 2: aNormal
+	w.vertices[head+6] = nx
+	w.vertices[head+7] = ny
+	w.vertices[head+8] = nz
+	// Location 3: aTangent
+	w.vertices[head+9] = tx
+	w.vertices[head+10] = ty
+	w.vertices[head+11] = tz
+	w.vertices[head+12] = tSign
+	// Location 4: aLightmap
+	w.vertices[head+13] = lmU
+	w.vertices[head+14] = lmV
+	w.vertices[head+15] = lmLayer
+	// Location 5: aMaterial
+	w.vertices[head+16] = material
+	w.vertices[head+17] = specBoost
+	w.vertices[head+18] = shininess
+	w.vertices[head+19] = detailScale
+	// Location 6: aExtra
+	w.vertices[head+20] = detailFactor
+	w.vertices[head+21] = envStrength
+	w.vertices[head+22] = renderMode
+	w.vertices[head+23] = envTint
+	// Location 7: aOrigin
+	w.vertices[head+24] = ox
+	w.vertices[head+25] = oy
+	w.vertices[head+26] = oz
+	// Location 8: aPosNext
+	w.vertices[head+27] = pnx
+	w.vertices[head+28] = pny
+	w.vertices[head+29] = pnz
+	// Location 9: aAnimData
+	w.vertices[head+30] = lerp
+	w.vertices[head+31] = yaw
+
 	slot := w.verticesSlot
 	w.verticesSlot++
 	return slot

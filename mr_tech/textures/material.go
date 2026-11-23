@@ -490,6 +490,35 @@ func (m *Material) GetFlat() (float32, float32, float32, float32, float32) {
 	return m.packed, m.specularBoost, m.shininess, m.detailScale, m.detailFactor
 }
 
+// GetRenderParams returns material properties for GPU vertices including packed flags,
+// specular/detail factors, environment map strength, and packed 24-bit RGB env tint.
+func (m *Material) GetRenderParams() (float32, float32, float32, float32, float32, float32, float32) {
+	var envStrength float32
+	if m.envMap != "" {
+		envStrength = 0.65
+		if len(m.envMapMask) > 0 {
+			envStrength = 0.85
+		}
+	}
+	r, g, b := uint32(255), uint32(255), uint32(255)
+	if len(m.envMapTint) >= 3 {
+		clampByte := func(v float32) uint32 {
+			if v <= 0 {
+				return 0
+			}
+			if v >= 1 {
+				return 255
+			}
+			return uint32(v*255.0 + 0.5)
+		}
+		r = clampByte(m.envMapTint[0])
+		g = clampByte(m.envMapTint[1])
+		b = clampByte(m.envMapTint[2])
+	}
+	tintPacked := float32(r | (g << 8) | (b << 16))
+	return m.packed, m.specularBoost, m.shininess, m.detailScale, m.detailFactor, envStrength, tintPacked
+}
+
 // GetPacked returns the precalculated packed material representation as float32.
 func (m *Material) GetPacked() float32 {
 	return m.packed

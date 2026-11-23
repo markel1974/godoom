@@ -29,7 +29,46 @@ func (m *stubTexHandler) GetFrames(_ []string) []*textures.Texture {
 
 type stubCtx struct{ api.IContext }
 
-func (stubCtx) Ptr(_ interface{}) unsafe.Pointer { return nil }
+func (stubCtx) Ptr(_ interface{}) unsafe.Pointer    { return nil }
+func (stubCtx) PtrOffset(offset int) unsafe.Pointer { return unsafe.Pointer(uintptr(offset)) }
+func (stubCtx) GenVertexArrays(_ int32, a *uint32) {
+	if a != nil {
+		*a = 1
+	}
+}
+func (stubCtx) GenBuffers(_ int32, b *uint32) {
+	if b != nil {
+		*b = 1
+	}
+}
+func (stubCtx) DeleteVertexArrays(_ int32, _ *uint32)                  {}
+func (stubCtx) DeleteBuffers(_ int32, _ *uint32)                       {}
+func (stubCtx) BindVertexArray(_ uint32)                               {}
+func (stubCtx) BindBuffer(_ uint32, _ uint32)                          {}
+func (stubCtx) BufferData(_ uint32, _ int, _ unsafe.Pointer, _ uint32) {}
+func (stubCtx) BufferSubData(_ uint32, _ int, _ int, _ unsafe.Pointer) {}
+func (stubCtx) VertexAttribPointer(_ uint32, _ int32, _ uint32, _ bool, _ int32, _ unsafe.Pointer) {
+}
+func (stubCtx) VertexAttribDivisor(_ uint32, _ uint32) {}
+func (stubCtx) EnableVertexAttribArray(_ uint32)       {}
+func (stubCtx) GenTextures(_ int32, t *uint32) {
+	if t != nil {
+		*t = 1
+	}
+}
+func (stubCtx) BindTexture(_ uint32, _ uint32)       {}
+func (stubCtx) TexParameteri(_, _ uint32, _ int32)   {}
+func (stubCtx) TexParameterf(_, _ uint32, _ float32) {}
+func (stubCtx) GetFloatv(_ uint32, data *float32) {
+	if data != nil {
+		*data = 1.0
+	}
+}
+func (stubCtx) TexImage3D(_ uint32, _ int32, _ int32, _, _, _, _ int32, _, _ uint32, _ unsafe.Pointer) {
+}
+func (stubCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uint32, _ unsafe.Pointer) {
+}
+func (stubCtx) GenerateMipmap(_ uint32) {}
 
 func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVolume {
 	dcOpaque := NewDrawCommands(config.BlendModeOpaque, 32768)

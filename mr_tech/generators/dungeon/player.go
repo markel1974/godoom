@@ -38,7 +38,7 @@ func (p *Player) Build() *config.Player {
 	player.Flash.OffsetY = 0.2
 
 	player.Bobbing.SwayScale = 1.0 //mod 2.0
-	player.Bobbing.SwayOffsetX = 5
+	player.Bobbing.SwayOffsetX = 1.2
 	player.Bobbing.SwayOffsetY = -1
 	player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	player.Bobbing.MaxAmplitudeY = 5.5

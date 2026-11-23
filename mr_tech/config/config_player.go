@@ -26,8 +26,8 @@ func NewConfigPlayer(position geometry.XYZ, angle float64, mass, speed, radius, 
 	p.DefaultWeaponId = weaponTest
 	p.Impulse = 0.06
 	p.Flash.FovDeg = 80.0
-	p.Flash.ShadowFovFactor = 1.75
-	p.Flash.ZNear = 0.1
+	p.Flash.ShadowFovFactor = 1.45
+	p.Flash.ZNear = 2.0
 	p.Flash.ZFar = 2048.0
 	p.Flash.Falloff = 200
 	p.Flash.Intensity = 0.4

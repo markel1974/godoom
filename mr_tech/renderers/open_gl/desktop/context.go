@@ -165,6 +165,16 @@ func (d *Context) DeleteTextures(n int32, textures *uint32) {
 	gl.DeleteTextures(n, textures)
 }
 
+// DeleteBuffers deletes named buffer objects.
+func (d *Context) DeleteBuffers(n int32, buffers *uint32) {
+	gl.DeleteBuffers(n, buffers)
+}
+
+// DeleteVertexArrays deletes vertex array objects.
+func (d *Context) DeleteVertexArrays(n int32, arrays *uint32) {
+	gl.DeleteVertexArrays(n, arrays)
+}
+
 // DepthFunc sets the function used to compare each incoming pixel depth value with the depth buffer's value.
 func (d *Context) DepthFunc(xfunc uint32) {
 	gl.DepthFunc(xfunc)
@@ -290,6 +300,21 @@ func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, ind
 	gl.MultiDrawElements(mode, count, xtype, indices, drawcount)
 }
 
+// DrawElements renders primitives from array data via an element index buffer.
+func (d *Context) DrawElements(mode uint32, count int32, xtype uint32, indices unsafe.Pointer) {
+	gl.DrawElements(mode, count, xtype, indices)
+}
+
+// DrawElementsInstanced renders multiple instances of indexed primitives.
+func (d *Context) DrawElementsInstanced(mode uint32, count int32, xtype uint32, indices unsafe.Pointer, instancecount int32) {
+	gl.DrawElementsInstanced(mode, count, xtype, indices, instancecount)
+}
+
+// CullFace specifies whether front- or back-facing facets are candidates for culling.
+func (d *Context) CullFace(mode uint32) {
+	gl.CullFace(mode)
+}
+
 // PolygonOffset sets the scale and units used to calculate depth values for polygons to reduce z-fighting.
 func (d *Context) PolygonOffset(factor float32, units float32) {
 	gl.PolygonOffset(factor, units)
@@ -322,6 +347,11 @@ func (d *Context) RenderbufferStorageMultisample(target uint32, samples int32, i
 	gl.RenderbufferStorageMultisample(target, samples, internalformat, width, height)
 }
 
+// Scissor defines the scissor box for pixels that pass the scissor test.
+func (d *Context) Scissor(x int32, y int32, width int32, height int32) {
+	gl.Scissor(x, y, width, height)
+}
+
 // ShaderSource sets the source code for a shader object, replacing any existing source code.
 func (d *Context) ShaderSource(shader uint32, count int32, xstring **uint8, length *int32) {
 	gl.ShaderSource(shader, count, xstring, length)
@@ -340,6 +370,11 @@ func (d *Context) Strs(strs ...string) (cstrs **uint8, free func()) {
 // TexImage2D specifies a two-dimensional texture image for the current texture target.
 func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
 	gl.TexImage2D(target, level, internalformat, width, height, border, format, xtype, pixels)
+}
+
+// TexSubImage2D updates a rectangular subregion of a two-dimensional texture image.
+func (d *Context) TexSubImage2D(target uint32, level int32, xoffset int32, yoffset int32, width int32, height int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
+	gl.TexSubImage2D(target, level, xoffset, yoffset, width, height, format, xtype, pixels)
 }
 
 // TexImage2DMultisample sets up a 2D multisample texture image with the specified parameters.
@@ -425,6 +460,11 @@ func (d *Context) UseProgram(program uint32) {
 // VertexAttribPointer specifies the location and data format of the array of generic vertex attributes.
 func (d *Context) VertexAttribPointer(index uint32, size int32, xtype uint32, normalized bool, stride int32, pointer unsafe.Pointer) {
 	gl.VertexAttribPointer(index, size, xtype, normalized, stride, pointer)
+}
+
+// VertexAttribDivisor modifies the rate at which generic vertex attributes advance during instanced rendering.
+func (d *Context) VertexAttribDivisor(index uint32, divisor uint32) {
+	gl.VertexAttribDivisor(index, divisor)
 }
 
 // Viewport sets the viewport dimensions for rendering, defined by the specified x, y coordinates, width, and height.

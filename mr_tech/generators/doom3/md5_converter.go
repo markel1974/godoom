@@ -95,7 +95,7 @@ func (t *MD5Converter) Convert(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName
 					continue
 				}
 				tri := config.NewModel3DEntryTriangle(mat)
-				for k := 0; k < 3; k++ {
+				for k := range 3 {
 					vi := triIdx[k]
 					v := sub.Vertices[vi]
 					tri.Vertices[k] = config.Model3DEntryVertex{Pos: computedVerts[vi], U: v.U, V: v.V}
@@ -129,7 +129,7 @@ func (t *MD5Converter) Convert(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName
 					}
 
 					tri := config.NewModel3DEntryTriangle(mat)
-					for k := 0; k < 3; k++ {
+					for k := range 3 {
 						vi := triIdx[k]
 						v := sub.Vertices[vi]
 						tri.Vertices[k] = config.Model3DEntryVertex{Pos: computedVerts[vi], U: v.U, V: v.V}
@@ -139,6 +139,7 @@ func (t *MD5Converter) Convert(mesh *md5.Mesh, headMesh *md5.Mesh, headJointName
 			}
 		}
 
+		config.NormalizeNormalsAndWinding(frameTriangles, true, 0.5)
 		return config.NewModel3DEntryFrame(frameTriangles)
 	}
 

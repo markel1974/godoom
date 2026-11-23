@@ -361,6 +361,7 @@ func (b *Things) threedoToThing(fileName string, kind config.ThingType, pos geom
 	}
 
 	// Create a single-frame Model3DEntry
+	config.NormalizeNormalsAndWinding(allTriangles, true, 0.5)
 	cModel := config.NewModel3DEntry(1, []string{"stand"}, []string{"death", "die"})
 	cModel.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	//id := fmt.Sprintf("%s_%s", "3DO", fileName)
@@ -383,7 +384,7 @@ func (b *Things) createPlayer(pos geometry.XYZ) *config.Player {
 	player.Flash.OffsetX = 0.2
 	player.Flash.OffsetY = 0.1
 	player.Bobbing.SwayScale = 1.0 //mod
-	player.Bobbing.SwayOffsetX = 50
+	player.Bobbing.SwayOffsetX = 0.75
 	player.Bobbing.SwayOffsetY = -0.9
 	player.Bobbing.MaxAmplitudeX = 2.0 // Keep lateral bobbing within playerRadius (2.5) so camera never clips behind walls
 	player.Bobbing.MaxAmplitudeY = 5.5

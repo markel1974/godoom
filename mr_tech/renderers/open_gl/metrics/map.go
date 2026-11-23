@@ -87,9 +87,24 @@ func (m *Map) GetProjPtr() *float32 {
 	return m.projPtr
 }
 
+// GetProj returns a copy of the projection matrix.
+func (m *Map) GetProj() [16]float32 {
+	return m.proj
+}
+
 // GetViewPtr returns a pointer to the view matrix stored in the Map structure.
 func (m *Map) GetViewPtr() *float32 {
 	return m.viewPtr
+}
+
+// GetView returns a copy of the view matrix.
+func (m *Map) GetView() [16]float32 {
+	return m.view
+}
+
+// GetInvView returns a copy of the inverse view matrix.
+func (m *Map) GetInvView() [16]float32 {
+	return m.invView
 }
 
 // TransformDirectionToView transforms a normalized 3D direction vector into the view space and computes its squared length.

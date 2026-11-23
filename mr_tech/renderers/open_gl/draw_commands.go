@@ -1,6 +1,7 @@
 package open_gl
 
 import (
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -33,20 +34,27 @@ func (w *DrawCommands) GetBlendMode() int {
 
 // Compute updates or creates a draw command using the provided start and current index values and material.
 func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *textures.Material) {
+	w.ComputeWithCentroid(startIndices, currentIndices, material, 0, 0, 0)
+}
+
+// ComputeWithCentroid updates or creates a draw command while recording the batch centroid for transparent sorting.
+func (w *DrawCommands) ComputeWithCentroid(startIndices, currentIndices int32, material *textures.Material, cx, cy, cz float32) {
 	var cmd *shaders.DrawCommand
 
 	// Se abbiamo già un comando e la nuova geometria inizia esattamente
 	// dove finisce la precedente, fondiamo tutto in un singolo batch gigante!
-	// MA SOLO se lo stato OpenGL (DepthWrite, PolygonOffset, Cutout) è identico!
+	// MA SOLO se lo stato OpenGL (DepthWrite, PolygonOffset, Cutout, CullMode) è identico
+	// e non siamo in modalità trasparente depth-sorted!
 	canMerge := false
-	if w.len > 0 && (w.commands[w.len-1].GetFirstIndex()+w.commands[w.len-1].GetIndexCount()) == startIndices {
+	if w.blendMode != int(config.BlendModeTransparent) && w.len > 0 && (w.commands[w.len-1].GetFirstIndex()+w.commands[w.len-1].GetIndexCount()) == startIndices {
 		prevMat := w.commands[w.len-1].GetMaterial()
 		if prevMat == material {
 			canMerge = true
 		} else if prevMat != nil && material != nil {
 			if prevMat.GetDepthWrite() == material.GetDepthWrite() &&
 				prevMat.GetPolygonOffset() == material.GetPolygonOffset() &&
-				prevMat.HasCutout() == material.HasCutout() {
+				prevMat.HasCutout() == material.HasCutout() &&
+				prevMat.GetCullMode() == material.GetCullMode() {
 				canMerge = true
 			}
 		} else if prevMat == nil && material == nil {
@@ -65,6 +73,7 @@ func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *tex
 		cmd.SetFirstIndex(startIndices)
 		cmd.SetIndexCount(0)
 		cmd.SetMaterial(material)
+		cmd.SetCentroid(cx, cy, cz)
 		w.len++
 	}
 

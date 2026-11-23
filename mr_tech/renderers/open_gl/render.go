@@ -79,10 +79,11 @@ type RenderOpenGL struct {
 	scaleX float32
 	scaleY float32
 
-	dcOpaque   *shaders.DrawCommandsRender
-	dcAdditive *shaders.DrawCommandsRender
-	dcLiquid   *shaders.DrawCommandsRender
-	hwOcc      *OcclusionHW
+	dcOpaque      *shaders.DrawCommandsRender
+	dcAdditive    *shaders.DrawCommandsRender
+	dcLiquid      *shaders.DrawCommandsRender
+	dcTransparent *shaders.DrawCommandsRender
+	hwOcc         *OcclusionHW
 
 	gpuProfiler *shaders.GpuProfiler
 	renderScale float64
@@ -125,6 +126,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 
 	w.dcAdditive = w.builder.GetDrawCommandsAdditive()
 	w.dcLiquid = w.builder.GetDrawCommandsLiquid()
+	w.dcTransparent = w.builder.GetDrawCommandsTransparent()
 	w.hwOcc = w.builder.GetHWOcclusion()
 	w.flash = w.player.GetFlash()
 	w.cal = cal
@@ -161,7 +163,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.liquid = w.handler.GetLiquid()
 	w.enableShadows = false
 	w.enableBoundingBoxDebug = false
-	w.container = append(w.container, w.main, w.sky, w.geometry, w.ssao, w.blur, w.depth, w.lights, w.flashlight, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
+	w.container = append(w.container, w.main, w.sky, w.depth, w.lights, w.post, w.bloom, w.occlusion, w.additive, w.liquid)
 	w.SetShadowsEnabled(w.cal.EnableShadows)
 
 	for _, s := range w.container {
@@ -182,6 +184,8 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	if err := w.tex.Setup(w.engine.GetTextures()); err != nil {
 		return err
 	}
+	w.tex.UploadEnvironment(w.engine.GetEnvMaps())
+	w.tex.UploadLightmaps(w.engine.GetLightmaps())
 	return nil
 }
 
@@ -222,7 +226,12 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	swayX, swayY, swaySensitivity := w.vi.GetSway()
 	flashX, flashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
-	w.flashlightMetrics.Update(w.mapMetrics.GetViewPtr(), flashX, flashY)
+	if w.player != nil {
+		if ent := w.player.GetEntity(); ent != nil {
+			flashX, flashY = clampFlashOffset(flashX, flashY, float32(ent.GetWidth()), float32(ent.GetDepth()))
+		}
+	}
+	w.flashlightMetrics.Update(w.mapMetrics.GetViewPtr(), flashX, flashY, flashSensitivity)
 
 	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
 
@@ -261,11 +270,16 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 		// without feedback-loop darkening from previous frame's water.
 		// The brightness channel is consumed only by bloom (resolved later in post.Prepare).
 		w.post.ResolveMSAA(fbW, fbH, shaders.ResolveColor|shaders.ResolveDepth)
-		w.liquid.Render(w.dcLiquid.Render)
+		w.liquid.RenderDC(w.dcLiquid)
+	}
+	// MAIN TRANSPARENT (Back-to-Front Sorted Translucent Pass)
+	if w.dcTransparent.HasCommands() {
+		w.tex.BindBuckets()
+		w.main.RenderTransparent(w.dcTransparent, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
 	}
 	// MAIN ADDITIVE
 	if w.dcAdditive.HasCommands() {
-		w.additive.RenderAdditive(w.dcAdditive.Render)
+		w.additive.RenderDC(w.dcAdditive)
 	}
 	// MSAA resolution
 	w.post.Prepare()
@@ -357,4 +371,24 @@ func (w *RenderOpenGL) SetBoundingBoxDebug(debug bool) {
 	w.enableBoundingBoxDebug = debug
 	w.hwOcc.SetDebug(debug)
 	w.handler.SetBoundingBoxDebug(w.enableBoundingBoxDebug)
+}
+
+// clampFlashOffset constrains the view-space flashlight sway origin inside the player collision volume
+// so the shadow camera never protrudes behind adjacent walls or doorframes.
+func clampFlashOffset(flashX, flashY, entWidth, entDepth float32) (float32, float32) {
+	if maxOffX := entWidth * 0.30; maxOffX > 0 {
+		if flashX > maxOffX {
+			flashX = maxOffX
+		} else if flashX < -maxOffX {
+			flashX = -maxOffX
+		}
+	}
+	if maxOffY := entDepth * 0.20; maxOffY > 0 {
+		if flashY > maxOffY {
+			flashY = maxOffY
+		} else if flashY < -maxOffY {
+			flashY = -maxOffY
+		}
+	}
+	return flashX, flashY
 }

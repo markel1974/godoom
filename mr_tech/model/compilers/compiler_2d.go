@@ -391,6 +391,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 				ceilFace.LockUV(true)
 			}
 		}
+		ceilFace.EnsureOutwardWinding(geometry.XYZ{X: 0, Y: 0, Z: -1})
 
 		vol3d.AddFace(ceilFace)
 
@@ -404,6 +405,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 				floorFace.LockUV(true)
 			}
 		}
+		floorFace.EnsureOutwardWinding(geometry.XYZ{X: 0, Y: 0, Z: 1})
 
 		vol3d.AddFace(floorFace)
 
@@ -535,9 +537,24 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 					midTopE = min(midTopE, limE)
 				}
 				if midTopS > midBotS || midTopE > midBotE {
+					matMiddle.SetCullMode(config.CullNone)
 					buildQuad(vol3d, geometry.XY{X: s.X, Y: s.Y}, geometry.XY{X: e.X, Y: e.Y}, midBotS, midBotE, midTopS, midTopE, seg.GetTag()+"_middle", matMiddle, align, t1, t2, false)
 				}
 			}
+		}
+
+		sectorCX := (p0.X + p1.X + p2.X) / 3.0
+		sectorCY := (p0.Y + p1.Y + p2.Y) / 3.0
+		volFaces := vol3d.GetFaces()
+		for fi := 0; fi < volFaces.Len(); fi++ {
+			fc := volFaces.At(fi)
+			if fc == nil || !fc.IsSingleSided() {
+				continue
+			}
+			a0x, a0y, _, a1x, a1y, _, a2x, a2y, _ := fc.GetPointsFlat()
+			midX := (a0x + a1x + a2x) / 3.0
+			midY := (a0y + a1y + a2y) / 3.0
+			fc.EnsureOutwardWinding(geometry.XYZ{X: sectorCX - midX, Y: sectorCY - midY, Z: 0})
 		}
 
 		vol3d.Rebuild()
@@ -568,6 +585,9 @@ func (r *Compiler2d) upgrade3dSegmentsUncovered(segments []*sectors.SegmentUncov
 			vol3d.SetLight(light)
 		}
 
+		if matSu := su.GetMat(); matSu != nil {
+			matSu.SetCullMode(config.CullNone)
+		}
 		buildQuad(vol3d, su.GetStart(), su.GetEnd(), su.GetZBS(), su.GetZBE(), su.GetZTS(), su.GetZTE(), su.GetTag(), su.GetMat(), su.GetAlign(), 0.0, 1.0, false)
 
 		vol3d.Rebuild()

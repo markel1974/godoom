@@ -26,6 +26,9 @@ type ThingRenderCache struct {
 	yaw           float32
 	renderMode    float32
 	oX, oY, oZ    float32
+	qX, qY, qZ    float32
+	qW            float32
+	isRigid       bool
 	entID         uint64
 	gen           uint64
 	lastSeenFrame uint64
@@ -51,6 +54,7 @@ func (tr *ThingRenderCache) GetGen() uint64 {
 // Equal reports whether the cache is valid and matches the supplied render state without needing animation rebuild.
 func (tr *ThingRenderCache) Equal(pFaces *volumes.Faces, pNextFaces *volumes.Faces, facesVer uint64, nextVer uint64, facesLen int, nextLen int, lerp float32, yaw float32, renderModeF float32, oX float32, oY float32, oZ float32) bool {
 	return tr.valid &&
+		!tr.isRigid &&
 		tr.pFaces == pFaces &&
 		tr.pNextFaces == pNextFaces &&
 		tr.facesVer == facesVer &&
@@ -64,8 +68,20 @@ func (tr *ThingRenderCache) Equal(pFaces *volumes.Faces, pNextFaces *volumes.Fac
 		!tr.fv.NeedsAnimRebuild()
 }
 
+// EqualRigid reports whether a rigid instanced entity's template, transform, and orientation match the previous frame.
+func (tr *ThingRenderCache) EqualRigid(pFaces *volumes.Faces, facesVer uint64, facesLen int, oX, oY, oZ, qX, qY, qZ, qW float32) bool {
+	return tr.valid &&
+		tr.isRigid &&
+		tr.pFaces == pFaces &&
+		tr.facesVer == facesVer &&
+		tr.facesLen == facesLen &&
+		tr.oX == oX && tr.oY == oY && tr.oZ == oZ &&
+		tr.qX == qX && tr.qY == qY && tr.qZ == qZ && tr.qW == qW
+}
+
 // Assign updates the cached render inputs, marks the cache valid, and advances its revision counter.
 func (tr *ThingRenderCache) Assign(pFaces *volumes.Faces, pNextFaces *volumes.Faces, facesVer uint64, nextVer uint64, facesLen int, nextLen int, lerp float32, yaw float32, renderModeF float32, oX float32, oY float32, oZ float32) {
+	tr.isRigid = false
 	tr.pFaces = pFaces
 	tr.pNextFaces = pNextFaces
 	tr.facesVer = facesVer
@@ -76,6 +92,21 @@ func (tr *ThingRenderCache) Assign(pFaces *volumes.Faces, pNextFaces *volumes.Fa
 	tr.yaw = yaw
 	tr.renderMode = renderModeF
 	tr.oX, tr.oY, tr.oZ = oX, oY, oZ
+	tr.valid = true
+	tr.gen++
+}
+
+// AssignRigid updates a rigid instanced entity's transform cache and advances its revision counter.
+func (tr *ThingRenderCache) AssignRigid(pFaces *volumes.Faces, facesVer uint64, facesLen int, oX, oY, oZ, qX, qY, qZ, qW float32) {
+	tr.isRigid = true
+	tr.pFaces = pFaces
+	tr.pNextFaces = nil
+	tr.facesVer = facesVer
+	tr.nextVer = 0
+	tr.facesLen = facesLen
+	tr.nextLen = 0
+	tr.oX, tr.oY, tr.oZ = oX, oY, oZ
+	tr.qX, tr.qY, tr.qZ, tr.qW = qX, qY, qZ, qW
 	tr.valid = true
 	tr.gen++
 }

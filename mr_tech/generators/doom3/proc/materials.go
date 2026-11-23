@@ -18,6 +18,7 @@ type MaterialDef struct {
 	Kind        string
 	SurfaceType string
 	IsDecal     bool
+	TwoSided    bool
 	GuiSurf     string
 }
 
@@ -212,7 +213,9 @@ func (m *Materials) parseMtrData(data []byte) {
 					}
 				}
 			case "translucent":
-				def.Kind = "translucent" // TODO config.MaterialKindTranslucent
+				def.Kind = "translucent"
+			case "twosided":
+				def.TwoSided = true
 			case "metal", "stone", "flesh", "wood", "cardboard", "liquid", "glass", "plastic", "ricochet":
 				def.SurfaceType = tokLower
 			case "water", "slime", "lava", "blood", "sky":

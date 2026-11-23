@@ -4,10 +4,12 @@ import "github.com/markel1974/godoom/mr_tech/geometry"
 
 // RawFace represents a geometric face with associated vertex points, texture coordinates, and surface properties.
 type RawFace struct {
-	Points  []geometry.XYZ
-	UVs     [][2]float64
-	TexName string
-	IsSky   bool
+	Points    []geometry.XYZ
+	UVs       [][2]float64
+	TexName   string
+	IsSky     bool
+	Normal    geometry.XYZ
+	HasNormal bool
 }
 
 // NewRawFace creates a new RawFace with the provided points, UV coordinates, texture name, and sky flag.

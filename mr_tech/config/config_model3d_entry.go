@@ -11,9 +11,11 @@ import (
 
 // Model3DEntryVertex represents a single vertex in an Model3DEntry 3D model with position and texture coordinates.
 type Model3DEntryVertex struct {
-	Pos geometry.XYZ
-	U   float32
-	V   float32
+	Pos       geometry.XYZ
+	U         float32
+	V         float32
+	Normal    geometry.XYZ
+	HasNormal bool
 }
 
 // Model3DEntryTriangle represents a triangular mesh with 3 vertices and an associated material.
@@ -295,4 +297,150 @@ func (m *Model3DEntry) GetSize() (float64, float64) {
 		}
 	}
 	return radius, height
+}
+
+type modelVertKey struct {
+	x, y, z int64
+}
+
+func makeModelVertKey(p geometry.XYZ) modelVertKey {
+	return modelVertKey{
+		x: int64(math.Round(p.X * 100.0)),
+		y: int64(math.Round(p.Y * 100.0)),
+		z: int64(math.Round(p.Z * 100.0)),
+	}
+}
+
+// NormalizeNormalsAndWinding ensures consistent CCW outward winding and populates
+// crease-aware smooth vertex normals for vertices without explicit artist normals.
+func NormalizeNormalsAndWinding(tris []Model3DEntryTriangle, checkSignedVolume bool, cosCrease float64) {
+	nTris := len(tris)
+	if nTris == 0 {
+		return
+	}
+
+	triCross := func(t *Model3DEntryTriangle) (cx, cy, cz float64) {
+		p0, p1, p2 := t.Vertices[0].Pos, t.Vertices[1].Pos, t.Vertices[2].Pos
+		e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+		e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+		return e1y*e2z - e1z*e2y, e1z*e2x - e1x*e2z, e1x*e2y - e1y*e2x
+	}
+
+	anyExplicit := false
+	for i := range tris {
+		t := &tris[i]
+		hasTriNormal := t.Vertices[0].HasNormal || t.Vertices[1].HasNormal || t.Vertices[2].HasNormal
+		if hasTriNormal {
+			anyExplicit = true
+			avgX := t.Vertices[0].Normal.X + t.Vertices[1].Normal.X + t.Vertices[2].Normal.X
+			avgY := t.Vertices[0].Normal.Y + t.Vertices[1].Normal.Y + t.Vertices[2].Normal.Y
+			avgZ := t.Vertices[0].Normal.Z + t.Vertices[1].Normal.Z + t.Vertices[2].Normal.Z
+			cx, cy, cz := triCross(t)
+			if cx*avgX+cy*avgY+cz*avgZ < 0 {
+				t.Vertices[1], t.Vertices[2] = t.Vertices[2], t.Vertices[1]
+			}
+		}
+	}
+
+	if !anyExplicit && checkSignedVolume {
+		var cxSum, cySum, czSum float64
+		for i := range tris {
+			for k := range 3 {
+				cxSum += tris[i].Vertices[k].Pos.X
+				cySum += tris[i].Vertices[k].Pos.Y
+				czSum += tris[i].Vertices[k].Pos.Z
+			}
+		}
+		invVerts := 1.0 / float64(nTris*3)
+		centroidX, centroidY, centroidZ := cxSum*invVerts, cySum*invVerts, czSum*invVerts
+
+		var signedVol float64
+		for i := range tris {
+			t := &tris[i]
+			p0 := t.Vertices[0].Pos
+			nx, ny, nz := triCross(t)
+			signedVol += (p0.X-centroidX)*nx + (p0.Y-centroidY)*ny + (p0.Z-centroidZ)*nz
+		}
+		if signedVol < -1e-6 {
+			for i := range tris {
+				t := &tris[i]
+				t.Vertices[1], t.Vertices[2] = t.Vertices[2], t.Vertices[1]
+			}
+		}
+	}
+
+	// Precompute area-weighted and unit face normals for all triangles.
+	type faceNData struct {
+		areaX, areaY, areaZ float64
+		unitX, unitY, unitZ float64
+		valid               bool
+	}
+	faceNormals := make([]faceNData, nTris)
+	type adjRef struct {
+		triIdx int
+	}
+	adjMap := make(map[modelVertKey][]adjRef, nTris)
+
+	for i := range tris {
+		t := &tris[i]
+		ax, ay, az := triCross(t)
+		l := math.Sqrt(ax*ax + ay*ay + az*az)
+		if l > 1e-12 {
+			invL := 1.0 / l
+			faceNormals[i] = faceNData{
+				areaX: ax, areaY: ay, areaZ: az,
+				unitX: ax * invL, unitY: ay * invL, unitZ: az * invL,
+				valid: true,
+			}
+			for k := range 3 {
+				key := makeModelVertKey(t.Vertices[k].Pos)
+				adjMap[key] = append(adjMap[key], adjRef{triIdx: i})
+			}
+		}
+	}
+
+	for i := range tris {
+		t := &tris[i]
+		fd := faceNormals[i]
+		for k := range 3 {
+			if t.Vertices[k].HasNormal {
+				n := t.Vertices[k].Normal
+				nl := math.Sqrt(n.X*n.X + n.Y*n.Y + n.Z*n.Z)
+				if nl > 1e-12 {
+					inv := 1.0 / nl
+					t.Vertices[k].Normal = geometry.XYZ{X: n.X * inv, Y: n.Y * inv, Z: n.Z * inv}
+				} else if fd.valid {
+					t.Vertices[k].Normal = geometry.XYZ{X: fd.unitX, Y: fd.unitY, Z: fd.unitZ}
+				}
+				continue
+			}
+			if !fd.valid {
+				t.Vertices[k].Normal = geometry.XYZ{X: 0, Y: 0, Z: 1}
+				t.Vertices[k].HasNormal = true
+				continue
+			}
+			key := makeModelVertKey(t.Vertices[k].Pos)
+			refs := adjMap[key]
+			var sx, sy, sz float64
+			for _, ref := range refs {
+				ofd := faceNormals[ref.triIdx]
+				if !ofd.valid {
+					continue
+				}
+				if fd.unitX*ofd.unitX+fd.unitY*ofd.unitY+fd.unitZ*ofd.unitZ >= cosCrease {
+					sx += ofd.areaX
+					sy += ofd.areaY
+					sz += ofd.areaZ
+				}
+			}
+			sl := math.Sqrt(sx*sx + sy*sy + sz*sz)
+			if sl > 1e-12 {
+				inv := 1.0 / sl
+				t.Vertices[k].Normal = geometry.XYZ{X: sx * inv, Y: sy * inv, Z: sz * inv}
+			} else {
+				t.Vertices[k].Normal = geometry.XYZ{X: fd.unitX, Y: fd.unitY, Z: fd.unitZ}
+			}
+			t.Vertices[k].HasNormal = true
+		}
+	}
 }

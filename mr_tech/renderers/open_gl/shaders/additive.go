@@ -18,6 +18,7 @@ const (
 	ShaderAdditiveLocView
 	ShaderAdditiveLocTime
 	ShaderAdditiveLocTexture
+	ShaderAdditiveLocInstanceMode
 	ShaderAdditiveLocLast
 )
 
@@ -33,9 +34,13 @@ type Additive struct {
 
 // NewAdditive creates and returns a new instance of Additive initialized with the provided graphics context.
 func NewAdditive() *Additive {
-	return &Additive{
+	a := &Additive{
 		prg: 0,
 	}
+	for i := range a.table {
+		a.table[i] = -1
+	}
+	return a
 }
 
 // Setup initializes the Additive instance by assigning the rendering context from the provided Handler.
@@ -56,6 +61,9 @@ func (s *Additive) SetupSamplers() error {
 	s.ctx.UseProgram(s.prg)
 	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
 	s.ctx.Uniform1iv(s.GetUniform(ShaderAdditiveLocTexture), 4, &diffuseUnits[0])
+	if loc := s.GetUniform(ShaderAdditiveLocInstanceMode); loc >= 0 {
+		s.ctx.Uniform1i(loc, InstanceModeStreaming)
+	}
 	return nil
 }
 
@@ -98,8 +106,18 @@ func (s *Additive) Compile(a IAssets) error {
 	s.table[ShaderAdditiveLocProjection] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_projection\x00"))
 	s.table[ShaderAdditiveLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
 	s.table[ShaderAdditiveLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
+	s.table[ShaderAdditiveLocInstanceMode] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_instanceMode\x00"))
 
 	return nil
+}
+
+// RenderDC executes the additive pass over a DrawCommandsRender supporting static/instanced/streaming geometry.
+func (s *Additive) RenderDC(dc *DrawCommandsRender) {
+	if dc == nil || !dc.HasCommands() {
+		return
+	}
+	dc.SetPassState(s.main.GetVAO(), s.GetUniform(ShaderAdditiveLocInstanceMode))
+	s.RenderAdditive(dc.Render)
 }
 
 // RenderAdditive applies additive blending and manages OpenGL state for rendering with given geometry and matrices.

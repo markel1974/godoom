@@ -85,13 +85,21 @@ func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[s
 			for j := int32(0); j < face.NumMesh; j += 3 {
 				var tri []geometry.XYZ
 				var uvs [][2]float64
+				var normals []geometry.XYZ
+				var lmUVs [][2]float64
 				for k := int32(0); k < 3; k++ {
 					vIdx := face.VertexStart + meshVerts[face.MeshStart+j+k]
 					v := vertexes[vIdx]
 					tri = append(tri, CreateXYZ(float64(v.Position[0]), float64(v.Position[1]), float64(v.Position[2])))
 					uvs = append(uvs, [2]float64{float64(v.TexCoord[0]), float64(v.TexCoord[1])})
+					normals = append(normals, CreateXYZ(float64(v.Normal[0]), float64(v.Normal[1]), float64(v.Normal[2])))
+					lmUVs = append(lmUVs, [2]float64{float64(v.LMapCoord[0]), float64(v.LMapCoord[1])})
 				}
-				rawFaces = append(rawFaces, NewRawFace3(tri, uvs, texName, tex))
+				rf := NewRawFace3(tri, uvs, texName, tex)
+				rf.Normals = normals
+				rf.LmUVs = lmUVs
+				rf.LightmapID = face.LightmapID
+				rawFaces = append(rawFaces, rf)
 			}
 
 		case 2: // PATCH DI BEZIER (Biquadratica)
@@ -113,11 +121,17 @@ func NewRawFaces3(rs io.ReadSeeker, headers Headers3, modelIdx int, noDraw map[s
 					}
 
 					// Livello di Tassellatura (LOD). 5 = Risoluzione standard.
-					triangles, uvs := Tessellate(cp, 5)
+					triangles, uvs, lmUVs, normals := TessellateWithAttributes(cp, 5)
 					for t := 0; t < len(triangles); t += 3 {
 						triC := []geometry.XYZ{triangles[t], triangles[t+1], triangles[t+2]}
 						uvsC := [][2]float64{uvs[t], uvs[t+1], uvs[t+2]}
-						rawFaces = append(rawFaces, NewRawFace3(triC, uvsC, texName, tex))
+						lmC := [][2]float64{lmUVs[t], lmUVs[t+1], lmUVs[t+2]}
+						normC := []geometry.XYZ{normals[t], normals[t+1], normals[t+2]}
+						rf := NewRawFace3(triC, uvsC, texName, tex)
+						rf.Normals = normC
+						rf.LmUVs = lmC
+						rf.LightmapID = face.LightmapID
+						rawFaces = append(rawFaces, rf)
 					}
 				}
 			}

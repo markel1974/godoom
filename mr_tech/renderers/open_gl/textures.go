@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	textures3 "github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -27,10 +28,13 @@ func NewBucket(size int) *Bucket {
 
 // Textures manages a collection of 2D textures and their associated VRAM buckets for efficient rendering and sampling.
 type Textures struct {
-	ctx      api.IContext
-	slots    []int
-	buckets  []*Bucket
-	textures map[*textures3.Texture]float32
+	ctx           api.IContext
+	slots         []int
+	buckets       []*Bucket
+	textures      map[*textures3.Texture]float32
+	envMapTex     uint32
+	lightmapTex   uint32
+	lightmapCount int32
 }
 
 // NewTextures creates and returns a new instance of Textures with an initialized map to store texture references.
@@ -160,6 +164,181 @@ func (tx *Textures) BindBuckets() {
 		tx.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEmissiveBase + i)
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, emissive)
 	}
+	tx.BindEnvironmentAndLightmaps()
+}
+
+// BindEnvironmentAndLightmaps binds the cubemap environment texture and baked lightmap array
+// onto their fixed texture units (TexUnitEnvMap and TexUnitLightmap).
+func (tx *Textures) BindEnvironmentAndLightmaps() {
+	if tx.envMapTex != 0 {
+		tx.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEnvMap)
+		tx.ctx.BindTexture(api.TEXTURE_CUBE_MAP, tx.envMapTex)
+	}
+	if tx.lightmapTex != 0 {
+		tx.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitLightmap)
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.lightmapTex)
+	}
+}
+
+// GetEnvMapTexture returns the GPU cubemap texture ID.
+func (tx *Textures) GetEnvMapTexture() uint32 {
+	return tx.envMapTex
+}
+
+// GetLightmapTexture returns the GPU 2D array lightmap texture ID.
+func (tx *Textures) GetLightmapTexture() uint32 {
+	return tx.lightmapTex
+}
+
+// HasLightmaps reports whether real baked lightmaps were uploaded.
+func (tx *Textures) HasLightmaps() bool {
+	return tx.lightmapCount > 0
+}
+
+// UploadEnvironment uploads a 6-face RGBA environment cubemap from config or builds a procedural
+// sky/horizon/ground cubemap fallback for metallic and glass Fresnel reflections.
+func (tx *Textures) UploadEnvironment(envMaps map[string][6][]byte) {
+	if tx.envMapTex != 0 {
+		return
+	}
+	tx.ctx.GenTextures(1, &tx.envMapTex)
+	tx.ctx.BindTexture(api.TEXTURE_CUBE_MAP, tx.envMapTex)
+	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_WRAP_R, api.CLAMP_TO_EDGE)
+
+	uploaded := false
+	for _, faces := range envMaps {
+		faceLen := len(faces[0])
+		if faceLen < 4 {
+			continue
+		}
+		dim := int32(math.Sqrt(float64(faceLen / 4)))
+		if dim > 0 && int(dim*dim*4) == faceLen {
+			valid := true
+			for f := 1; f < 6; f++ {
+				if len(faces[f]) != faceLen {
+					valid = false
+					break
+				}
+			}
+			if valid {
+				for f := 0; f < 6; f++ {
+					tx.ctx.TexImage2D(api.TEXTURE_CUBE_MAP_POSITIVE_X+uint32(f), 0, api.RGBA8, dim, dim, 0, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(faces[f]))
+				}
+				uploaded = true
+				break
+			}
+		}
+	}
+
+	if !uploaded {
+		const size = 64
+		buf := make([]byte, size*size*4)
+		sunX, sunY, sunZ := 0.44, 0.72, 0.54
+		sunL := math.Sqrt(sunX*sunX + sunY*sunY + sunZ*sunZ)
+		sunX, sunY, sunZ = sunX/sunL, sunY/sunL, sunZ/sunL
+		clampB := func(v float64) byte {
+			if v <= 0 {
+				return 0
+			}
+			if v >= 1 {
+				return 255
+			}
+			return byte(v*255.0 + 0.5)
+		}
+		for f := 0; f < 6; f++ {
+			for y := 0; y < size; y++ {
+				v := ((float64(y)+0.5)/float64(size))*2.0 - 1.0
+				for x := 0; x < size; x++ {
+					u := ((float64(x)+0.5)/float64(size))*2.0 - 1.0
+					var dx, dy, dz float64
+					switch f {
+					case 0:
+						dx, dy, dz = 1, -v, -u
+					case 1:
+						dx, dy, dz = -1, -v, u
+					case 2:
+						dx, dy, dz = u, 1, v
+					case 3:
+						dx, dy, dz = u, -1, -v
+					case 4:
+						dx, dy, dz = u, -v, 1
+					default:
+						dx, dy, dz = -u, -v, -1
+					}
+					invL := 1.0 / math.Sqrt(dx*dx+dy*dy+dz*dz)
+					nx, ny, nz := dx*invL, dy*invL, dz*invL
+					var r, g, b float64
+					if ny >= 0 {
+						t := math.Pow(ny, 0.55)
+						// Horizon mist -> steel zenith
+						r = (1.0-t)*0.56 + t*0.16
+						g = (1.0-t)*0.64 + t*0.26
+						b = (1.0-t)*0.74 + t*0.42
+						sunDot := math.Max(0, nx*sunX+ny*sunY+nz*sunZ)
+						sunGlow := math.Pow(sunDot, 12.0)*0.45 + math.Pow(sunDot, 96.0)*0.9
+						r += sunGlow * 1.0
+						g += sunGlow * 0.92
+						b += sunGlow * 0.78
+					} else {
+						t := math.Pow(-ny, 0.5)
+						// Horizon mist -> dark metallic floor bounce
+						r = (1.0-t)*0.42 + t*0.10
+						g = (1.0-t)*0.48 + t*0.11
+						b = (1.0-t)*0.54 + t*0.14
+					}
+					off := (y*size + x) * 4
+					buf[off] = clampB(r)
+					buf[off+1] = clampB(g)
+					buf[off+2] = clampB(b)
+					buf[off+3] = 255
+				}
+			}
+			tx.ctx.TexImage2D(api.TEXTURE_CUBE_MAP_POSITIVE_X+uint32(f), 0, api.RGBA8, size, size, 0, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(buf))
+		}
+	}
+	tx.ctx.BindTexture(api.TEXTURE_CUBE_MAP, 0)
+}
+
+// UploadLightmaps uploads baked 2D lightmap layers to a GPU TEXTURE_2D_ARRAY, or creates
+// a 1x1x1 white dummy array when the level has no pre-baked lightmaps.
+func (tx *Textures) UploadLightmaps(lms []*config.Lightmap) {
+	if tx.lightmapTex != 0 {
+		tx.ctx.DeleteTextures(1, &tx.lightmapTex)
+		tx.lightmapTex = 0
+	}
+	tx.ctx.GenTextures(1, &tx.lightmapTex)
+	tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.lightmapTex)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MIN_FILTER, api.LINEAR)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAG_FILTER, api.LINEAR)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_S, api.CLAMP_TO_EDGE)
+	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_WRAP_T, api.CLAMP_TO_EDGE)
+
+	if len(lms) == 0 {
+		tx.lightmapCount = 0
+		white := []byte{255, 255, 255, 255}
+		tx.ctx.TexImage3D(api.TEXTURE_2D_ARRAY, 0, api.RGBA8, 1, 1, 1, 0, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(white))
+		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, 0)
+		return
+	}
+
+	w, h := int32(lms[0].Width), int32(lms[0].Height)
+	if w <= 0 || h <= 0 {
+		w, h = 128, 128
+	}
+	layers := int32(len(lms))
+	tx.lightmapCount = layers
+	tx.ctx.TexImage3D(api.TEXTURE_2D_ARRAY, 0, api.RGBA8, w, h, layers, 0, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(nil))
+	for i, lm := range lms {
+		if lm == nil || len(lm.Data) < int(w*h*4) {
+			continue
+		}
+		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, int32(i), w, h, 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(lm.Data))
+	}
+	tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, 0)
 }
 
 // idxByDim returns the index of the first slot in the `slots` array with a value greater than or equal to `maxDim`.

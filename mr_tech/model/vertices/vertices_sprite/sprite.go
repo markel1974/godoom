@@ -38,6 +38,7 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 	if v.cfg.Sprite != nil {
 		material = v.materials.GetMaterial(v.cfg.Sprite.Material)
 		if material != nil {
+			material.SetCullMode(config.CullNone)
 			tex := material.GetCurrentFrame()
 			if tex != nil {
 				w, d = tex.GetSize()

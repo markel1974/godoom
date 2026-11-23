@@ -31,6 +31,7 @@ const (
 	ShaderLiquidLocFar
 	ShaderLiquidLocTexture
 	ShaderLiquidLocLightDir
+	ShaderLiquidLocInstanceMode
 	//ShaderLiquidLocLiquidType
 	ShaderLiquidLocLast
 )
@@ -49,9 +50,13 @@ type Liquid struct {
 
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
 func NewLiquid() *Liquid {
-	return &Liquid{
+	l := &Liquid{
 		prg: 0,
 	}
+	for i := range l.table {
+		l.table[i] = -1
+	}
+	return l
 }
 
 // Setup initializes the Lights instance by assigning the rendering context from the provided Handler.
@@ -87,6 +92,9 @@ func (s *Liquid) SetupSamplers() error {
 	locDepth := s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_depthTex\x00"))
 	if locDepth != -1 {
 		s.ctx.Uniform1i(locDepth, api.TexUnitShadowMap)
+	}
+	if loc := s.GetUniform(ShaderLiquidLocInstanceMode); loc >= 0 {
+		s.ctx.Uniform1i(loc, InstanceModeStreaming)
 	}
 
 	return nil
@@ -139,6 +147,7 @@ func (s *Liquid) Compile(a IAssets) error {
 	}
 	s.table[ShaderLiquidLocTexture] = locTex
 	s.table[ShaderLiquidLocLightDir] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_lightDir\x00"))
+	s.table[ShaderLiquidLocInstanceMode] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_instanceMode\x00"))
 	//s.table[ShaderLiquidLocLiquidType] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_liquidType\x00"))
 
 	return nil
@@ -147,6 +156,15 @@ func (s *Liquid) Compile(a IAssets) error {
 // Init initializes the Liquid shader, setting up necessary state or resources. Returns an error if initialization fails.
 func (s *Liquid) Init() error {
 	return nil
+}
+
+// RenderDC executes the liquid pass over a DrawCommandsRender supporting static/instanced/streaming geometry.
+func (s *Liquid) RenderDC(dc *DrawCommandsRender) {
+	if dc == nil || !dc.HasCommands() {
+		return
+	}
+	dc.SetPassState(s.main.GetVAO(), s.GetUniform(ShaderLiquidLocInstanceMode))
+	s.Render(dc.Render)
 }
 
 // Render handles the rendering logic for the liquid, applying shaders, setting up textures, and drawing geometry based on parameters.

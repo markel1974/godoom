@@ -19,6 +19,18 @@ type edgeAdjacency struct {
 	count uint8
 }
 
+type smoothVertKey struct {
+	x, y, z int64
+}
+
+func makeSmoothVertKey(p geometry.XYZ) smoothVertKey {
+	return smoothVertKey{
+		x: int64(math.Round(p.X * 100.0)),
+		y: int64(math.Round(p.Y * 100.0)),
+		z: int64(math.Round(p.Z * 100.0)),
+	}
+}
+
 // Faces stores a collection of Face values and accumulated geometric properties.
 type Faces struct {
 	tree             *aabb.Tree
@@ -39,6 +51,7 @@ type Faces struct {
 	hasTesselation  bool
 	allowTessellate bool
 	version         uint64
+	geomHash        uint64
 }
 
 // NewFaces creates a Faces collection with the given initial capacity.
@@ -92,6 +105,11 @@ func (f *Faces) BumpVersion() {
 	f.version++
 }
 
+// GetGeomHash returns the structural and vertex fingerprint for sharing identical static GPU meshes.
+func (f *Faces) GetGeomHash() uint64 {
+	return f.geomHash
+}
+
 // Rebuild recomputes cached bounds, normals, active edge masks, and mass properties from the current faces.
 func (f *Faces) Rebuild() {
 	f.version++
@@ -101,6 +119,7 @@ func (f *Faces) Rebuild() {
 		f.w, f.h, f.d = 0, 0, 0
 		f.cx, f.cy, f.cz = 0, 0, 0
 		f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = 0, 0, 0, 0, 0, 0
+		f.geomHash = 0
 		return
 	}
 	f.minX, f.minY, f.minZ = math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
@@ -111,15 +130,138 @@ func (f *Faces) Rebuild() {
 		f.tree.InsertObject(face)
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = face.GetMinMax(f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ)
 	}
-	f.rebuildActiveEdges()
+	f.computeActiveEdges()
+	f.computeVertexNormalsAndTangents(0.5)
+	f.computeGeomHash()
 	f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = f.ComputeMassProperties()
 	f.w = f.maxX - f.minX
 	f.h = f.maxY - f.minY
 	f.d = f.maxZ - f.minZ
 }
 
-// rebuildActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave).
-func (f *Faces) rebuildActiveEdges() {
+// computeVertexNormalsAndTangents averages area-weighted face normals at shared vertices
+// when adjacent faces fall within the crease threshold (cosCrease = 0.5 -> ~60 deg),
+// while preserving explicit artist vertex normals when already set.
+func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
+	if f.count <= 0 {
+		return
+	}
+	type adjFace struct {
+		idx int32
+		nx  float64
+		ny  float64
+		nz  float64
+		ax  float64
+		ay  float64
+		az  float64
+	}
+	adjMap := make(map[smoothVertKey][]int32, f.count*2)
+	faceData := make([]adjFace, f.count)
+
+	needsSmooth := false
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil {
+			continue
+		}
+		p0, p1, p2 := fc.tri.Points[0], fc.tri.Points[1], fc.tri.Points[2]
+		e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
+		e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+		ax := e1y*e2z - e1z*e2y
+		ay := e1z*e2x - e1x*e2z
+		az := e1x*e2y - e1y*e2x
+		faceData[i] = adjFace{
+			idx: int32(i),
+			nx:  fc.n.X, ny: fc.n.Y, nz: fc.n.Z,
+			ax: ax, ay: ay, az: az,
+		}
+		if !fc.hasExplicitNormals {
+			needsSmooth = true
+		}
+		if f.count > 1 {
+			for k := 0; k < 3; k++ {
+				key := makeSmoothVertKey(fc.tri.Points[k])
+				adjMap[key] = append(adjMap[key], int32(i))
+			}
+		}
+	}
+
+	if needsSmooth && f.count > 1 {
+		for i := 0; i < f.count; i++ {
+			fc := f.container[i]
+			if fc == nil || fc.hasExplicitNormals {
+				continue
+			}
+			fd := faceData[i]
+			if fd.nx == 0 && fd.ny == 0 && fd.nz == 0 {
+				continue
+			}
+			for k := 0; k < 3; k++ {
+				key := makeSmoothVertKey(fc.tri.Points[k])
+				refs := adjMap[key]
+				var sx, sy, sz float64
+				for _, rIdx := range refs {
+					ofd := faceData[rIdx]
+					if fd.nx*ofd.nx+fd.ny*ofd.ny+fd.nz*ofd.nz >= cosCrease {
+						sx += ofd.ax
+						sy += ofd.ay
+						sz += ofd.az
+					}
+				}
+				fc.vertexNormals[k] = normalizeXYZ(geometry.XYZ{X: sx, Y: sy, Z: sz}, fc.n)
+			}
+			fc.computeTangent()
+		}
+	}
+}
+
+func (f *Faces) computeGeomHash() {
+	const offset64 uint64 = 14695981039346656037
+	const prime64 uint64 = 1099511628211
+	h := offset64
+	mixU32 := func(v uint32) {
+		h ^= uint64(v)
+		h *= prime64
+	}
+	mixF32 := func(v float32) {
+		mixU32(math.Float32bits(v))
+	}
+	mixStr := func(s string) {
+		for i := 0; i < len(s); i++ {
+			h ^= uint64(s[i])
+			h *= prime64
+		}
+		h ^= 0xff
+		h *= prime64
+	}
+
+	mixU32(uint32(f.count))
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil {
+			continue
+		}
+		for k := 0; k < 3; k++ {
+			p := fc.tri.Points[k]
+			mixF32(float32(p.X))
+			mixF32(float32(p.Y))
+			mixF32(float32(p.Z))
+			mixF32(float32(fc.u[k]))
+			mixF32(float32(fc.v[k]))
+			mixF32(float32(fc.vertexNormals[k].X))
+			mixF32(float32(fc.vertexNormals[k].Y))
+			mixF32(float32(fc.vertexNormals[k].Z))
+		}
+		mixU32(uint32(fc.lightmapID))
+		if fc.material != nil {
+			mixStr(fc.material.GetName())
+		}
+	}
+	f.geomHash = h
+}
+
+// computeActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave).
+func (f *Faces) computeActiveEdges() {
 	const (
 		coplanarCosThreshold = 0.9995
 		coplanarSinMax       = 0.032
@@ -158,11 +300,7 @@ func (f *Faces) rebuildActiveEdges() {
 			continue
 		}
 		p := fc.tri.Points
-		keys := [3]EdgeKey{
-			MakeEdgeKey(p[0], p[1]),
-			MakeEdgeKey(p[1], p[2]),
-			MakeEdgeKey(p[2], p[0]),
-		}
+		keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
 		for eIdx := uint8(0); eIdx < 3; eIdx++ {
 			key := keys[eIdx]
 			adj := f.edgeAdj[key]
@@ -201,8 +339,8 @@ func (f *Faces) rebuildActiveEdges() {
 		if (fa.material == nil) != (fb.material == nil) {
 			continue
 		}
-		pA, _, oppA := fa.edgePoints(int(refA.edgeIdx))
-		_, _, oppB := fb.edgePoints(int(refB.edgeIdx))
+		pA, _, oppA := fa.GetEdgePoints(int(refA.edgeIdx))
+		_, _, oppB := fb.GetEdgePoints(int(refB.edgeIdx))
 
 		cosAngle := fa.n.X*fb.n.X + fa.n.Y*fb.n.Y + fa.n.Z*fb.n.Z
 		sinB := sinToPlane(oppB, pA, fa.n)

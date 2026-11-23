@@ -9,11 +9,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 )
 
+// LWOConverter converts LightWave Object model data into configuration model entries using archived resources and materials.
 type LWOConverter struct {
 	arc       proc.IPkArchive
 	materials *proc.Materials
 }
 
+// NewLWOConverter creates an LWO converter using the provided archive and material definitions.
 func NewLWOConverter(arc proc.IPkArchive, materials *proc.Materials) *LWOConverter {
 	return &LWOConverter{
 		arc:       arc,
@@ -96,6 +98,7 @@ func (t *LWOConverter) Convert(r io.Reader) (*config.Model3DEntry, error) {
 		return nil, fmt.Errorf("no triangles generated from LWO")
 	}
 
+	config.NormalizeNormalsAndWinding(triangles, false, 0.5)
 	cModel := config.NewModel3DEntry(1, []string{"idle"}, []string{"death", "die"})
 	cModel.Frames[0] = config.NewModel3DEntryFrame(triangles)
 	cModel.ActionDefinitions = []string{"idle"}

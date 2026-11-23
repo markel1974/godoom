@@ -96,6 +96,8 @@ func (s *Shaders) MaterialBind(texName string, material *config.Material) {
 	}
 	if s.IsAdditive(texNameLC) {
 		material.BlendMode = config.BlendModeAdditive
+	} else if s.IsTransparent(texNameLC) && material.AlphaTest <= 0 {
+		material.BlendMode = config.BlendModeTransparent
 	}
 	material.CullMode = s.GetCullMode(texNameLC)
 	material.DepthWrite = s.GetDepthWrite(texNameLC)
@@ -166,6 +168,33 @@ func (s *Shaders) IsAdditive(target string) bool {
 		}
 	}
 	return false
+}
+
+// IsTransparent reports whether the shader uses alpha blending (GL_SRC_ALPHA / GL_ONE_MINUS_SRC_ALPHA)
+// on its primary diffuse layer without an opaque diffuse stage underneath.
+func (s *Shaders) IsTransparent(target string) bool {
+	k, ok := s.container[target]
+	if !ok {
+		return false
+	}
+	hasOpaqueDiffuse := false
+	hasAlphaBlend := false
+	for _, st := range k.stages {
+		mapName := st.mapData
+		if mapName == "" {
+			mapName = st.clampMap
+		}
+		mapLC := strings.ToLower(mapName)
+		if mapLC == "" || strings.HasPrefix(mapLC, "$") || strings.HasPrefix(mapLC, "*") {
+			continue
+		}
+		if st.blendSrc == "" && st.blendDst == "" {
+			hasOpaqueDiffuse = true
+		} else if st.blendSrc == "gl_src_alpha" && st.blendDst == "gl_one_minus_src_alpha" {
+			hasAlphaBlend = true
+		}
+	}
+	return hasAlphaBlend && !hasOpaqueDiffuse
 }
 
 // GetAnimMap retrieves the animation map frames (excluding frequency) for the first stage that has an animMap.

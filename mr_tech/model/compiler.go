@@ -27,6 +27,8 @@ type Compiler struct {
 	things      *Things
 	ui          []ithing.IThing
 	calibration *Calibration
+	lightmaps   []*config.Lightmap
+	envMaps     map[string][6][]byte
 }
 
 // NewCompiler initializes and returns a new instance of Compiler with default-nil-initialized fields.
@@ -55,6 +57,8 @@ func (r *Compiler) Compile(cfg *config.Root) error {
 	}
 
 	cfg.Scale(r.gScale)
+	r.lightmaps = cfg.Lightmaps
+	r.envMaps = cfg.EnvMaps
 
 	materials := materials2.NewMaterials(cfg.GetTextures())
 	if err := materials.Setup(); err != nil {
@@ -161,4 +165,14 @@ func (r *Compiler) GetLights() *Lights {
 // GetCalibration returns the Calibration instance associated with the Compiler.
 func (r *Compiler) GetCalibration() *Calibration {
 	return r.calibration
+}
+
+// GetLightmaps returns baked 2D lightmap slices extracted from configuration (if any).
+func (r *Compiler) GetLightmaps() []*config.Lightmap {
+	return r.lightmaps
+}
+
+// GetEnvMaps returns configured 6-face cubemap buffers indexed by name (if any).
+func (r *Compiler) GetEnvMaps() map[string][6][]byte {
+	return r.envMaps
 }

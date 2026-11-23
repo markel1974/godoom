@@ -120,6 +120,9 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 			face := volumes.NewFace(points, label, material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
+			if tri.Vertices[0].HasNormal || tri.Vertices[1].HasNormal || tri.Vertices[2].HasNormal {
+				face.SetVertexNormals(tri.Vertices[0].Normal, tri.Vertices[1].Normal, tri.Vertices[2].Normal)
+			}
 			volume.AddFace(face)
 		}
 		// Copy tags to volume
@@ -423,8 +426,32 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 		dst.SetV(src.GetV())
 		if isIdent && noOffset {
 			dst.CopyPoints(src)
+			dst.CopyRenderAttributes(src)
 		} else {
 			rot.TransformPointsWithMatrix(dst.GetTri(), src.GetTri(), ox, oy, oz)
+			if isIdent {
+				dst.CopyRenderAttributes(src)
+			} else {
+				nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := src.GetVertexNormalsFlat()
+				rx0, ry0, rz0 := rot.RotatePoint(nx0, ny0, nz0)
+				rx1, ry1, rz1 := rot.RotatePoint(nx1, ny1, nz1)
+				rx2, ry2, rz2 := rot.RotatePoint(nx2, ny2, nz2)
+				dst.SetComputedVertexNormals(
+					geometry.XYZ{X: rx0, Y: ry0, Z: rz0},
+					geometry.XYZ{X: rx1, Y: ry1, Z: rz1},
+					geometry.XYZ{X: rx2, Y: ry2, Z: rz2},
+				)
+				tx0, ty0, tz0, s0, tx1, ty1, tz1, s1, tx2, ty2, tz2, s2 := src.GetTangentsFlat()
+				rtx0, rty0, rtz0 := rot.RotatePoint(tx0, ty0, tz0)
+				rtx1, rty1, rtz1 := rot.RotatePoint(tx1, ty1, tz1)
+				rtx2, rty2, rtz2 := rot.RotatePoint(tx2, ty2, tz2)
+				dst.SetTangents(
+					geometry.XYZ{X: rtx0, Y: rty0, Z: rtz0},
+					geometry.XYZ{X: rtx1, Y: rty1, Z: rtz1},
+					geometry.XYZ{X: rtx2, Y: rty2, Z: rtz2},
+					s0, s1, s2,
+				)
+			}
 		}
 		if trackBounds {
 			minX, minY, minZ, maxX, maxY, maxZ = dst.GetMinMax(minX, minY, minZ, maxX, maxY, maxZ)
@@ -564,6 +591,15 @@ func (v *Element3D) Compile(tick uint64) bool {
 // GetUIFaces returns the face sets, interpolation value, and render mode for UI rendering.
 func (v *Element3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64) {
 	return v.facesA, v.facesB, v.lerpT, vertices.RenderModeModel3D
+}
+
+// GetRigidFaces returns the unrotated local-space static Faces template when the model
+// is currently on a single non-morphing frame, allowing GPU instanced rendering without CPU vertex copies.
+func (v *Element3D) GetRigidFaces() *volumes.Faces {
+	if v.volA != nil && (v.singleFrame || v.volA == v.volB) {
+		return v.volA.GetFaces()
+	}
+	return nil
 }
 
 // GetVolumes returns the entry's source and target volumes along with the interpolation factor.

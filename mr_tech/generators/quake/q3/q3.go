@@ -304,10 +304,47 @@ func (q3 *BSPReader) Build(root *config.Root) error {
 	} else {
 		root.Volumes = cVolumes
 	}
+	root.Lightmaps = q3.loadLightmaps()
 	if sun := q3.shaders.GetSun(); sun != nil {
 		root.Lights = append(root.Lights, sun)
 	}
 	return nil
+}
+
+func (q3 *BSPReader) loadLightmaps() []*config.Lightmap {
+	const lmWidth = 128
+	const lmHeight = 128
+	const rawSize = lmWidth * lmHeight * 3
+	lump := q3.headers.Lumps[lumps.LumpLightmaps3]
+	if lump.Length < rawSize {
+		return nil
+	}
+	count := int(lump.Length) / rawSize
+	if _, err := q3.rs.Seek(int64(lump.Offset), io.SeekStart); err != nil {
+		return nil
+	}
+	out := make([]*config.Lightmap, 0, count)
+	rgb := make([]byte, rawSize)
+	for i := 0; i < count; i++ {
+		if _, err := io.ReadFull(q3.rs, rgb); err != nil {
+			break
+		}
+		rgba := make([]byte, lmWidth*lmHeight*4)
+		for p := 0; p < lmWidth*lmHeight; p++ {
+			src := p * 3
+			dst := p * 4
+			rgba[dst] = rgb[src]
+			rgba[dst+1] = rgb[src+1]
+			rgba[dst+2] = rgb[src+2]
+			rgba[dst+3] = 255
+		}
+		out = append(out, &config.Lightmap{
+			Width:  lmWidth,
+			Height: lmHeight,
+			Data:   rgba,
+		})
+	}
+	return out
 }
 
 // Retrieve constructs and returns a populated config.Root object based on BSPReader state or an error if the process fails.
@@ -346,7 +383,7 @@ func (q3 *BSPReader) Retrieve() (*config.Root, error) {
 	root.Player.Flash.OffsetX = 0.2
 	root.Player.Flash.OffsetY = 0.1
 	root.Player.Bobbing.SwayScale = 1.0 //mod 2.0
-	root.Player.Bobbing.SwayOffsetX = 50
+	root.Player.Bobbing.SwayOffsetX = 5.0
 	root.Player.Bobbing.SwayOffsetY = -0.9
 	root.Player.Bobbing.MaxAmplitudeX = 5.0 // MAXIMUM EXCURSION: 12 units (approx. 20% of player height)
 	root.Player.Bobbing.MaxAmplitudeY = 5.5

@@ -531,6 +531,14 @@ func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64)
 	return t.IVertices.Deform(localImpact, localImpulse, radius)
 }
 
+// GetRigidFaces delegates to IVertices when the underlying renderable exposes a static rigid mesh template.
+func (t *Base) GetRigidFaces() *volumes.Faces {
+	if rs, ok := t.IVertices.(ithing.IRigidRenderSource); ok {
+		return rs.GetRigidFaces()
+	}
+	return nil
+}
+
 // dentCompute returns the dent depth and radius derived from force, using defaults for non-positive force.
 func (t *Base) dentCompute(force float64) (float64, float64) {
 	dentDepth := 2.5

@@ -48,7 +48,8 @@ type Context struct {
 	ptrMap   map[uintptr]interface{}
 	ptrMutex sync.Mutex
 
-	jsBuffer                          js.Value
+	scratch                           jsScratchBuffer
+	scratchAux                        jsScratchBuffer
 	scratchMatrixBuffer               js.Value
 	scratchMatrixBytes                js.Value
 	scratch3fvBuffer                  js.Value
@@ -84,16 +85,20 @@ type Context struct {
 	fn_getQueryParameter              js.Value
 	fn_createTexture                  js.Value
 	fn_createVertexArray              js.Value
+	fn_deleteBuffer                   js.Value
 	fn_deleteFramebuffer              js.Value
 	fn_deleteRenderbuffer             js.Value
 	fn_deleteShader                   js.Value
 	fn_deleteTexture                  js.Value
+	fn_deleteVertexArray              js.Value
 	fn_depthFunc                      js.Value
 	fn_depthMask                      js.Value
 	fn_disable                        js.Value
 	fn_drawArrays                     js.Value
 	fn_drawBuffers                    js.Value
 	fn_drawElements                   js.Value
+	fn_drawElementsInstanced          js.Value
+	fn_cullFace                       js.Value
 	fn_multiDrawElements              js.Value
 	fn_enable                         js.Value
 	fn_enableVertexAttribArray        js.Value
@@ -113,11 +118,13 @@ type Context struct {
 	fn_readBuffer                     js.Value
 	fn_renderbufferStorage            js.Value
 	fn_renderbufferStorageMultisample js.Value
+	fn_scissor                        js.Value
 	fn_shaderSource                   js.Value
 	fn_texImage2D                     js.Value
 	fn_texImage3D                     js.Value
 	fn_texParameterf                  js.Value
 	fn_texParameteri                  js.Value
+	fn_texSubImage2D                  js.Value
 	fn_texSubImage3D                  js.Value
 	fn_uniform1f                      js.Value
 	fn_uniform1i                      js.Value
@@ -129,8 +136,10 @@ type Context struct {
 	fn_uniformBlockBinding            js.Value
 	fn_uniformMatrix4fv               js.Value
 	fn_useProgram                     js.Value
+	fn_vertexAttribDivisor            js.Value
 	fn_vertexAttribPointer            js.Value
 	fn_viewport                       js.Value
+	jsArrayBuffer                     js.Value
 	jsInt8Array                       js.Value
 	jsUint8Array                      js.Value
 	jsInt16Array                      js.Value
@@ -139,7 +148,21 @@ type Context struct {
 	jsUint32Array                     js.Value
 	jsFloat32Array                    js.Value
 	jsConsole                         js.Value
-	jsGetWasmMemoryView               js.Value
+}
+
+// jsScratchBuffer owns a JavaScript heap ArrayBuffer and typed array views over it.
+// Using JS-owned memory instead of direct views over wasm.memory.buffer guarantees
+// WebGL/typed views are never detached or shrunk to 0 bytes by Go memory.grow().
+type jsScratchBuffer struct {
+	buf     js.Value
+	u8      js.Value
+	i8      js.Value
+	i16     js.Value
+	u16     js.Value
+	i32     js.Value
+	u32     js.Value
+	f32     js.Value
+	byteCap int
 }
 
 // NewContextWeb initializes and returns a new WebGL rendering context for the provided JavaScript WebGL context.
@@ -162,25 +185,9 @@ func NewContext(width int, height int, fps int, player *config.Player, vsync boo
 		queries:  NewResourceTracker(),
 		uniforms: []js.Value{js.Null()},
 		ptrMap:   make(map[uintptr]interface{}),
-		jsBuffer: js.Global().Get("Uint8Array"),
-		//sharedBuffer:    js.Global().Get("Uint8Array").New(1024 * 1024 * 8),
-		//sharedBufferCap: 1024 * 1024 * 8,
 	}
 
-	ctx.scratchMatrixBuffer = js.Global().Get("Float32Array").New(16)
-	ctx.scratchMatrixBytes = js.Global().Get("Uint8Array").New(ctx.scratchMatrixBuffer.Get("buffer"))
-	ctx.scratch3fvBuffer = js.Global().Get("Float32Array").New(3)
-	ctx.scratch3fvBytes = js.Global().Get("Uint8Array").New(ctx.scratch3fvBuffer.Get("buffer"))
-
-	ctx.jsGetWasmMemoryView = js.Global().Get("getWasmMemoryView")
-	ctx.jsInt8Array = js.Global().Get("Int8Array")
-	ctx.jsUint8Array = js.Global().Get("Uint8Array")
-	ctx.jsInt16Array = js.Global().Get("Int16Array")
-	ctx.jsUint16Array = js.Global().Get("Uint16Array")
-	ctx.jsInt32Array = js.Global().Get("Int32Array")
-	ctx.jsUint32Array = js.Global().Get("Uint32Array")
-	ctx.jsFloat32Array = js.Global().Get("Float32Array")
-	ctx.jsConsole = js.Global().Get("console")
+	ctx.initJSTypes()
 	ctx.win = NewGLWindow(ctx, cfg, player)
 	ctx.fn_activeTexture = ctx.gl.Get("activeTexture").Call("bind", ctx.gl)
 	ctx.fn_attachShader = ctx.gl.Get("attachShader").Call("bind", ctx.gl)
@@ -206,16 +213,20 @@ func NewContext(width int, height int, fps int, player *config.Player, vsync boo
 	ctx.fn_createShader = ctx.gl.Get("createShader").Call("bind", ctx.gl)
 	ctx.fn_createTexture = ctx.gl.Get("createTexture").Call("bind", ctx.gl)
 	ctx.fn_createVertexArray = ctx.gl.Get("createVertexArray").Call("bind", ctx.gl)
+	ctx.fn_deleteBuffer = ctx.gl.Get("deleteBuffer").Call("bind", ctx.gl)
 	ctx.fn_deleteFramebuffer = ctx.gl.Get("deleteFramebuffer").Call("bind", ctx.gl)
 	ctx.fn_deleteRenderbuffer = ctx.gl.Get("deleteRenderbuffer").Call("bind", ctx.gl)
 	ctx.fn_deleteShader = ctx.gl.Get("deleteShader").Call("bind", ctx.gl)
 	ctx.fn_deleteTexture = ctx.gl.Get("deleteTexture").Call("bind", ctx.gl)
+	ctx.fn_deleteVertexArray = ctx.gl.Get("deleteVertexArray").Call("bind", ctx.gl)
 	ctx.fn_depthFunc = ctx.gl.Get("depthFunc").Call("bind", ctx.gl)
 	ctx.fn_depthMask = ctx.gl.Get("depthMask").Call("bind", ctx.gl)
 	ctx.fn_disable = ctx.gl.Get("disable").Call("bind", ctx.gl)
 	ctx.fn_drawArrays = ctx.gl.Get("drawArrays").Call("bind", ctx.gl)
 	ctx.fn_drawBuffers = ctx.gl.Get("drawBuffers").Call("bind", ctx.gl)
 	ctx.fn_drawElements = ctx.gl.Get("drawElements").Call("bind", ctx.gl)
+	ctx.fn_drawElementsInstanced = ctx.gl.Get("drawElementsInstanced").Call("bind", ctx.gl)
+	ctx.fn_cullFace = ctx.gl.Get("cullFace").Call("bind", ctx.gl)
 	ctx.fn_enable = ctx.gl.Get("enable").Call("bind", ctx.gl)
 	ctx.fn_enableVertexAttribArray = ctx.gl.Get("enableVertexAttribArray").Call("bind", ctx.gl)
 	ctx.fn_framebufferRenderbuffer = ctx.gl.Get("framebufferRenderbuffer").Call("bind", ctx.gl)
@@ -234,11 +245,13 @@ func NewContext(width int, height int, fps int, player *config.Player, vsync boo
 	ctx.fn_readBuffer = ctx.gl.Get("readBuffer").Call("bind", ctx.gl)
 	ctx.fn_renderbufferStorage = ctx.gl.Get("renderbufferStorage").Call("bind", ctx.gl)
 	ctx.fn_renderbufferStorageMultisample = ctx.gl.Get("renderbufferStorageMultisample").Call("bind", ctx.gl)
+	ctx.fn_scissor = ctx.gl.Get("scissor").Call("bind", ctx.gl)
 	ctx.fn_shaderSource = ctx.gl.Get("shaderSource").Call("bind", ctx.gl)
 	ctx.fn_texImage2D = ctx.gl.Get("texImage2D").Call("bind", ctx.gl)
 	ctx.fn_texImage3D = ctx.gl.Get("texImage3D").Call("bind", ctx.gl)
 	ctx.fn_texParameterf = ctx.gl.Get("texParameterf").Call("bind", ctx.gl)
 	ctx.fn_texParameteri = ctx.gl.Get("texParameteri").Call("bind", ctx.gl)
+	ctx.fn_texSubImage2D = ctx.gl.Get("texSubImage2D").Call("bind", ctx.gl)
 	ctx.fn_texSubImage3D = ctx.gl.Get("texSubImage3D").Call("bind", ctx.gl)
 	ctx.fn_uniform1f = ctx.gl.Get("uniform1f").Call("bind", ctx.gl)
 	ctx.fn_uniform1i = ctx.gl.Get("uniform1i").Call("bind", ctx.gl)
@@ -250,6 +263,7 @@ func NewContext(width int, height int, fps int, player *config.Player, vsync boo
 	ctx.fn_uniformBlockBinding = ctx.gl.Get("uniformBlockBinding").Call("bind", ctx.gl)
 	ctx.fn_uniformMatrix4fv = ctx.gl.Get("uniformMatrix4fv").Call("bind", ctx.gl)
 	ctx.fn_useProgram = ctx.gl.Get("useProgram").Call("bind", ctx.gl)
+	ctx.fn_vertexAttribDivisor = ctx.gl.Get("vertexAttribDivisor").Call("bind", ctx.gl)
 	ctx.fn_vertexAttribPointer = ctx.gl.Get("vertexAttribPointer").Call("bind", ctx.gl)
 	ctx.fn_viewport = ctx.gl.Get("viewport").Call("bind", ctx.gl)
 	ctx.fn_getQueryParameter = ctx.gl.Get("getQueryParameter").Call("bind", ctx.gl)
@@ -261,6 +275,24 @@ func NewContext(width int, height int, fps int, player *config.Player, vsync boo
 	ctx.fn_multiDrawElements = js.Global().Call("eval", fnMultiDrawElements)
 
 	return ctx
+}
+
+// initJSTypes binds JS TypedArray constructors and scratch buffers once.
+func (d *Context) initJSTypes() {
+	d.jsArrayBuffer = js.Global().Get("ArrayBuffer")
+	d.jsInt8Array = js.Global().Get("Int8Array")
+	d.jsUint8Array = js.Global().Get("Uint8Array")
+	d.jsInt16Array = js.Global().Get("Int16Array")
+	d.jsUint16Array = js.Global().Get("Uint16Array")
+	d.jsInt32Array = js.Global().Get("Int32Array")
+	d.jsUint32Array = js.Global().Get("Uint32Array")
+	d.jsFloat32Array = js.Global().Get("Float32Array")
+	d.jsConsole = js.Global().Get("console")
+
+	d.scratchMatrixBuffer = d.jsFloat32Array.New(16)
+	d.scratchMatrixBytes = d.jsUint8Array.New(d.scratchMatrixBuffer.Get("buffer"))
+	d.scratch3fvBuffer = d.jsFloat32Array.New(3)
+	d.scratch3fvBytes = d.jsUint8Array.New(d.scratch3fvBuffer.Get("buffer"))
 }
 
 // Setup initializes the rendering context for the given renderer and propagates setup errors from the underlying window.
@@ -296,6 +328,11 @@ func (d *Context) getSliceBytes(data interface{}) []byte {
 			return nil
 		}
 		return unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*4)
+	case []uint16:
+		if len(v) == 0 {
+			return nil
+		}
+		return unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*2)
 	}
 	return nil
 }
@@ -380,26 +417,20 @@ func (d *Context) BlitFramebuffer(srcX0 int32, srcY0 int32, srcX1 int32, srcY1 i
 
 // BufferData uploads data to a buffer object for the specified target with the given usage pattern.
 func (d *Context) BufferData(target uint32, size int, data unsafe.Pointer, usage uint32) {
+	if size <= 0 {
+		d.fn_bufferData.Invoke(target, 0, usage)
+		return
+	}
 	if data == nil || uintptr(data) == 0 {
 		d.fn_bufferData.Invoke(target, size, usage)
 		return
 	}
-	d.ptrMutex.Lock()
-	dataVal, ok := d.ptrMap[uintptr(data)]
-	d.ptrMutex.Unlock()
-
-	if ok && dataVal != nil {
-		bytes := d.getSliceBytes(dataVal)
-		if len(bytes) > size {
-			bytes = bytes[:size]
-		}
-		jsArr := d.getUint8haredJSArray(bytes)
-		d.fn_bufferData.Invoke(target, jsArr, usage)
+	bytes := d.resolveUploadBytes(size, data)
+	if len(bytes) == 0 {
+		d.fn_bufferData.Invoke(target, size, usage)
 		return
 	}
-
-	// Direct Wasm memory pointer (zero-copy, zero-alloc)
-	jsArr := d.jsGetWasmMemoryView.Invoke(int(uintptr(data)), size, "uint8")
+	jsArr := d.scratch.typedView(d, bytes, 0x1401)
 	d.fn_bufferData.Invoke(target, jsArr, usage)
 }
 
@@ -412,22 +443,11 @@ func (d *Context) BufferSubData(target uint32, offset int, size int, data unsafe
 	if data == nil || uintptr(data) == 0 || size <= 0 {
 		return
 	}
-	d.ptrMutex.Lock()
-	dataVal, ok := d.ptrMap[uintptr(data)]
-	d.ptrMutex.Unlock()
-
-	if ok && dataVal != nil {
-		bytes := d.getSliceBytes(dataVal)
-		if len(bytes) > size {
-			bytes = bytes[:size]
-		}
-		jsArr := d.getUint8haredJSArray(bytes)
-		d.fn_bufferSubData.Invoke(target, offset, jsArr)
+	bytes := d.resolveUploadBytes(size, data)
+	if len(bytes) == 0 {
 		return
 	}
-
-	// Direct Wasm memory pointer (zero-copy, zero-alloc)
-	jsArr := d.jsGetWasmMemoryView.Invoke(int(uintptr(data)), size, "uint8")
+	jsArr := d.scratch.typedView(d, bytes, 0x1401)
 	d.fn_bufferSubData.Invoke(target, offset, jsArr)
 }
 
@@ -445,6 +465,11 @@ func (d *Context) Clear(mask uint32) {
 // ClearColor sets the color used to clear the color buffer with specified red, green, blue, and alpha values.
 func (d *Context) ClearColor(red float32, green float32, blue float32, alpha float32) {
 	d.fn_clearColor.Invoke(red, green, blue, alpha)
+}
+
+// CullFace specifies whether front- or back-facing facets are candidates for culling.
+func (d *Context) CullFace(mode uint32) {
+	d.fn_cullFace.Invoke(mode)
 }
 
 // CompileShader compiles the specified shader within the current graphics context.
@@ -519,6 +544,24 @@ func (d *Context) DeleteTextures(n int32, textures *uint32) {
 	for i := int32(0); i < n; i++ {
 		d.fn_deleteTexture.Invoke(d.textures.Get(arr[i]))
 		d.textures.Remove(arr[i])
+	}
+}
+
+// DeleteBuffers deletes named buffer objects.
+func (d *Context) DeleteBuffers(n int32, buffers *uint32) {
+	arr := unsafe.Slice(buffers, n)
+	for i := int32(0); i < n; i++ {
+		d.fn_deleteBuffer.Invoke(d.buffers.Get(arr[i]))
+		d.buffers.Remove(arr[i])
+	}
+}
+
+// DeleteVertexArrays deletes vertex array objects.
+func (d *Context) DeleteVertexArrays(n int32, arrays *uint32) {
+	arr := unsafe.Slice(arrays, n)
+	for i := int32(0); i < n; i++ {
+		d.fn_deleteVertexArray.Invoke(d.vaos.Get(arr[i]))
+		d.vaos.Remove(arr[i])
 	}
 }
 
@@ -800,11 +843,10 @@ func (d *Context) LinkProgram(program uint32) {
 }
 
 func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, indices *unsafe.Pointer, drawcount int32) {
-	if drawcount == 0 {
+	if drawcount <= 0 {
 		return
 	}
 
-	cSlice := unsafe.Slice(count, drawcount)
 	ptrSlice := unsafe.Slice(indices, drawcount)
 
 	// Assicuriamoci che il buffer di scratch sia capiente abbastanza (zero-alloc a regime)
@@ -817,9 +859,11 @@ func (d *Context) MultiDrawElements(mode uint32, count *int32, xtype uint32, ind
 		d.scratchOffsets[i] = uint32(uintptr(ptrSlice[i]))
 	}
 
-	// Sfruttiamo l'Arena Allocator condiviso per passare le slice a JS
-	counts32 := d.getInt32SharedJSArray(cSlice)
-	offsets32 := d.getUint32SharedJSArray(d.scratchOffsets[:drawcount])
+	cBytes := unsafe.Slice((*byte)(unsafe.Pointer(count)), int(drawcount)*4)
+	oBytes := unsafe.Slice((*byte)(unsafe.Pointer(&d.scratchOffsets[0])), int(drawcount)*4)
+
+	counts32 := d.scratch.typedView(d, cBytes, 0x1404)
+	offsets32 := d.scratchAux.typedView(d, oBytes, 0x1405)
 
 	// Esecuzione batch interamente gestita nel loop JS
 	d.fn_multiDrawElements.Invoke(d.gl, mode, counts32, xtype, offsets32, drawcount)
@@ -888,6 +932,15 @@ func (d *Context) Ptr(data interface{}) unsafe.Pointer {
 		d.ptrMap[uintptr(ptr)] = data
 		d.ptrMutex.Unlock()
 		return ptr
+	case []uint16:
+		if len(v) == 0 {
+			return nil
+		}
+		ptr := unsafe.Pointer(&v[0])
+		d.ptrMutex.Lock()
+		d.ptrMap[uintptr(ptr)] = data
+		d.ptrMutex.Unlock()
+		return ptr
 	default:
 		d.ptrMutex.Lock()
 		defer d.ptrMutex.Unlock()
@@ -922,6 +975,11 @@ func (d *Context) RenderbufferStorageMultisample(target uint32, samples int32, i
 	d.fn_renderbufferStorageMultisample.Invoke(target, samples, internalformat, width, height)
 }
 
+// Scissor defines the scissor box for pixels that pass the scissor test.
+func (d *Context) Scissor(x int32, y int32, width int32, height int32) {
+	d.fn_scissor.Invoke(x, y, width, height)
+}
+
 // ShaderSource sets the source code in a shader object to the specified string array.
 func (d *Context) ShaderSource(shader uint32, count int32, xstring **uint8, length *int32) {
 	const version = "#version 300 es"
@@ -948,6 +1006,8 @@ func (d *Context) ShaderSource(shader uint32, count int32, xstring **uint8, leng
 		"precision highp sampler2DShadow;",
 		"precision highp sampler2D;",
 		"precision highp sampler2DArray;",
+		"precision highp samplerCube;",
+		"precision highp usampler2D;",
 		"precision highp float;",
 	}
 
@@ -1003,22 +1063,8 @@ func (d *Context) TexImage2D(target uint32, level int32, internalformat int32, w
 		xtype = 0x1405          // UNSIGNED_INT
 	}
 
-	if pixels == nil || uintptr(pixels) == 0 {
-		d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, js.Null())
-		return
-	}
-	d.ptrMutex.Lock()
-	dataVal, ok := d.ptrMap[uintptr(pixels)]
-	d.ptrMutex.Unlock()
-
-	if !ok || dataVal == nil {
-		d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, js.Null())
-		return
-	}
-
-	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.getUint8haredJSArray(bytes)
-	d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, d.getJSView(jsArr, xtype))
+	view, _ := d.resolveTextureView(pixels, xtype)
+	d.fn_texImage2D.Invoke(target, level, internalformat, width, height, border, format, xtype, view)
 }
 
 // TexImage2DMultisample specifies storage for a 2D multisample texture.
@@ -1048,22 +1094,8 @@ func (d *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 
 // TexImage3D specifies a three-dimensional texture image for a target texture.
 func (d *Context) TexImage3D(target uint32, level int32, internalformat int32, width int32, height int32, depth int32, border int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	if pixels == nil || uintptr(pixels) == 0 {
-		d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
-		return
-	}
-	d.ptrMutex.Lock()
-	dataVal, ok := d.ptrMap[uintptr(pixels)]
-	d.ptrMutex.Unlock()
-
-	if !ok || dataVal == nil {
-		d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, js.Null())
-		return
-	}
-
-	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.getUint8haredJSArray(bytes)
-	d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, d.getJSView(jsArr, xtype))
+	view, _ := d.resolveTextureView(pixels, xtype)
+	d.fn_texImage3D.Invoke(target, level, internalformat, width, height, depth, border, format, xtype, view)
 }
 
 // TexParameterf sets the float parameter for a specific texture target and property.
@@ -1085,22 +1117,22 @@ func (d *Context) TexParameteri(target uint32, pname uint32, param int32) {
 	d.fn_texParameteri.Invoke(target, pname, param)
 }
 
+// TexSubImage2D updates a portion of a 2D texture with new pixel data.
+func (d *Context) TexSubImage2D(target uint32, level int32, xoffset int32, yoffset int32, width int32, height int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
+	view, ok := d.resolveTextureView(pixels, xtype)
+	if !ok {
+		return
+	}
+	d.fn_texSubImage2D.Invoke(target, level, xoffset, yoffset, width, height, format, xtype, view)
+}
+
 // TexSubImage3D updates a portion of a 3D texture with new pixel data for the specified level and offset coordinates.
 func (d *Context) TexSubImage3D(target uint32, level int32, xoffset int32, yoffset int32, zoffset int32, width int32, height int32, depth int32, format uint32, xtype uint32, pixels unsafe.Pointer) {
-	if pixels == nil || uintptr(pixels) == 0 {
+	view, ok := d.resolveTextureView(pixels, xtype)
+	if !ok {
 		return
 	}
-	d.ptrMutex.Lock()
-	dataVal, ok := d.ptrMap[uintptr(pixels)]
-	d.ptrMutex.Unlock()
-
-	if !ok || dataVal == nil {
-		return
-	}
-
-	bytes := d.getSliceBytes(dataVal)
-	jsArr := d.getUint8haredJSArray(bytes)
-	d.fn_texSubImage3D.Invoke(target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, d.getJSView(jsArr, xtype))
+	d.fn_texSubImage3D.Invoke(target, level, xoffset, yoffset, zoffset, width, height, depth, format, xtype, view)
 }
 
 // Uniform1f sets the value of a float uniform variable at the given location in the WebGL program context.
@@ -1121,12 +1153,12 @@ func (d *Context) Uniform1i(location int32, v0 int32) {
 
 // Uniform1iv sets the value of a uniform variable array in the active shader program as a slice of integers.
 func (d *Context) Uniform1iv(location int32, count int32, value *int32) {
-	if location == -1 {
+	if count <= 0 || location == -1 || value == nil {
 		return
 	}
 	loc := d.uniforms[location]
-	slice := unsafe.Slice(value, count)
-	i32Arr := d.getInt32SharedJSArray(slice)
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(value)), int(count)*4)
+	i32Arr := d.scratch.typedView(d, bytes, 0x1404)
 	d.fn_uniform1iv.Invoke(loc, i32Arr)
 }
 
@@ -1180,9 +1212,8 @@ func (d *Context) UniformMatrix4fv(location int32, count int32, transpose bool, 
 		return
 	}
 	// Fallback standard per array di matrici (es. animazioni scheletriche)
-	total := count * 16
-	slice := unsafe.Slice(value, total)
-	f32Arr := d.getFloat32SharedJSArray(slice)
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(value)), int(count)*16*4)
+	f32Arr := d.scratch.typedView(d, bytes, 0x1406)
 	d.fn_uniformMatrix4fv.Invoke(loc, transpose, f32Arr)
 }
 
@@ -1200,9 +1231,8 @@ func (d *Context) Uniform3fv(location int32, count int32, value *float32) {
 		d.fn_uniform3fv.Invoke(loc, d.scratch3fvBuffer)
 		return
 	}
-	total := count * 3
-	slice := unsafe.Slice(value, total)
-	f32Arr := d.getFloat32SharedJSArray(slice)
+	bytes := unsafe.Slice((*byte)(unsafe.Pointer(value)), int(count)*3*4)
+	f32Arr := d.scratch.typedView(d, bytes, 0x1406)
 	d.fn_uniform3fv.Invoke(loc, f32Arr)
 }
 
@@ -1211,10 +1241,25 @@ func (d *Context) UseProgram(program uint32) {
 	d.fn_useProgram.Invoke(d.programs.Get(program))
 }
 
+// DrawElements renders primitives from array data via an element index buffer.
+func (d *Context) DrawElements(mode uint32, count int32, xtype uint32, indices unsafe.Pointer) {
+	d.fn_drawElements.Invoke(mode, count, xtype, uintptr(indices))
+}
+
+// DrawElementsInstanced renders multiple instances of indexed primitives.
+func (d *Context) DrawElementsInstanced(mode uint32, count int32, xtype uint32, indices unsafe.Pointer, instancecount int32) {
+	d.fn_drawElementsInstanced.Invoke(mode, count, xtype, uintptr(indices), instancecount)
+}
+
 // VertexAttribPointer specifies the location and data format of the array of generic vertex attributes.
 func (d *Context) VertexAttribPointer(index uint32, size int32, xtype uint32, normalized bool, stride int32, pointer unsafe.Pointer) {
 	offset := uintptr(pointer)
 	d.fn_vertexAttribPointer.Invoke(index, size, xtype, normalized, stride, offset)
+}
+
+// VertexAttribDivisor modifies the rate at which generic vertex attributes advance during instanced rendering.
+func (d *Context) VertexAttribDivisor(index uint32, divisor uint32) {
+	d.fn_vertexAttribDivisor.Invoke(index, divisor)
 }
 
 // Viewport sets the viewport dimensions and position using specified x, y, width, and height parameters.
@@ -1277,61 +1322,93 @@ func (d *Context) GetQueryObjectui64v(query uint32, pname uint32, params *uint64
 	fmt.Println("GetQueryObjectui64v unimplemented")
 }
 
-// getJSView creates a JavaScript typed array view for the given buffer based on the specified xtype.
-// Supported xtypes include BYTE, UNSIGNED_BYTE, SHORT, UNSIGNED_SHORT, INT, UNSIGNED_INT, and FLOAT.
-// Returns the constructed js.Value or the original buffer for unsupported xtypes.
-func (d *Context) getJSView(buffer js.Value, xtype uint32) js.Value {
+func (s *jsScratchBuffer) ensure(d *Context, neededBytes int) {
+	if neededBytes <= s.byteCap && !s.buf.IsUndefined() {
+		return
+	}
+	newCap := s.byteCap * 2
+	if newCap < neededBytes {
+		newCap = neededBytes
+	}
+	if newCap < 4096 {
+		newCap = 4096
+	}
+	// Align to 4 bytes so Int32Array / Uint32Array / Float32Array views are always valid.
+	newCap = (newCap + 3) &^ 3
+	buf := d.jsArrayBuffer.New(newCap)
+	s.buf = buf
+	s.u8 = d.jsUint8Array.New(buf)
+	s.i8 = d.jsInt8Array.New(buf)
+	s.i16 = d.jsInt16Array.New(buf)
+	s.u16 = d.jsUint16Array.New(buf)
+	s.i32 = d.jsInt32Array.New(buf)
+	s.u32 = d.jsUint32Array.New(buf)
+	s.f32 = d.jsFloat32Array.New(buf)
+	s.byteCap = newCap
+}
+
+func (s *jsScratchBuffer) copyBytes(d *Context, bytes []byte) int {
+	n := len(bytes)
+	if n == 0 {
+		return 0
+	}
+	s.ensure(d, n)
+	js.CopyBytesToJS(s.u8, bytes)
+	return n
+}
+
+func (s *jsScratchBuffer) typedView(d *Context, bytes []byte, xtype uint32) js.Value {
+	n := s.copyBytes(d, bytes)
+	if n == 0 {
+		return js.Null()
+	}
 	switch xtype {
 	case 0x1400: // BYTE
-		return d.jsInt8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+		return s.i8.Call("subarray", 0, n)
 	case 0x1401: // UNSIGNED_BYTE
-		return buffer //d.jsUint8Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength"))
+		return s.u8.Call("subarray", 0, n)
 	case 0x1402: // SHORT
-		return d.jsInt16Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
+		return s.i16.Call("subarray", 0, n/2)
 	case 0x1403: // UNSIGNED_SHORT
-		return d.jsUint16Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/2)
+		return s.u16.Call("subarray", 0, n/2)
 	case 0x1404: // INT
-		return d.jsInt32Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+		return s.i32.Call("subarray", 0, n/4)
 	case 0x1405: // UNSIGNED_INT
-		return d.jsUint32Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+		return s.u32.Call("subarray", 0, n/4)
 	case 0x1406: // FLOAT
-		return d.jsFloat32Array.New(buffer.Get("buffer"), buffer.Get("byteOffset"), buffer.Get("byteLength").Int()/4)
+		return s.f32.Call("subarray", 0, n/4)
+	default:
+		return s.u8.Call("subarray", 0, n)
 	}
-	return buffer
 }
 
-// getUint8haredJSArray retrieves a JavaScript Uint8Array view of the given byte slice.
-func (d *Context) getUint8haredJSArray(bytes []byte) js.Value {
+func (d *Context) resolveUploadBytes(size int, data unsafe.Pointer) []byte {
+	d.ptrMutex.Lock()
+	dataVal, ok := d.ptrMap[uintptr(data)]
+	d.ptrMutex.Unlock()
+	if ok && dataVal != nil {
+		bytes := d.getSliceBytes(dataVal)
+		if len(bytes) > size {
+			bytes = bytes[:size]
+		}
+		return bytes
+	}
+	return unsafe.Slice((*byte)(data), size)
+}
+
+func (d *Context) resolveTextureView(pixels unsafe.Pointer, xtype uint32) (js.Value, bool) {
+	if pixels == nil || uintptr(pixels) == 0 {
+		return js.Null(), false
+	}
+	d.ptrMutex.Lock()
+	dataVal, ok := d.ptrMap[uintptr(pixels)]
+	d.ptrMutex.Unlock()
+	if !ok || dataVal == nil {
+		return js.Null(), false
+	}
+	bytes := d.getSliceBytes(dataVal)
 	if len(bytes) == 0 {
-		return js.Null()
+		return js.Null(), false
 	}
-	offset := uintptr(unsafe.Pointer(&bytes[0]))
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(bytes), "uint8")
-}
-
-// getInt32SharedJSArray creates a JavaScript shared array from a slice of int32 values.
-func (d *Context) getInt32SharedJSArray(data []int32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	offset := uintptr(unsafe.Pointer(&data[0]))
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "int32")
-}
-
-// getUint32SharedJSArray converts a Go slice of uint32 to a shared JavaScript Uint32Array.
-func (d *Context) getUint32SharedJSArray(data []uint32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	offset := uintptr(unsafe.Pointer(&data[0]))
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "uint32")
-}
-
-// getFloat32SharedJSArray creates a JavaScript shared array from a slice of float32 values.
-func (d *Context) getFloat32SharedJSArray(data []float32) js.Value {
-	if len(data) == 0 {
-		return js.Null()
-	}
-	offset := uintptr(unsafe.Pointer(&data[0]))
-	return d.jsGetWasmMemoryView.Invoke(int(offset), len(data), "float32")
+	return d.scratch.typedView(d, bytes, xtype), true
 }

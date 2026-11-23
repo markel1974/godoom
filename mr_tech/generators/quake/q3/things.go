@@ -3,6 +3,7 @@ package q3
 import (
 	"fmt"
 	_ "image/jpeg"
+	"math"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -129,21 +130,28 @@ func (t *Things) CreateBSP(bspPath string, position geometry.XYZ, classname stri
 				pos := rawTri[k]
 				u, v := float32(0.0), float32(0.0)
 				// Find corresponding UV index for vertex
+				var nrm geometry.XYZ
+				var hasNrm bool
 				for idx, pt := range bspFace.Points {
 					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
 						if len(bspFace.UVs) > idx {
 							u = float32(bspFace.UVs[idx][0])
 							v = float32(bspFace.UVs[idx][1])
 						}
+						if len(bspFace.Normals) > idx {
+							nrm = bspFace.Normals[idx]
+							hasNrm = true
+						}
 						break
 					}
 				}
-				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v, Normal: nrm, HasNormal: hasNrm}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
 	// BSPs do not have vertex-morphing animations, 1 single frame
+	config.NormalizeNormalsAndWinding(allTriangles, false, 0.5)
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	thingCfg := CreateConfigThing(classname, "", position, model3d, nil)
@@ -170,20 +178,27 @@ func (t *Things) CreateInternalBModel(rawFaces []*lumps.RawFace3, position geome
 			for k := 0; k < 3; k++ {
 				pos := rawTri[k]
 				u, v := float32(0.0), float32(0.0)
+				var nrm geometry.XYZ
+				var hasNrm bool
 				for idx, pt := range bspFace.Points {
 					if pt.X == pos.X && pt.Y == pos.Y && pt.Z == pos.Z {
 						if len(bspFace.UVs) > idx {
 							u = float32(bspFace.UVs[idx][0])
 							v = float32(bspFace.UVs[idx][1])
 						}
+						if len(bspFace.Normals) > idx {
+							nrm = bspFace.Normals[idx]
+							hasNrm = true
+						}
 						break
 					}
 				}
-				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v}
+				tri.Vertices[k] = config.Model3DEntryVertex{Pos: pos, U: u, V: v, Normal: nrm, HasNormal: hasNrm}
 			}
 			allTriangles = append(allTriangles, tri)
 		}
 	}
+	config.NormalizeNormalsAndWinding(allTriangles, false, 0.5)
 	model3d := config.NewModel3DEntry(1, []string{"default"}, []string{"death", "die"})
 	model3d.Frames[0] = config.NewModel3DEntryFrame(allTriangles)
 	return CreateConfigThing(classname, "", position, model3d, ent), nil
@@ -453,6 +468,7 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 
 		// Assemble triangles for each frame
 		for i := 0; i < int(surf.Header.NumFrames); i++ {
+			frameStart := len(cfg.Frames[i].Triangles)
 			for t := 0; t < int(surf.Header.NumTriangles); t++ {
 				var configTri config.Model3DEntryTriangle
 				configTri.Material = material
@@ -463,14 +479,25 @@ func (t *Things) loadMD3Part(partName, basePath string) (*config.Model3DEntry, e
 					v := surf.Vertices[globVIndex]
 					uv := surf.TexCoords[vIndex]
 
+					const md3NormScale = (2.0 * math.Pi) / 255.0
+					zenith := float64(v.Normal[0]) * md3NormScale
+					azimuth := float64(v.Normal[1]) * md3NormScale
+					sinZ := math.Sin(zenith)
+					nx := math.Cos(azimuth) * sinZ
+					ny := math.Sin(azimuth) * sinZ
+					nz := math.Cos(zenith)
+
 					configTri.Vertices[k] = config.Model3DEntryVertex{
-						Pos: geometry.XYZ{X: float64(v.Coord[0]) * md3Scale, Y: float64(v.Coord[1]) * md3Scale, Z: float64(v.Coord[2]) * md3Scale},
-						U:   uv.St[0],
-						V:   uv.St[1],
+						Pos:       geometry.XYZ{X: float64(v.Coord[0]) * md3Scale, Y: float64(v.Coord[1]) * md3Scale, Z: float64(v.Coord[2]) * md3Scale},
+						U:         uv.St[0],
+						V:         uv.St[1],
+						Normal:    geometry.XYZ{X: nx, Y: ny, Z: nz},
+						HasNormal: true,
 					}
 				}
 				cfg.Frames[i].Triangles = append(cfg.Frames[i].Triangles, configTri)
 			}
+			config.NormalizeNormalsAndWinding(cfg.Frames[i].Triangles[frameStart:], false, 0.5)
 		}
 	}
 	return cfg, nil

@@ -1,39 +1,73 @@
-Frammentazione dei draw call sui volumi statici (critico in WASM/WebGL2):
-
-Ogni *volumes.Faces crea un proprio ResidentMesh con VAO, VBO ed EBO separati.
-In DrawCommandsRender.RenderPrepass, RenderShade e in ogni tile di Depth.Render, staticItems chiama un BindVertexArray + DrawElements individuale per ogni submesh di ogni volume visibile (mentre solo la path streaming usa MultiDrawElements).
-Su WASM/WebGL2, ogni cambio stato o DrawElements paga una chiamata sincrona syscall/js; su mappe con molti settori/volumi diventa rapidamente il primo collo di bottiglia CPU/bridge. Accorpare i volumi statici in un Mega-VBO/VAO statico (con offset o MultiDrawElements) eliminerebbe quasi tutti i VAO bind.
-
-Nessun riutilizzo vertici (triangle soup indicizzato) & vertex layout non compresso:
-
-In ResidentMesh.Rebuild, Indices resta sequenziale (vIdx, vIdx+1, vIdx+2): ogni triangolo scrive 3 vertici separati da 96 byte l'uno senza vertex deduplication/post-transform cache. Su mesh 3D lisce (personaggi/veicoli con migliaia di triangoli) significa ~3× trasformazioni nel vertex shader e ~3× VRAM rispetto a una vera index buffer condivisa.
-
-Shadow Atlas ricalcolato interamente ad ogni frame con lo stesso frustum della camera:
-
-Quando le ombre sono attive, Depth.Render ridisegna l'intero set dcOpaque (tutta la geometria visibile alla camera, senza frustum culling per singola luce, e con CULL_FACE disabilitato) su stanza (1024²), torcia (1024²) e fino a 8 shadow light (512²): fino a 10 ridisegni completi per frame.
-Inoltre, usando dcOpaque già cullato dal frustum della camera principale (frustumFront), oggetti/muri appena fuori dall'inquadratura del giocatore ma dentro il cono di una luce/stanza non proiettano ombra dentro la vista, e le shadow light statiche non cachano la geometria statica quando la scena non si muove.
-
-Hardware Occlusion Queries non batchate & mappe cache senza eviction:
-
-OcclusionHW.Render fa il readback asincrono correttamente, ma emette comunque una tripletta BeginQuery + DrawArrays + EndQuery per ogni singola entità testata (in WebGL2 sono 3N chiamate JS ogni 4 frame).
-Le mappe volMeshes e thingMeshes in BuilderVolume e states in OcclusionHW non liberano mai i VAO/VBO/query di volumi o entity eliminate in run lunghe o cambi mappa in-place.
-
-Uniform per-pass ancora via chiamate singole invece di UBO PerFrame / ShadowLights:
-
-Main.bindForwardUniforms invia decine di matrici/vettori (e fino a 8 struct u_shadowLights[i] = ~40 chiamate uniform) ad ogni pass (solid, cutout, transparent). Spostarli in un UBO condiviso aggiornato 1 volta per frame taglierebbe molte chiamate gl.uniform* in WebGL2.
+STATO ATTUALE (già implementato)
+---------------------------------
+[x] Separazione package gpu/{buffers,draws,vramtex,queries}, shaders e open_gl senza dipendenze circolari
+[x] Static Atlas + MultiDrawElements sui volumi statici non-streamer (BuilderVolume.buildStaticAtlas, ResidentMesh.*StaticAtlas, DrawBatchStaticMulti)
+[x] GPU Instancing rigid props/things (InstancePool + DrawElementsInstanced + cache VAO in BindInstancedWithCache)
+[x] Z-Prepass + Early-Z (DepthFunc EQUAL sui batch prepassed in Main.Render)
+[x] Clustered Forward Lighting 16x9x16 su texture RGBA16UI + UBO LightsBlock (shaders/lights.go)
+[x] Master Shadow Atlas 2048x2048 double-buffered con pass separati depth_solid / depth cutout
+[x] Pipeline HDR (RGBA16F MSAA) + ACES Luminance Tonemapping + FXAA opzionale (Post)
 
 
+OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
+--------------------------------------------------
 
-1) Unificare i volumi statici in pochi Mega-VBO/VAO (invece di un ResidentMesh per Volume) + MultiDrawElements anche sul percorso statico.
+1) Shadow Atlas: culling per-luce e caching delle tile (CRITICO)
+- In shaders/depth.go (Depth.Render / renderAtlasPass), il pass ombre ridisegna l'intero set dcOpaque (già filtrato solo sul frustumFront della camera) su stanza (1024²), torcia (1024²) e fino a 8 shadow light (512²): fino a 10 ridisegni per frame.
+- Effetto collaterale attuale: muri/oggetti fuori dal frustum camera ma dentro il cono di una luce/stanza non proiettano ombre nella vista.
+- Da fare:
+  * eseguire frustum culling dedicato per singola luce/tile sui volumi/things;
+  * introdurre dirty-flag / cache statica per le tile di luci che non cambiano posizione/geometria (ed eventuale throttling/round-robin);
+  * estendere il supporto static atlas / chunk anche quando vols.HasStreamer() è attivo (oggi buildStaticAtlas esce subito se HasStreamer() è true e ricade su ResidentMesh per singolo *volumes.Faces).
 
-2) Spostare matrici per-frame e u_shadowLights in un UBO per azzerare le decine di Uniform* su bridge JS in WebGL2.
+2) UBO PerFrame / ShadowLights (riduzione chiamate uniform in WebGL2)
+- Main.bindForwardUniforms (shaders/main.go) invia ad ogni pass (solidPrg, cutoutPrg, RenderTransparent) matrici per-frame, parametri cluster/camera, torcia e fino a 8 struct u_shadowLights[i] (~40 chiamate Uniform* per pass).
+- Spostare matrici/camera/torcia e u_shadowLights in un UBO condiviso aggiornato 1 volta per frame.
 
-3) Indice vero (deduplica vertici) nei ResidentMesh e culling / throttling per-luce in Depth.Render.
+3) Vertex deduplication (vero index buffer) & compressione vertex layout
+- ResidentMesh (gpu/buffers/resident_mesh.go) scrive ancora Indices sequenziali (vIdx, vIdx+1, vIdx+2) con StaticVertexFloats = 24 (96 byte/vertice in float32, vertex_layout.go).
+- Su mesh 3D lisce e mappe estese questo causa ~3× trasformazioni vertex shader e banda VRAM.
+- Da fare: deduplica vertici per avere una vera index buffer condivisa e compressione degli attributi (normal/tangent packed invece di vec3/vec4 float32 pieni).
 
-4) Mega-VBO / chunk statici (pochi VAO/VBO per l'intero mondo statico invece che uno per volume) + batching continuo/MultiDrawElements anche sugli statici.
+4) Eviction nelle cache GPU e pool Query
+- BuilderVolume.volMeshes e thingMeshes (builder_volume.go) tracciano LastSeenFrame ma non eseguono mai sweep/Dispose() di mesh non più usate.
+- OcclusionHW (gpu/queries/occlusion_hw.go) alloca states e queryIDs monotonicamente senza eviction/riciclo (a pool esaurito GetState ritorna nil) e emette BeginQuery + DrawArrays + EndQuery per singola AABB.
+- Da fare: sweep periodico con Dispose() su mesh/stati stale e riciclo degli ID query (più batching/riduzione chiamate per occlusion).
 
-5) Vertex sharing reale nell'index buffer dei ResidentMesh.
 
-6) UBO per uniform per-frame e shadow lights (meno chiamate syscall/js per frame).
+UPGRADE RESA VISIVA (SHADER & POST-PROCESSING)
+----------------------------------------------
 
-7) Shadow culling per luce + cache statica nell'atlante ombre.
+5) Ombre più morbide: PCF ruotato (Poisson / Vogel disk)
+- In assets/main_opaque.frag, roomShadow esegue un solo lookup su u_shadowAtlas e torcia/u_shadowLights usano una griglia fissa 2x2 su 4 texel.
+- Sostituire con sampling PCF ruotato per pixel (Poisson/Vogel disk + jitter spaziale) per eliminare scalettature e banding sui tile 512x512 e sulla stanza.
+
+6) Bloom piramidale (mip downsample/upsample) + soft knee
+- assets/bloom.frag usa un blur gaussiano a singola risoluzione (fbW/2, 5 passaggi ping-pong) e main_opaque.frag taglia BrightColor con soglia secca (> 3.0).
+- Passare a una catena mip piramidale (Dual-Kawase o Jimenez downsample/upsample su 4-5 livelli) con soft threshold knee per un glow ampio e naturale a costo minore di fillrate.
+
+7) GTAO / SSAO half-res sul Depth del Z-Prepass
+- Il forward attuale (main_opaque.frag) non applica AO di contatto su spigoli e giunzioni muro/pavimento.
+- Riutilizzare il depth buffer già riempito dal Z-Prepass (+ Post.ResolveMSAA con ResolveDepth se MSAA attivo) per un pass GTAO/SSAO half-res prima dello shading forward, senza G-buffer.
+
+8) Modello PBR leggero (GGX) + mipmap su cubemap riflessioni
+- main_opaque.frag usa ancora speculare Blinn-Phong (SpecBoost/Shininess) e u_envMap campionata senza roughness/mip (Textures.UploadEnvironment in gpu/vramtex/textures.go non genera mipmap prefiltrate).
+- Introdurre BRDF GGX (roughness/metalness) + mip chain/convolution sulla cubemap u_envMap.
+
+
+PULIZIA CODICE LEGACY
+---------------------
+
+9) Rimozione residui della vecchia pipeline deferred
+- Handler (shaders/handler.go) e RenderOpenGL (render.go) istanziano ancora geometry, ssao, blur, deferred e shadowLight senza aggiungerli a w.container né compilarli (e SetShadowsEnabled aggiorna tuttora w.flashlight inutilizzato).
+- Rimuovere i pass morti (o sostituire ssao/blur con i nuovi pass basati su Z-Prepass e bloom piramidale).
+
+
+PRIORITÀ CONSIGLIATA
+--------------------
+1. Per-light frustum culling + static tile caching in Depth.Render
+2. UBO PerFrame / ShadowLights in Main
+3. Bloom piramidale + PCF ruotato nelle ombre
+4. GTAO/SSAO sul depth prepass + pulizia pass deferred legacy
+5. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU
+6. Shading GGX + envMap con mipmap prefiltrate

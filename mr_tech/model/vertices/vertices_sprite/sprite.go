@@ -99,6 +99,7 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 
 	v.solver = v.volume.GetSolver()
 	v.ent = v.solver.GetEntity()
+	v.cfg = nil
 
 	return v
 }

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/textures"
 	"github.com/markel1974/godoom/mr_tech/version"
 )
@@ -210,28 +212,22 @@ func main() {
 	textures.SetFps(uint64(fps))
 	rigid_body.SetFps(uint64(fps))
 
-	res := app.GetResources()
-	target := app.GetPath()
-	cfg, err := gen.Builder(res, target, level)
+	cfg, err := buildLevelConfig(app, gen, level)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	runtime.GC()
 
 	en := engine.NewEngine()
-	if err = en.Setup(cfg); err != nil {
+	ctx, err := compileAndPrepareEngine(app, en, cfg, enableShadows, enableShadowLights, msaaSamples, renderScale, enableFXAA, enableVSync)
+	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	cfg = nil
+	runtime.GC()
 
-	cal := en.GetCalibration()
-	cal.EnableShadows = IntToBool(enableShadows)
-	cal.EnableShadowLights = IntToBool(enableShadowLights)
-	cal.MSAASamples = msaaSamples
-	cal.RenderScale = renderScale
-	cal.EnableFXAA = IntToBool(enableFXAA)
-
-	ctx := app.GetContext(cfg.Player, IntToBool(enableVSync))
 	render := open_gl.NewRender(ctx)
 	if err = render.Setup(en); err != nil {
 		fmt.Println(err)
@@ -239,4 +235,31 @@ func main() {
 	}
 	render.Start()
 	app.WaitExit()
+}
+
+// buildLevelConfig runs the selected level generator and immediately releases the raw asset container.
+func buildLevelConfig(app *App, gen ModeDef, level int) (*config.Root, error) {
+	res := app.GetResources()
+	target := app.GetPath()
+	cfg, err := gen.Builder(res, target, level)
+	res = nil
+	_ = app.ReleaseResources()
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// compileAndPrepareEngine compiles the engine configuration, applies calibration flags, and creates the window context.
+func compileAndPrepareEngine(app *App, en *engine.Engine, cfg *config.Root, enableShadows, enableShadowLights, msaaSamples int, renderScale float64, enableFXAA, enableVSync int) (api.IContext, error) {
+	if err := en.Setup(cfg); err != nil {
+		return nil, err
+	}
+	cal := en.GetCalibration()
+	cal.EnableShadows = IntToBool(enableShadows)
+	cal.EnableShadowLights = IntToBool(enableShadowLights)
+	cal.MSAASamples = msaaSamples
+	cal.RenderScale = renderScale
+	cal.EnableFXAA = IntToBool(enableFXAA)
+	return app.GetContext(cfg.Player, IntToBool(enableVSync)), nil
 }

@@ -174,3 +174,11 @@ func (z *ResourcesZip) ReadDir(fPath string) ([]os.DirEntry, error) {
 
 	return out, nil
 }
+
+// Close releases the underlying ZIP reader and raw archive buffer so GC can reclaim memory.
+func (z *ResourcesZip) Close() error {
+	z.zr = nil
+	z.fBuffer = nil
+	z.fPath = ""
+	return nil
+}

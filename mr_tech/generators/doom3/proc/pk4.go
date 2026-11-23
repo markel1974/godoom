@@ -233,3 +233,12 @@ func (pk *Pk4) ReadDirFilter(fullPath string, wildcard string) ([]string, error)
 	sort.Strings(out)
 	return out, nil
 }
+
+// Close releases all opened PK4 zip readers and resource references so memory can be reclaimed.
+func (pk *Pk4) Close() error {
+	pk.readers = nil
+	pk.reader = nil
+	pk.root = nil
+	pk.res = nil
+	return nil
+}

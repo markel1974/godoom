@@ -209,13 +209,10 @@ func (s *Lights) Prepare(frameLights unsafe.Pointer, lightSize int32, numLights 
 	packLight := func(srcIdx, dstIdx int) {
 		sOff := srcIdx * floatsPerLight
 		dOff := dstIdx * floatsPerLight
-		if s.mapMetrics != nil {
-			dst[dOff], dst[dOff+1], dst[dOff+2] = s.mapMetrics.TransformPointToView(src[sOff], src[sOff+1], src[sOff+2])
-			dst[dOff+8], dst[dOff+9], dst[dOff+10] = s.mapMetrics.TransformDirectionNormalizedToView(src[sOff+8], src[sOff+9], src[sOff+10])
-		} else {
-			dst[dOff], dst[dOff+1], dst[dOff+2] = src[sOff], src[sOff+1], src[sOff+2]
-			dst[dOff+8], dst[dOff+9], dst[dOff+10] = src[sOff+8], src[sOff+9], src[sOff+10]
-		}
+
+		dst[dOff], dst[dOff+1], dst[dOff+2] = s.mapMetrics.TransformPointToView(src[sOff], src[sOff+1], src[sOff+2])
+		dst[dOff+8], dst[dOff+9], dst[dOff+10] = s.mapMetrics.TransformDirectionNormalizedToView(src[sOff+8], src[sOff+9], src[sOff+10])
+
 		dst[dOff+3] = src[sOff+3]
 		dst[dOff+4] = src[sOff+4]
 		dst[dOff+5] = src[sOff+5]
@@ -252,14 +249,13 @@ func (s *Lights) Prepare(frameLights unsafe.Pointer, lightSize int32, numLights 
 				continue
 			}
 			vx, vy, vz := src[sOff], src[sOff+1], src[sOff+2]
-			if s.mapMetrics != nil {
-				vx, vy, vz = s.mapMetrics.TransformPointToView(vx, vy, vz)
-			}
+			vx, vy, vz = s.mapMetrics.TransformPointToView(vx, vy, vz)
+
 			effSq, _ := metrics.ComputeLightAttenuation(intensity, src[sOff+11])
 			scores[i] = (vx*vx + vy*vy + vz*vz) - effSq
 		}
 		// Partial selection sort for top maxUBOLights nearest/relevant lights (0 allocs).
-		for i := 0; i < maxUBOLights; i++ {
+		for i := range maxUBOLights {
 			minPos := i
 			minScore := scores[order[i]]
 			for j := i + 1; j < srcCount; j++ {
@@ -365,19 +361,11 @@ func (s *Lights) PrepareClusters() (tex uint32, near float32, logScale float32, 
 	if s.clustersReady {
 		return s.clusterTex, s.clusterNear, s.clusterLogScale, s.globalCount
 	}
-	proj := [16]float32{
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1,
-	}
-	zNear := float32(1.0)
-	zFar := float32(8192.0)
-	if s.mapMetrics != nil {
-		proj = s.mapMetrics.GetProj()
-		zNear = s.mapMetrics.GetRoomZNear()
-		zFar = s.mapMetrics.GetRoomZFar()
-	}
+
+	proj := s.mapMetrics.GetProj()
+	zNear := s.mapMetrics.GetRoomZNear()
+	zFar := s.mapMetrics.GetRoomZFar()
+
 	usedPool := s.PrepareClustersWithProj(proj, zNear, zFar)
 	if s.clusterTex != 0 {
 		poolTexels := (usedPool + 3) / 4

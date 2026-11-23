@@ -15,4 +15,6 @@ type IArchive interface {
 	ReadDir(fullPath string) ([]string, error)
 
 	ReadDirFilter(fullPath string, wildcard string) ([]string, error)
+
+	Close() error
 }

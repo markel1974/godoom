@@ -109,6 +109,7 @@ func (np *NodePak) GetNode(parts []string) *NodePak {
 type Pak struct {
 	res  common.IResources
 	root *NodePak
+	file common.IReader
 }
 
 // NewPak initializes and returns a new instance of the Pak structure.
@@ -134,6 +135,7 @@ func (pk *Pak) Setup(path string) error {
 	if err != nil {
 		return err
 	}
+	pk.file = file
 	var header Header
 	if err = binary.Read(file, binary.LittleEndian, &header); err != nil {
 		return err
@@ -207,4 +209,16 @@ func (pk *Pak) ReadDirFilter(fullPath string, wildcard string) ([]string, error)
 func (pk *Pak) Parts(path string) []string {
 	parts := strings.Split(path, PakSeparator)
 	return parts
+}
+
+// Close closes the underlying PAK reader and clears the parsed archive tree so memory can be reclaimed.
+func (pk *Pak) Close() error {
+	var err error
+	if pk.file != nil {
+		err = pk.file.Close()
+		pk.file = nil
+	}
+	pk.root = nil
+	pk.res = nil
+	return err
 }

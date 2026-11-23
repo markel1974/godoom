@@ -137,5 +137,21 @@
         <option name="profileType" value="CPU" />
       </GoProfileMapEntry>
     </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-allocs-2026-11-23-114809-780.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1795430883694" />
+        <option name="file" value="godoom-allocs-2026-11-23-114809-780.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="ALLOCS" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-11-23-115615-680.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1795431336883" />
+        <option name="file" value="godoom-cpu-2026-11-23-115615-680.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
   </component>
 </project>

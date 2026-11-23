@@ -64,3 +64,13 @@ func (a *App) GetPath() string {
 func (a *App) GetResources() common.IResources {
 	return a.res
 }
+
+// ReleaseResources closes and detaches the loaded resource archive so its memory can be reclaimed.
+func (a *App) ReleaseResources() error {
+	if a.res == nil {
+		return nil
+	}
+	err := a.res.Close()
+	a.res = nil
+	return err
+}

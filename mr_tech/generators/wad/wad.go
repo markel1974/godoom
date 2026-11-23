@@ -435,3 +435,20 @@ func (w *WAD) GetSpriteImage(spriteName string) (*image.RGBA, error) {
 
 	return rgba, nil
 }
+
+// Close releases the opened WAD file reader and clears cached lump/asset tables.
+func (w *WAD) Close() error {
+	var err error
+	if w.file != nil {
+		err = w.file.Close()
+		w.file = nil
+	}
+	w.lumpInfos = nil
+	w.lumps = nil
+	w.sprites = nil
+	w.patches = nil
+	w.textures = nil
+	w.flats = nil
+	w.levels = nil
+	return err
+}

@@ -79,6 +79,16 @@ func (a *App) GetResources() common.IResources {
 	return a.res
 }
 
+// ReleaseResources closes and detaches the loaded resource archive so its memory can be reclaimed.
+func (a *App) ReleaseResources() error {
+	if a.res == nil {
+		return nil
+	}
+	err := a.res.Close()
+	a.res = nil
+	return err
+}
+
 // WaitExit prevents the Go program from exiting prematurely in Wasm by blocking indefinitely using a channel.
 func (a *App) WaitExit() {
 	// In Wasm requestAnimationFrame non è bloccante,

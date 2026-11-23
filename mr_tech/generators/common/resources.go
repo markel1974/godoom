@@ -20,4 +20,6 @@ type IResources interface {
 	Open(path string) (IReader, error)
 
 	ReadDir(path string) ([]os.DirEntry, error)
+
+	Close() error
 }

@@ -565,3 +565,8 @@ func (th *Things) removeThing(ent ithing.IThing) {
 	}
 	delete(th.entities, id)
 }
+
+// ClearConfig releases the initial configuration slice once setup has constructed runtime things.
+func (th *Things) ClearConfig() {
+	th.cfg = nil
+}

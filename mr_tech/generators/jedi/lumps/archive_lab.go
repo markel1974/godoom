@@ -307,5 +307,7 @@ func (al *ArchiveLab) Close() error {
 		}
 	}
 	al.files = nil
+	al.container = nil
+	al.fs = nil
 	return nil
 }

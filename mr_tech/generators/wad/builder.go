@@ -88,11 +88,13 @@ func (bld *Builder) Build(fs common.IResources, inFile string, levelNumber int) 
 	if err := wad.Load(fs, wadFile); err != nil {
 		return nil, err
 	}
+	defer wad.Close()
 	wadLevel := wad
 	if len(wadLevelFile) > 0 {
 		iWad := New()
 		if err := iWad.Load(fs, wadLevelFile); err == nil {
 			wadLevel = iWad
+			defer iWad.Close()
 		} else {
 			fmt.Printf("can't find iWad:%q\n", err)
 		}

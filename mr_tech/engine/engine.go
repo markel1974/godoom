@@ -74,6 +74,7 @@ func (e *Engine) Setup(cfg *config.Root) error {
 	e.player = compiler.GetPlayer()
 	//e.ui = compiler.GetUI()
 	e.things = compiler.GetThings()
+	e.things.ClearConfig()
 	e.lights = compiler.GetLights()
 	e.calibration = compiler.GetCalibration()
 	e.volumes = compiler.GetVolumes()

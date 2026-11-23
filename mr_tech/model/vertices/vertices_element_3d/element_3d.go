@@ -21,58 +21,60 @@ import (
 
 // Element3D stores runtime state for a 3D vertex-based entity with animation, volumes, and physics data.
 type Element3D struct {
-	solver        *collisions.Solver
-	ent           *rigid_body.Entity
-	cfg           *config.Thing
-	materials     *materials.Materials
-	comp          *Composer
-	vols          *volumes.Volumes //[]*volumes.Volume
-	startFrame    int
-	endFrame      int
-	startTick     uint64
-	currentAction int
-	actions       []*Action
-	clampAnim     bool
-	tagMap        map[string]int
-	volA          *volumes.Volume
-	volB          *volumes.Volume
-	lerpT         float64
-	singleFrame   bool
-	lastVolA      *volumes.Volume
-	groupSize     float64
-	salt          uint64
-	tick          uint64
-	facesA        *volumes.Faces
-	facesB        *volumes.Faces
-	frameIdxA     int
-	frameIdxB     int
-	rot           *articulated_dynamics.TagAxis
-	lastQx        float64
-	lastQy        float64
-	lastQz        float64
-	lastQw        float64
-	lastRotVolA   *volumes.Volume
-	lastRotVolB   *volumes.Volume
-	minX          float64
-	minY          float64
-	minZ          float64
-	maxX          float64
-	maxY          float64
-	maxZ          float64
+	solver             *collisions.Solver
+	ent                *rigid_body.Entity
+	restitutionCombine int
+	frictionCombine    int
+	materials          *materials.Materials
+	comp               *Composer
+	vols               *volumes.Volumes //[]*volumes.Volume
+	startFrame         int
+	endFrame           int
+	startTick          uint64
+	currentAction      int
+	actions            []*Action
+	clampAnim          bool
+	tagMap             map[string]int
+	volA               *volumes.Volume
+	volB               *volumes.Volume
+	lerpT              float64
+	singleFrame        bool
+	lastVolA           *volumes.Volume
+	groupSize          float64
+	salt               uint64
+	tick               uint64
+	facesA             *volumes.Faces
+	facesB             *volumes.Faces
+	frameIdxA          int
+	frameIdxB          int
+	rot                *articulated_dynamics.TagAxis
+	lastQx             float64
+	lastQy             float64
+	lastQz             float64
+	lastQw             float64
+	lastRotVolA        *volumes.Volume
+	lastRotVolB        *volumes.Volume
+	minX               float64
+	minY               float64
+	minZ               float64
+	maxX               float64
+	maxY               float64
+	maxZ               float64
 }
 
 // NewElement3D creates and initializes a 3D vertex entry from thing model frames, actions, tags, and materials.
 // NewElement3D panics if required frame, action, or group size configuration is invalid.
 func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D {
 	v := &Element3D{
-		solver:    nil,
-		cfg:       cfg,
-		materials: materials,
+		solver:             nil,
+		restitutionCombine: cfg.RestitutionCombine,
+		frictionCombine:    cfg.FrictionCombine,
+		materials:          materials,
 	}
 
-	model := v.cfg.Element3D
+	model := cfg.Element3D
 	if len(model.Frames) <= 0 {
-		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", v.cfg.Id))
+		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
 	}
 	if len(model.ActionDefinitions) != len(model.ActionIntervals) {
 		panic(fmt.Sprintf("action definitions and intervals must be the same length"))
@@ -106,10 +108,16 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 
 	v.vols = volumes.NewVolumes(len(model.Frames))
 
-	//v.volumes = make([]*volumes.Volume, len(model.Frames))
+	var sharedSolver *collisions.Solver
 	for frameIdx, cfgFrame := range model.Frames {
-		baseId := fmt.Sprintf("%s_md1_frame_%d", v.cfg.Id, frameIdx)
-		volume := volumes.NewVolumeDynamic(frameIdx, baseId, "thing", v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
+		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
+		var volume *volumes.Volume
+		if frameIdx == 0 {
+			volume = volumes.NewVolumeDynamic(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
+			sharedSolver = volume.GetSolver()
+		} else {
+			volume = volumes.NewVolumeWithSolver(frameIdx, baseId, "thing", nil)
+		}
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
@@ -130,6 +138,9 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
+		if frameIdx > 0 {
+			volume.SetSolver(sharedSolver)
+		}
 		v.vols.Set(frameIdx, volume)
 	}
 
@@ -356,7 +367,12 @@ func (v *Element3D) AdvanceAnimation(tick uint64) {
 func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64) {
 	v.vols.BuildCenters()
 
-	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, gForce)
+	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.restitutionCombine, v.frictionCombine, gForce)
+	for i := 0; i < v.vols.Len(); i++ {
+		if vol := v.vols.Get(i); vol != nil {
+			vol.SetSolver(partSolver)
+		}
+	}
 	rebuildSolverFromVolume(partSolver, v.volA)
 	v.comp.solver = partSolver
 	v.comp.volume = v.volA

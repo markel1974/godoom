@@ -181,6 +181,8 @@ func (g *ArchiveGob) Close() error {
 		}
 	}
 	g.files = nil
+	g.entries = nil
+	g.fs = nil
 	return nil
 }
 

@@ -33,5 +33,6 @@ func (r *ResourcesMem) Open(in string) (IReader, error) {
 
 // Close releases any resources associated with the ResourcesMem instance. Returns an error if the operation fails.
 func (r *ResourcesMem) Close() error {
+	r.s = nil
 	return nil
 }

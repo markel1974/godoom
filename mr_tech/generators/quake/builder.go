@@ -35,6 +35,7 @@ func (p *Builder) Setup(res common.IResources, pakPath string, lev int) (*config
 	if aErr != nil {
 		return nil, aErr
 	}
+	defer arc.Close()
 
 	if err := arc.Setup(pakPath); err != nil {
 		return nil, err

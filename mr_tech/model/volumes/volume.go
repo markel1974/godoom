@@ -26,27 +26,40 @@ type Volume struct {
 	dirty      bool
 }
 
-// NewVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
+// newVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
 func newVolume(dynamic bool, modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
+	return newVolumeBase(dynamic, modelId, id, tag, collisions.NewSolver(dynamic, mass, restitution, friction, restCombine, frictionCombine, gForce))
+}
+
+func newVolumeBase(dynamic bool, modelId int, id string, tag string, solver *collisions.Solver) *Volume {
 	v := &Volume{
 		dynamic:    dynamic,
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
 		faces:      NewFaces(128, false),
-		solver:     collisions.NewSolver(dynamic, mass, restitution, friction, restCombine, frictionCombine, gForce),
+		solver:     solver,
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
 		deformable: true,
 	}
-	v.aabb = v.solver.GetEntity().GetAABB()
+	if solver != nil {
+		v.aabb = solver.GetEntity().GetAABB()
+	}
 	return v
 }
 
 // NewVolumeDynamic creates a dynamic Volume with the given identifiers, tag, and physics settings.
 func NewVolumeDynamic(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
 	v := newVolume(true, modelId, id, tag, mass, restitution, friction, restCombine, frictionCombine, gForce)
+	v.SetAllowTessellate(false)
+	return v
+}
+
+// NewVolumeWithSolver creates a dynamic-tagged Volume sharing an existing collision solver (or nil until bound) without allocating a duplicate Cage.
+func NewVolumeWithSolver(modelId int, id string, tag string, sharedSolver *collisions.Solver) *Volume {
+	v := newVolumeBase(true, modelId, id, tag, sharedSolver)
 	v.SetAllowTessellate(false)
 	return v
 }
@@ -72,11 +85,13 @@ func (v *Volume) Setup(object aabb.IObject) error {
 func (v *Volume) Rebuild() bool {
 	v.faces.Rebuild()
 
-	minX, minY, minZ := v.faces.GetMin()
-	w, h, d := v.faces.GetSize()
-	cx, cy, cz := v.faces.GetCentroid()
-	ixx, ixy, ixz, iyy, iyz, izz := v.faces.GetInertia()
-	v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+	if v.solver != nil {
+		minX, minY, minZ := v.faces.GetMin()
+		w, h, d := v.faces.GetSize()
+		cx, cy, cz := v.faces.GetCentroid()
+		ixx, ixy, ixz, iyy, iyz, izz := v.faces.GetInertia()
+		v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
+	}
 
 	v.dirty = true
 
@@ -126,6 +141,16 @@ func (v *Volume) GetMarker() int {
 // GetSolver returns the collision solver associated with the volume.
 func (v *Volume) GetSolver() *collisions.Solver {
 	return v.solver
+}
+
+// SetSolver attaches solver to the volume and syncs its AABB pointer.
+func (v *Volume) SetSolver(solver *collisions.Solver) {
+	v.solver = solver
+	if solver != nil {
+		v.aabb = solver.GetEntity().GetAABB()
+	} else {
+		v.aabb = nil
+	}
 }
 
 // GetAABB returns the axis-aligned bounding box of the volume's collision entity.

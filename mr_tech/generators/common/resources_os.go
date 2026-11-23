@@ -28,3 +28,8 @@ func (r *ResourcesOs) Open(in string) (IReader, error) {
 func (r *ResourcesOs) ReadDir(fPath string) ([]os.DirEntry, error) {
 	return os.ReadDir(fPath)
 }
+
+// Close releases any resources associated with the ResourcesOs instance.
+func (r *ResourcesOs) Close() error {
+	return nil
+}

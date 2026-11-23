@@ -184,3 +184,11 @@ func (pk *Pk3) ReadDirFilter(fullPath string, wildcard string) ([]string, error)
 	sort.Strings(out)
 	return out, nil
 }
+
+// Close releases the underlying PK3 reader and archive tree so memory can be reclaimed.
+func (pk *Pk3) Close() error {
+	pk.reader = nil
+	pk.root = nil
+	pk.res = nil
+	return nil
+}

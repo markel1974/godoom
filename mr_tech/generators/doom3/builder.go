@@ -32,6 +32,7 @@ func (br *Builder) Setup(res common.IResources, pk4Path string, lev int) (*confi
 	}
 
 	arc := proc.NewPk4(res)
+	defer arc.Close()
 
 	if err := arc.Setup(pk4Path); err != nil {
 		return nil, fmt.Errorf("failed to open pk4 archive: %w", err)

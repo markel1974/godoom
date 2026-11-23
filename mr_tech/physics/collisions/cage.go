@@ -159,7 +159,7 @@ func NewCageSequence() *Cage {
 func NewCage(id uint64) *Cage {
 	c := &Cage{
 		id:            id,
-		seen:          make([]uint64, max(id*2, 1024)),
+		seen:          make([]uint64, 64),
 		solver:        nil,
 		ellipsoid:     rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volumeObj:     nil,
@@ -886,7 +886,7 @@ func (s *Cage) Translate(slot int, src aabb.IObject, deltaX, deltaY, deltaZ floa
 // HasSeen checks if the given Cage has already been marked as seen in the current Cage.[cite: 6]
 func (s *Cage) HasSeen(rCage *Cage) bool {
 	if rCage.id >= uint64(len(s.seen)) {
-		s.growSeen(rCage.id)
+		return s.session == 0
 	}
 	return s.seen[rCage.id] == s.session
 }
@@ -1858,7 +1858,11 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 
 // growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.
 func (s *Cage) growSeen(idx uint64) {
-	n := make([]uint64, idx*2)
+	newCap := uint64(len(s.seen)) * 2
+	if newCap <= idx {
+		newCap = idx + 64
+	}
+	n := make([]uint64, newCap)
 	copy(n, s.seen)
 	s.seen = n
 }

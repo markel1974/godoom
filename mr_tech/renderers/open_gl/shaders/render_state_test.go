@@ -15,6 +15,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -646,16 +647,16 @@ func TestZPrepassSolidVsCutoutEarlyZAndShaderDirectives(t *testing.T) {
 		t.Fatalf("texture with alpha < 255 must report HasCutout() == true")
 	}
 
-	dcr := NewDrawCommandsRender(ctx, "test_opaque", false)
-	cmdSolid := NewDrawCommand()
+	dcr := gpu.NewDrawCommandsRender(ctx, "test_opaque", false)
+	cmdSolid := gpu.NewDrawCommand()
 	cmdSolid.SetFirstIndex(0)
 	cmdSolid.SetIndexCount(6)
 	cmdSolid.SetMaterial(solidMat)
-	cmdCutout := NewDrawCommand()
+	cmdCutout := gpu.NewDrawCommand()
 	cmdCutout.SetFirstIndex(6)
 	cmdCutout.SetIndexCount(6)
 	cmdCutout.SetMaterial(cutoutMat)
-	dcr.Prepare([]*DrawCommand{cmdSolid, cmdCutout})
+	dcr.Prepare([]*gpu.DrawCommand{cmdSolid, cmdCutout})
 
 	ctx.colorMaskCalls = nil
 	ctx.depthMaskCalls = nil
@@ -700,8 +701,8 @@ func TestZPrepassSolidVsCutoutEarlyZAndShaderDirectives(t *testing.T) {
 
 	// Solid-only shadow atlas pass must skip cutout depth shader completely.
 	d.SetShadowsEnabled(true)
-	dcrSolidOnly := NewDrawCommandsRender(ctx, "test_solid_only", false)
-	dcrSolidOnly.Prepare([]*DrawCommand{cmdSolid})
+	dcrSolidOnly := gpu.NewDrawCommandsRender(ctx, "test_solid_only", false)
+	dcrSolidOnly.Prepare([]*gpu.DrawCommand{cmdSolid})
 	ctx.multiDrawPrograms = nil
 	d.Render(dcrSolidOnly)
 	for _, prg := range ctx.multiDrawPrograms {
@@ -872,21 +873,21 @@ func TestDepthRenderShadowAtlasStateIsolationAndPolygonOffset(t *testing.T) {
 	decalMat.SetDepthWrite(true)
 	decalMat.SetPolygonOffset(true)
 
-	cmdSolid := NewDrawCommand()
+	cmdSolid := gpu.NewDrawCommand()
 	cmdSolid.SetFirstIndex(0)
 	cmdSolid.SetIndexCount(6)
 	cmdSolid.SetMaterial(solidMat)
-	cmdDecal := NewDrawCommand()
+	cmdDecal := gpu.NewDrawCommand()
 	cmdDecal.SetFirstIndex(6)
 	cmdDecal.SetIndexCount(6)
 	cmdDecal.SetMaterial(decalMat)
-	cmdCutout := NewDrawCommand()
+	cmdCutout := gpu.NewDrawCommand()
 	cmdCutout.SetFirstIndex(12)
 	cmdCutout.SetIndexCount(6)
 	cmdCutout.SetMaterial(cutoutMat)
 
-	dcr := NewDrawCommandsRender(ctx, "shadow_state", false)
-	dcr.Prepare([]*DrawCommand{cmdSolid, cmdDecal, cmdCutout})
+	dcr := gpu.NewDrawCommandsRender(ctx, "shadow_state", false)
+	dcr.Prepare([]*gpu.DrawCommand{cmdSolid, cmdDecal, cmdCutout})
 
 	d.SetShadowsEnabled(true)
 	d.Prepare()
@@ -1104,12 +1105,12 @@ func TestDepthDoubleBufferShadowAtlasAndUnbinds(t *testing.T) {
 	}
 
 	solidMat, _ := makeSolidAndCutoutMaterials(t)
-	cmdSolid := NewDrawCommand()
+	cmdSolid := gpu.NewDrawCommand()
 	cmdSolid.SetFirstIndex(0)
 	cmdSolid.SetIndexCount(6)
 	cmdSolid.SetMaterial(solidMat)
-	dcr := NewDrawCommandsRender(ctx, "atlas_dbl", false)
-	dcr.Prepare([]*DrawCommand{cmdSolid})
+	dcr := gpu.NewDrawCommandsRender(ctx, "atlas_dbl", false)
+	dcr.Prepare([]*gpu.DrawCommand{cmdSolid})
 
 	// Simulate Textures.BindBuckets() leaving unit 11/13 active before Depth.Render creates atlas.
 	ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitEmissiveBase + 3)

@@ -160,7 +160,7 @@ func (s *Liquid) Init() error {
 }
 
 // RenderDC executes the liquid pass over a DrawCommandsRender supporting static/instanced/streaming geometry.
-func (s *Liquid) RenderDC(dc *DrawCommandsRender) {
+func (s *Liquid) RenderDC(dc *gpu.DrawCommandsRender) {
 	if dc == nil || !dc.HasCommands() {
 		return
 	}

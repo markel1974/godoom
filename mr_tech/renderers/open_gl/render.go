@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -24,13 +25,13 @@ type IBuilder interface {
 
 	GetLightsStride() int32
 
-	GetDrawCommands() *shaders.DrawCommandsRender
+	GetDrawCommands() *gpu.DrawCommandsRender
 
-	GetDrawCommandsAdditive() *shaders.DrawCommandsRender
+	GetDrawCommandsAdditive() *gpu.DrawCommandsRender
 
-	GetDrawCommandsLiquid() *shaders.DrawCommandsRender
+	GetDrawCommandsLiquid() *gpu.DrawCommandsRender
 
-	GetHWOcclusion() *OcclusionHW
+	GetHWOcclusion() *gpu.OcclusionHW
 
 	GetVertices() ([]float32, int32, []uint32, int32)
 
@@ -45,7 +46,7 @@ type RenderOpenGL struct {
 	engine *engine.Engine
 	vi     *engine.ViewMatrix
 	player *things.Player
-	tex    *Textures
+	tex    *gpu.Textures
 
 	builder     *BuilderVolume
 	enableClear bool
@@ -81,13 +82,13 @@ type RenderOpenGL struct {
 	scaleX float32
 	scaleY float32
 
-	dcOpaque      *shaders.DrawCommandsRender
-	dcAdditive    *shaders.DrawCommandsRender
-	dcLiquid      *shaders.DrawCommandsRender
-	dcTransparent *shaders.DrawCommandsRender
-	hwOcc         *OcclusionHW
+	dcOpaque      *gpu.DrawCommandsRender
+	dcAdditive    *gpu.DrawCommandsRender
+	dcLiquid      *gpu.DrawCommandsRender
+	dcTransparent *gpu.DrawCommandsRender
+	hwOcc         *gpu.OcclusionHW
 
-	gpuProfiler *shaders.GpuProfiler
+	gpuProfiler *gpu.GpuProfiler
 	renderScale float64
 }
 
@@ -121,7 +122,7 @@ func (w *RenderOpenGL) Start() {
 // RenderPrepare initializes shaders, textures, and builder components required for rendering and configures global settings.
 func (w *RenderOpenGL) RenderPrepare() error {
 	cal := w.engine.GetCalibration()
-	w.tex = NewTextures(w.ctx)
+	w.tex = gpu.NewTextures(w.ctx)
 	w.player.SetPitchOptions(-1.5, 1.5, 0.01)
 	w.builder = NewBuilderVolume(w.ctx, w.tex, cal, w.player)
 	w.dcOpaque = w.builder.GetDrawCommandsOpaque()

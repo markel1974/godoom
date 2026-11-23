@@ -1,4 +1,4 @@
-package open_gl
+package gpu
 
 import (
 	"fmt"

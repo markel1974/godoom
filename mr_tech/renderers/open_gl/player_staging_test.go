@@ -16,6 +16,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -56,6 +57,7 @@ func (stubCtx) GenTextures(_ int32, t *uint32) {
 		*t = 1
 	}
 }
+func (stubCtx) GenQueries(_ int32, _ *uint32)        {}
 func (stubCtx) BindTexture(_ uint32, _ uint32)       {}
 func (stubCtx) TexParameteri(_, _ uint32, _ int32)   {}
 func (stubCtx) TexParameterf(_, _ uint32, _ float32) {}
@@ -71,10 +73,10 @@ func (stubCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uin
 func (stubCtx) GenerateMipmap(_ uint32) {}
 
 func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVolume {
-	dcOpaque := NewDrawCommands(config.BlendModeOpaque, 32768)
-	dcAdditive := NewDrawCommands(config.BlendModeAdditive, 4096)
-	dcLiquid := NewDrawCommands(config.BlendModeLiquid, 4096)
-	modes := make([]*DrawCommands, config.BlendModeLatest)
+	dcOpaque := gpu.NewDrawCommands(config.BlendModeOpaque, 32768)
+	dcAdditive := gpu.NewDrawCommands(config.BlendModeAdditive, 4096)
+	dcLiquid := gpu.NewDrawCommands(config.BlendModeLiquid, 4096)
+	modes := make([]*gpu.DrawCommands, config.BlendModeLatest)
 	modes[dcOpaque.GetBlendMode()] = dcOpaque
 	modes[dcAdditive.GetBlendMode()] = dcAdditive
 	modes[dcLiquid.GetBlendMode()] = dcLiquid
@@ -86,14 +88,14 @@ func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVol
 
 	return &BuilderVolume{
 		ctx:        stubCtx{},
-		tex:        NewTextures(stubCtx{}),
-		fv:         NewFrameVertices(stubCtx{}, 1048576),
+		tex:        gpu.NewTextures(stubCtx{}),
+		fv:         gpu.NewFrameVertices(stubCtx{}, 1048576),
 		dcOpaque:   dcOpaque,
 		dcAdditive: dcAdditive,
 		dcLiquid:   dcLiquid,
 		modes:      modes,
 		cal:        cal,
-		occlusion:  &OcclusionHW{states: make(map[uint64]*OcclusionState, 8), interval: defaultOcclusionInterval},
+		occlusion:  gpu.NewOcclusionHW(stubCtx{}, 8),
 		player:     pl,
 		playerId:   plID,
 	}
@@ -104,7 +106,7 @@ func (w *BuilderVolume) resetTestFrame() {
 	w.dcOpaque.Reset()
 	w.dcAdditive.Reset()
 	w.dcLiquid.Reset()
-	w.occlusion.testsLen = 0
+	w.occlusion.Reset()
 }
 
 func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T) {
@@ -164,7 +166,7 @@ func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T)
 
 	bv := newTestBuilderVolume(mCal, pl)
 	// Simulate OcclusionHW having marked the player invisible on an earlier readback.
-	bv.occlusion.states[pl.GetEntity().GetId()] = &OcclusionState{IsVisible: false}
+	bv.occlusion.GetState(pl.GetEntity().GetId()).IsVisible = false
 
 	// Place frustum far away so the player AABB is also outside QueryFrustum.
 	ff := metrics.NewFrustum()
@@ -184,8 +186,8 @@ func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T)
 	if moved < 20.0 {
 		t.Fatalf("player stalled when occluded/outside frustum: moved=%.4f (start=(%.2f,%.2f) end=(%.2f,%.2f))", moved, startX, startY, endX, endY)
 	}
-	if bv.occlusion.testsLen != 0 {
-		t.Fatalf("expected invisible player not to queue OcclusionHW tests, got testsLen=%d", bv.occlusion.testsLen)
+	if bv.occlusion.HasDrawTests() {
+		t.Fatalf("expected invisible player not to queue OcclusionHW tests")
 	}
 }
 
@@ -343,7 +345,7 @@ func TestJediBobbingWithinPlayerRadiusAndContinuousWalk(t *testing.T) {
 			ff.Setup(float32(mCal.AspectRatio), float32(mCal.ZFar), float32(mCal.ZNear), mCal.PrjScale, mCal.PrjScale)
 
 			bv := newTestBuilderVolume(mCal, pl)
-			bv.occlusion.states[pl.GetEntity().GetId()] = &OcclusionState{IsVisible: false}
+			bv.occlusion.GetState(pl.GetEntity().GetId()).IsVisible = false
 
 			for i := 0; i < 300; i++ {
 				bv.resetTestFrame()

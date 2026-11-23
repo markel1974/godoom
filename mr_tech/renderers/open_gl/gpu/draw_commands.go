@@ -1,14 +1,13 @@
-package open_gl
+package gpu
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // DrawCommands manages a collection of draw command objects used to define rendering batches in a graphics pipeline.
 type DrawCommands struct {
-	commands             []*shaders.DrawCommand
+	commands             []*DrawCommand
 	freezeLen            int
 	len                  int
 	freezeLastIndexCount int32
@@ -19,10 +18,10 @@ type DrawCommands struct {
 func NewDrawCommands(mode int, s int) *DrawCommands {
 	dc := &DrawCommands{
 		blendMode: mode,
-		commands:  make([]*shaders.DrawCommand, s),
+		commands:  make([]*DrawCommand, s),
 	}
 	for i := range dc.commands {
-		dc.commands[i] = shaders.NewDrawCommand()
+		dc.commands[i] = NewDrawCommand()
 	}
 	return dc
 }
@@ -39,7 +38,7 @@ func (w *DrawCommands) Compute(startIndices, currentIndices int32, material *tex
 
 // ComputeWithCentroid updates or creates a draw command while recording the batch centroid for transparent sorting.
 func (w *DrawCommands) ComputeWithCentroid(startIndices, currentIndices int32, material *textures.Material, cx, cy, cz float32) {
-	var cmd *shaders.DrawCommand
+	var cmd *DrawCommand
 
 	// Se abbiamo già un comando e la nuova geometria inizia esattamente
 	// dove finisce la precedente, fondiamo tutto in un singolo batch gigante!
@@ -104,12 +103,12 @@ func (w *DrawCommands) Freeze() {
 }
 
 // Get retrieves the list of draw commands up to the current length.
-func (w *DrawCommands) Get() []*shaders.DrawCommand {
+func (w *DrawCommands) Get() []*DrawCommand {
 	return w.commands[0:w.len]
 }
 
 // GetDrawCommands returns the current list of DrawCommand instances up to the active length.
-func (w *DrawCommands) GetDrawCommands() []*shaders.DrawCommand {
+func (w *DrawCommands) GetDrawCommands() []*DrawCommand {
 	return w.Get()
 }
 
@@ -120,10 +119,10 @@ func (w *DrawCommands) Grow() {
 	if newSize == 0 {
 		newSize = 128
 	}
-	newCommands := make([]*shaders.DrawCommand, newSize)
+	newCommands := make([]*DrawCommand, newSize)
 	copy(newCommands, w.commands)
 	for i := oldLen; i < newSize; i++ {
-		newCommands[i] = shaders.NewDrawCommand()
+		newCommands[i] = NewDrawCommand()
 	}
 	w.commands = newCommands
 }

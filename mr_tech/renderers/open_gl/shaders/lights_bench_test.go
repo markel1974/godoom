@@ -151,7 +151,7 @@ func BenchmarkLightsPrepareClustersSparse(b *testing.B) {
 	}
 }
 
-func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *Depth, *DrawCommandsRender) {
+func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *Depth, *gpu.DrawCommandsRender) {
 	t.Helper()
 	ctx := newRecordingCtx()
 	calCfg := config.NewConfigCalibration()
@@ -185,9 +185,9 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 
 	staticAtlas := gpu.NewResidentMesh(ctx)
 	staticAtlas.VAO = 9001
-	staticItems := make([]*StaticDrawItem, staticCount)
+	staticItems := make([]*gpu.StaticDrawItem, staticCount)
 	for i := range staticCount {
-		staticItems[i] = &StaticDrawItem{
+		staticItems[i] = &gpu.StaticDrawItem{
 			Mesh: staticAtlas,
 			Sub: &gpu.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
@@ -202,9 +202,9 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 	instMesh := gpu.NewResidentMesh(ctx)
 	instMesh.VAO = 9002
 	instMesh.VAOInstanced = 9003
-	instItems := make([]*InstancedDrawItem, 4)
+	instItems := make([]*gpu.InstancedDrawItem, 4)
 	for i := range 4 {
-		instItems[i] = &InstancedDrawItem{
+		instItems[i] = &gpu.InstancedDrawItem{
 			Mesh: instMesh,
 			Sub: &gpu.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
@@ -219,7 +219,7 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 		}
 	}
 
-	dcr := NewDrawCommandsRender(ctx, "depth_bench", false)
+	dcr := gpu.NewDrawCommandsRender(ctx, "depth_bench", false)
 	dcr.Prepare(nil)
 	dcr.SetResidentDraws(staticItems, len(staticItems), instItems, len(instItems))
 	return ctx, d, dcr

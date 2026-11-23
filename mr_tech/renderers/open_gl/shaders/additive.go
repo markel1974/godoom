@@ -113,7 +113,7 @@ func (s *Additive) Compile(a IAssets) error {
 }
 
 // RenderDC executes the additive pass over a DrawCommandsRender supporting static/instanced/streaming geometry.
-func (s *Additive) RenderDC(dc *DrawCommandsRender) {
+func (s *Additive) RenderDC(dc *gpu.DrawCommandsRender) {
 	if dc == nil || !dc.HasCommands() {
 		return
 	}

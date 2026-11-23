@@ -5,6 +5,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -295,7 +296,7 @@ func (s *Depth) Prepare() {
 }
 
 // Render performs the depth render into the unified master shadow atlas.
-func (s *Depth) Render(dc *DrawCommandsRender) {
+func (s *Depth) Render(dc *gpu.DrawCommandsRender) {
 	if !s.shadows || dc == nil || !dc.HasCommands() {
 		return
 	}
@@ -347,7 +348,7 @@ func (s *Depth) Render(dc *DrawCommandsRender) {
 	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
-func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval float32, dc *DrawCommandsRender, cutout bool) {
+func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval float32, dc *gpu.DrawCommandsRender, cutout bool) {
 	s.ctx.UseProgram(prg)
 	s.ctx.Uniform1f(table[DepthLocTime], interval)
 	s.ctx.UniformMatrix4fv(table[DepthLocView], 1, false, s.viewMatrixPtr)

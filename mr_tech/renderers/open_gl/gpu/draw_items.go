@@ -1,11 +1,10 @@
-package shaders
+package gpu
 
 import (
 	"cmp"
 	"slices"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
 )
 
 // TransparentKind identifies how a transparent draw item is sourced and rendered.
@@ -20,14 +19,14 @@ const (
 
 // StaticDrawItem pairs a GPU-resident mesh with one of its submesh ranges for static rendering.
 type StaticDrawItem struct {
-	Mesh *gpu.ResidentMesh
-	Sub  *gpu.ResidentSubMesh
+	Mesh *ResidentMesh
+	Sub  *ResidentSubMesh
 }
 
 // InstancedDrawItem describes an instanced draw command for a resident submesh and its instance buffer range.
 type InstancedDrawItem struct {
-	Mesh           *gpu.ResidentMesh
-	Sub            *gpu.ResidentSubMesh
+	Mesh           *ResidentMesh
+	Sub            *ResidentSubMesh
 	InstanceVBO    uint32
 	BaseByteOffset int32
 	InstanceCount  int32
@@ -43,8 +42,8 @@ type TransparentDrawItem struct {
 	PolygonOffset  bool
 	FirstIndex     int32
 	IndexCount     int32
-	Mesh           *gpu.ResidentMesh
-	Sub            *gpu.ResidentSubMesh
+	Mesh           *ResidentMesh
+	Sub            *ResidentSubMesh
 	InstanceVBO    uint32
 	BaseByteOffset int32
 	InstanceCount  int32
@@ -55,7 +54,7 @@ type TransparentDrawItems struct {
 	data           []*TransparentDrawItem
 	transparentLen int
 	prevLen        int
-	dynPool        gpu.PtrPool[TransparentDrawItem]
+	dynPool        PtrPool[TransparentDrawItem]
 }
 
 // NewTransparentDrawItems creates an empty TransparentDrawItems collection with initial storage for n items.
@@ -129,7 +128,7 @@ func (w *TransparentDrawItems) Add(it *TransparentDrawItem) {
 }
 
 // AddStatic queues prebuilt static transparent submesh items, updating camera-relative squared distances.
-func (w *TransparentDrawItems) AddStatic(src *gpu.PtrPool[TransparentDrawItem], camX, camY, camZ float32) {
+func (w *TransparentDrawItems) AddStatic(src *PtrPool[TransparentDrawItem], camX, camY, camZ float32) {
 	for i := 0; i < src.Len; i++ {
 		it := src.Items[i]
 		sub := it.Sub
@@ -142,7 +141,7 @@ func (w *TransparentDrawItems) AddStatic(src *gpu.PtrPool[TransparentDrawItem], 
 }
 
 // AddInstanced acquires a dynamic transparent item for a single rigid instance submesh and queues it for sorting.
-func (w *TransparentDrawItems) AddInstanced(mesh *gpu.ResidentMesh, sub *gpu.ResidentSubMesh, instanceVBO uint32, baseByteOffset int32, cx, cy, cz, camX, camY, camZ float32) {
+func (w *TransparentDrawItems) AddInstanced(mesh *ResidentMesh, sub *ResidentSubMesh, instanceVBO uint32, baseByteOffset int32, cx, cy, cz, camX, camY, camZ float32) {
 	dx := cx - camX
 	dy := cy - camY
 	dz := cz - camZ

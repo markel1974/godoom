@@ -142,7 +142,7 @@ func TestResidentMeshAndFrameVerticesZeroAllocsSteadyState(t *testing.T) {
 		t.Fatalf("unexpected slice cap/count after rebuild: subLen=%d/%d animLen=%d/%d", rm.SubMeshesLen, len(rm.SubMeshes), rm.AnimLen, len(rm.AnimMats))
 	}
 
-	fv := NewStagingFrameVertices(64)
+	fv := gpu.NewStagingFrameVertices(64)
 	fv.AddAnimRef(animMat, tA)
 	fv.AddBatchCentroid(config.BlendModeOpaque, 3, animMat, 1, 2, 3)
 

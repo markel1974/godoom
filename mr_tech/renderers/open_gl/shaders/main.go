@@ -584,7 +584,7 @@ func (s *Main) bindForwardUniforms(
 }
 
 // Render executes a Z-prepass followed by Early-Z forward opaque shading and conditional alpha-cutout shading.
-func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
+func (s *Main) Render(dc *gpu.DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
 	targetFbo := s.post.GetFBO()
 	view := s.metrics.GetViewPtr()
 	invView := s.metrics.GetInvViewPtr()
@@ -689,7 +689,7 @@ func (s *Main) Render(dc *DrawCommandsRender, ambient float32, flashX, flashY, f
 }
 
 // RenderTransparent executes the back-to-front depth-sorted translucent pass over the resolved opaque/liquid scene.
-func (s *Main) RenderTransparent(dc *DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
+func (s *Main) RenderTransparent(dc *gpu.DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
 	if dc == nil || !dc.HasCommands() {
 		return
 	}

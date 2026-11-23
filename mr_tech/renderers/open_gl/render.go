@@ -214,9 +214,6 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	}
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
-	vert, vertSize, _, indices, indexSize, _ := w.builder.GetVertices()
-	staticVertBytes, staticIdxBytes, staticGen, frameGen := w.builder.GetUploadHints()
-	//fmt.Println("TEST", vertSize, vertCount, indexSize, indicesCount)
 	lights, lightSize, lightsCount := w.builder.GetLights()
 	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 
@@ -244,12 +241,17 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	// RENDER START HERE
 	w.depth.Prepare()
+	if w.enableShadows {
+		w.builder.ComputeShadows(w.engine, w.depth)
+	}
+	vert, vertSize, _, indices, indexSize, _ := w.builder.GetVertices()
+	staticVertBytes, staticIdxBytes, staticGen, frameGen := w.builder.GetUploadHints()
 	// MAIN PREPARE (VBO and EBO)
 	w.main.PrepareFrame(vert, vertSize, staticVertBytes, indices, indexSize, staticIdxBytes, staticGen, frameGen)
 	// LIGHTS PREPARE (UBO)
 	w.lights.Prepare(lights, lightSize, lightsCount)
 	// OMBRE
-	w.depth.Render(w.dcOpaque)
+	w.depth.RenderWithTiles(w.dcOpaque, w.builder.GetShadowTiles())
 	// MAIN OPAQUE (Z-Prepass + Single-Pass Forward with Early-Z)
 	w.main.Render(w.dcOpaque, float32(w.vi.GetLightIntensity()), flashX, flashY, flashSensitivity)
 	// HW OCCLUSION

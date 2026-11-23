@@ -16,30 +16,36 @@ type ThingCacheRef struct {
 
 // ThingRenderCache stores cached render state for reusing generated thing frame vertices across frames.
 type ThingRenderCache struct {
-	fv            *draws.FrameVertices
-	pFaces        *volumes.Faces
-	pNextFaces    *volumes.Faces
-	facesVer      uint64
-	nextVer       uint64
-	facesLen      int
-	nextLen       int
-	lerp          float32
-	yaw           float32
-	renderMode    float32
-	oX, oY, oZ    float32
-	qX, qY, qZ    float32
-	qW            float32
-	isRigid       bool
-	entID         uint64
-	gen           uint64
-	lastSeenFrame uint64
-	inUse         bool
-	valid         bool
+	fv               *draws.FrameVertices
+	pFaces           *volumes.Faces
+	pNextFaces       *volumes.Faces
+	facesVer         uint64
+	nextVer          uint64
+	facesLen         int
+	nextLen          int
+	lerp             float32
+	yaw              float32
+	renderMode       float32
+	oX, oY, oZ       float32
+	qX, qY, qZ       float32
+	qW               float32
+	isRigid          bool
+	entID            uint64
+	gen              uint64
+	lastSeenFrame    uint64
+	compileFrame     uint64
+	committedFrame   uint64
+	committedBaseIdx int32
+	inUse            bool
+	valid            bool
 }
 
 // NewThingRenderCache creates a render cache with CPU-only staging frame vertices for thing rendering.
 func NewThingRenderCache() *ThingRenderCache {
-	return &ThingRenderCache{fv: draws.NewStagingFrameVertices(128)}
+	return &ThingRenderCache{
+		fv:               draws.NewStagingFrameVertices(128),
+		committedBaseIdx: -1,
+	}
 }
 
 // GetFrameVertices returns the cached frame vertices for this render cache.
@@ -188,9 +194,28 @@ func (w *ThingsRender) Retrieve(ent *rigid_body.Entity) *ThingRenderCache {
 	entry.pFaces = nil
 	entry.pNextFaces = nil
 	entry.lastSeenFrame = w.thingFrameID
+	entry.compileFrame = 0
+	entry.committedFrame = 0
+	entry.committedBaseIdx = -1
 	entry.fv.DeepReset()
 	ent.SetRenderMarker(slot)
 	return entry
+}
+
+// PeekIfCurrent returns ent's cached entry without modifying tracking state if already visited in the current thing frame.
+func (w *ThingsRender) PeekIfCurrent(ent *rigid_body.Entity) *ThingRenderCache {
+	if ent == nil {
+		return nil
+	}
+	entID := ent.GetId()
+	slot := ent.GetRenderMarker()
+	if slot >= 0 && slot < w.nextSlot {
+		entry := w.entries[slot]
+		if entry.inUse && entry.entID == entID && entry.lastSeenFrame == w.thingFrameID {
+			return entry
+		}
+	}
+	return nil
 }
 
 // AddRef records the entry's entity ID and current cache generation in the preallocated frame reference array.

@@ -102,6 +102,20 @@ func (w *DrawCommands) Freeze() {
 	}
 }
 
+func (w *DrawCommands) EmitBatchWithCentroid(startIdx, endIdx int32, batch *FrameBatch) {
+	if w == nil {
+		return
+	}
+	cx, cy, cz := batch.centroidX, batch.centroidY, batch.centroidZ
+	if batch.centCount > 1 {
+		inv := 1.0 / float32(batch.centCount)
+		cx *= inv
+		cy *= inv
+		cz *= inv
+	}
+	w.ComputeWithCentroid(startIdx, endIdx, batch.material, cx, cy, cz)
+}
+
 // Get retrieves the list of draw commands up to the current length.
 func (w *DrawCommands) Get() []*DrawCommand {
 	return w.commands[0:w.len]

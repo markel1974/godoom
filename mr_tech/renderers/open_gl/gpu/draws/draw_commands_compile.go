@@ -189,8 +189,7 @@ func (w *DrawCommandsRender) compileShadowInstanced(cutout bool, dst *[]InstShad
 	*dstLen = n
 }
 
-// SetResidentDraws attaches GPU-resident static and instanced draw slices built for the current frame.
-func (w *DrawCommandsRender) SetResidentDraws(staticItems []*DrawItemStatic, staticLen int, instancedItems []*DrawItemInstanced, instancedLen int) {
+func (w *DrawCommandsRender) attachResidentAndCompileShadow(staticItems []*DrawItemStatic, staticLen int, instancedItems []*DrawItemInstanced, instancedLen int) {
 	w.staticItems = staticItems
 	w.staticLen = staticLen
 	w.instancedItems = instancedItems
@@ -206,6 +205,11 @@ func (w *DrawCommandsRender) SetResidentDraws(staticItems []*DrawItemStatic, sta
 	w.compileShadowStaticBatches(true, &w.shadowCutoutStatic, &w.shadowCutoutStaticLen)
 	w.compileShadowInstanced(false, &w.shadowSolidInst, &w.shadowSolidInstLen)
 	w.compileShadowInstanced(true, &w.shadowCutoutInst, &w.shadowCutoutInstLen)
+}
+
+// SetResidentDraws attaches GPU-resident static and instanced draw slices built for the current frame.
+func (w *DrawCommandsRender) SetResidentDraws(staticItems []*DrawItemStatic, staticLen int, instancedItems []*DrawItemInstanced, instancedLen int) {
+	w.attachResidentAndCompileShadow(staticItems, staticLen, instancedItems, instancedLen)
 
 	if w.isAdditive {
 		w.prepassSolidStaticLen = 0
@@ -220,6 +224,16 @@ func (w *DrawCommandsRender) SetResidentDraws(staticItems []*DrawItemStatic, sta
 	w.compileOrderedStaticBatches(1, true, &w.prepassCutoutStatic, &w.prepassCutoutStaticLen)
 	w.compileOrderedStaticBatches(0, false, &w.shadeSolidStatic, &w.shadeSolidStaticLen)
 	w.compileOrderedStaticBatches(1, false, &w.shadeCutoutStatic, &w.shadeCutoutStaticLen)
+}
+
+// SetShadowResidentDraws attaches GPU-resident static and instanced draw slices for shadow-only tile passes.
+func (w *DrawCommandsRender) SetShadowResidentDraws(staticItems []*DrawItemStatic, staticLen int, instancedItems []*DrawItemInstanced, instancedLen int) {
+	w.attachResidentAndCompileShadow(staticItems, staticLen, instancedItems, instancedLen)
+	w.renderAllStaticLen = 0
+	w.prepassSolidStaticLen = 0
+	w.prepassCutoutStaticLen = 0
+	w.shadeSolidStaticLen = 0
+	w.shadeCutoutStaticLen = 0
 }
 
 // Prepare organizes and processes an array of DrawCommand instances into renderable batches for efficient rendering.

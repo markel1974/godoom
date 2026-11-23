@@ -3,6 +3,7 @@ package draws
 import (
 	"unsafe"
 
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -142,13 +143,15 @@ func (w *FrameVertices) GetMaterial(index int) *textures.Material {
 	return w.materials[index]
 }
 
-// Commit fast-copies the staged vertices, re-indexes the indices to the current vertex slot,
-// and replays the draw commands into the appropriate blend modes.
-func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
+// appendGeometry copies fv's staged vertices and re-indexed indices into w and returns the starting index offset, or -1 if empty.
+func (w *FrameVertices) appendGeometry(fv *FrameVertices) int32 {
+	if fv == nil {
+		return -1
+	}
 	vCount := fv.verticesCount
 	iCount := fv.indicesCount
 	if vCount == 0 || iCount == 0 {
-		return
+		return -1
 	}
 
 	for w.verticesCount+vCount >= int32(len(w.vertices)) {
@@ -169,24 +172,56 @@ func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
 	}
 
 	startIdx := w.indicesCount
-	for b := 0; b < fv.batchesLen; b++ {
-		batch := fv.batches[b]
-		endIdx := startIdx + batch.indexCount
-		targetDc := modes[batch.blendMode]
-		cx, cy, cz := batch.centroidX, batch.centroidY, batch.centroidZ
-		if batch.centCount > 1 {
-			inv := 1.0 / float32(batch.centCount)
-			cx *= inv
-			cy *= inv
-			cz *= inv
-		}
-		targetDc.ComputeWithCentroid(startIdx, endIdx, batch.material, cx, cy, cz)
-		startIdx = endIdx
-	}
-
 	w.verticesCount += vCount
 	w.verticesSlot += fv.verticesSlot
 	w.indicesCount += iCount
+	return startIdx
+}
+
+// Commit fast-copies the staged vertices, re-indexes the indices to the current vertex slot,
+// and replays the draw commands into the appropriate blend modes.
+func (w *FrameVertices) Commit(fv *FrameVertices, modes []*DrawCommands) {
+	w.CommitWithOffset(fv, modes)
+}
+
+// CommitWithOffset fast-copies fv into w, emits draw commands into modes, and returns the starting index offset (or -1 if empty).
+func (w *FrameVertices) CommitWithOffset(fv *FrameVertices, modes []*DrawCommands) int32 {
+	baseIdx := w.appendGeometry(fv)
+	if baseIdx < 0 {
+		return -1
+	}
+	startIdx := baseIdx
+	for b := 0; b < fv.batchesLen; b++ {
+		batch := fv.batches[b]
+		endIdx := startIdx + batch.indexCount
+		target := modes[batch.blendMode]
+		if target != nil {
+			target.EmitBatchWithCentroid(startIdx, endIdx, batch)
+		}
+		startIdx = endIdx
+	}
+	return baseIdx
+}
+
+// CommitVerticesOnly fast-copies fv's vertices and re-indexed indices into w without emitting draw commands.
+func (w *FrameVertices) CommitVerticesOnly(fv *FrameVertices) int32 {
+	return w.appendGeometry(fv)
+}
+
+// ReplayOpaqueBatches emits draw commands for fv's opaque batches anchored at baseIdx into targetOpaque.
+func (w *FrameVertices) ReplayOpaqueBatches(baseIdx int32, fv *FrameVertices, targetOpaque *DrawCommands) {
+	if baseIdx < 0 || fv == nil || targetOpaque == nil {
+		return
+	}
+	startIdx := baseIdx
+	for b := 0; b < fv.batchesLen; b++ {
+		batch := fv.batches[b]
+		endIdx := startIdx + batch.indexCount
+		if batch.blendMode == config.BlendModeOpaque {
+			targetOpaque.EmitBatchWithCentroid(startIdx, endIdx, batch)
+		}
+		startIdx = endIdx
+	}
 }
 
 // Freeze locks the current state of verticesCount, indicesCount, and verticesSlot for subsequent resets.

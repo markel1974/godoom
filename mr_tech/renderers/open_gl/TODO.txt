@@ -11,30 +11,23 @@ STATO ATTUALE (già implementato)
 [x] Depth-only Half-Res SSAO + blur cross-bilaterale tra Z-Prepass e shading forward con ResolveDepth MSAA (shaders/ssao.go, assets/ssao.frag, assets/ssao_blur.frag, shaders/main.go, render.go)
 [x] Ombre PCF morbide con Vogel disk ruotato per pixel su stanza, torcia e u_shadowLights (assets/main_opaque.frag)
 [x] Bloom piramidale su 5 livelli (Jimenez downsample con Karis average + additive tent upsample) + soft knee quadratico (assets/bloom.frag, shaders/bloom.go, assets/main_opaque.frag)
+[x] Per-light frustum culling + static tile caching per double-buffer in Depth.RenderWithTiles / BuilderVolume.ComputeShadows + chunked static atlas con HasStreamer() attivo (shaders/depth.go, builder_shadows.go, builder_volume.go, gpu/draws/frame_vertices.go)
 
 
 OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
 --------------------------------------------------
 
-1) Shadow Atlas: culling per-luce e caching delle tile (CRITICO)
-- In shaders/depth.go (Depth.Render / renderAtlasPass), il pass ombre ridisegna l'intero set dcOpaque (già filtrato solo sul frustumFront della camera) su stanza (1024²), torcia (1024²) e fino a 8 shadow light (512²): fino a 10 ridisegni per frame.
-- Effetto collaterale attuale: muri/oggetti fuori dal frustum camera ma dentro il cono di una luce/stanza non proiettano ombre nella vista.
-- Da fare:
-  * eseguire frustum culling dedicato per singola luce/tile sui volumi/things;
-  * introdurre dirty-flag / cache statica per le tile di luci che non cambiano posizione/geometria (ed eventuale throttling/round-robin);
-  * estendere il supporto static atlas / chunk anche quando vols.HasStreamer() è attivo (oggi buildStaticAtlas esce subito se HasStreamer() è true e ricade su ResidentMesh per singolo *volumes.Faces).
-
-2) UBO PerFrame / ShadowLights (riduzione chiamate uniform in WebGL2)
+1) UBO PerFrame / ShadowLights (riduzione chiamate uniform in WebGL2)
 - Main.bindForwardUniforms (shaders/main.go) invia ad ogni pass (solidPrg, cutoutPrg, RenderTransparent) matrici per-frame, parametri cluster/camera, torcia e fino a 8 struct u_shadowLights[i] (~40 chiamate Uniform* per pass).
 - Spostare matrici/camera/torcia e u_shadowLights in un UBO condiviso aggiornato 1 volta per frame.
 
-3) Vertex deduplication (vero index buffer) & compressione vertex layout
+2) Vertex deduplication (vero index buffer) & compressione vertex layout
 - ResidentMesh (gpu/buffers/resident_mesh.go) scrive ancora Indices sequenziali (vIdx, vIdx+1, vIdx+2) con StaticVertexFloats = 24 (96 byte/vertice in float32, vertex_layout.go).
 - Su mesh 3D lisce e mappe estese questo causa ~3× trasformazioni vertex shader e banda VRAM.
 - Da fare: deduplica vertici per avere una vera index buffer condivisa e compressione degli attributi (normal/tangent packed invece di vec3/vec4 float32 pieni).
 
-4) Eviction nelle cache GPU e pool Query
-- BuilderVolume.volMeshes e thingMeshes (builder_volume.go) tracciano LastSeenFrame ma non eseguono mai sweep/Dispose() di mesh non più usate.
+3) Eviction nelle cache GPU e pool Query
+- BuilderVolume.volMeshes e thingMeshes (builder_volume.go) tracciano LastSeenFrame ma non eseguono mai sweep/Dispose() di mesh non più usate (mentre streamChunks esegue già eviction/Dispose periodica).
 - OcclusionHW (gpu/queries/occlusion_hw.go) alloca states e queryIDs monotonicamente senza eviction/riciclo (a pool esaurito GetState ritorna nil) e emette BeginQuery + DrawArrays + EndQuery per singola AABB.
 - Da fare: sweep periodico con Dispose() su mesh/stati stale e riciclo degli ID query (più batching/riduzione chiamate per occlusion).
 
@@ -42,14 +35,13 @@ OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
 PULIZIA CODICE LEGACY
 ---------------------
 
-5) Rimozione residui della vecchia pipeline deferred
+4) Rimozione residui della vecchia pipeline deferred
 - Handler (shaders/handler.go) e RenderOpenGL (render.go) mantengono ancora riferimenti legacy (geometry, blur, deferred, shadowLight non attivi in w.container, e flashlight/SetShadowsEnabled). Nota: ssao è stato riattivato e integrato nella pipeline forward tramite RenderDepth su Z-Prepass.
 - Rimuovere i pass deferred non più usati.
 
 
 PRIORITÀ CONSIGLIATA
 --------------------
-1. Per-light frustum culling + static tile caching in Depth.Render (e supporto static atlas con HasStreamer() attivo)
-2. UBO PerFrame / ShadowLights in Main (riduzione chiamate uniform in WebGL2)
-3. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU / pool OcclusionHW
-4. Rimozione residui della vecchia pipeline deferred (geometry, blur, deferred, shadowLight)
+1. UBO PerFrame / ShadowLights in Main (riduzione chiamate uniform in WebGL2)
+2. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU / pool OcclusionHW
+3. Rimozione residui della vecchia pipeline deferred (geometry, blur, deferred, shadowLight)

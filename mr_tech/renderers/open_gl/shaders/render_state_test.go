@@ -1391,3 +1391,176 @@ func TestShaderSourcesGGXPBRVogelPCFSoftBloomAndSamplerBudget(t *testing.T) {
 		t.Fatalf("bloom.frag missing Jimenez Karis downsample / tent upsample")
 	}
 }
+
+func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
+	ctx := newRecordingCtx()
+	calCfg := config.NewConfigCalibration()
+	cal := model.NewCalibration(calCfg, nil)
+	cal.EnableShadowLights = true
+	cal.MSAASamples = 0
+	flashCfg := config.NewFlash()
+	flashCfg.Intensity = 0.05
+	flash := things.NewFlash(flashCfg)
+
+	h := NewHandler(80, 64)
+	if err := h.Setup(ctx, cal, flash, 640, 480); err != nil {
+		t.Fatalf("Handler.Setup: %v", err)
+	}
+	if err := h.GetMain().Init(); err != nil {
+		t.Fatalf("Main.Init: %v", err)
+	}
+	d := h.GetDepth()
+	if err := d.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Depth.Compile: %v", err)
+	}
+	d.SetShadowsEnabled(true)
+
+	var shadowLights [metrics.ShadowLightsCount]*metrics.Light
+	for i := range 2 {
+		lt := metrics.NewLight()
+		lt.Assign(float32(i*40), 50, -30, 1, 1, 1, 1, 2.0, 0, -1, 0, 100, 0.8, 0.7, 1.0)
+		shadowLights[i] = lt
+	}
+	h.GetShadowLightsMetrics().Update(shadowLights, 2)
+	d.Prepare()
+
+	solidMat, _ := makeSolidAndCutoutMaterials(t)
+	mkTileDC := func(first int32) *draws.DrawCommandsRender {
+		cmd := draws.NewDrawCommand()
+		cmd.SetFirstIndex(first)
+		cmd.SetIndexCount(6)
+		cmd.SetMaterial(solidMat)
+		dc := draws.NewDrawCommandsRender(ctx, "tile", false)
+		dc.Prepare([]*draws.DrawCommand{cmd})
+		return dc
+	}
+
+	var tiles [MaxShadowTiles]ShadowTileData
+	fillTiles := func(hashes [4]uint64, reuse [4]bool) {
+		slots := [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1}
+		for idx, slot := range slots {
+			active, _, matPtr := d.GetTileConfig(slot)
+			if !active || matPtr == nil {
+				t.Fatalf("expected active tile slot %d", slot)
+			}
+			var mat [16]float32
+			copy(mat[:], (*[16]float32)(unsafe.Pointer(matPtr))[:])
+			tiles[slot] = ShadowTileData{
+				Active:    true,
+				RenderDC:  mkTileDC(int32(idx * 6)),
+				Matrix:    mat,
+				SceneHash: hashes[idx],
+				Reuse:     reuse[idx],
+			}
+		}
+	}
+
+	hashes := [4]uint64{101, 202, 303, 404}
+	// Frame 1 (targets buf 1): all 4 active tiles dirty -> 4 scissor clears, 4 draws.
+	fillTiles(hashes, [4]bool{})
+	ctx.resetLogs()
+	ctx.clearCalls = 0
+	d.RenderWithTiles(nil, &tiles)
+	if ctx.clearCalls != 4 || len(ctx.multiDrawPrograms) != 4 {
+		t.Fatalf("frame 1 expected 4 clears and 4 draws, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
+	}
+
+	// Frame 2 (targets buf 0): second buffer is still cold -> 4 clears, 4 draws.
+	fillTiles(hashes, [4]bool{
+		d.CanReuseTile(ShadowTileRoom, &tiles[ShadowTileRoom].Matrix, hashes[0]),
+		d.CanReuseTile(ShadowTileFlash, &tiles[ShadowTileFlash].Matrix, hashes[1]),
+		d.CanReuseTile(ShadowTileLightBase, &tiles[ShadowTileLightBase].Matrix, hashes[2]),
+		d.CanReuseTile(ShadowTileLightBase+1, &tiles[ShadowTileLightBase+1].Matrix, hashes[3]),
+	})
+	ctx.resetLogs()
+	ctx.clearCalls = 0
+	d.RenderWithTiles(nil, &tiles)
+	if ctx.clearCalls != 4 || len(ctx.multiDrawPrograms) != 4 {
+		t.Fatalf("frame 2 (cold double-buffer) expected 4 clears and 4 draws, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
+	}
+
+	// Frames 3 & 4: both double buffers now cached -> 0 clears, 0 draws, 0 allocs!
+	for frame := 3; frame <= 4; frame++ {
+		for idx, slot := range [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1} {
+			if !d.CanReuseTile(slot, &tiles[slot].Matrix, hashes[idx]) {
+				t.Fatalf("frame %d expected CanReuseTile=true for slot %d", frame, slot)
+			}
+			tiles[slot].Reuse = true
+		}
+		ctx.resetLogs()
+		ctx.clearCalls = 0
+		d.RenderWithTiles(nil, &tiles)
+		if ctx.clearCalls != 0 || len(ctx.multiDrawPrograms) != 0 {
+			t.Fatalf("frame %d expected 0 clears and 0 draws on cached tiles, got clear=%d draws=%d", frame, ctx.clearCalls, len(ctx.multiDrawPrograms))
+		}
+	}
+
+	allocs := testing.AllocsPerRun(50, func() {
+		for _, slot := range [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1} {
+			tiles[slot].Reuse = d.CanReuseTile(slot, &tiles[slot].Matrix, tiles[slot].SceneHash)
+		}
+		d.RenderWithTiles(nil, &tiles)
+	})
+	if allocs > 0 {
+		t.Fatalf("cached RenderWithTiles allocated %.2f objects/op, want 0", allocs)
+	}
+
+	// Invalidate ONLY Light0 hash -> frame 5 updates Light0 in buf 1, frame 6 updates Light0 in buf 0.
+	hashes[2] = 9999
+	updateReuse := func() {
+		dcs := [4]*draws.DrawCommandsRender{
+			tiles[ShadowTileRoom].RenderDC,
+			tiles[ShadowTileFlash].RenderDC,
+			tiles[ShadowTileLightBase].RenderDC,
+			tiles[ShadowTileLightBase+1].RenderDC,
+		}
+		var reuse [4]bool
+		slots := [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1}
+		for idx, slot := range slots {
+			reuse[idx] = d.CanReuseTile(slot, &tiles[slot].Matrix, hashes[idx])
+		}
+		fillTiles(hashes, reuse)
+		for idx, slot := range slots {
+			tiles[slot].RenderDC = dcs[idx]
+		}
+	}
+	updateReuse()
+	ctx.resetLogs()
+	ctx.clearCalls = 0
+	d.RenderWithTiles(nil, &tiles)
+	if ctx.clearCalls != 1 || len(ctx.multiDrawPrograms) != 1 {
+		t.Fatalf("single dirty spotlight (buf 1) expected 1 clear and 1 draw, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
+	}
+	wantLight0Scissor := [4]int32{0, 0, 512, 512}
+	if ctx.drawScissors[0] != wantLight0Scissor {
+		t.Fatalf("dirty Light0 scissor=%v, want %v", ctx.drawScissors[0], wantLight0Scissor)
+	}
+	updateReuse()
+	ctx.resetLogs()
+	ctx.clearCalls = 0
+	d.RenderWithTiles(nil, &tiles)
+	if ctx.clearCalls != 1 || len(ctx.multiDrawPrograms) != 1 {
+		t.Fatalf("single dirty spotlight (buf 0) expected 1 clear and 1 draw, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
+	}
+
+	// Dirty tile with no geometry still clears its scissor rect to 1.0 without draws.
+	hashes[3] = 8888
+	tiles[ShadowTileLightBase+1].RenderDC = nil
+	updateReuse()
+	ctx.resetLogs()
+	ctx.clearCalls = 0
+	d.RenderWithTiles(nil, &tiles)
+	if ctx.clearCalls != 1 || len(ctx.multiDrawPrograms) != 0 {
+		t.Fatalf("dirty empty tile expected 1 clear and 0 draws, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
+	}
+	if ctx.scissorCalls[0] != ([4]int32{512, 0, 512, 512}) {
+		t.Fatalf("dirty empty Light1 cleared wrong scissor %v", ctx.scissorCalls[0])
+	}
+
+	// Toggling shadows off/on invalidates cache cleanly.
+	d.SetShadowsEnabled(false)
+	d.SetShadowsEnabled(true)
+	if d.CanReuseTile(ShadowTileRoom, &tiles[ShadowTileRoom].Matrix, hashes[0]) {
+		t.Fatalf("expected CanReuseTile=false after SetShadowsEnabled(false->true) invalidation")
+	}
+}

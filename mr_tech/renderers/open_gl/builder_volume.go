@@ -1,6 +1,7 @@
 package open_gl
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -18,6 +19,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -74,13 +76,17 @@ type BuilderVolume struct {
 
 	thingsRender *ThingsRender
 
-	volMeshes           map[*volumes.Faces]*buffers.ResidentMesh
-	staticAtlas         *buffers.ResidentMesh
-	staticEntries       map[*volumes.Faces]*staticVolumeEntry
-	staticAtlasBuilt    bool
-	staticAtlasVolCount int
-	thingMeshes         map[uint64][]*buffers.ResidentMesh
-	texLookupFn         func(*textures.Texture) (float32, bool)
+	volMeshes             map[*volumes.Faces]*buffers.ResidentMesh
+	staticAtlas           *buffers.ResidentMesh
+	staticEntries         map[*volumes.Faces]*staticVolumeEntry
+	staticAtlasBuilt      bool
+	staticAtlasStreamMode bool
+	staticAtlasVolCount   int
+	streamChunks          map[streamChunkKey]*streamChunkEntry
+	chunkQueryBox         *aabb.BoundingBox
+	chunkQueryVols        []*volumes.Volume
+	thingMeshes           map[uint64][]*buffers.ResidentMesh
+	texLookupFn           func(*textures.Texture) (float32, bool)
 
 	staticOpaque   buffers.PtrPool[draws.DrawItemStatic]
 	staticLiquid   buffers.PtrPool[draws.DrawItemStatic]
@@ -97,13 +103,38 @@ type BuilderVolume struct {
 	lastInstVBO      uint32
 	transparentItems *draws.DrawItemsTransparent
 
+	shadowTiles        [shaders.MaxShadowTiles]shaders.ShadowTileData
+	shadowBuilders     [shaders.MaxShadowTiles]*shadowTileBuilder
+	shadowInstPool     *buffers.InstancePool
+	shadowInstGroups   buffers.PtrPool[RigidInstanceGroup]
+	shadowGroupToken   uint64
+	shadowFrustum      *aabb.Frustum
+	shadowVolScratch   []*volumes.Volume
+	shadowThingScratch []ithing.IThing
+	shadowStreamCache  shadowThingCache
+	prevShadowExtraSig uint64
+
 	lastCamGLX float32
 	lastCamGLY float32
 	lastCamGLZ float32
 	meshFrame  uint64
 }
 
+const streamAtlasCellSize = 512.0
+
+type streamChunkKey struct {
+	x, y int
+}
+
+type streamChunkEntry struct {
+	atlas         *buffers.ResidentMesh
+	faces         []*volumes.Faces
+	lastSeenFrame uint64
+}
+
 type staticVolumeEntry struct {
+	atlas       *buffers.ResidentMesh
+	chunk       *streamChunkEntry
 	subStart    int
 	subCount    int
 	skyMaterial *textures.Material
@@ -269,8 +300,12 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	if w.texLookupFn == nil {
 		w.texLookupFn = w.lookupTexLayer
 	}
-	if !w.staticAtlasBuilt || (vols != nil && w.staticAtlasVolCount != vols.Len()) {
+	hasStreamer := vols != nil && vols.HasStreamer()
+	if !w.staticAtlasBuilt || w.staticAtlasStreamMode != hasStreamer || (!hasStreamer && vols != nil && w.staticAtlasVolCount != vols.Len()) {
 		w.buildStaticAtlas(vols)
+	}
+	if hasStreamer && w.meshFrame > 0 && w.meshFrame&255 == 0 {
+		w.evictStaleStreamChunks()
 	}
 	w.visibleVol.Reset(vols.Len(), pX, pY, pZ)
 
@@ -297,6 +332,9 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 				if faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
 					canReuse = false
 					break
+				}
+				if entry.chunk != nil {
+					entry.chunk.lastSeenFrame = w.meshFrame
 				}
 				continue
 			}
@@ -351,40 +389,24 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	w.staticTransSrc.Reset()
 
 	for vIdx := range visLen {
+		w.resolveVolumeMesh(w.visibleVol.At(vIdx), vols)
+	}
+	for vIdx := range visLen {
 		vol := w.visibleVol.At(vIdx)
-		faces := vol.GetFaces()
-		if faces == nil {
-			vol.ClearDirty()
+		rm, entry, skyMat := w.lookupResolvedVolume(vol)
+		if skyMat != nil {
+			w.cSky = skyMat
+		}
+		if entry != nil && !entry.detached {
+			for sIdx := entry.subStart; sIdx < entry.subStart+entry.subCount; sIdx++ {
+				w.pushStaticSubMesh(entry.atlas, entry.atlas.SubMeshes[sIdx])
+			}
 			continue
 		}
-		if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
-			if vol.IsDirty() || faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
-				entry.detached = true
-			} else {
-				if entry.skyMaterial != nil {
-					w.cSky = entry.skyMaterial
-				}
-				for sIdx := entry.subStart; sIdx < entry.subStart+entry.subCount; sIdx++ {
-					w.pushStaticSubMesh(w.staticAtlas, w.staticAtlas.SubMeshes[sIdx])
-				}
-				continue
+		if rm != nil {
+			for sIdx := 0; sIdx < rm.SubMeshesLen; sIdx++ {
+				w.pushStaticSubMesh(rm, rm.SubMeshes[sIdx])
 			}
-		}
-		rm := w.volMeshes[faces]
-		if rm == nil {
-			rm = buffers.NewResidentMesh(w.ctx)
-			w.volMeshes[faces] = rm
-		}
-		rm.LastSeenFrame = w.meshFrame
-		if vol.IsDirty() || rm.NeedsRebuild(faces, true) {
-			rm.Rebuild(faces, w.texLookupFn)
-			vol.ClearDirty()
-		}
-		if rm.SkyMaterial != nil {
-			w.cSky = rm.SkyMaterial
-		}
-		for sIdx := 0; sIdx < rm.SubMeshesLen; sIdx++ {
-			w.pushStaticSubMesh(rm, rm.SubMeshes[sIdx])
 		}
 	}
 
@@ -401,35 +423,116 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 	return true
 }
 
-func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
-	w.staticAtlasBuilt = true
-	w.staticAtlasVolCount = 0
-	if vols == nil {
-		return
+func (w *BuilderVolume) lookupResolvedVolume(vol *volumes.Volume) (*buffers.ResidentMesh, *staticVolumeEntry, *textures.Material) {
+	if vol == nil {
+		return nil, nil, nil
 	}
-	w.staticAtlasVolCount = vols.Len()
-	if vols.HasStreamer() || vols.GetVolumes() == nil || vols.Len() == 0 {
-		return
+	faces := vol.GetFaces()
+	if faces == nil {
+		return nil, nil, nil
 	}
-	rawVols := vols.GetVolumes().Slice()
+	if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
+		return entry.atlas, entry, entry.skyMaterial
+	}
+	if rm := w.volMeshes[faces]; rm != nil {
+		return rm, nil, rm.SkyMaterial
+	}
+	return nil, nil, nil
+}
+
+func (w *BuilderVolume) resolveVolumeMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers.ResidentMesh, *staticVolumeEntry, *textures.Material) {
+	if vol == nil {
+		return nil, nil, nil
+	}
+	faces := vol.GetFaces()
+	if faces == nil {
+		vol.ClearDirty()
+		return nil, nil, nil
+	}
+	if entry := w.staticEntries[faces]; entry != nil {
+		if !entry.detached {
+			if vol.IsDirty() || faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
+				entry.detached = true
+			} else {
+				if entry.chunk != nil {
+					entry.chunk.lastSeenFrame = w.meshFrame
+				}
+				return entry.atlas, entry, entry.skyMaterial
+			}
+		}
+	} else if vols != nil && vols.HasStreamer() {
+		if entry = w.buildStreamChunkForVolume(vol, vols); entry != nil && !entry.detached {
+			if entry.chunk != nil {
+				entry.chunk.lastSeenFrame = w.meshFrame
+			}
+			return entry.atlas, entry, entry.skyMaterial
+		}
+	}
+
+	rm := w.volMeshes[faces]
+	if rm == nil {
+		rm = buffers.NewResidentMesh(w.ctx)
+		w.volMeshes[faces] = rm
+	}
+	rm.LastSeenFrame = w.meshFrame
+	if vol.IsDirty() || rm.NeedsRebuild(faces, true) {
+		rm.Rebuild(faces, w.texLookupFn)
+		vol.ClearDirty()
+	}
+	return rm, nil, rm.SkyMaterial
+}
+
+func (w *BuilderVolume) disposeStreamChunks() {
+	for key, chunk := range w.streamChunks {
+		if chunk.atlas != nil {
+			chunk.atlas.Dispose()
+			chunk.atlas = nil
+		}
+		chunk.faces = nil
+		delete(w.streamChunks, key)
+	}
+}
+
+func (w *BuilderVolume) evictStaleStreamChunks() {
+	const chunkMaxAgeFrames = 600
+	for key, chunk := range w.streamChunks {
+		if w.meshFrame-chunk.lastSeenFrame <= chunkMaxAgeFrames {
+			continue
+		}
+		for _, f := range chunk.faces {
+			if e := w.staticEntries[f]; e != nil && e.chunk == chunk {
+				delete(w.staticEntries, f)
+			}
+		}
+		if chunk.atlas != nil {
+			chunk.atlas.Dispose()
+			chunk.atlas = nil
+		}
+		delete(w.streamChunks, key)
+	}
+}
+
+func (w *BuilderVolume) packVolumesIntoAtlas(atlas *buffers.ResidentMesh, rawVols []*volumes.Volume, chunk *streamChunkEntry) {
 	totalFaces := 0
 	for _, vol := range rawVols {
 		if vol == nil {
 			continue
 		}
 		if faces := vol.GetFaces(); faces != nil {
+			if prev := w.staticEntries[faces]; prev != nil && prev.detached {
+				continue
+			}
 			totalFaces += faces.Len()
 		}
 	}
 	if totalFaces == 0 {
+		if chunk != nil && atlas != nil {
+			atlas.Dispose()
+		}
 		return
 	}
-	if w.staticAtlas == nil {
-		w.staticAtlas = buffers.NewResidentMesh(w.ctx)
-	}
-	w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, len(rawVols))
-	w.staticAtlas.ReserveStaticAtlas(totalFaces)
-	w.staticAtlas.BeginStaticAtlas()
+	atlas.ReserveStaticAtlas(totalFaces)
+	atlas.BeginStaticAtlas()
 	for _, vol := range rawVols {
 		if vol == nil {
 			continue
@@ -438,25 +541,148 @@ func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
 		if faces == nil || faces.Len() == 0 {
 			continue
 		}
-		if w.staticEntries[faces] != nil {
-			vol.ClearDirty()
+		if prev := w.staticEntries[faces]; prev != nil {
+			if !prev.detached {
+				vol.ClearDirty()
+			}
 			continue
 		}
-		subStart, subCount, skyMat, hasAnim, ok := w.staticAtlas.AppendStaticFaces(faces, w.texLookupFn)
-		if !hasAnim && (ok || skyMat != nil) {
+		subStart, subCount, skyMat, hasAnim, ok := atlas.AppendStaticFaces(faces, w.texLookupFn)
+		if hasAnim {
+			// Remember animated volumes so streamed chunk builds do not retry packing them on subsequent frames.
+			if chunk != nil {
+				w.staticEntries[faces] = &staticVolumeEntry{detached: true}
+			}
+			continue
+		}
+		if ok || skyMat != nil {
 			w.staticEntries[faces] = &staticVolumeEntry{
+				atlas:       atlas,
+				chunk:       chunk,
 				subStart:    subStart,
 				subCount:    subCount,
 				skyMaterial: skyMat,
 				version:     faces.GetVersion(),
 				faceCount:   faces.Len(),
 			}
+			if chunk != nil {
+				chunk.faces = append(chunk.faces, faces)
+			}
 			vol.ClearDirty()
 		}
 	}
-	if w.staticAtlas.SubMeshesLen > 0 {
-		w.staticAtlas.EndStaticAtlas()
+	if atlas.SubMeshesLen > 0 {
+		atlas.EndStaticAtlas()
+	} else if chunk != nil {
+		atlas.Dispose()
 	}
+}
+
+func (w *BuilderVolume) buildStreamChunkForVolume(vol *volumes.Volume, vols *model.Volumes) *staticVolumeEntry {
+	if vol == nil || vols == nil {
+		return nil
+	}
+	targetFaces := vol.GetFaces()
+	box := vol.GetAABB()
+	if box == nil || targetFaces == nil {
+		return nil
+	}
+	if w.staticEntries == nil {
+		w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, 256)
+	}
+	if w.streamChunks == nil {
+		w.streamChunks = make(map[streamChunkKey]*streamChunkEntry, 64)
+	}
+	if w.chunkQueryBox == nil {
+		w.chunkQueryBox = aabb.NewBoundingBox()
+	}
+
+	midX, midY, _ := box.GetCentroid()
+	cx := int(math.Floor(midX / streamAtlasCellSize))
+	cy := int(math.Floor(midY / streamAtlasCellSize))
+	key := streamChunkKey{x: cx, y: cy}
+
+	minX := float64(cx) * streamAtlasCellSize
+	minY := float64(cy) * streamAtlasCellSize
+	w.chunkQueryBox.Rebuild(minX, minY, -1e12, minX+streamAtlasCellSize, minY+streamAtlasCellSize, 1e12)
+
+	w.chunkQueryVols = w.chunkQueryVols[:0]
+	foundTarget := false
+	vols.QueryAABB(w.chunkQueryBox, func(v *volumes.Volume) {
+		if v == nil {
+			return
+		}
+		vb := v.GetAABB()
+		if vb == nil {
+			return
+		}
+		vx, vy, _ := vb.GetCentroid()
+		if int(math.Floor(vx/streamAtlasCellSize)) != cx || int(math.Floor(vy/streamAtlasCellSize)) != cy {
+			return
+		}
+		if v == vol {
+			foundTarget = true
+		}
+		w.chunkQueryVols = append(w.chunkQueryVols, v)
+	})
+	if !foundTarget {
+		w.chunkQueryVols = append(w.chunkQueryVols, vol)
+	}
+
+	chunk := w.streamChunks[key]
+	if chunk == nil {
+		chunk = &streamChunkEntry{
+			atlas: buffers.NewResidentMesh(w.ctx),
+		}
+		w.streamChunks[key] = chunk
+	} else {
+		for _, oldFaces := range chunk.faces {
+			if e := w.staticEntries[oldFaces]; e != nil && !e.detached && e.chunk == chunk {
+				delete(w.staticEntries, oldFaces)
+			}
+		}
+		chunk.faces = chunk.faces[:0]
+		if chunk.atlas == nil {
+			chunk.atlas = buffers.NewResidentMesh(w.ctx)
+		}
+	}
+	chunk.lastSeenFrame = w.meshFrame
+
+	w.packVolumesIntoAtlas(chunk.atlas, w.chunkQueryVols, chunk)
+	if chunk.atlas.SubMeshesLen == 0 {
+		chunk.atlas = nil
+	}
+	return w.staticEntries[targetFaces]
+}
+
+func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
+	w.staticAtlasBuilt = true
+	w.staticAtlasVolCount = 0
+	hasStreamer := vols != nil && vols.HasStreamer()
+	w.staticAtlasStreamMode = hasStreamer
+	w.disposeStreamChunks()
+	if hasStreamer {
+		w.staticAtlas = nil
+		if vols != nil {
+			w.staticAtlasVolCount = vols.Len()
+		}
+		w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, 256)
+		w.streamChunks = make(map[streamChunkKey]*streamChunkEntry, 64)
+		return
+	}
+	if vols == nil {
+		return
+	}
+	w.staticAtlasVolCount = vols.Len()
+	if vols.GetVolumes() == nil || vols.Len() == 0 {
+		return
+	}
+	rawVols := vols.GetVolumes().Slice()
+	if w.staticAtlas == nil {
+		w.staticAtlas = buffers.NewResidentMesh(w.ctx)
+	}
+	w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, len(rawVols))
+	w.packVolumesIntoAtlas(w.staticAtlas, rawVols, nil)
 }
 
 func (w *BuilderVolume) pushStaticSubMesh(rm *buffers.ResidentMesh, sub *buffers.ResidentSubMesh) {
@@ -542,10 +768,10 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	pushPassThing := func(thing ithing.IThing) {
-		thing.Compile(tick)
-
 		ent := thing.GetEntity()
 		entry2 := w.thingsRender.Retrieve(ent)
+		thing.Compile(tick)
+		entry2.compileFrame = w.meshFrame
 
 		if rs, ok := thing.(ithing.IRigidRenderSource); ok {
 			if rigidFaces := rs.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
@@ -565,131 +791,11 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			}
 		}
 
-		pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
-		if pFaces == nil || pFaces.Len() == 0 {
+		if !w.buildNonRigidThingCache(thing, entry2) {
 			return
 		}
-
-		lerp := float32(lp)
-		yaw := float32(thing.GetAngle())
-		if renderMode == vertices.RenderModeModel3D {
-			yaw = 0.0
-		}
-		renderModeF := float32(renderMode)
-		tPosX, tPosY, zBot := ent.GetCenter()
-		oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-
-		facesVer := pFaces.GetVersion()
-		facesLen := pFaces.Len()
-		var nextVer uint64
-		var nextLen int
-		if pNextFaces != nil {
-			nextVer = pNextFaces.GetVersion()
-			nextLen = pNextFaces.Len()
-		}
-
-		fv := entry2.GetFrameVertices()
-		cacheHit := entry2.Equal(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ)
-		if !cacheHit {
-			fv.DeepReset()
-
-			var currentMat *textures.Material
-			batchStart := fv.GetIndicesLen()
-			var centSumX, centSumY, centSumZ float64
-			var centCount int
-
-			flushBatch := func() {
-				currentIndices := fv.GetIndicesLen()
-				if currentIndices > batchStart && currentMat != nil {
-					var bcx, bcy, bcz float32
-					if centCount > 0 {
-						inv := 1.0 / float64(centCount)
-						bcx = float32(centSumX * inv)
-						bcy = float32(centSumY * inv)
-						bcz = float32(centSumZ * inv)
-					} else {
-						bcx, bcy, bcz = oX, oY, oZ
-					}
-					fv.AddBatchCentroid(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat, bcx, bcy, bcz)
-				}
-				batchStart = currentIndices
-				centSumX, centSumY, centSumZ = 0, 0, 0
-				centCount = 0
-			}
-
-			limit := facesLen
-			if pNextFaces != nil && nextLen < limit {
-				limit = nextLen
-			}
-
-			for fx := 0; fx < limit; fx++ {
-				face := pFaces.At(fx)
-				if face == nil {
-					continue
-				}
-				mat := face.GetMaterial()
-				if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
-					continue
-				}
-				tex := mat.GetCurrentFrame()
-				if tex == nil {
-					continue
-				}
-				if mat.IsAnimated() {
-					fv.AddAnimRef(mat, tex)
-				}
-				tId := tex.GetIdentifier()
-				if tId < 0 {
-					tId, _ = w.tex.Get(tex)
-					tex.SetIdentifier(tId)
-				}
-
-				if mat != currentMat {
-					flushBatch()
-					currentMat = mat
-				}
-
-				packed, spec, shininess, detailScale, detailFactor, envStr, envTint := mat.GetRenderParams()
-				p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
-				u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
-				nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := face.GetVertexNormalsFlat()
-				tx0, ty0, tz0, s0, tx1, ty1, tz1, s1, tx2, ty2, tz2, s2 := face.GetTangentsFlat()
-				lmID, lmU, lmV := face.GetLightmap()
-				lmIDFloat := float32(lmID)
-
-				if renderMode == vertices.RenderModeOpaque || renderMode == vertices.RenderModeLiquid {
-					centSumX += (p0X + p1X + p2X) / 3.0
-					centSumY += (p0Z + p1Z + p2Z) / 3.0
-					centSumZ += -(p0Y + p1Y + p2Y) / 3.0
-				} else {
-					centSumX += float64(oX)
-					centSumY += float64(oY)
-					centSumZ += float64(oZ)
-				}
-				centCount++
-
-				var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
-				if pNextFaces != nil {
-					if nf := pNextFaces.At(fx); nf != nil {
-						np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = nf.GetPointsFlat()
-					} else {
-						np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
-					}
-				} else {
-					np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
-				}
-
-				id0 := fv.AddVertexFull(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, float32(nx0), float32(nz0), float32(-ny0), float32(tx0), float32(tz0), float32(-ty0), float32(s0), float32(lmU[0]), float32(lmV[0]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
-				id1 := fv.AddVertexFull(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, float32(nx1), float32(nz1), float32(-ny1), float32(tx1), float32(tz1), float32(-ty1), float32(s1), float32(lmU[1]), float32(lmV[1]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
-				id2 := fv.AddVertexFull(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, float32(nx2), float32(nz2), float32(-ny2), float32(tx2), float32(tz2), float32(-ty2), float32(s2), float32(lmU[2]), float32(lmV[2]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
-				fv.AddTriangle(id0, id1, id2)
-			}
-
-			flushBatch()
-			entry2.Assign(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ)
-		}
-
-		w.fv.Commit(fv, w.modes)
+		entry2.committedBaseIdx = w.fv.CommitWithOffset(entry2.GetFrameVertices(), w.modes)
+		entry2.committedFrame = w.meshFrame
 		w.thingsRender.AddRef(entry2)
 	}
 
@@ -801,6 +907,135 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 	}
 
 	return thingsChanged
+}
+
+func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *ThingRenderCache) bool {
+	pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
+	if pFaces == nil || pFaces.Len() == 0 {
+		return false
+	}
+
+	lerp := float32(lp)
+	yaw := float32(thing.GetAngle())
+	if renderMode == vertices.RenderModeModel3D {
+		yaw = 0.0
+	}
+	renderModeF := float32(renderMode)
+	ent := thing.GetEntity()
+	tPosX, tPosY, zBot := ent.GetCenter()
+	oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+
+	facesVer := pFaces.GetVersion()
+	facesLen := pFaces.Len()
+	var nextVer uint64
+	var nextLen int
+	if pNextFaces != nil {
+		nextVer = pNextFaces.GetVersion()
+		nextLen = pNextFaces.Len()
+	}
+
+	fv := entry2.GetFrameVertices()
+	if entry2.Equal(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ) {
+		return true
+	}
+
+	fv.DeepReset()
+
+	var currentMat *textures.Material
+	batchStart := fv.GetIndicesLen()
+	var centSumX, centSumY, centSumZ float64
+	var centCount int
+
+	flushBatch := func() {
+		currentIndices := fv.GetIndicesLen()
+		if currentIndices > batchStart && currentMat != nil {
+			var bcx, bcy, bcz float32
+			if centCount > 0 {
+				inv := 1.0 / float64(centCount)
+				bcx = float32(centSumX * inv)
+				bcy = float32(centSumY * inv)
+				bcz = float32(centSumZ * inv)
+			} else {
+				bcx, bcy, bcz = oX, oY, oZ
+			}
+			fv.AddBatchCentroid(currentMat.GetBlendMode(), currentIndices-batchStart, currentMat, bcx, bcy, bcz)
+		}
+		batchStart = currentIndices
+		centSumX, centSumY, centSumZ = 0, 0, 0
+		centCount = 0
+	}
+
+	limit := facesLen
+	if pNextFaces != nil && nextLen < limit {
+		limit = nextLen
+	}
+
+	for fx := 0; fx < limit; fx++ {
+		face := pFaces.At(fx)
+		if face == nil {
+			continue
+		}
+		mat := face.GetMaterial()
+		if mat == nil || mat.GetKind() == int(config.MaterialKindNone) {
+			continue
+		}
+		tex := mat.GetCurrentFrame()
+		if tex == nil {
+			continue
+		}
+		if mat.IsAnimated() {
+			fv.AddAnimRef(mat, tex)
+		}
+		tId := tex.GetIdentifier()
+		if tId < 0 {
+			tId, _ = w.tex.Get(tex)
+			tex.SetIdentifier(tId)
+		}
+
+		if mat != currentMat {
+			flushBatch()
+			currentMat = mat
+		}
+
+		packed, spec, shininess, detailScale, detailFactor, envStr, envTint := mat.GetRenderParams()
+		p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z := face.GetPointsFlat()
+		u0, u1, u2, v0, v1, v2 := face.GetUVFlat()
+		nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := face.GetVertexNormalsFlat()
+		tx0, ty0, tz0, s0, tx1, ty1, tz1, s1, tx2, ty2, tz2, s2 := face.GetTangentsFlat()
+		lmID, lmU, lmV := face.GetLightmap()
+		lmIDFloat := float32(lmID)
+
+		if renderMode == vertices.RenderModeOpaque || renderMode == vertices.RenderModeLiquid {
+			centSumX += (p0X + p1X + p2X) / 3.0
+			centSumY += (p0Z + p1Z + p2Z) / 3.0
+			centSumZ += -(p0Y + p1Y + p2Y) / 3.0
+		} else {
+			centSumX += float64(oX)
+			centSumY += float64(oY)
+			centSumZ += float64(oZ)
+		}
+		centCount++
+
+		var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
+		if pNextFaces != nil {
+			if nf := pNextFaces.At(fx); nf != nil {
+				np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = nf.GetPointsFlat()
+			} else {
+				np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
+			}
+		} else {
+			np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
+		}
+
+		id0 := fv.AddVertexFull(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, float32(nx0), float32(nz0), float32(-ny0), float32(tx0), float32(tz0), float32(-ty0), float32(s0), float32(lmU[0]), float32(lmV[0]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+		id1 := fv.AddVertexFull(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, float32(nx1), float32(nz1), float32(-ny1), float32(tx1), float32(tz1), float32(-ty1), float32(s1), float32(lmU[1]), float32(lmV[1]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+		id2 := fv.AddVertexFull(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, float32(nx2), float32(nz2), float32(-ny2), float32(tx2), float32(tz2), float32(-ty2), float32(s2), float32(lmU[2]), float32(lmV[2]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+		fv.AddTriangle(id0, id1, id2)
+	}
+
+	flushBatch()
+	entry2.Assign(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ)
+	return true
 }
 
 // pushQLights processes a collection of lights within the specified front and rear frustums and updates the frame lighting.

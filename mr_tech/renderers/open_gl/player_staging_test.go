@@ -16,8 +16,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/occlusion"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -74,10 +75,10 @@ func (stubCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uin
 func (stubCtx) GenerateMipmap(_ uint32) {}
 
 func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVolume {
-	dcOpaque := gpu.NewDrawCommands(config.BlendModeOpaque, 32768)
-	dcAdditive := gpu.NewDrawCommands(config.BlendModeAdditive, 4096)
-	dcLiquid := gpu.NewDrawCommands(config.BlendModeLiquid, 4096)
-	modes := make([]*gpu.DrawCommands, config.BlendModeLatest)
+	dcOpaque := draws.NewDrawCommands(config.BlendModeOpaque, 32768)
+	dcAdditive := draws.NewDrawCommands(config.BlendModeAdditive, 4096)
+	dcLiquid := draws.NewDrawCommands(config.BlendModeLiquid, 4096)
+	modes := make([]*draws.DrawCommands, config.BlendModeLatest)
 	modes[dcOpaque.GetBlendMode()] = dcOpaque
 	modes[dcAdditive.GetBlendMode()] = dcAdditive
 	modes[dcLiquid.GetBlendMode()] = dcLiquid
@@ -89,14 +90,14 @@ func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVol
 
 	return &BuilderVolume{
 		ctx:        stubCtx{},
-		tex:        gpu.NewTextures(stubCtx{}),
-		fv:         gpu.NewFrameVertices(stubCtx{}, 1048576),
+		tex:        vramtex.NewTextures(stubCtx{}),
+		fv:         draws.NewFrameVertices(stubCtx{}, 1048576),
 		dcOpaque:   dcOpaque,
 		dcAdditive: dcAdditive,
 		dcLiquid:   dcLiquid,
 		modes:      modes,
 		cal:        cal,
-		occlusion:  occlusion.NewOcclusionHW(stubCtx{}, 8),
+		occlusion:  queries.NewOcclusionHW(stubCtx{}, 8),
 		player:     pl,
 		playerId:   plID,
 	}

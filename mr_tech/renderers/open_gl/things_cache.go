@@ -3,7 +3,7 @@ package open_gl
 import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 )
 
 const defaultThingCacheCap = 4096
@@ -16,7 +16,7 @@ type ThingCacheRef struct {
 
 // ThingRenderCache stores cached render state for reusing generated thing frame vertices across frames.
 type ThingRenderCache struct {
-	fv            *gpu.FrameVertices
+	fv            *draws.FrameVertices
 	pFaces        *volumes.Faces
 	pNextFaces    *volumes.Faces
 	facesVer      uint64
@@ -39,11 +39,11 @@ type ThingRenderCache struct {
 
 // NewThingRenderCache creates a render cache with CPU-only staging frame vertices for thing rendering.
 func NewThingRenderCache() *ThingRenderCache {
-	return &ThingRenderCache{fv: gpu.NewStagingFrameVertices(128)}
+	return &ThingRenderCache{fv: draws.NewStagingFrameVertices(128)}
 }
 
 // GetFrameVertices returns the cached frame vertices for this render cache.
-func (tr *ThingRenderCache) GetFrameVertices() *gpu.FrameVertices {
+func (tr *ThingRenderCache) GetFrameVertices() *draws.FrameVertices {
 	return tr.fv
 }
 

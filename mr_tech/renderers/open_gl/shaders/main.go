@@ -8,8 +8,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -192,7 +192,7 @@ func (s *Main) Init() error {
 		s.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, s.mainEBO[i])
 		s.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, eboBytesSize, nil, api.DYNAMIC_DRAW)
 
-		vertex_layout.ConfigureVertexAttribs(s.ctx, s.stride, true)
+		buffers.ConfigureVertexAttribs(s.ctx, s.stride, true)
 	}
 
 	s.ctx.BindVertexArray(0)
@@ -482,7 +482,7 @@ func (s *Main) bindZPrepassProgram(zp *zPrepassProgram, view, proj *float32, int
 	s.ctx.UniformMatrix4fv(zp.locProj, 1, false, proj)
 	s.ctx.Uniform1f(zp.locTime, interval)
 	if zp.locInstanceMode >= 0 {
-		s.ctx.Uniform1i(zp.locInstanceMode, vertex_layout.InstanceModeStreaming)
+		s.ctx.Uniform1i(zp.locInstanceMode, buffers.InstanceModeStreaming)
 	}
 }
 
@@ -579,13 +579,13 @@ func (s *Main) bindForwardUniforms(
 		s.ctx.Uniform1i(loc, numGlobalLights)
 	}
 	if loc := p.table[MainLocInstanceMode]; loc >= 0 {
-		s.ctx.Uniform1i(loc, vertex_layout.InstanceModeStreaming)
+		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
 	}
 	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.lights.GetActiveUBO())
 }
 
 // Render executes a Z-prepass followed by Early-Z forward opaque shading and conditional alpha-cutout shading.
-func (s *Main) Render(dc *gpu.DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
+func (s *Main) Render(dc *draws.DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
 	targetFbo := s.post.GetFBO()
 	view := s.metrics.GetViewPtr()
 	invView := s.metrics.GetInvViewPtr()
@@ -690,7 +690,7 @@ func (s *Main) Render(dc *gpu.DrawCommandsRender, ambient float32, flashX, flash
 }
 
 // RenderTransparent executes the back-to-front depth-sorted translucent pass over the resolved opaque/liquid scene.
-func (s *Main) RenderTransparent(dc *gpu.DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
+func (s *Main) RenderTransparent(dc *draws.DrawCommandsRender, ambient float32, flashX, flashY, flashSensitivity float32) {
 	if dc == nil || !dc.HasCommands() {
 		return
 	}

@@ -8,7 +8,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
@@ -151,7 +152,7 @@ func BenchmarkLightsPrepareClustersSparse(b *testing.B) {
 	}
 }
 
-func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *Depth, *gpu.DrawCommandsRender) {
+func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *Depth, *draws.DrawCommandsRender) {
 	t.Helper()
 	ctx := newRecordingCtx()
 	calCfg := config.NewConfigCalibration()
@@ -183,13 +184,13 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 	h.GetShadowLightsMetrics().Update(shadowLights, metrics.ShadowLightsCount)
 	d.Prepare()
 
-	staticAtlas := gpu.NewResidentMesh(ctx)
+	staticAtlas := buffers.NewResidentMesh(ctx)
 	staticAtlas.VAO = 9001
-	staticItems := make([]*gpu.DrawItemStatic, staticCount)
+	staticItems := make([]*draws.DrawItemStatic, staticCount)
 	for i := range staticCount {
-		staticItems[i] = &gpu.DrawItemStatic{
+		staticItems[i] = &draws.DrawItemStatic{
 			Mesh: staticAtlas,
-			Sub: &gpu.ResidentSubMesh{
+			Sub: &buffers.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
 				CullMode:   config.CullFront,
 				DepthWrite: true,
@@ -199,14 +200,14 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 		}
 	}
 
-	instMesh := gpu.NewResidentMesh(ctx)
+	instMesh := buffers.NewResidentMesh(ctx)
 	instMesh.VAO = 9002
 	instMesh.VAOInstanced = 9003
-	instItems := make([]*gpu.DrawItemInstanced, 4)
+	instItems := make([]*draws.DrawItemInstanced, 4)
 	for i := range 4 {
-		instItems[i] = &gpu.DrawItemInstanced{
+		instItems[i] = &draws.DrawItemInstanced{
 			Mesh: instMesh,
-			Sub: &gpu.ResidentSubMesh{
+			Sub: &buffers.ResidentSubMesh{
 				BlendMode:  config.BlendModeOpaque,
 				CullMode:   config.CullFront,
 				DepthWrite: true,
@@ -219,7 +220,7 @@ func setupDepthAtlas10TileTest(t testing.TB, staticCount int) (*recordingCtx, *D
 		}
 	}
 
-	dcr := gpu.NewDrawCommandsRender(ctx, "depth_bench", false)
+	dcr := draws.NewDrawCommandsRender(ctx, "depth_bench", false)
 	dcr.Prepare(nil)
 	dcr.SetResidentDraws(staticItems, len(staticItems), instItems, len(instItems))
 	return ctx, d, dcr

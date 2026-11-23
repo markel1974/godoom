@@ -5,8 +5,8 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -96,7 +96,7 @@ func (s *Liquid) SetupSamplers() error {
 		s.ctx.Uniform1i(locDepth, api.TexUnitShadowMap)
 	}
 	if loc := s.GetUniform(ShaderLiquidLocInstanceMode); loc >= 0 {
-		s.ctx.Uniform1i(loc, vertex_layout.InstanceModeStreaming)
+		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
 	}
 
 	return nil
@@ -161,7 +161,7 @@ func (s *Liquid) Init() error {
 }
 
 // RenderDC executes the liquid pass over a DrawCommandsRender supporting static/instanced/streaming geometry.
-func (s *Liquid) RenderDC(dc *gpu.DrawCommandsRender) {
+func (s *Liquid) RenderDC(dc *draws.DrawCommandsRender) {
 	if dc == nil || !dc.HasCommands() {
 		return
 	}

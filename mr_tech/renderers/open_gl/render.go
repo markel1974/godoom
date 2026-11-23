@@ -7,9 +7,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/occlusion"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/profiler"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -27,13 +27,13 @@ type IBuilder interface {
 
 	GetLightsStride() int32
 
-	GetDrawCommands() *gpu.DrawCommandsRender
+	GetDrawCommands() *draws.DrawCommandsRender
 
-	GetDrawCommandsAdditive() *gpu.DrawCommandsRender
+	GetDrawCommandsAdditive() *draws.DrawCommandsRender
 
-	GetDrawCommandsLiquid() *gpu.DrawCommandsRender
+	GetDrawCommandsLiquid() *draws.DrawCommandsRender
 
-	GetHWOcclusion() *occlusion.OcclusionHW
+	GetHWOcclusion() *queries.OcclusionHW
 
 	GetVertices() ([]float32, int32, []uint32, int32)
 
@@ -48,7 +48,7 @@ type RenderOpenGL struct {
 	engine *engine.Engine
 	vi     *engine.ViewMatrix
 	player *things.Player
-	tex    *gpu.Textures
+	tex    *vramtex.Textures
 
 	builder     *BuilderVolume
 	enableClear bool
@@ -84,13 +84,13 @@ type RenderOpenGL struct {
 	scaleX float32
 	scaleY float32
 
-	dcOpaque      *gpu.DrawCommandsRender
-	dcAdditive    *gpu.DrawCommandsRender
-	dcLiquid      *gpu.DrawCommandsRender
-	dcTransparent *gpu.DrawCommandsRender
-	hwOcc         *occlusion.OcclusionHW
+	dcOpaque      *draws.DrawCommandsRender
+	dcAdditive    *draws.DrawCommandsRender
+	dcLiquid      *draws.DrawCommandsRender
+	dcTransparent *draws.DrawCommandsRender
+	hwOcc         *queries.OcclusionHW
 
-	gpuProfiler *profiler.GpuProfiler
+	gpuProfiler *queries.GpuProfiler
 	renderScale float64
 }
 
@@ -124,7 +124,7 @@ func (w *RenderOpenGL) Start() {
 // RenderPrepare initializes shaders, textures, and builder components required for rendering and configures global settings.
 func (w *RenderOpenGL) RenderPrepare() error {
 	cal := w.engine.GetCalibration()
-	w.tex = gpu.NewTextures(w.ctx)
+	w.tex = vramtex.NewTextures(w.ctx)
 	w.player.SetPitchOptions(-1.5, 1.5, 0.01)
 	w.builder = NewBuilderVolume(w.ctx, w.tex, cal, w.player)
 	w.dcOpaque = w.builder.GetDrawCommandsOpaque()

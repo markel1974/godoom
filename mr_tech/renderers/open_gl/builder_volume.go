@@ -13,10 +13,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/occlusion"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/ptr"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -27,14 +27,14 @@ type RigidInstance struct {
 }
 
 type RigidInstanceGroup struct {
-	mesh           *gpu.ResidentMesh
-	instances      ptr.PtrPool[RigidInstance]
+	mesh           *buffers.ResidentMesh
+	instances      buffers.PtrPool[RigidInstance]
 	baseByteOffset int32
 }
 
 type RigidTransItem struct {
-	mesh           *gpu.ResidentMesh
-	sub            *gpu.ResidentSubMesh
+	mesh           *buffers.ResidentMesh
+	sub            *buffers.ResidentSubMesh
 	baseByteOffset int32
 	cx, cy, cz     float32
 }
@@ -42,22 +42,22 @@ type RigidTransItem struct {
 // BuilderVolume represents a structure that consolidates textures, frame vertices, draw commands, and other rendering resources.
 type BuilderVolume struct {
 	ctx                 api.IContext
-	tex                 *gpu.Textures
-	fv                  *gpu.FrameVertices
-	dcOpaque            *gpu.DrawCommands
-	dcAdditive          *gpu.DrawCommands
-	dcLiquid            *gpu.DrawCommands
-	dcTransparent       *gpu.DrawCommands
+	tex                 *vramtex.Textures
+	fv                  *draws.FrameVertices
+	dcOpaque            *draws.DrawCommands
+	dcAdditive          *draws.DrawCommands
+	dcLiquid            *draws.DrawCommands
+	dcTransparent       *draws.DrawCommands
 	fl                  *FrameLights
-	dcRenderOpaque      *gpu.DrawCommandsRender
-	dcRenderAdditive    *gpu.DrawCommandsRender
-	dcRenderLiquid      *gpu.DrawCommandsRender
-	dcRenderTransparent *gpu.DrawCommandsRender
+	dcRenderOpaque      *draws.DrawCommandsRender
+	dcRenderAdditive    *draws.DrawCommandsRender
+	dcRenderLiquid      *draws.DrawCommandsRender
+	dcRenderTransparent *draws.DrawCommandsRender
 	cSky                *textures.Material
 	cal                 *model.Calibration
 	visibleVol          *VisibleVolumes
-	modes               []*gpu.DrawCommands
-	occlusion           *occlusion.OcclusionHW
+	modes               []*draws.DrawCommands
+	occlusion           *queries.OcclusionHW
 	frustumFront        *metrics.Frustum
 	lightBB             *aabb.BoundingBox
 	playerId            uint64
@@ -74,28 +74,28 @@ type BuilderVolume struct {
 
 	thingsRender *ThingsRender
 
-	volMeshes           map[*volumes.Faces]*gpu.ResidentMesh
-	staticAtlas         *gpu.ResidentMesh
+	volMeshes           map[*volumes.Faces]*buffers.ResidentMesh
+	staticAtlas         *buffers.ResidentMesh
 	staticEntries       map[*volumes.Faces]*staticVolumeEntry
 	staticAtlasBuilt    bool
 	staticAtlasVolCount int
-	thingMeshes         map[uint64][]*gpu.ResidentMesh
+	thingMeshes         map[uint64][]*buffers.ResidentMesh
 	texLookupFn         func(*textures.Texture) (float32, bool)
 
-	staticOpaque   ptr.PtrPool[gpu.DrawItemStatic]
-	staticLiquid   ptr.PtrPool[gpu.DrawItemStatic]
-	staticAdditive ptr.PtrPool[gpu.DrawItemStatic]
-	staticTransSrc ptr.PtrPool[gpu.DrawItemTransparent]
+	staticOpaque   buffers.PtrPool[draws.DrawItemStatic]
+	staticLiquid   buffers.PtrPool[draws.DrawItemStatic]
+	staticAdditive buffers.PtrPool[draws.DrawItemStatic]
+	staticTransSrc buffers.PtrPool[draws.DrawItemTransparent]
 
-	instancePool     *gpu.InstancePool
-	instGroups       ptr.PtrPool[RigidInstanceGroup]
+	instancePool     *buffers.InstancePool
+	instGroups       buffers.PtrPool[RigidInstanceGroup]
 	instFrame        uint64
-	instOpaque       ptr.PtrPool[gpu.DrawItemInstanced]
-	instLiquid       ptr.PtrPool[gpu.DrawItemInstanced]
-	instAdditive     ptr.PtrPool[gpu.DrawItemInstanced]
-	instTransSrc     ptr.PtrPool[RigidTransItem]
+	instOpaque       buffers.PtrPool[draws.DrawItemInstanced]
+	instLiquid       buffers.PtrPool[draws.DrawItemInstanced]
+	instAdditive     buffers.PtrPool[draws.DrawItemInstanced]
+	instTransSrc     buffers.PtrPool[RigidTransItem]
 	lastInstVBO      uint32
-	transparentItems *gpu.DrawItemsTransparent
+	transparentItems *draws.DrawItemsTransparent
 
 	lastCamGLX float32
 	lastCamGLY float32
@@ -113,35 +113,35 @@ type staticVolumeEntry struct {
 }
 
 // NewBuilderVolume initializes and returns a new BuilderVolume instance with configured textures and calibration settings.
-func NewBuilderVolume(ctx api.IContext, tex *gpu.Textures, cal *model.Calibration, player *things.Player) *BuilderVolume {
+func NewBuilderVolume(ctx api.IContext, tex *vramtex.Textures, cal *model.Calibration, player *things.Player) *BuilderVolume {
 	bv := &BuilderVolume{
 		ctx:                 ctx,
 		tex:                 tex,
 		player:              player,
 		playerId:            player.GetEntity().GetId(),
-		fv:                  gpu.NewFrameVertices(ctx, 1048576),
-		dcOpaque:            gpu.NewDrawCommands(config.BlendModeOpaque, 32768),
-		dcAdditive:          gpu.NewDrawCommands(config.BlendModeAdditive, 4096),
-		dcLiquid:            gpu.NewDrawCommands(config.BlendModeLiquid, 4096),
-		dcTransparent:       gpu.NewDrawCommands(config.BlendModeTransparent, 4096),
+		fv:                  draws.NewFrameVertices(ctx, 1048576),
+		dcOpaque:            draws.NewDrawCommands(config.BlendModeOpaque, 32768),
+		dcAdditive:          draws.NewDrawCommands(config.BlendModeAdditive, 4096),
+		dcLiquid:            draws.NewDrawCommands(config.BlendModeLiquid, 4096),
+		dcTransparent:       draws.NewDrawCommands(config.BlendModeTransparent, 4096),
 		fl:                  NewFrameLights(ctx, 1024, cal.EnableShadowLights),
-		dcRenderOpaque:      gpu.NewDrawCommandsRender(ctx, "opaque", false),
-		dcRenderAdditive:    gpu.NewDrawCommandsRender(ctx, "additive", true),
-		dcRenderLiquid:      gpu.NewDrawCommandsRender(ctx, "liquid", true),
-		dcRenderTransparent: gpu.NewDrawCommandsRender(ctx, "transparent", false),
+		dcRenderOpaque:      draws.NewDrawCommandsRender(ctx, "opaque", false),
+		dcRenderAdditive:    draws.NewDrawCommandsRender(ctx, "additive", true),
+		dcRenderLiquid:      draws.NewDrawCommandsRender(ctx, "liquid", true),
+		dcRenderTransparent: draws.NewDrawCommandsRender(ctx, "transparent", false),
 		cSky:                nil,
 		cal:                 cal,
 		visibleVol:          NewVisibleVols(8192),
-		modes:               make([]*gpu.DrawCommands, config.BlendModeLatest),
-		occlusion:           occlusion.NewOcclusionHW(ctx, 4096),
+		modes:               make([]*draws.DrawCommands, config.BlendModeLatest),
+		occlusion:           queries.NewOcclusionHW(ctx, 4096),
 		frustumFront:        metrics.NewFrustum(),
 		lightBB:             aabb.NewBoundingBox(),
 		cachedRawVols:       make([]*volumes.Volume, 8192),
 		thingsRender:        NewThingsRender(),
-		volMeshes:           make(map[*volumes.Faces]*gpu.ResidentMesh, 1024),
-		thingMeshes:         make(map[uint64][]*gpu.ResidentMesh, 256),
-		instancePool:        gpu.NewInstancePool(ctx, 256),
-		transparentItems:    gpu.NewDrawItemsTransparent(64),
+		volMeshes:           make(map[*volumes.Faces]*buffers.ResidentMesh, 1024),
+		thingMeshes:         make(map[uint64][]*buffers.ResidentMesh, 256),
+		instancePool:        buffers.NewInstancePool(ctx, 256),
+		transparentItems:    draws.NewDrawItemsTransparent(64),
 	}
 	bv.instGroups.Init(32)
 	bv.texLookupFn = bv.lookupTexLayer
@@ -186,7 +186,9 @@ func (w *BuilderVolume) GetVerticesStride() int32 { return w.fv.VerticesStride()
 func (w *BuilderVolume) GetLightsStride() int32 { return w.fl.LightsStride() }
 
 // GetDrawCommandsOpaque returns the prepared DrawCommandsRender object containing batched GPU drawing commands for rendering.
-func (w *BuilderVolume) GetDrawCommandsOpaque() *gpu.DrawCommandsRender { return w.dcRenderOpaque }
+func (w *BuilderVolume) GetDrawCommandsOpaque() *draws.DrawCommandsRender {
+	return w.dcRenderOpaque
+}
 
 // GetVertices retrieves the vertex buffer, vertex count, index buffer, and index count from the builder volume.
 func (w *BuilderVolume) GetVertices() (unsafe.Pointer, int, int32, unsafe.Pointer, int, int32) {
@@ -262,7 +264,7 @@ func (w *BuilderVolume) Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *e
 // pushQVolumes updates GPU-resident static volume meshes only when the visible volume set, geometry, or animated wall textures change.
 func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
 	if w.volMeshes == nil {
-		w.volMeshes = make(map[*volumes.Faces]*gpu.ResidentMesh, 256)
+		w.volMeshes = make(map[*volumes.Faces]*buffers.ResidentMesh, 256)
 	}
 	if w.texLookupFn == nil {
 		w.texLookupFn = w.lookupTexLayer
@@ -370,7 +372,7 @@ func (w *BuilderVolume) pushQVolumes(vols *model.Volumes, frustumFront *aabb.Fru
 		}
 		rm := w.volMeshes[faces]
 		if rm == nil {
-			rm = gpu.NewResidentMesh(w.ctx)
+			rm = buffers.NewResidentMesh(w.ctx)
 			w.volMeshes[faces] = rm
 		}
 		rm.LastSeenFrame = w.meshFrame
@@ -423,7 +425,7 @@ func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
 		return
 	}
 	if w.staticAtlas == nil {
-		w.staticAtlas = gpu.NewResidentMesh(w.ctx)
+		w.staticAtlas = buffers.NewResidentMesh(w.ctx)
 	}
 	w.staticEntries = make(map[*volumes.Faces]*staticVolumeEntry, len(rawVols))
 	w.staticAtlas.ReserveStaticAtlas(totalFaces)
@@ -457,7 +459,7 @@ func (w *BuilderVolume) buildStaticAtlas(vols *model.Volumes) {
 	}
 }
 
-func (w *BuilderVolume) pushStaticSubMesh(rm *gpu.ResidentMesh, sub *gpu.ResidentSubMesh) {
+func (w *BuilderVolume) pushStaticSubMesh(rm *buffers.ResidentMesh, sub *buffers.ResidentSubMesh) {
 	if sub.IndexCount == 0 {
 		return
 	}
@@ -472,7 +474,7 @@ func (w *BuilderVolume) pushStaticSubMesh(rm *gpu.ResidentMesh, sub *gpu.Residen
 		item.Sub = sub
 	case config.BlendModeTransparent:
 		item := w.staticTransSrc.Acquire()
-		item.Kind = gpu.TransparentStatic
+		item.Kind = draws.TransparentStatic
 		item.DistSq = 0
 		item.SortOrder = sub.SortOrder
 		item.CullMode = sub.CullMode
@@ -499,13 +501,13 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		w.thingsRender = NewThingsRender()
 	}
 	if w.thingMeshes == nil {
-		w.thingMeshes = make(map[uint64][]*gpu.ResidentMesh, 256)
+		w.thingMeshes = make(map[uint64][]*buffers.ResidentMesh, 256)
 	}
 	if w.meshFrame == 0 {
 		w.meshFrame = 1
 	}
 	if w.instancePool == nil {
-		w.instancePool = gpu.NewInstancePool(w.ctx, 256)
+		w.instancePool = buffers.NewInstancePool(w.ctx, 256)
 	}
 	if w.texLookupFn == nil {
 		w.texLookupFn = w.lookupTexLayer
@@ -518,7 +520,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	things.StagePrepare()
 
-	addRigidInstance := func(rm *gpu.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
+	addRigidInstance := func(rm *buffers.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
 		var g *RigidInstanceGroup
 		if rm.InstGroupFrame == w.instFrame {
 			g = w.instGroups.Items[rm.InstGroupIdx]
@@ -743,7 +745,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			g.baseByteOffset = baseByteOff
 			for k := range cnt {
 				inst := g.instances.Items[k]
-				w.instancePool.WriteTransformAt(baseFloat+k*vertex_layout.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
+				w.instancePool.WriteTransformAt(baseFloat+k*buffers.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
 			}
 		}
 		instVBO := w.instancePool.Upload()
@@ -781,7 +783,7 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 						rt := w.instTransSrc.Acquire()
 						rt.mesh = g.mesh
 						rt.sub = sub
-						rt.baseByteOffset = g.baseByteOffset + int32(k*vertex_layout.InstanceMatrixFloats*4)
+						rt.baseByteOffset = g.baseByteOffset + int32(k*buffers.InstanceMatrixFloats*4)
 						rt.cx = float32(inst.cx)
 						rt.cy = float32(inst.cz)
 						rt.cz = float32(-inst.cy)
@@ -825,22 +827,22 @@ func (w *BuilderVolume) pushQLights(ls *model.Lights, frustumFront *aabb.Frustum
 }
 
 // GetDrawCommandsAdditive returns the additive draw commands prepared for rendering.
-func (w *BuilderVolume) GetDrawCommandsAdditive() *gpu.DrawCommandsRender {
+func (w *BuilderVolume) GetDrawCommandsAdditive() *draws.DrawCommandsRender {
 	return w.dcRenderAdditive
 }
 
 // GetDrawCommandsLiquid returns the liquid draw commands prepared for rendering.
-func (w *BuilderVolume) GetDrawCommandsLiquid() *gpu.DrawCommandsRender {
+func (w *BuilderVolume) GetDrawCommandsLiquid() *draws.DrawCommandsRender {
 	return w.dcRenderLiquid
 }
 
 // GetDrawCommandsTransparent returns the sorted transparent draw commands prepared for rendering.
-func (w *BuilderVolume) GetDrawCommandsTransparent() *gpu.DrawCommandsRender {
+func (w *BuilderVolume) GetDrawCommandsTransparent() *draws.DrawCommandsRender {
 	return w.dcRenderTransparent
 }
 
 // GetOpaqueInstancedItems returns the active rigid instanced opaque draw items for inspection.
-func (w *BuilderVolume) GetOpaqueInstancedItems() []*gpu.DrawItemInstanced {
+func (w *BuilderVolume) GetOpaqueInstancedItems() []*draws.DrawItemInstanced {
 	return w.instOpaque.Items[:w.instOpaque.Len]
 }
 
@@ -857,17 +859,17 @@ func (w *BuilderVolume) GetInstancedDrawCount() int {
 // GetStreamingVertexCount returns the current vertex count stored in the CPU streaming buffer.
 func (w *BuilderVolume) GetStreamingVertexCount() int {
 	_, _, vCount, _, _, _ := w.fv.GetVertices()
-	return int(vCount) / vertex_layout.StreamingVertexFloats
+	return int(vCount) / buffers.StreamingVertexFloats
 }
 
 // GetHWOcclusion retrieves the hardware-based occlusion object associated with the BuilderVolume.
-func (w *BuilderVolume) GetHWOcclusion() *occlusion.OcclusionHW {
+func (w *BuilderVolume) GetHWOcclusion() *queries.OcclusionHW {
 	return w.occlusion
 }
 
 // retrieveThingMesh returns a resident mesh for the given faces, reusing or rebuilding cached mesh data when needed.
 // The returned bool reports whether the mesh was rebuilt during the current mesh frame.
-func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*gpu.ResidentMesh, bool) {
+func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh, bool) {
 	gh := rigidFaces.GetGeomHash()
 	bucket := w.thingMeshes[gh]
 	for _, rm := range bucket {
@@ -882,7 +884,7 @@ func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*gpu.Resid
 			return rm, rm.RebuiltFrame == w.meshFrame
 		}
 	}
-	rm := gpu.NewResidentMesh(w.ctx)
+	rm := buffers.NewResidentMesh(w.ctx)
 	rm.LastSeenFrame = w.meshFrame
 	rm.RebuiltFrame = w.meshFrame
 	rm.Rebuild(rigidFaces, w.texLookupFn)

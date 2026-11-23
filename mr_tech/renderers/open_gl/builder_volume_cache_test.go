@@ -15,7 +15,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
@@ -165,7 +165,7 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	mCal := en.GetCalibration()
 
 	rCtx := &noopRenderCtx{}
-	glTex := gpu.NewTextures(rCtx)
+	glTex := vramtex.NewTextures(rCtx)
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}
@@ -461,7 +461,7 @@ func TestBuilderVolumeRigidInstancingAndTransparentSorting(t *testing.T) {
 	baseVi := engine.NewViewMatrix()
 	baseVi.Update(basePl)
 	baseCtx := &noopRenderCtx{}
-	baseTex := gpu.NewTextures(baseCtx)
+	baseTex := vramtex.NewTextures(baseCtx)
 	if err := baseTex.Setup(baseEn.GetTextures()); err != nil {
 		t.Fatalf("base textures setup failed: %v", err)
 	}
@@ -503,7 +503,7 @@ func TestBuilderVolumeRigidInstancingAndTransparentSorting(t *testing.T) {
 	mCal := en.GetCalibration()
 
 	rCtx := &noopRenderCtx{}
-	glTex := gpu.NewTextures(rCtx)
+	glTex := vramtex.NewTextures(rCtx)
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}
@@ -609,7 +609,7 @@ func TestBuilderVolumeStaticAtlasCoalescesVolumesAndDetachesDirty(t *testing.T) 
 	mCal := en.GetCalibration()
 
 	rCtx := &noopRenderCtx{}
-	glTex := gpu.NewTextures(rCtx)
+	glTex := vramtex.NewTextures(rCtx)
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}

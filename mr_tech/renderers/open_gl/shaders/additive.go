@@ -2,8 +2,8 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vertex_layout"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
@@ -64,7 +64,7 @@ func (s *Additive) SetupSamplers() error {
 	diffuseUnits := [4]int32{api.TexUnitDiffuseBase, api.TexUnitDiffuseBase + 1, api.TexUnitDiffuseBase + 2, api.TexUnitDiffuseBase + 3}
 	s.ctx.Uniform1iv(s.GetUniform(ShaderAdditiveLocTexture), 4, &diffuseUnits[0])
 	if loc := s.GetUniform(ShaderAdditiveLocInstanceMode); loc >= 0 {
-		s.ctx.Uniform1i(loc, vertex_layout.InstanceModeStreaming)
+		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func (s *Additive) Compile(a IAssets) error {
 }
 
 // RenderDC executes the additive pass over a DrawCommandsRender supporting static/instanced/streaming geometry.
-func (s *Additive) RenderDC(dc *gpu.DrawCommandsRender) {
+func (s *Additive) RenderDC(dc *draws.DrawCommandsRender) {
 	if dc == nil || !dc.HasCommands() {
 		return
 	}

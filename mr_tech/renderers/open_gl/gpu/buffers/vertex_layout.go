@@ -60,22 +60,22 @@ func ConfigureVertexAttribs(ctx api.IContext, strideBytes int32, includeDynamic 
 }
 
 // WriteStaticVertex encodes a static vertex in OpenGL coordinate space into the 24-float dst slice.
-func WriteStaticVertex(dst []float32, px, py, pz, u, v float64, texLayer float32, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv float64, lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint float32) {
-	dst[0] = float32(px)
-	dst[1] = float32(pz)
-	dst[2] = float32(-py)
-	dst[3] = float32(u)
-	dst[4] = float32(-v)
+func WriteStaticVertex(dst []float32, px, py, pz, u, v, texLayer, nx, ny, nz, tx, ty, tz, tSign, lmu, lmv, lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint float32) {
+	dst[0] = px
+	dst[1] = pz
+	dst[2] = -py
+	dst[3] = u
+	dst[4] = -v
 	dst[5] = texLayer
-	dst[6] = float32(nx)
-	dst[7] = float32(nz)
-	dst[8] = float32(-ny)
-	dst[9] = float32(tx)
-	dst[10] = float32(tz)
-	dst[11] = float32(-ty)
-	dst[12] = float32(tSign)
-	dst[13] = float32(lmu)
-	dst[14] = float32(lmv)
+	dst[6] = nx
+	dst[7] = nz
+	dst[8] = -ny
+	dst[9] = tx
+	dst[10] = tz
+	dst[11] = -ty
+	dst[12] = tSign
+	dst[13] = lmu
+	dst[14] = lmv
 	dst[15] = lmIDFloat
 	dst[16] = packed
 	dst[17] = spec

@@ -386,7 +386,9 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 		ceilFace := volumes.NewFace(ceilP, sector.GetMaterialIndex(1))
 		if align := sector.GetCeilAlign(); align != nil {
 			if w, h, ok := materialSize(ceilFace.GetMaterial()); ok {
-				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, ceilFace.GetTri())
+				var ceilTri geometry.Triangle3D
+				ceilTri.Points = ceilP
+				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, &ceilTri)
 				ceilFace.SetUV(u0, v0, u1, v1, u2, v2)
 				ceilFace.LockUV(true)
 			}
@@ -400,7 +402,9 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 
 		if align := sector.GetFloorAlign(); align != nil {
 			if w, h, ok := materialSize(floorFace.GetMaterial()); ok {
-				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, floorFace.GetTri())
+				var floorTri geometry.Triangle3D
+				floorTri.Points = floorP
+				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, &floorTri)
 				floorFace.SetUV(u0, v0, u1, v1, u2, v2)
 				floorFace.LockUV(true)
 			}
@@ -551,7 +555,9 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 			if fc == nil || !fc.IsSingleSided() {
 				continue
 			}
-			a0x, a0y, _, a1x, a1y, _, a2x, a2y, _ := fc.GetPointsFlat()
+			a0x, a0y, _ := fc.Get0()
+			a1x, a1y, _ := fc.Get1()
+			a2x, a2y, _ := fc.Get2()
 			midX := (a0x + a1x + a2x) / 3.0
 			midY := (a0y + a1y + a2y) / 3.0
 			fc.EnsureOutwardWinding(geometry.XYZ{X: sectorCX - midX, Y: sectorCY - midY, Z: 0})

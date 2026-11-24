@@ -404,9 +404,9 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 		lmIDFloat := float32(lmID)
 
 		// GL coordinates centroid
-		centSumX += (p0x + p1x + p2x) / 3.0
-		centSumY += (p0z + p1z + p2z) / 3.0
-		centSumZ += -(p0y + p1y + p2y) / 3.0
+		centSumX += float64(p0x+p1x+p2x) / 3.0
+		centSumY += float64(p0z+p1z+p2z) / 3.0
+		centSumZ += -float64(p0y+p1y+p2y) / 3.0
 		centCount++
 
 		WriteStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)

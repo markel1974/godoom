@@ -23,11 +23,11 @@ type smoothVertKey struct {
 	x, y, z int64
 }
 
-func makeSmoothVertKey(p geometry.XYZ) smoothVertKey {
+func makeSmoothVertKey(p geometry.XYZ32) smoothVertKey {
 	return smoothVertKey{
-		x: int64(math.Round(p.X * 100.0)),
-		y: int64(math.Round(p.Y * 100.0)),
-		z: int64(math.Round(p.Z * 100.0)),
+		x: int64(math.Round(float64(p.X) * 100.0)),
+		y: int64(math.Round(float64(p.Y) * 100.0)),
+		z: int64(math.Round(float64(p.Z) * 100.0)),
 	}
 }
 
@@ -44,8 +44,8 @@ type Faces struct {
 	w, h, d          float64
 
 	markedEdges     map[EdgeKey]struct{}
-	midpoints       map[EdgeKey]geometry.XYZ
-	displacements   map[VertexKey]geometry.XYZ
+	midpoints       map[EdgeKey]geometry.XYZ32
+	displacements   map[VertexKey]geometry.XYZ32
 	nextFaces       []*Face
 	hasTesselation  bool
 	allowTessellate bool
@@ -101,8 +101,8 @@ func (f *Faces) TessellateInit() {
 		return
 	}
 	f.markedEdges = make(map[EdgeKey]struct{}, 128)
-	f.midpoints = make(map[EdgeKey]geometry.XYZ, 128)
-	f.displacements = make(map[VertexKey]geometry.XYZ, 128)
+	f.midpoints = make(map[EdgeKey]geometry.XYZ32, 128)
+	f.displacements = make(map[VertexKey]geometry.XYZ32, 128)
 	f.nextFaces = make([]*Face, 0, f.count)
 	f.hasTesselation = true
 }
@@ -218,15 +218,17 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 		if fc == nil {
 			continue
 		}
-		p0, p1, p2 := fc.tri.Points[0], fc.tri.Points[1], fc.tri.Points[2]
-		e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-		e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+		p0x, p0y, p0z := fc.Get0()
+		p1x, p1y, p1z := fc.Get1()
+		p2x, p2y, p2z := fc.Get2()
+		e1x, e1y, e1z := p1x-p0x, p1y-p0y, p1z-p0z
+		e2x, e2y, e2z := p2x-p0x, p2y-p0y, p2z-p0z
 		ax := e1y*e2z - e1z*e2y
 		ay := e1z*e2x - e1x*e2z
 		az := e1x*e2y - e1y*e2x
 		faceData[i] = adjFace{
 			idx: int32(i),
-			nx:  fc.n.X, ny: fc.n.Y, nz: fc.n.Z,
+			nx:  float64(fc.n.X), ny: float64(fc.n.Y), nz: float64(fc.n.Z),
 			ax: ax, ay: ay, az: az,
 		}
 		for k := 0; k < 3; k++ {
@@ -257,8 +259,7 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 				}
 			}
 			ptr := &fc.vertexNormals[k]
-			ptr.X, ptr.Y, ptr.Z = NormalizeXYZ(sx, sy, sz, fc.n.X, fc.n.Y, fc.n.Z)
-			//fc.vertexNormals[k] = NormalizeXYZ(geometry.XYZ{X: sx, Y: sy, Z: sz}, fc.n)
+			ptr.X, ptr.Y, ptr.Z = NormalizeXYZ64(sx, sy, sz, fc.n.X, fc.n.Y, fc.n.Z)
 		}
 		fc.computeTangent()
 	}
@@ -292,14 +293,14 @@ func (f *Faces) computeGeomHash() {
 		}
 		for k := 0; k < 3; k++ {
 			p := fc.tri.Points[k]
-			mixF32(float32(p.X))
-			mixF32(float32(p.Y))
-			mixF32(float32(p.Z))
-			mixF32(float32(fc.u[k]))
-			mixF32(float32(fc.v[k]))
-			mixF32(float32(fc.vertexNormals[k].X))
-			mixF32(float32(fc.vertexNormals[k].Y))
-			mixF32(float32(fc.vertexNormals[k].Z))
+			mixF32(p.X)
+			mixF32(p.Y)
+			mixF32(p.Z)
+			mixF32(fc.u[k])
+			mixF32(fc.v[k])
+			mixF32(fc.vertexNormals[k].X)
+			mixF32(fc.vertexNormals[k].Y)
+			mixF32(fc.vertexNormals[k].Z)
 		}
 		mixU32(uint32(fc.lightmapID))
 		if fc.material != nil {
@@ -358,15 +359,15 @@ func (f *Faces) computeActiveEdges() {
 		}
 	}
 
-	sinToPlane := func(opp, anchor, n geometry.XYZ) float64 {
-		dx := opp.X - anchor.X
-		dy := opp.Y - anchor.Y
-		dz := opp.Z - anchor.Z
+	sinToPlane := func(opp, anchor, n geometry.XYZ32) float64 {
+		dx := float64(opp.X) - float64(anchor.X)
+		dy := float64(opp.Y) - float64(anchor.Y)
+		dz := float64(opp.Z) - float64(anchor.Z)
 		lenSq := dx*dx + dy*dy + dz*dz
 		if lenSq <= 1e-18 {
 			return 0.0
 		}
-		return (dx*n.X + dy*n.Y + dz*n.Z) / math.Sqrt(lenSq)
+		return (dx*float64(n.X) + dy*float64(n.Y) + dz*float64(n.Z)) / math.Sqrt(lenSq)
 	}
 
 	for _, adj := range edgeAdj {
@@ -386,7 +387,7 @@ func (f *Faces) computeActiveEdges() {
 		pA, _, oppA := fa.GetEdgePoints(int(refA.edgeIdx))
 		_, _, oppB := fb.GetEdgePoints(int(refB.edgeIdx))
 
-		cosAngle := fa.n.X*fb.n.X + fa.n.Y*fb.n.Y + fa.n.Z*fb.n.Z
+		cosAngle := float64(fa.n.X)*float64(fb.n.X) + float64(fa.n.Y)*float64(fb.n.Y) + float64(fa.n.Z)*float64(fb.n.Z)
 		sinB := sinToPlane(oppB, pA, fa.n)
 		sinA := sinToPlane(oppA, pA, fb.n)
 
@@ -550,16 +551,16 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 			if _, exists := f.displacements[key]; exists {
 				continue
 			}
-			dx := p.X - impact.X
-			dy := p.Y - impact.Y
-			dz := p.Z - impact.Z
+			dx := float64(p.X) - impact.X
+			dy := float64(p.Y) - impact.Y
+			dz := float64(p.Z) - impact.Z
 			distSq := dx*dx + dy*dy + dz*dz
 			if distSq >= radiusSq {
 				continue
 			}
 			t := 1.0 - math.Sqrt(distSq)/radius
 			factor := t * t * (3.0 - 2.0*t)
-			f.displacements[key] = geometry.XYZ{X: impulse.X * factor, Y: impulse.Y * factor, Z: impulse.Z * factor}
+			f.displacements[key] = geometry.XYZ32{X: float32(impulse.X * factor), Y: float32(impulse.Y * factor), Z: float32(impulse.Z * factor)}
 		}
 	}
 
@@ -574,9 +575,9 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 			if !inside {
 				continue
 			}
-			p0 := fc.tri.Points[0]
+			p0x, p0y, p0z := fc.Get0()
 			nx, ny, nz := fc.GetNormal()
-			distPlane := math.Abs((impact.X-p0.X)*nx + (impact.Y-p0.Y)*ny + (impact.Z-p0.Z)*nz)
+			distPlane := math.Abs((impact.X-p0x)*nx + (impact.Y-p0y)*ny + (impact.Z-p0z)*nz)
 			if distPlane > radius*2.0 && distPlane > 16.0 {
 				continue
 			}
@@ -587,9 +588,10 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 				}
 				p := fc.tri.Points[j]
 				key := MakeVertexKey(p)
-				disp := geometry.XYZ{X: impulse.X * weight, Y: impulse.Y * weight, Z: impulse.Z * weight}
+				dx, dy, dz := impulse.X*weight, impulse.Y*weight, impulse.Z*weight
+				disp := geometry.XYZ32{X: float32(dx), Y: float32(dy), Z: float32(dz)}
 				if existing, ok := f.displacements[key]; ok {
-					if weight*weight > existing.X*existing.X+existing.Y*existing.Y+existing.Z*existing.Z {
+					if dx*dx+dy*dy+dz*dz > float64(existing.X)*float64(existing.X)+float64(existing.Y)*float64(existing.Y)+float64(existing.Z)*float64(existing.Z) {
 						f.displacements[key] = disp
 					}
 				} else {
@@ -609,7 +611,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 		if fc == nil {
 			continue
 		}
-		for j := 0; j < geometry.Triangle3DPoints; j++ {
+		for j := 0; j < geometry.Triangle3DPoints32; j++ {
 			p := &fc.tri.Points[j]
 			if displacement, ok := f.displacements[MakeVertexKey(*p)]; ok {
 				p.X += displacement.X
@@ -634,14 +636,14 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		maxEdge = deformMinEdge
 	}
 
-	midpoint := func(a, b geometry.XYZ) geometry.XYZ {
-		return geometry.XYZ{X: (a.X + b.X) * 0.5, Y: (a.Y + b.Y) * 0.5, Z: (a.Z + b.Z) * 0.5}
+	midpoint := func(a, b geometry.XYZ32) geometry.XYZ32 {
+		return geometry.XYZ32{X: (a.X + b.X) * 0.5, Y: (a.Y + b.Y) * 0.5, Z: (a.Z + b.Z) * 0.5}
 	}
 
-	distanceSquared := func(a, b geometry.XYZ) float64 {
-		dx := a.X - b.X
-		dy := a.Y - b.Y
-		dz := a.Z - b.Z
+	distanceSquared := func(a, b geometry.XYZ32) float64 {
+		dx := float64(a.X) - float64(b.X)
+		dy := float64(a.Y) - float64(b.Y)
+		dz := float64(a.Z) - float64(b.Z)
 		return dx*dx + dy*dy + dz*dz
 	}
 
@@ -665,7 +667,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				continue
 			}
 			p := fc.tri.Points
-			edges := [3][2]geometry.XYZ{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
+			edges := [3][2]geometry.XYZ32{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 			for _, edge := range edges {
 				d2 := distanceSquared(edge[0], edge[1])
 				// Non suddividere se lo spigolo è già più corto di deformMinEdge
@@ -688,7 +690,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			}
 
 			p := fc.tri.Points
-			edges := [3][2]geometry.XYZ{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
+			edges := [3][2]geometry.XYZ32{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 			for _, edge := range edges {
 				key := MakeEdgeKey(edge[0], edge[1])
 				if _, ok := f.markedEdges[key]; ok {
@@ -708,7 +710,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 			p := fc.tri.Points
 			keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
 			var mask uint8
-			var mab, mbc, mca geometry.XYZ
+			var mab, mbc, mca geometry.XYZ32
 			if m, ok := f.midpoints[keys[0]]; ok {
 				mask |= 1
 				mab = m

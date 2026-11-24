@@ -20,6 +20,11 @@ func ToPackedVec3(v geometry.XYZ) PackedVec3 {
 	return PackedVec3{x: float32(v.X), y: float32(v.Y), z: float32(v.Z)}
 }
 
+// ToXYZ32 converts a PackedVec3 to a geometry.XYZ32 directly without intermediate float64 widening.
+func (p PackedVec3) ToXYZ32() geometry.XYZ32 {
+	return geometry.XYZ32{X: p.x, Y: p.y, Z: p.z}
+}
+
 // ToXYZ converts a PackedVec3 to a geometry.XYZ by mapping its float32 components to float64 components.
 func (p PackedVec3) ToXYZ() geometry.XYZ {
 	return geometry.XYZ{X: float64(p.x), Y: float64(p.y), Z: float64(p.z)}
@@ -230,14 +235,14 @@ func NewElementTemplate(model *config.Model3DEntry, mats *materials.Materials) *
 			pts := fc.GetTri().Points
 			nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := fc.GetVertexNormalsFlat()
 			posIdx[i] = [3]uint32{
-				AppendDedupVec(&positions, posDedup, ToPackedVec3(pts[0])),
-				AppendDedupVec(&positions, posDedup, ToPackedVec3(pts[1])),
-				AppendDedupVec(&positions, posDedup, ToPackedVec3(pts[2])),
+				AppendDedupVec(&positions, posDedup, PackedVec3{x: pts[0].X, y: pts[0].Y, z: pts[0].Z}),
+				AppendDedupVec(&positions, posDedup, PackedVec3{x: pts[1].X, y: pts[1].Y, z: pts[1].Z}),
+				AppendDedupVec(&positions, posDedup, PackedVec3{x: pts[2].X, y: pts[2].Y, z: pts[2].Z}),
 			}
 			normIdx[i] = [3]uint32{
-				AppendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx0), y: float32(ny0), z: float32(nz0)}),
-				AppendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx1), y: float32(ny1), z: float32(nz1)}),
-				AppendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx2), y: float32(ny2), z: float32(nz2)}),
+				AppendDedupVec(&normals, normDedup, PackedVec3{x: nx0, y: ny0, z: nz0}),
+				AppendDedupVec(&normals, normDedup, PackedVec3{x: nx1, y: ny1, z: nz1}),
+				AppendDedupVec(&normals, normDedup, PackedVec3{x: nx2, y: ny2, z: nz2}),
 			}
 			activeEdges[i] = fc.ActiveEdgeMask()
 		}
@@ -324,7 +329,7 @@ func (tpl *ElementTemplate) ApplyTemplateFrameToVolume(frameIdx int, vol *volume
 		pi := tf.posIdx[j]
 		ni := tf.normIdx[j]
 		fc := faces.At(j)
-		fc.ApplyTemplateGeometry(pos[pi[0]].ToXYZ(), pos[pi[1]].ToXYZ(), pos[pi[2]].ToXYZ(), norm[ni[0]].ToXYZ(), norm[ni[1]].ToXYZ(), norm[ni[2]].ToXYZ(), tf.activeEdges[j])
+		fc.ApplyTemplateGeometry(pos[pi[0]].ToXYZ32(), pos[pi[1]].ToXYZ32(), pos[pi[2]].ToXYZ32(), norm[ni[0]].ToXYZ32(), norm[ni[1]].ToXYZ32(), norm[ni[2]].ToXYZ32(), tf.activeEdges[j])
 	}
 	for _, tg := range tf.tags {
 		vol.SetVertexTag(tg.idx, tg.origin, tg.axis)

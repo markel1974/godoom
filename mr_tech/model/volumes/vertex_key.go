@@ -14,10 +14,10 @@ const (
 )
 
 type VertexKey struct {
-	x, y, z uint64
+	x, y, z uint32
 }
 
-func MakeVertexKey(p geometry.XYZ) VertexKey {
+func MakeVertexKey(p geometry.XYZ32) VertexKey {
 	if p.X == 0 {
 		p.X = 0
 	}
@@ -29,9 +29,9 @@ func MakeVertexKey(p geometry.XYZ) VertexKey {
 	}
 
 	return VertexKey{
-		x: math.Float64bits(p.X),
-		y: math.Float64bits(p.Y),
-		z: math.Float64bits(p.Z),
+		x: math.Float32bits(p.X),
+		y: math.Float32bits(p.Y),
+		z: math.Float32bits(p.Z),
 	}
 }
 
@@ -39,7 +39,7 @@ type EdgeKey struct {
 	a, b VertexKey
 }
 
-func MakeEdgeKey(a, b geometry.XYZ) EdgeKey {
+func MakeEdgeKey(a, b geometry.XYZ32) EdgeKey {
 	lessVertex := func(a, b VertexKey) bool {
 		if a.x != b.x {
 			return a.x < b.x

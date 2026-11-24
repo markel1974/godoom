@@ -1006,9 +1006,9 @@ func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *Thi
 		lmIDFloat := float32(lmID)
 
 		if renderMode == vertices.RenderModeOpaque || renderMode == vertices.RenderModeLiquid {
-			centSumX += (p0X + p1X + p2X) / 3.0
-			centSumY += (p0Z + p1Z + p2Z) / 3.0
-			centSumZ += -(p0Y + p1Y + p2Y) / 3.0
+			centSumX += float64(p0X+p1X+p2X) / 3.0
+			centSumY += float64(p0Z+p1Z+p2Z) / 3.0
+			centSumZ += -float64(p0Y+p1Y+p2Y) / 3.0
 		} else {
 			centSumX += float64(oX)
 			centSumY += float64(oY)
@@ -1016,7 +1016,7 @@ func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *Thi
 		}
 		centCount++
 
-		var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float64
+		var np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z float32
 		if pNextFaces != nil {
 			if nf := pNextFaces.At(fx); nf != nil {
 				np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = nf.GetPointsFlat()
@@ -1027,9 +1027,9 @@ func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *Thi
 			np0X, np0Y, np0Z, np1X, np1Y, np1Z, np2X, np2Y, np2Z = p0X, p0Y, p0Z, p1X, p1Y, p1Z, p2X, p2Y, p2Z
 		}
 
-		id0 := fv.AddVertexFull(float32(p0X), float32(p0Z), float32(-p0Y), float32(u0), float32(-v0), tId, float32(nx0), float32(nz0), float32(-ny0), float32(tx0), float32(tz0), float32(-ty0), float32(s0), float32(lmU[0]), float32(lmV[0]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np0X), float32(np0Z), float32(-np0Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
-		id1 := fv.AddVertexFull(float32(p1X), float32(p1Z), float32(-p1Y), float32(u1), float32(-v1), tId, float32(nx1), float32(nz1), float32(-ny1), float32(tx1), float32(tz1), float32(-ty1), float32(s1), float32(lmU[1]), float32(lmV[1]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np1X), float32(np1Z), float32(-np1Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
-		id2 := fv.AddVertexFull(float32(p2X), float32(p2Z), float32(-p2Y), float32(u2), float32(-v2), tId, float32(nx2), float32(nz2), float32(-ny2), float32(tx2), float32(tz2), float32(-ty2), float32(s2), float32(lmU[2]), float32(lmV[2]), lmIDFloat, oX, oY, oZ, renderModeF, float32(np2X), float32(np2Z), float32(-np2Y), lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+		id0 := fv.AddVertexFull(p0X, p0Z, -p0Y, u0, -v0, tId, nx0, nz0, -ny0, tx0, tz0, -ty0, s0, lmU[0], lmV[0], lmIDFloat, oX, oY, oZ, renderModeF, np0X, np0Z, -np0Y, lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+		id1 := fv.AddVertexFull(p1X, p1Z, -p1Y, u1, -v1, tId, nx1, nz1, -ny1, tx1, tz1, -ty1, s1, lmU[1], lmV[1], lmIDFloat, oX, oY, oZ, renderModeF, np1X, np1Z, -np1Y, lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
+		id2 := fv.AddVertexFull(p2X, p2Z, -p2Y, u2, -v2, tId, nx2, nz2, -ny2, tx2, tz2, -ty2, s2, lmU[2], lmV[2], lmIDFloat, oX, oY, oZ, renderModeF, np2X, np2Z, -np2Y, lerp, yaw, packed, spec, shininess, detailScale, detailFactor, envStr, envTint)
 		fv.AddTriangle(id0, id1, id2)
 	}
 

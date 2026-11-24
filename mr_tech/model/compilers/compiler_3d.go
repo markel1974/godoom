@@ -111,7 +111,7 @@ func (r *Compiler3d) compile3d() []*volumes.Volume {
 					face.EnsureOutwardWinding(cf.ExpectedNormal)
 				} else if face.HasExplicitNormals() {
 					nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := face.GetVertexNormalsFlat()
-					face.EnsureOutwardWinding(geometry.XYZ{X: nx0 + nx1 + nx2, Y: ny0 + ny1 + ny2, Z: nz0 + nz1 + nz2})
+					face.EnsureOutwardWinding(geometry.XYZ{X: float64(nx0 + nx1 + nx2), Y: float64(ny0 + ny1 + ny2), Z: float64(nz0 + nz1 + nz2)})
 				}
 
 				volume.AddFace(face)

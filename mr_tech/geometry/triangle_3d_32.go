@@ -6,20 +6,21 @@ const Triangle3DPoints32 = 3
 
 // Triangle3D32 represents a triangle in 3D space defined by three vertices.
 type Triangle3D32 struct {
-	Points [Triangle3DPoints]XYZ32
+	Points [Triangle3DPoints32]XYZ32
 }
 
 // NewTriangle3D32 returns a new Triangle3D32 initialized with the provided points.
-func NewTriangle3D32(points [Triangle3DPoints]XYZ) *Triangle3D {
-	return &Triangle3D{Points: points}
+func NewTriangle3D32(points [Triangle3DPoints32]XYZ32) *Triangle3D32 {
+	return &Triangle3D32{Points: points}
 }
 
 // NormalizeXYZFallback normalizes a given 3D vector to unit length; returns fallback if the vector's length is near zero.
 func (v *XYZ32) NormalizeXYZFallback(fallback XYZ32) XYZ32 {
-	l := math.Sqrt(float64(v.X*v.X + v.Y*v.Y + v.Z*v.Z))
-	if l > 1e-12 {
-		inv := float32(1.0 / l)
-		return XYZ32{X: v.X * inv, Y: v.Y * inv, Z: v.Z * inv}
+	vx, vy, vz := float64(v.X), float64(v.Y), float64(v.Z)
+	l := math.Sqrt(vx*vx + vy*vy + vz*vz)
+	if l > 1e-6 {
+		inv := 1.0 / l
+		return XYZ32{X: float32(vx * inv), Y: float32(vy * inv), Z: float32(vz * inv)}
 	}
 	return fallback
 }

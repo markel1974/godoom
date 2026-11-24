@@ -257,12 +257,12 @@ func TestVolumesSharedTreeRebuildGeometryAndDeform(t *testing.T) {
 	mat := textures.NewMaterial("solid", []*textures.Texture{tex}, int(config.MaterialKindSolid))
 
 	v0 := volumes.NewVolumeDynamicShared(0, "f0", "thing", sharedTree, solver)
-	f0 := volumes.NewFace([3]geometry.XYZ{{X: 0, Y: 0, Z: 0}, {X: 4, Y: 0, Z: 0}, {X: 0, Y: 4, Z: 0}}, "f0_t", mat)
+	f0 := volumes.NewFace([3]geometry.XYZ{{X: 0, Y: 0, Z: 0}, {X: 4, Y: 0, Z: 0}, {X: 0, Y: 4, Z: 0}}, mat)
 	v0.AddFace(f0)
 	v0.RebuildGeometry()
 
 	v1 := volumes.NewVolumeDynamicShared(1, "f1", "thing", sharedTree, solver)
-	f1 := volumes.NewFace([3]geometry.XYZ{{X: 50, Y: 0, Z: 0}, {X: 54, Y: 0, Z: 0}, {X: 50, Y: 4, Z: 0}}, "f1_t", mat)
+	f1 := volumes.NewFace([3]geometry.XYZ{{X: 50, Y: 0, Z: 0}, {X: 54, Y: 0, Z: 0}, {X: 50, Y: 4, Z: 0}}, mat)
 	v1.AddFace(f1)
 	v1.RebuildGeometry()
 

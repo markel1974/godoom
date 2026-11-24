@@ -252,7 +252,7 @@ func TestVisibleVolumesSortFrontToBack(t *testing.T) {
 			{X: x - 1, Y: y - 1, Z: z - 1},
 			{X: x + 1, Y: y - 1, Z: z - 1},
 			{X: x, Y: y + 1, Z: z + 1},
-		}, "f", nil)
+		}, nil)
 		v.AddFace(f)
 		v.Rebuild()
 		return v

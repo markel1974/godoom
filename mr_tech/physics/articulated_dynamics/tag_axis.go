@@ -108,6 +108,20 @@ func (ta *TagAxis) TransformPointsWithMatrix(dst *geometry.Triangle3D, src *geom
 	ta.data.TransformPointsWithMatrix(dst, src, originX, originY, originZ)
 }
 
+// TransformPointsWithMatrix32 applies the high-precision basis matrix and origin offset to src and stores float32 vertices into dst.
+func (ta *TagAxis) TransformPointsWithMatrix32(dst, src *geometry.Triangle3D32, originX, originY, originZ float64) {
+	m := &ta.data.Points
+	for k := 0; k < geometry.Triangle3DPoints32; k++ {
+		sx, sy, sz := float64(src.Points[k].X), float64(src.Points[k].Y), float64(src.Points[k].Z)
+		rx := sx*m[0].X + sy*m[1].X + sz*m[2].X
+		ry := sx*m[0].Y + sy*m[1].Y + sz*m[2].Y
+		rz := sx*m[0].Z + sy*m[1].Z + sz*m[2].Z
+		dst.Points[k].X = float32(rx + originX)
+		dst.Points[k].Y = float32(ry + originY)
+		dst.Points[k].Z = float32(rz + originZ)
+	}
+}
+
 // MultiplyMatrix performs matrix multiplication between the current axis and a child axis, storing the result in the target axis.
 func (ta *TagAxis) MultiplyMatrix(c *TagAxis, t *TagAxis) {
 	child := c.data

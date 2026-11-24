@@ -639,20 +639,20 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 			dst.CopyPoints(src)
 			dst.CopyRenderAttributes(src)
 		} else {
-			rot.TransformPointsWithMatrix(dst.GetTri(), src.GetTri(), ox, oy, oz)
+			rot.TransformPointsWithMatrix32(dst.GetTri(), src.GetTri(), ox, oy, oz)
 			if isIdent {
 				dst.CopyRenderAttributes(src)
 			} else {
 				nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := src.GetVertexNormalsFlat()
-				rx0, ry0, rz0 := rot.RotatePoint(nx0, ny0, nz0)
-				rx1, ry1, rz1 := rot.RotatePoint(nx1, ny1, nz1)
-				rx2, ry2, rz2 := rot.RotatePoint(nx2, ny2, nz2)
+				rx0, ry0, rz0 := rot.RotatePoint(float64(nx0), float64(ny0), float64(nz0))
+				rx1, ry1, rz1 := rot.RotatePoint(float64(nx1), float64(ny1), float64(nz1))
+				rx2, ry2, rz2 := rot.RotatePoint(float64(nx2), float64(ny2), float64(nz2))
 				dst.SetComputedVertexNormals(rx0, ry0, rz0, rx1, ry1, rz1, rx2, ry2, rz2)
 				tx0, ty0, tz0, s0, tx1, ty1, tz1, s1, tx2, ty2, tz2, s2 := src.GetTangentsFlat()
-				rtx0, rty0, rtz0 := rot.RotatePoint(tx0, ty0, tz0)
-				rtx1, rty1, rtz1 := rot.RotatePoint(tx1, ty1, tz1)
-				rtx2, rty2, rtz2 := rot.RotatePoint(tx2, ty2, tz2)
-				dst.SetTangents(rtx0, rty0, rtz0, rtx1, rty1, rtz1, rtx2, rty2, rtz2, s0, s1, s2)
+				rtx0, rty0, rtz0 := rot.RotatePoint(float64(tx0), float64(ty0), float64(tz0))
+				rtx1, rty1, rtz1 := rot.RotatePoint(float64(tx1), float64(ty1), float64(tz1))
+				rtx2, rty2, rtz2 := rot.RotatePoint(float64(tx2), float64(ty2), float64(tz2))
+				dst.SetTangents(rtx0, rty0, rtz0, rtx1, rty1, rtz1, rtx2, rty2, rtz2, float64(s0), float64(s1), float64(s2))
 			}
 		}
 		if trackBounds {

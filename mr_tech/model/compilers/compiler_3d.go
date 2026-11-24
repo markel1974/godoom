@@ -98,7 +98,10 @@ func (r *Compiler3d) compile3d() []*volumes.Volume {
 						face.LockUV(true)
 					}
 					if hasNormals {
-						face.SetVertexNormals(triNormals[0], triNormals[1], triNormals[2])
+						n0X, n0Y, n0Z := triNormals[0].ToFloat64()
+						n1X, n1Y, n1Z := triNormals[1].ToFloat64()
+						n2X, n2Y, n2Z := triNormals[2].ToFloat64()
+						face.SetVertexNormals(n0X, n0Y, n0Z, n1X, n1Y, n1Z, n2X, n2Y, n2Z)
 					}
 					if hasLmUvs && cf.LightmapID >= 0 {
 						face.SetLightmap(cf.LightmapID, triLmUvs[0][0], triLmUvs[0][1], triLmUvs[1][0], triLmUvs[1][1], triLmUvs[2][0], triLmUvs[2][1])

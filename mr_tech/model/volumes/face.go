@@ -158,16 +158,18 @@ func (fc *Face) GetUVFlat() (float64, float64, float64, float64, float64, float6
 
 // GetVertexNormalsFlat returns the three vertex normal vectors as nine float64 components.
 func (fc *Face) GetVertexNormalsFlat() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	return fc.vertexNormals[0].X, fc.vertexNormals[0].Y, fc.vertexNormals[0].Z,
-		fc.vertexNormals[1].X, fc.vertexNormals[1].Y, fc.vertexNormals[1].Z,
-		fc.vertexNormals[2].X, fc.vertexNormals[2].Y, fc.vertexNormals[2].Z
+	ptr0 := &fc.vertexNormals[0]
+	ptr1 := &fc.vertexNormals[1]
+	ptr2 := &fc.vertexNormals[2]
+	return ptr0.X, ptr0.Y, ptr0.Z, ptr1.X, ptr1.Y, ptr1.Z, ptr2.X, ptr2.Y, ptr2.Z
 }
 
 // GetTangentsFlat returns per-vertex tangent XYZ + bitangent sign W for all three vertices.
 func (fc *Face) GetTangentsFlat() (float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	return fc.tangents[0].X, fc.tangents[0].Y, fc.tangents[0].Z, fc.tangentSigns[0],
-		fc.tangents[1].X, fc.tangents[1].Y, fc.tangents[1].Z, fc.tangentSigns[1],
-		fc.tangents[2].X, fc.tangents[2].Y, fc.tangents[2].Z, fc.tangentSigns[2]
+	ptr0 := &fc.tangents[0]
+	ptr1 := &fc.tangents[1]
+	ptr2 := &fc.tangents[2]
+	return ptr0.X, ptr0.Y, ptr0.Z, fc.tangentSigns[0], ptr1.X, ptr1.Y, ptr1.Z, fc.tangentSigns[1], ptr2.X, ptr2.Y, ptr2.Z, fc.tangentSigns[2]
 }
 
 // GetEdgePoints returns the two vertices for edgeIdx and the triangle vertex opposite that edge.
@@ -198,33 +200,37 @@ func (fc *Face) SetUV(u0, v0, u1, v1, u2, v2 float64) {
 
 // SetU sets the U coordinates for the face vertices.
 func (fc *Face) SetU(u0, u1, u2 float64) {
-	fc.u[0] = u0
-	fc.u[1] = u1
-	fc.u[2] = u2
+	fc.u[0], fc.u[1], fc.u[2] = u0, u1, u2
 }
 
 // SetV sets the face's V components to v0, v1, and v2.
 func (fc *Face) SetV(v0, v1, v2 float64) {
-	fc.v[0] = v0
-	fc.v[1] = v1
-	fc.v[2] = v2
+	fc.v[0], fc.v[1], fc.v[2] = v0, v1, v2
 }
 
 // SetVertexNormals sets explicit per-vertex normals (preserving them across Rebuild/smoothing) and updates tangents.
-func (fc *Face) SetVertexNormals(n0, n1, n2 geometry.XYZ) {
-	fc.explicitNormals[0] = normalizeXYZ(n0, fc.n)
-	fc.explicitNormals[1] = normalizeXYZ(n1, fc.n)
-	fc.explicitNormals[2] = normalizeXYZ(n2, fc.n)
+func (fc *Face) SetVertexNormals(n0X, n0Y, n0Z, n1X, n1Y, n1Z, n2X, n2Y, n2Z float64) {
+	fX, fY, fZ := fc.n.X, fc.n.Y, fc.n.Z
+	ptr0 := &fc.explicitNormals[0]
+	ptr0.X, ptr0.Y, ptr0.Z = NormalizeXYZ(n0X, n0Y, n0Z, fX, fY, fZ)
+	ptr1 := &fc.explicitNormals[1]
+	ptr1.X, ptr1.Y, ptr1.Z = NormalizeXYZ(n1X, n1Y, n1Z, fX, fY, fZ)
+	ptr2 := &fc.explicitNormals[2]
+	ptr2.X, ptr2.Y, ptr2.Z = NormalizeXYZ(n2X, n2Y, n2Z, fX, fY, fZ)
 	fc.vertexNormals = fc.explicitNormals
 	fc.hasExplicitNormals = true
 	fc.computeTangent()
 }
 
 // SetComputedVertexNormals assigns computed/transformed per-vertex normals without marking them as immutable artist normals.
-func (fc *Face) SetComputedVertexNormals(n0, n1, n2 geometry.XYZ) {
-	fc.vertexNormals[0] = normalizeXYZ(n0, fc.n)
-	fc.vertexNormals[1] = normalizeXYZ(n1, fc.n)
-	fc.vertexNormals[2] = normalizeXYZ(n2, fc.n)
+func (fc *Face) SetComputedVertexNormals(n0X, n0Y, n0Z, n1X, n1Y, n1Z, n2X, n2Y, n2Z float64) {
+	fX, fY, fZ := fc.n.X, fc.n.Y, fc.n.Z
+	ptr0 := &fc.vertexNormals[0]
+	ptr0.X, ptr0.Y, ptr0.Z = NormalizeXYZ(n0X, n0Y, n0Z, fX, fY, fZ)
+	ptr1 := &fc.vertexNormals[1]
+	ptr1.X, ptr1.Y, ptr1.Z = NormalizeXYZ(n1X, n1Y, n1Z, fX, fY, fZ)
+	ptr2 := &fc.vertexNormals[2]
+	ptr2.X, ptr2.Y, ptr2.Z = NormalizeXYZ(n2X, n2Y, n2Z, fX, fY, fZ)
 }
 
 // HasExplicitNormals reports whether explicit per-vertex normals were provided.
@@ -233,8 +239,13 @@ func (fc *Face) HasExplicitNormals() bool {
 }
 
 // SetTangents sets per-vertex tangents and handedness signs directly (e.g. for rotated clones).
-func (fc *Face) SetTangents(t0, t1, t2 geometry.XYZ, s0, s1, s2 float64) {
-	fc.tangents[0], fc.tangents[1], fc.tangents[2] = t0, t1, t2
+func (fc *Face) SetTangents(t0X, t0Y, t0Z, t1X, t1Y, t1Z, t2X, t2Y, t2Z float64, s0, s1, s2 float64) {
+	ptr0 := &fc.tangents[0]
+	ptr0.X, ptr0.Y, ptr0.Z = t0X, t0Y, t0Z
+	ptr1 := &fc.tangents[1]
+	ptr1.X, ptr1.Y, ptr1.Z = t1X, t1Y, t1Z
+	ptr2 := &fc.tangents[2]
+	ptr2.X, ptr2.Y, ptr2.Z = t2X, t2Y, t2Z
 	fc.tangentSigns[0], fc.tangentSigns[1], fc.tangentSigns[2] = s0, s1, s2
 }
 
@@ -306,16 +317,6 @@ func (fc *Face) SetParent(parent *Volume) {
 	fc.parent = parent
 }
 
-// GetLabel returns the label associated with the face.
-func (fc *Face) GetLabel() string {
-	return "" //,fc.label
-}
-
-// SetLabel sets the label for the face.
-func (fc *Face) SetLabel(label string) {
-	//fc.label = label
-}
-
 // GetNormal retrieves the normalized vector components (X, Y, Z) representing the face's orientation in 3D space.
 func (fc *Face) GetNormal() (float64, float64, float64) {
 	return fc.n.X, fc.n.Y, fc.n.Z
@@ -370,12 +371,12 @@ func (fc *Face) PointInside2d(px, py float64) bool {
 // Returns (distance, true) if the ray hits within maxDist.
 func (fc *Face) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (float64, bool) {
 	const eps = 1e-7
-	p0 := fc.tri.Points[0]
-	p1 := fc.tri.Points[1]
-	p2 := fc.tri.Points[2]
+	ptr0 := &fc.tri.Points[0]
+	ptr1 := &fc.tri.Points[1]
+	ptr2 := &fc.tri.Points[2]
 
-	e1x, e1y, e1z := p1.X-p0.X, p1.Y-p0.Y, p1.Z-p0.Z
-	e2x, e2y, e2z := p2.X-p0.X, p2.Y-p0.Y, p2.Z-p0.Z
+	e1x, e1y, e1z := ptr1.X-ptr0.X, ptr1.Y-ptr0.Y, ptr1.Z-ptr0.Z
+	e2x, e2y, e2z := ptr2.X-ptr0.X, ptr2.Y-ptr0.Y, ptr2.Z-ptr0.Z
 
 	// h = dir x e2
 	hx := dirY*e2z - dirZ*e2y
@@ -396,9 +397,9 @@ func (fc *Face) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (flo
 
 	f := 1.0 / a
 	// s = origin - p0
-	sx := oX - p0.X
-	sy := oY - p0.Y
-	sz := oZ - p0.Z
+	sx := oX - ptr0.X
+	sy := oY - ptr0.Y
+	sz := oZ - ptr0.Z
 
 	// u = f * (s . h)
 	u := f * (sx*hx + sy*hy + sz*hz)
@@ -451,9 +452,13 @@ func (fc *Face) InitTemplateSource(tri [3]geometry.XYZ, mat *textures.Material, 
 	fc.activeEdges = EdgeAllActive
 	if hasNormals {
 		fc.computeNormal()
-		fc.explicitNormals[0] = normalizeXYZ(n0, fc.n)
-		fc.explicitNormals[1] = normalizeXYZ(n1, fc.n)
-		fc.explicitNormals[2] = normalizeXYZ(n2, fc.n)
+		fX, fY, fZ := fc.n.X, fc.n.Y, fc.n.Z
+		ptr0 := &fc.explicitNormals[0]
+		ptr1 := &fc.explicitNormals[1]
+		ptr2 := &fc.explicitNormals[2]
+		ptr0.X, ptr0.Y, ptr0.Z = NormalizeXYZ(n0.X, n0.Y, n0.Z, fX, fY, fZ)
+		ptr1.X, ptr1.Y, ptr1.Z = NormalizeXYZ(n1.X, n1.Y, n1.Z, fX, fY, fZ)
+		ptr2.X, ptr2.Y, ptr2.Z = NormalizeXYZ(n2.X, n2.Y, n2.Z, fX, fY, fZ)
 		fc.vertexNormals = fc.explicitNormals
 		fc.hasExplicitNormals = true
 	} else {
@@ -576,14 +581,14 @@ func (fc *Face) IsDeformable() bool {
 
 // Barycentric computes the 3D barycentric coordinates of point p relative to the face triangle.
 // Returns (w0, w1, w2, inside) where w0+w1+w2=1 and inside is true if p is on or near the triangle surface.
-func (fc *Face) Barycentric(p geometry.XYZ) (float64, float64, float64, bool) {
-	a := fc.tri.Points[0]
-	b := fc.tri.Points[1]
-	c := fc.tri.Points[2]
+func (fc *Face) Barycentric(pX, pY, pZ float64) (float64, float64, float64, bool) {
+	ptr0 := &fc.tri.Points[0]
+	ptr1 := &fc.tri.Points[1]
+	ptr2 := &fc.tri.Points[2]
 
-	v0x, v0y, v0z := b.X-a.X, b.Y-a.Y, b.Z-a.Z
-	v1x, v1y, v1z := c.X-a.X, c.Y-a.Y, c.Z-a.Z
-	v2x, v2y, v2z := p.X-a.X, p.Y-a.Y, p.Z-a.Z
+	v0x, v0y, v0z := ptr1.X-ptr0.X, ptr1.Y-ptr0.Y, ptr1.Z-ptr0.Z
+	v1x, v1y, v1z := ptr2.X-ptr0.X, ptr2.Y-ptr0.Y, ptr2.Z-ptr0.Z
+	v2x, v2y, v2z := pX-ptr0.X, pY-ptr0.Y, pZ-ptr0.Z
 
 	d00 := v0x*v0x + v0y*v0y + v0z*v0z
 	d01 := v0x*v1x + v0y*v1y + v0z*v1z
@@ -662,7 +667,7 @@ func (fc *Face) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 	// Fallback for large triangles whose vertices are outside
 	// the influence radius but whose surface contains the impact.
 	if !deformed {
-		w0, w1, w2, inside := fc.Barycentric(impact)
+		w0, w1, w2, inside := fc.Barycentric(impact.X, impact.Y, impact.Z)
 		if inside {
 			weights := [3]float64{w0 * w0, w1 * w1, w2 * w2}
 			for i, weight := range weights {
@@ -893,13 +898,14 @@ func (fc *Face) computeTangent() {
 	}
 
 	if !hasUVBasis {
-		faceT = fallbackTangent(fc.n)
+		faceT.X, faceT.Y, faceT.Z = FallbackTangent(fc.n.X, fc.n.Y, fc.n.Z)
+		faceB.X, faceB.Y, faceB.Z = fc.n.Y*faceT.Z-fc.n.Z*faceT.Y, fc.n.Z*faceT.X-fc.n.X*faceT.Z, fc.n.X*faceT.Y-fc.n.Y*faceT.X
 		// faceB = n x faceT
-		faceB = geometry.XYZ{
-			X: fc.n.Y*faceT.Z - fc.n.Z*faceT.Y,
-			Y: fc.n.Z*faceT.X - fc.n.X*faceT.Z,
-			Z: fc.n.X*faceT.Y - fc.n.Y*faceT.X,
-		}
+		//faceB = geometry.XYZ{
+		//	X: fc.n.Y*faceT.Z - fc.n.Z*faceT.Y,
+		//	Y: fc.n.Z*faceT.X - fc.n.X*faceT.Z,
+		//	Z: fc.n.X*faceT.Y - fc.n.Y*faceT.X,
+		//}
 	}
 
 	for k := 0; k < 3; k++ {
@@ -917,9 +923,10 @@ func (fc *Face) computeTangent() {
 		var tOrtho geometry.XYZ
 		if ol > 1e-8 {
 			invO := 1.0 / ol
-			tOrtho = geometry.XYZ{X: ox * invO, Y: oy * invO, Z: oz * invO}
+			tOrtho.X, tOrtho.Y, tOrtho.Z = ox*invO, oy*invO, oz*invO
+			//tOrtho = geometry.XYZ{X: ox * invO, Y: oy * invO, Z: oz * invO}
 		} else {
-			tOrtho = fallbackTangent(n)
+			tOrtho.X, tOrtho.Y, tOrtho.Z = FallbackTangent(n.X, n.Y, n.Z)
 		}
 		// Bitangent handedness sign = sign(dot(cross(N, T'), B))
 		cx := n.Y*tOrtho.Z - n.Z*tOrtho.Y

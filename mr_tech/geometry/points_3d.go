@@ -9,8 +9,14 @@ type XYZ struct {
 	Z float64 `json:"z"`
 }
 
+// To32 converts the XYZ coordinates to single-precision XYZ32 values.
 func (v *XYZ) To32() XYZ32 {
 	return XYZ32{X: float32(v.X), Y: float32(v.Y), Z: float32(v.Z)}
+}
+
+// ToFloat64 returns the X, Y, and Z components as float64 values.
+func (v *XYZ) ToFloat64() (float64, float64, float64) {
+	return v.X, v.Y, v.Z
 }
 
 // Scale divides the X, Y and Z components of the XYZ struct by the given scale factor.

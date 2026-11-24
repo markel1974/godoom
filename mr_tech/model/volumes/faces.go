@@ -256,7 +256,9 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 					sz += ofd.az
 				}
 			}
-			fc.vertexNormals[k] = normalizeXYZ(geometry.XYZ{X: sx, Y: sy, Z: sz}, fc.n)
+			ptr := &fc.vertexNormals[k]
+			ptr.X, ptr.Y, ptr.Z = NormalizeXYZ(sx, sy, sz, fc.n.X, fc.n.Y, fc.n.Z)
+			//fc.vertexNormals[k] = NormalizeXYZ(geometry.XYZ{X: sx, Y: sy, Z: sz}, fc.n)
 		}
 		fc.computeTangent()
 	}
@@ -568,7 +570,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 			if fc == nil || !fc.IsDeformable() {
 				continue
 			}
-			w0, w1, w2, inside := fc.Barycentric(impact)
+			w0, w1, w2, inside := fc.Barycentric(impact.X, impact.Y, impact.Z)
 			if !inside {
 				continue
 			}

@@ -155,7 +155,10 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
 			if tri.Vertices[0].HasNormal || tri.Vertices[1].HasNormal || tri.Vertices[2].HasNormal {
-				face.SetVertexNormals(tri.Vertices[0].Normal, tri.Vertices[1].Normal, tri.Vertices[2].Normal)
+				n0X, n0Y, n0Z := tri.Vertices[0].Normal.ToFloat64()
+				n1X, n1Y, n1Z := tri.Vertices[1].Normal.ToFloat64()
+				n2X, n2Y, n2Z := tri.Vertices[2].Normal.ToFloat64()
+				face.SetVertexNormals(n0X, n0Y, n0Z, n1X, n1Y, n1Z, n2X, n2Y, n2Z)
 			}
 			volume.AddFace(face)
 		}
@@ -644,21 +647,12 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 				rx0, ry0, rz0 := rot.RotatePoint(nx0, ny0, nz0)
 				rx1, ry1, rz1 := rot.RotatePoint(nx1, ny1, nz1)
 				rx2, ry2, rz2 := rot.RotatePoint(nx2, ny2, nz2)
-				dst.SetComputedVertexNormals(
-					geometry.XYZ{X: rx0, Y: ry0, Z: rz0},
-					geometry.XYZ{X: rx1, Y: ry1, Z: rz1},
-					geometry.XYZ{X: rx2, Y: ry2, Z: rz2},
-				)
+				dst.SetComputedVertexNormals(rx0, ry0, rz0, rx1, ry1, rz1, rx2, ry2, rz2)
 				tx0, ty0, tz0, s0, tx1, ty1, tz1, s1, tx2, ty2, tz2, s2 := src.GetTangentsFlat()
 				rtx0, rty0, rtz0 := rot.RotatePoint(tx0, ty0, tz0)
 				rtx1, rty1, rtz1 := rot.RotatePoint(tx1, ty1, tz1)
 				rtx2, rty2, rtz2 := rot.RotatePoint(tx2, ty2, tz2)
-				dst.SetTangents(
-					geometry.XYZ{X: rtx0, Y: rty0, Z: rtz0},
-					geometry.XYZ{X: rtx1, Y: rty1, Z: rtz1},
-					geometry.XYZ{X: rtx2, Y: rty2, Z: rtz2},
-					s0, s1, s2,
-				)
+				dst.SetTangents(rtx0, rty0, rtz0, rtx1, rty1, rtz1, rtx2, rty2, rtz2, s0, s1, s2)
 			}
 		}
 		if trackBounds {

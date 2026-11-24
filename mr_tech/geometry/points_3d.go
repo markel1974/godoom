@@ -9,6 +9,10 @@ type XYZ struct {
 	Z float64 `json:"z"`
 }
 
+func (v *XYZ) To32() XYZ32 {
+	return XYZ32{X: float32(v.X), Y: float32(v.Y), Z: float32(v.Z)}
+}
+
 // Scale divides the X, Y and Z components of the XYZ struct by the given scale factor.
 func (v *XYZ) Scale(scale XYZ) {
 	v.X *= scale.X

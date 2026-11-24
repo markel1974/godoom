@@ -60,8 +60,7 @@ func NewVolumeDynamic(modelId int, id string, tag string, mass, restitution, fri
 }
 
 // NewVolumeDynamicShared creates a dynamic volume instance without attaching a collision solver. It disables tessellation.
-func NewVolumeDynamicShared(modelId int, id string, tag string, solver *collisions.Solver) *Volume {
-	tree := aabb.NewTree(uint(treeInitSize), 0.0)
+func NewVolumeDynamicShared(modelId int, id string, tag string, tree *aabb.Tree, solver *collisions.Solver) *Volume {
 	v := newVolume(true, modelId, id, tag, tree, solver)
 	v.SetAllowTessellate(false)
 	return v

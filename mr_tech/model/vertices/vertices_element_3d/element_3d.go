@@ -112,7 +112,9 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		volume := volumes.NewVolumeDynamicShared(frameIdx, baseId, "thing", sharedSolver)
+		//TODO TROPPO ONEROSO BISOGNA CREARE UN UNICO ALBERO PER TUTTE LE ANIMAZIONI
+		tree := aabb.NewTree(16, 0.0)
+		volume := volumes.NewVolumeDynamicShared(frameIdx, baseId, "thing", tree, sharedSolver)
 
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)

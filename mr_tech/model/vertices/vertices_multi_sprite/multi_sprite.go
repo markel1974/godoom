@@ -79,7 +79,9 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", v.cfg.Id, viewIdx)
 		thingId := fmt.Sprintf("thing_%s_%d", v.cfg.Id, viewIdx)
-		volume := volumes.NewVolumeDynamicShared(viewIdx, baseId, thingId, sharedSolver)
+		//TODO TROPPO ONEROSO BISOGNA CREARE UN UNICO ALBERO PER TUTTE LE ANIMAZIONI
+		tree := aabb.NewTree(16, 0.0)
+		volume := volumes.NewVolumeDynamicShared(viewIdx, baseId, thingId, tree, sharedSolver)
 		mat := v.materials.GetMaterial(view)
 		faces, err := v.createFaces(mat)
 		if err != nil {

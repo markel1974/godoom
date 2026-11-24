@@ -56,13 +56,14 @@ type Faces struct {
 
 // NewFaces creates a Faces collection with the given initial capacity.
 // If fill is true, the collection length is initialized to initSize.
-func NewFaces(initSize int, fill bool) *Faces {
+func NewFaces(tree *aabb.Tree, fill bool) *Faces {
 	count := 0
+	initSize := int(tree.Capacity())
 	if fill {
 		count = initSize
 	}
 	return &Faces{
-		tree:            aabb.NewTree(64, 0.0),
+		tree:            tree,
 		container:       make([]*Face, initSize),
 		count:           count,
 		markedEdges:     nil,

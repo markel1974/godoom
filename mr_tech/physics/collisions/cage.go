@@ -90,6 +90,8 @@ const floorGroundTolerance = 0.25
 // floorNormalThreshold matches the rigid-body floor normal threshold for valid ground support.
 const floorNormalThreshold = 0.7
 
+const LocalSlotMax = 2
+
 // Cage represents a data structure for managing collision information for a physical entity.[cite: 6]
 type Cage struct {
 	seen                []uint64
@@ -99,7 +101,7 @@ type Cage struct {
 	entity              *rigid_body.Entity
 	buckets             [BucketSize]*Bucket
 	ellipsoid           *rigid_body.Entity
-	ellipsoidLocal      [4]*rigid_body.Entity
+	ellipsoidLocal      [LocalSlotMax]*rigid_body.Entity
 	cX, cY, cZ          float64
 	dX, dY, dZ          float64
 	tX, tY, tZ          float64

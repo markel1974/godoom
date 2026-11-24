@@ -65,12 +65,6 @@ type Element3D struct {
 // NewElement3D creates and initializes a 3D vertex entry from thing model frames, actions, tags, and materials.
 // NewElement3D panics if required frame, action, or group size configuration is invalid.
 func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D {
-	v := &Element3D{
-		solver:             nil,
-		restitutionCombine: cfg.RestitutionCombine,
-		frictionCombine:    cfg.FrictionCombine,
-		materials:          materials,
-	}
 
 	model := cfg.Element3D
 	if len(model.Frames) <= 0 {
@@ -95,8 +89,16 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		}
 	}
 
+	v := &Element3D{
+		tagMap:             make(map[string]int),
+		vols:               volumes.NewVolumes(len(model.Frames)),
+		solver:             nil,
+		restitutionCombine: cfg.RestitutionCombine,
+		frictionCombine:    cfg.FrictionCombine,
+		materials:          materials,
+	}
+
 	tagCounter := 0
-	v.tagMap = make(map[string]int)
 	for _, cfgFrame := range model.Frames {
 		for tagName := range cfgFrame.Tags {
 			if _, exists := v.tagMap[tagName]; !exists {
@@ -106,18 +108,12 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		}
 	}
 
-	v.vols = volumes.NewVolumes(len(model.Frames))
+	sharedSolver := collisions.NewSolver(true, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 
-	var sharedSolver *collisions.Solver
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		var volume *volumes.Volume
-		if frameIdx == 0 {
-			volume = volumes.NewVolumeDynamic(frameIdx, baseId, "thing", cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
-			sharedSolver = volume.GetSolver()
-		} else {
-			volume = volumes.NewVolumeWithSolver(frameIdx, baseId, "thing", nil)
-		}
+		volume := volumes.NewVolumeDynamicShared(frameIdx, baseId, "thing", sharedSolver)
+
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
@@ -138,20 +134,19 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.Rebuild()
-		if frameIdx > 0 {
-			volume.SetSolver(sharedSolver)
-		}
 		v.vols.Set(frameIdx, volume)
 	}
 
 	maxFaces := v.vols.GetFaceCount()
-	facesA := volumes.NewFaces(maxFaces, true)
-	facesB := volumes.NewFaces(maxFaces, true)
+	treeA := aabb.NewTree(uint(maxFaces), 0.0)
+	treeB := aabb.NewTree(uint(maxFaces), 0.0)
+	facesA := volumes.NewFaces(treeA, true)
+	facesB := volumes.NewFaces(treeB, true)
 	facesA.SetAllowTessellate(false)
 	facesB.SetAllowTessellate(false)
 	refVol := v.vols.Get(0)
 
-	for j := 0; j < maxFaces; j++ {
+	for j := range maxFaces {
 		var mat *textures.Material
 		var tu, tv [3]float64
 		if j < refVol.GetFaceCount() {

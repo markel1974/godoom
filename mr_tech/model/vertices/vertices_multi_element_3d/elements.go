@@ -33,7 +33,7 @@ func NewElements(cfg *config.Thing, materials *materials.Materials) *Elements {
 	v := &Elements{
 		ownerVol:   ownerVol,
 		ent:        ownerVol.GetSolver().GetEntity(),
-		emptyFaces: volumes.NewFaces(0, false),
+		emptyFaces: volumes.NewFaces(aabb.NewTree(0, 0.0), false),
 	}
 
 	numParts := len(cfg.MultiElement3D.Parts)

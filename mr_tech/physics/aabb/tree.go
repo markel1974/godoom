@@ -39,6 +39,11 @@ func NewTree(initialSize uint, margin float64) *Tree {
 	return t
 }
 
+// Capacity returns the maximum number of nodes the tree can hold.
+func (a *Tree) Capacity() uint {
+	return a.nodeCapacity
+}
+
 // GetRoot returns the root AABB of the tree along with a boolean indicating its existence.
 func (a *Tree) GetRoot() (*AABB, bool) {
 	if a.rootNodeIndex == NullNode {

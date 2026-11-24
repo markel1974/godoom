@@ -69,6 +69,7 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 	if v.debug {
 		v.renderMode = vertices.RenderModeModel3D
 	}
+	sharedSolver := collisions.NewSolver(true, v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 	for viewIdx, view := range v.cfg.MultiSprite.Views {
 		if view == nil {
 			panic(fmt.Sprintf("view is nil for viewIdx %d", viewIdx))
@@ -78,12 +79,7 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", v.cfg.Id, viewIdx)
 		thingId := fmt.Sprintf("thing_%s_%d", v.cfg.Id, viewIdx)
-		var volume *volumes.Volume
-		if viewIdx == 0 {
-			volume = volumes.NewVolumeDynamic(viewIdx, baseId, thingId, v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
-		} else {
-			volume = volumes.NewVolumeWithSolver(viewIdx, baseId, thingId, nil)
-		}
+		volume := volumes.NewVolumeDynamicShared(viewIdx, baseId, thingId, sharedSolver)
 		mat := v.materials.GetMaterial(view)
 		faces, err := v.createFaces(mat)
 		if err != nil {
@@ -93,9 +89,6 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 			volume.AddFace(face)
 		}
 		volume.Rebuild()
-		if viewIdx > 0 {
-			volume.SetSolver(v.volumes[0].GetSolver())
-		}
 		v.volumes[viewIdx] = volume
 	}
 

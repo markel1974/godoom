@@ -9,6 +9,10 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
+const (
+	treeInitSize = 16
+)
+
 // Volume represents a spatial model element that groups geometry, lighting, physics, and sector data.
 type Volume struct {
 	dynamic    bool
@@ -26,40 +30,39 @@ type Volume struct {
 	dirty      bool
 }
 
-// newVolume creates a Volume with identifiers, tags, physics settings, empty face storage, and a face tree.
-func newVolume(dynamic bool, modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
-	return newVolumeBase(dynamic, modelId, id, tag, collisions.NewSolver(dynamic, mass, restitution, friction, restCombine, frictionCombine, gForce))
-}
-
-func newVolumeBase(dynamic bool, modelId int, id string, tag string, solver *collisions.Solver) *Volume {
+// newVolume creates and returns a pointer to a new Volume instance with the provided parameters initialized.
+// The Volume instance is configured with properties such as dynamic state, model ID, identifier, tag, and associated AABB tree.
+// It initializes collision handling via the provided solver and sets default values for various internal properties.
+func newVolume(dynamic bool, modelId int, id string, tag string, tree *aabb.Tree, solver *collisions.Solver) *Volume {
 	v := &Volume{
 		dynamic:    dynamic,
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
-		faces:      NewFaces(128, false),
+		faces:      NewFaces(tree, false),
 		solver:     solver,
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
 		marker:     -1,
 		deformable: true,
 	}
-	if solver != nil {
-		v.aabb = solver.GetEntity().GetAABB()
-	}
+	v.aabb = solver.GetEntity().GetAABB()
 	return v
 }
 
 // NewVolumeDynamic creates a dynamic Volume with the given identifiers, tag, and physics settings.
 func NewVolumeDynamic(modelId int, id string, tag string, mass, restitution, friction float64, restCombine, frictionCombine int, gForce float64) *Volume {
-	v := newVolume(true, modelId, id, tag, mass, restitution, friction, restCombine, frictionCombine, gForce)
+	tree := aabb.NewTree(uint(treeInitSize), 0.0)
+	solver := collisions.NewSolver(true, mass, restitution, friction, restCombine, frictionCombine, gForce)
+	v := newVolume(true, modelId, id, tag, tree, solver)
 	v.SetAllowTessellate(false)
 	return v
 }
 
-// NewVolumeWithSolver creates a dynamic-tagged Volume sharing an existing collision solver (or nil until bound) without allocating a duplicate Cage.
-func NewVolumeWithSolver(modelId int, id string, tag string, sharedSolver *collisions.Solver) *Volume {
-	v := newVolumeBase(true, modelId, id, tag, sharedSolver)
+// NewVolumeDynamicShared creates a dynamic volume instance without attaching a collision solver. It disables tessellation.
+func NewVolumeDynamicShared(modelId int, id string, tag string, solver *collisions.Solver) *Volume {
+	tree := aabb.NewTree(uint(treeInitSize), 0.0)
+	v := newVolume(true, modelId, id, tag, tree, solver)
 	v.SetAllowTessellate(false)
 	return v
 }
@@ -70,7 +73,10 @@ func NewVolumeConcrete(modelId int, id string, tag string) *Volume {
 	const concreteRestitution = 0.0
 	const concreteFriction = 0.2
 	const concreteGForce = 9.8
-	return newVolume(false, modelId, id, tag, concreteMass, concreteRestitution, concreteFriction, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), concreteGForce)
+	tree := aabb.NewTree(uint(treeInitSize), 0.0)
+	solver := collisions.NewSolver(false, concreteMass, concreteRestitution, concreteFriction, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), concreteGForce)
+	v := newVolume(false, modelId, id, tag, tree, solver)
+	return v
 }
 
 // Setup initializes the volume's collision solver and returns any setup error.
@@ -145,12 +151,11 @@ func (v *Volume) GetSolver() *collisions.Solver {
 
 // SetSolver attaches solver to the volume and syncs its AABB pointer.
 func (v *Volume) SetSolver(solver *collisions.Solver) {
-	v.solver = solver
-	if solver != nil {
-		v.aabb = solver.GetEntity().GetAABB()
-	} else {
-		v.aabb = nil
+	if solver == nil {
+		panic("solver can't be nil")
 	}
+	v.solver = solver
+	v.aabb = solver.GetEntity().GetAABB()
 }
 
 // GetAABB returns the axis-aligned bounding box of the volume's collision entity.
@@ -261,17 +266,12 @@ func (v *Volume) QueryOverlaps(object aabb.IObject, callback func(object aabb.IO
 
 // SetAllowTessellate enables or disables dynamic tessellation on the volume's faces.
 func (v *Volume) SetAllowTessellate(allow bool) {
-	if v.faces != nil {
-		v.faces.SetAllowTessellate(allow)
-	}
+	v.faces.SetAllowTessellate(allow)
 }
 
 // IsAllowTessellate reports whether dynamic tessellation is enabled on the volume's faces.
 func (v *Volume) IsAllowTessellate() bool {
-	if v.faces != nil {
-		return v.faces.IsAllowTessellate()
-	}
-	return false
+	return v.faces.IsAllowTessellate()
 }
 
 // QueryPoint calls callback for each face whose bounding box contains the given 3D point.

@@ -155,20 +155,30 @@ func (m *Model3DEntry) Center(referenceFrames []string) {
 	_, _ = m.CenterWithBounds(referenceFrames)
 }
 
-// CenterWithBounds centers the 3D model around the origin and returns the original world center offset and bounding box size.
-func (m *Model3DEntry) CenterWithBounds(referenceFrames []string) (geometry.XYZ, geometry.XYZ) {
-	if m == nil || len(m.Frames) == 0 {
-		return geometry.XYZ{}, geometry.XYZ{}
+// resolveReferenceFrame returns the start frame index of the first action matching referenceFrames, or 0.
+func (m *Model3DEntry) resolveReferenceFrame(referenceFrames []string) int {
+	if len(m.ActionDefinitions) > 0 && len(m.ActionIntervals) == len(m.ActionDefinitions) {
+		for i, name := range m.ActionDefinitions {
+			base, _ := m.GetBaseName(strings.ToLower(strings.TrimSpace(name)))
+			for _, t := range referenceFrames {
+				if strings.Contains(base, t) {
+					if idx := m.ActionIntervals[i][0]; idx >= 0 && idx < len(m.Frames) {
+						return idx
+					}
+				}
+			}
+		}
 	}
+	return 0
+}
 
-	minX, minY, minZ := math.Inf(1), math.Inf(1), math.Inf(1)
-	maxX, maxY, maxZ := math.Inf(-1), math.Inf(-1), math.Inf(-1)
-	hasVertices := false
-
-	for _, tri := range m.Frames[0].Triangles {
+func (m *Model3DEntry) frameBounds(frameIdx int) (minX, minY, minZ, maxX, maxY, maxZ float64, ok bool) {
+	minX, minY, minZ = math.Inf(1), math.Inf(1), math.Inf(1)
+	maxX, maxY, maxZ = math.Inf(-1), math.Inf(-1), math.Inf(-1)
+	for _, tri := range m.Frames[frameIdx].Triangles {
 		for _, vertex := range tri.Vertices {
 			p := vertex.Pos
-			hasVertices = true
+			ok = true
 			if p.X < minX {
 				minX = p.X
 			}
@@ -189,51 +199,27 @@ func (m *Model3DEntry) CenterWithBounds(referenceFrames []string) (geometry.XYZ,
 			}
 		}
 	}
+	return minX, minY, minZ, maxX, maxY, maxZ, ok
+}
 
+// CenterWithBounds centers the 3D model around the origin and returns the original world center offset and bounding box size.
+func (m *Model3DEntry) CenterWithBounds(referenceFrames []string) (geometry.XYZ, geometry.XYZ) {
+	if m == nil || len(m.Frames) == 0 {
+		return geometry.XYZ{}, geometry.XYZ{}
+	}
+
+	referenceFrame := m.resolveReferenceFrame(referenceFrames)
+	minX, minY, minZ, maxX, maxY, maxZ, hasVertices := m.frameBounds(referenceFrame)
+	if !hasVertices && referenceFrame != 0 {
+		minX, minY, minZ, maxX, maxY, maxZ, hasVertices = m.frameBounds(0)
+	}
 	if !hasVertices {
 		return geometry.XYZ{}, geometry.XYZ{}
 	}
 
-	//idle := []string{"stand", "idle", "legs_idle", "hover"}
-
-	referenceFrame := 0
-	if len(m.ActionDefinitions) > 0 && len(m.ActionIntervals) == len(m.ActionDefinitions) {
-		for i, name := range m.ActionDefinitions {
-			base, _ := m.GetBaseName(strings.ToLower(strings.TrimSpace(name)))
-			found := false
-			for _, t := range referenceFrames {
-				if strings.Contains(base, t) {
-					if idx := m.ActionIntervals[i][0]; idx >= 0 && idx < len(m.Frames) {
-						referenceFrame = idx
-						found = true
-						break
-					}
-				}
-			}
-			if found {
-				break
-			}
-		}
-	}
-
-	minZIdle := minZ
-	if referenceFrame != 0 {
-		fMinZ := math.Inf(1)
-		for _, tri := range m.Frames[referenceFrame].Triangles {
-			for _, vertex := range tri.Vertices {
-				if vertex.Pos.Z < fMinZ {
-					fMinZ = vertex.Pos.Z
-				}
-			}
-		}
-		if !math.IsInf(fMinZ, 1) {
-			minZIdle = fMinZ
-		}
-	}
-
-	centerX := (minX + maxX) / 2
-	centerY := (minY + maxY) / 2
-	centerZ := minZIdle + (maxZ-minZ)/2
+	centerX := (minX + maxX) * 0.5
+	centerY := (minY + maxY) * 0.5
+	centerZ := (minZ + maxZ) * 0.5
 
 	for frameIdx := range m.Frames {
 		for triIdx := range m.Frames[frameIdx].Triangles {

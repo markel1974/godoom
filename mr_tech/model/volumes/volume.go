@@ -88,8 +88,25 @@ func (v *Volume) Setup(object aabb.IObject) error {
 
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.
 func (v *Volume) Rebuild() bool {
-	v.faces.Rebuild()
+	v.RebuildGeometry()
+	v.RebuildTree()
+	return true
+}
 
+// RebuildGeometry updates face geometry, cached bounds, and physics properties without modifying the spatial tree.
+func (v *Volume) RebuildGeometry() bool {
+	v.faces.RebuildGeometry()
+	v.syncSolverFromFaces()
+	v.dirty = true
+	return true
+}
+
+// RebuildTree clears and repopulates the volume's spatial tree from its current faces.
+func (v *Volume) RebuildTree() {
+	v.faces.RebuildTree()
+}
+
+func (v *Volume) syncSolverFromFaces() {
 	if v.solver != nil {
 		minX, minY, minZ := v.faces.GetMin()
 		w, h, d := v.faces.GetSize()
@@ -97,10 +114,6 @@ func (v *Volume) Rebuild() bool {
 		ixx, ixy, ixz, iyy, iyz, izz := v.faces.GetInertia()
 		v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
 	}
-
-	v.dirty = true
-
-	return true
 }
 
 // IsDeformable reports whether the volume can undergo deformation.
@@ -284,16 +297,23 @@ func (v *Volume) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, rad
 	return v.Deform(impact, impulse, radius)
 }
 
-// Deform applies a local plastic deformation to all volume faces within radius of impact.
-func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+func (v *Volume) deformGeometry(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if radius <= 0 {
 		return false
 	}
 	if !v.faces.Deform(impact, impulse, radius) {
 		return false
 	}
+	v.RebuildGeometry()
+	return true
+}
+
+// Deform applies a local plastic deformation to all volume faces within radius of impact.
+func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	if !v.deformGeometry(impact, impulse, radius) {
+		return false
+	}
 	// Una sola ricostruzione al termine dell'intera deformazione.
-	v.Rebuild()
-	v.SetDirty(true)
+	v.RebuildTree()
 	return true
 }

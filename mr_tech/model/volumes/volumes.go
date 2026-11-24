@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
 // Volumes manages a collection of spatial volumes and cached frame center data.
@@ -104,6 +105,26 @@ func (v *Volumes) HasCenters() bool {
 	return v.centersLen > 0
 }
 
+// sharesTree reports whether at least two non-nil volumes in v point to the same AABB tree.
+func (v *Volumes) sharesTree() bool {
+	var first *aabb.Tree
+	for _, vol := range v.vols {
+		if vol == nil {
+			continue
+		}
+		t := vol.GetFacesTree()
+		if t == nil {
+			continue
+		}
+		if first == nil {
+			first = t
+		} else if t == first {
+			return true
+		}
+	}
+	return false
+}
+
 // BuildCenters recenter each volume around its bounding-box center and records the original centers.
 func (v *Volumes) BuildCenters() {
 	vLen := len(v.vols)
@@ -111,6 +132,7 @@ func (v *Volumes) BuildCenters() {
 		v.centers = make([]geometry.XYZ, vLen*2)
 	}
 	v.centersLen = vLen
+	shared := v.sharesTree()
 	for fIdx, vol := range v.vols {
 		if vol == nil {
 			continue
@@ -134,16 +156,31 @@ func (v *Volumes) BuildCenters() {
 				f.Set2(p2X-mcx, p2Y-mcy, p2Z-mcz)
 				f.Rebuild()
 			}
-			vol.Rebuild()
+			if shared {
+				// Callers with a shared AABB tree synchronize the tree for the active frame afterwards.
+				vol.RebuildGeometry()
+			} else {
+				vol.Rebuild()
+			}
 		}
 	}
 }
 
 // Deform applies an impulse deformation around impact to all volumes and reports whether any volume changed.
 func (v *Volumes) Deform(impact, impulse geometry.XYZ, radius float64) bool {
+	shared := v.sharesTree()
 	deformed := false
 	for _, vol := range v.vols {
-		if vol != nil && vol.Deform(impact, impulse, radius) {
+		if vol == nil {
+			continue
+		}
+		var changed bool
+		if shared {
+			changed = vol.deformGeometry(impact, impulse, radius)
+		} else {
+			changed = vol.Deform(impact, impulse, radius)
+		}
+		if changed {
 			deformed = true
 		}
 	}

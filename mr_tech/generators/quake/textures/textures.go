@@ -110,13 +110,13 @@ func (w *Textures) loadFromPixelsPalette(name string, width, height int, indices
 		transparentColor = 255
 	}
 
-	for y := 0; y < height; y++ {
+	for y := range height {
 		// L'inversione Y avviene solo se il formato lo richiede esplicitamente
 		targetY := y
 		if invertY {
 			targetY = height - 1 - y
 		}
-		for x := 0; x < width; x++ {
+		for x := range width {
 			colorIdx := indices[y*width+x]
 			if hasAlpha && colorIdx == transparentColor {
 				tex.Set(x, targetY, 0x00000000)

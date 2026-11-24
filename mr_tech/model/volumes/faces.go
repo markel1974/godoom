@@ -54,11 +54,23 @@ type Faces struct {
 	geomHash        uint64
 }
 
-// NewFaces creates a Faces collection with the given initial capacity.
+// NewFaces creates a Faces collection sized to the given tree capacity.
 // If fill is true, the collection length is initialized to initSize.
 func NewFaces(tree *aabb.Tree, fill bool) *Faces {
+	initSize := 0
+	if tree != nil {
+		initSize = int(tree.Capacity())
+	}
+	return NewFacesSized(tree, initSize, fill)
+}
+
+// NewFacesSized creates a Faces collection with an explicit initial slice capacity and optional tree.
+// If fill is true, the collection length is initialized to initSize.
+func NewFacesSized(tree *aabb.Tree, initSize int, fill bool) *Faces {
+	if initSize < 0 {
+		initSize = 0
+	}
 	count := 0
-	initSize := int(tree.Capacity())
 	if fill {
 		count = initSize
 	}
@@ -111,10 +123,16 @@ func (f *Faces) GetGeomHash() uint64 {
 	return f.geomHash
 }
 
-// Rebuild recomputes cached bounds, normals, active edge masks, and mass properties from the current faces.
+// Rebuild recomputes cached bounds, normals, active edge masks, mass properties, and the spatial tree.
 func (f *Faces) Rebuild() {
+	f.RebuildGeometry()
+	f.RebuildTree()
+}
+
+// RebuildGeometry recomputes cached bounds, normals, tangents, geometry hash, active edges, and mass properties
+// without modifying the spatial AABB tree.
+func (f *Faces) RebuildGeometry() {
 	f.version++
-	f.tree.Clear()
 	if f.count == 0 {
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = 0, 0, 0, 0, 0, 0
 		f.w, f.h, f.d = 0, 0, 0
@@ -128,7 +146,6 @@ func (f *Faces) Rebuild() {
 	for x := 0; x < f.count; x++ {
 		face := f.container[x]
 		face.Rebuild()
-		f.tree.InsertObject(face)
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = face.GetMinMax(f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ)
 	}
 	f.computeActiveEdges()
@@ -138,6 +155,20 @@ func (f *Faces) Rebuild() {
 	f.w = f.maxX - f.minX
 	f.h = f.maxY - f.minY
 	f.d = f.maxZ - f.minZ
+}
+
+// RebuildTree clears and repopulates the associated spatial AABB tree from the current faces
+// without recomputing geometry properties or bumping the version counter.
+func (f *Faces) RebuildTree() {
+	if f.tree == nil {
+		return
+	}
+	f.tree.Clear()
+	for x := 0; x < f.count; x++ {
+		if face := f.container[x]; face != nil {
+			f.tree.InsertObject(face)
+		}
+	}
 }
 
 // computeVertexNormalsAndTangents averages area-weighted face normals at shared vertices
@@ -399,7 +430,11 @@ func (f *Faces) Len() int {
 // Add appends a face to the collection, growing the internal storage when needed.
 func (f *Faces) Add(face *Face) {
 	if f.count >= len(f.container) {
-		newFaces := make([]*Face, f.count*2)
+		newCap := f.count * 2
+		if newCap == 0 {
+			newCap = 1
+		}
+		newFaces := make([]*Face, newCap)
 		copy(newFaces, f.container)
 		f.container = newFaces
 	}
@@ -466,7 +501,9 @@ func (f *Faces) SetCount(count int) {
 
 // Clear removes all faces from the collection.
 func (f *Faces) Clear() {
-	f.tree.Clear()
+	if f.tree != nil {
+		f.tree.Clear()
+	}
 	f.count = 0
 	f.version++
 }

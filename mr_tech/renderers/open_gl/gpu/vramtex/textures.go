@@ -69,10 +69,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		if w <= 0 || h <= 0 {
 			continue
 		}
-		maxDim := int(w)
-		if int(h) > maxDim {
-			maxDim = int(h)
-		}
+		maxDim := max(int(h), int(w))
 		usable := &Usable{maxDim: maxDim, tex: tex}
 		valid = append(valid, usable)
 		idx := tx.idxByDim(maxDim)
@@ -93,6 +90,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
 		diffuse, normal, emissive := usable.tex.Compile(size)
+
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(diffuse))
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].NormalArray)
@@ -154,7 +152,7 @@ func (tx *Textures) BindBuckets() {
 	tx.BindEnvironmentAndLightmaps()
 }
 
-// BindEnvironmentAndLightmaps binds the cubemap environment texture and baked lightmap array
+// BindEnvironmentAndLightmaps binds the cube-map environment texture and baked lightmap array
 // onto their fixed texture units (TexUnitEnvMap and TexUnitLightmap).
 func (tx *Textures) BindEnvironmentAndLightmaps() {
 	if tx.envMapTex != 0 {
@@ -167,12 +165,12 @@ func (tx *Textures) BindEnvironmentAndLightmaps() {
 	}
 }
 
-// GetEnvMapTexture returns the GPU cubemap texture ID.
+// GetEnvMapTexture returns the GPU cube-map texture ID.
 func (tx *Textures) GetEnvMapTexture() uint32 {
 	return tx.envMapTex
 }
 
-// GetEnvMapMaxLod returns the maximum mipmap LOD index available in the environment cubemap.
+// GetEnvMapMaxLod returns the maximum mipmap LOD index available in the environment cube-map.
 func (tx *Textures) GetEnvMapMaxLod() float32 {
 	return tx.envMaxLod
 }
@@ -187,8 +185,8 @@ func (tx *Textures) HasLightmaps() bool {
 	return tx.lightmapCount > 0
 }
 
-// UploadEnvironment uploads a 6-face RGBA environment cubemap with a GGX prefiltered mip chain
-// from config or builds a procedural sky/horizon/sun/ground cubemap fallback.
+// UploadEnvironment uploads a 6-face RGBA environment cube-map with a GGX prefiltered mip chain
+// from config or builds a procedural sky/horizon/sun/ground cube-map fallback.
 func (tx *Textures) UploadEnvironment(envMaps map[string][6][]byte) {
 	if tx.envMapTex != 0 {
 		return
@@ -197,13 +195,7 @@ func (tx *Textures) UploadEnvironment(envMaps map[string][6][]byte) {
 	tx.ctx.BindTexture(api.TEXTURE_CUBE_MAP, tx.envMapTex)
 
 	dim, baseLinear := buildBaseEnvFaces(envMaps)
-	maxMip := int32(math.Floor(math.Log2(float64(dim))))
-	if maxMip > 5 {
-		maxMip = 5
-	}
-	if maxMip < 0 {
-		maxMip = 0
-	}
+	maxMip := max(min(int32(math.Floor(math.Log2(float64(dim)))), 5), 0)
 	tx.envMaxLod = float32(maxMip)
 
 	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_BASE_LEVEL, 0)
@@ -215,16 +207,13 @@ func (tx *Textures) UploadEnvironment(envMaps map[string][6][]byte) {
 	tx.ctx.TexParameteri(api.TEXTURE_CUBE_MAP, api.TEXTURE_WRAP_R, api.CLAMP_TO_EDGE)
 
 	mip0Bytes := encodeEnvFacesSRGB(baseLinear, dim)
-	for f := 0; f < 6; f++ {
+	for f := range 6 {
 		tx.ctx.TexImage2D(api.TEXTURE_CUBE_MAP_POSITIVE_X+uint32(f), 0, api.RGBA8, int32(dim), int32(dim), 0, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(mip0Bytes[f]))
 	}
 
 	// Build GGX-importance prefiltered mip levels cleanly across cube boundaries.
 	for level := int32(1); level <= maxMip; level++ {
-		mipSize := dim >> level
-		if mipSize < 1 {
-			mipSize = 1
-		}
+		mipSize := max(dim>>level, 1)
 		roughness := float64(level) / float64(maxMip)
 		samples := 24
 		if mipSize >= 128 {
@@ -232,303 +221,12 @@ func (tx *Textures) UploadEnvironment(envMaps map[string][6][]byte) {
 		}
 		filtered := prefilterEnvMip(baseLinear, dim, mipSize, roughness, samples)
 		mipBytes := encodeEnvFacesSRGB(filtered, mipSize)
-		for f := 0; f < 6; f++ {
+		for f := range 6 {
 			tx.ctx.TexImage2D(api.TEXTURE_CUBE_MAP_POSITIVE_X+uint32(f), level, api.RGBA8, int32(mipSize), int32(mipSize), 0, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(mipBytes[f]))
 		}
 	}
 
 	tx.ctx.BindTexture(api.TEXTURE_CUBE_MAP, 0)
-}
-
-func buildBaseEnvFaces(envMaps map[string][6][]byte) (int, [6][]float32) {
-	var out [6][]float32
-	for _, faces := range envMaps {
-		faceLen := len(faces[0])
-		if faceLen < 4 {
-			continue
-		}
-		dim := int(math.Sqrt(float64(faceLen / 4)))
-		if dim >= 4 && dim*dim*4 == faceLen {
-			valid := true
-			for f := 1; f < 6; f++ {
-				if len(faces[f]) != faceLen {
-					valid = false
-					break
-				}
-			}
-			if valid {
-				for f := 0; f < 6; f++ {
-					src := faces[f]
-					lin := make([]float32, dim*dim*3)
-					for i, j := 0, 0; i < len(src); i, j = i+4, j+3 {
-						lin[j] = float32(math.Pow(float64(src[i])/255.0, 2.2))
-						lin[j+1] = float32(math.Pow(float64(src[i+1])/255.0, 2.2))
-						lin[j+2] = float32(math.Pow(float64(src[i+2])/255.0, 2.2))
-					}
-					out[f] = lin
-				}
-				return dim, out
-			}
-		}
-	}
-
-	const size = 64
-	sunX, sunY, sunZ := 0.44, 0.72, 0.54
-	sunL := math.Sqrt(sunX*sunX + sunY*sunY + sunZ*sunZ)
-	sunX, sunY, sunZ = sunX/sunL, sunY/sunL, sunZ/sunL
-	for f := 0; f < 6; f++ {
-		lin := make([]float32, size*size*3)
-		for y := 0; y < size; y++ {
-			v := ((float64(y)+0.5)/float64(size))*2.0 - 1.0
-			for x := 0; x < size; x++ {
-				u := ((float64(x)+0.5)/float64(size))*2.0 - 1.0
-				nx, ny, nz := cubeUVToDir(f, u, v)
-				var r, g, b float64
-				if ny >= 0 {
-					t := math.Pow(ny, 0.55)
-					// Linear sky gradient (horizon mist -> steel zenith)
-					r = (1.0-t)*0.30 + t*0.035
-					g = (1.0-t)*0.39 + t*0.075
-					b = (1.0-t)*0.52 + t*0.18
-					sunDot := math.Max(0, nx*sunX+ny*sunY+nz*sunZ)
-					sunGlow := math.Pow(sunDot, 16.0)*0.35 + math.Pow(sunDot, 128.0)*1.35
-					r += sunGlow * 1.05
-					g += sunGlow * 0.94
-					b += sunGlow * 0.76
-				} else {
-					t := math.Pow(-ny, 0.5)
-					// Linear ground bounce (horizon mist -> dark slate floor)
-					r = (1.0-t)*0.18 + t*0.015
-					g = (1.0-t)*0.23 + t*0.018
-					b = (1.0-t)*0.29 + t*0.026
-				}
-				off := (y*size + x) * 3
-				lin[off] = float32(r)
-				lin[off+1] = float32(g)
-				lin[off+2] = float32(b)
-			}
-		}
-		out[f] = lin
-	}
-	return size, out
-}
-
-func encodeEnvFacesSRGB(faces [6][]float32, dim int) [6][]byte {
-	var encoded [6][]byte
-	const invGamma = 1.0 / 2.2
-	clampB := func(v float64) byte {
-		if v <= 0 {
-			return 0
-		}
-		s := math.Pow(v, invGamma)
-		if s >= 1 {
-			return 255
-		}
-		return byte(s*255.0 + 0.5)
-	}
-	texels := dim * dim
-	for f := 0; f < 6; f++ {
-		src := faces[f]
-		dst := make([]byte, texels*4)
-		for i, j := 0, 0; i < texels; i, j = i+1, j+3 {
-			o := i * 4
-			dst[o] = clampB(float64(src[j]))
-			dst[o+1] = clampB(float64(src[j+1]))
-			dst[o+2] = clampB(float64(src[j+2]))
-			dst[o+3] = 255
-		}
-		encoded[f] = dst
-	}
-	return encoded
-}
-
-func cubeUVToDir(face int, u, v float64) (float64, float64, float64) {
-	var dx, dy, dz float64
-	switch face {
-	case 0:
-		dx, dy, dz = 1, -v, -u
-	case 1:
-		dx, dy, dz = -1, -v, u
-	case 2:
-		dx, dy, dz = u, 1, v
-	case 3:
-		dx, dy, dz = u, -1, -v
-	case 4:
-		dx, dy, dz = u, -v, 1
-	default:
-		dx, dy, dz = -u, -v, -1
-	}
-	invL := 1.0 / math.Sqrt(dx*dx+dy*dy+dz*dz)
-	return dx * invL, dy * invL, dz * invL
-}
-
-func dirToCubeUV(nx, ny, nz float64) (int, float64, float64) {
-	ax, ay, az := math.Abs(nx), math.Abs(ny), math.Abs(nz)
-	var face int
-	var ma, uc, vc float64
-	if ax >= ay && ax >= az {
-		ma = ax
-		if nx >= 0 {
-			face = 0
-			uc, vc = -nz, -ny
-		} else {
-			face = 1
-			uc, vc = nz, -ny
-		}
-	} else if ay >= ax && ay >= az {
-		ma = ay
-		if ny >= 0 {
-			face = 2
-			uc, vc = nx, nz
-		} else {
-			face = 3
-			uc, vc = nx, -nz
-		}
-	} else {
-		ma = az
-		if nz >= 0 {
-			face = 4
-			uc, vc = nx, -ny
-		} else {
-			face = 5
-			uc, vc = -nx, -ny
-		}
-	}
-	if ma <= 1e-12 {
-		return face, 0, 0
-	}
-	return face, uc / ma, vc / ma
-}
-
-func sampleCubeLinear(faces [6][]float32, dim int, nx, ny, nz float64) (float64, float64, float64) {
-	f, u, v := dirToCubeUV(nx, ny, nz)
-	fx := (u*0.5+0.5)*float64(dim) - 0.5
-	fy := (v*0.5+0.5)*float64(dim) - 0.5
-	if fx < 0 {
-		fx = 0
-	} else if fx > float64(dim-1) {
-		fx = float64(dim - 1)
-	}
-	if fy < 0 {
-		fy = 0
-	} else if fy > float64(dim-1) {
-		fy = float64(dim - 1)
-	}
-	x0 := int(fx)
-	y0 := int(fy)
-	x1 := x0 + 1
-	if x1 >= dim {
-		x1 = dim - 1
-	}
-	y1 := y0 + 1
-	if y1 >= dim {
-		y1 = dim - 1
-	}
-	tx := fx - float64(x0)
-	ty := fy - float64(y0)
-	src := faces[f]
-	i00 := (y0*dim + x0) * 3
-	i10 := (y0*dim + x1) * 3
-	i01 := (y1*dim + x0) * 3
-	i11 := (y1*dim + x1) * 3
-	w00 := (1 - tx) * (1 - ty)
-	w10 := tx * (1 - ty)
-	w01 := (1 - tx) * ty
-	w11 := tx * ty
-	r := float64(src[i00])*w00 + float64(src[i10])*w10 + float64(src[i01])*w01 + float64(src[i11])*w11
-	g := float64(src[i00+1])*w00 + float64(src[i10+1])*w10 + float64(src[i01+1])*w01 + float64(src[i11+1])*w11
-	b := float64(src[i00+2])*w00 + float64(src[i10+2])*w10 + float64(src[i01+2])*w01 + float64(src[i11+2])*w11
-	return r, g, b
-}
-
-func prefilterEnvMip(src [6][]float32, srcDim, dstDim int, roughness float64, sampleCount int) [6][]float32 {
-	a := roughness * roughness
-	a2 := a * a
-	if a2 < 1e-4 {
-		a2 = 1e-4
-	}
-	// Precompute local GGX half-vectors around +Z in tangent space.
-	type tangentSample struct{ hx, hy, hz float64 }
-	hVecs := make([]tangentSample, sampleCount)
-	for i := 0; i < sampleCount; i++ {
-		u1 := (float64(i) + 0.5) / float64(sampleCount)
-		// Van der Corput radical inverse base 2
-		bits := uint32(i + 1)
-		bits = (bits << 16) | (bits >> 16)
-		bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1)
-		bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2)
-		bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4)
-		bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8)
-		u2 := float64(bits) * 2.3283064365386963e-10
-		phi := 2.0 * math.Pi * u1
-		cosTheta := math.Sqrt((1.0 - u2) / (1.0 + (a2-1.0)*u2))
-		sinTheta := math.Sqrt(math.Max(0.0, 1.0-cosTheta*cosTheta))
-		hVecs[i] = tangentSample{
-			hx: math.Cos(phi) * sinTheta,
-			hy: math.Sin(phi) * sinTheta,
-			hz: cosTheta,
-		}
-	}
-
-	var out [6][]float32
-	for f := 0; f < 6; f++ {
-		dst := make([]float32, dstDim*dstDim*3)
-		for y := 0; y < dstDim; y++ {
-			v := ((float64(y)+0.5)/float64(dstDim))*2.0 - 1.0
-			for x := 0; x < dstDim; x++ {
-				u := ((float64(x)+0.5)/float64(dstDim))*2.0 - 1.0
-				nx, ny, nz := cubeUVToDir(f, u, v)
-				upX, upY, upZ := 0.0, 1.0, 0.0
-				if math.Abs(ny) > 0.999 {
-					upX, upY, upZ = 0.0, 0.0, 1.0
-				}
-				// T = normalize(cross(up, N))
-				tx := upY*nz - upZ*ny
-				ty := upZ*nx - upX*nz
-				tz := upX*ny - upY*nx
-				tInv := 1.0 / math.Sqrt(tx*tx+ty*ty+tz*tz)
-				tx, ty, tz = tx*tInv, ty*tInv, tz*tInv
-				// B = cross(N, T)
-				bx := ny*tz - nz*ty
-				by := nz*tx - nx*tz
-				bz := nx*ty - ny*tx
-
-				var sumR, sumG, sumB, totalW float64
-				for s := 0; s < sampleCount; s++ {
-					hv := hVecs[s]
-					hx := tx*hv.hx + bx*hv.hy + nx*hv.hz
-					hy := ty*hv.hx + by*hv.hy + ny*hv.hz
-					hz := tz*hv.hx + bz*hv.hy + nz*hv.hz
-					nDotH := nx*hx + ny*hy + nz*hz
-					lx := 2.0*nDotH*hx - nx
-					ly := 2.0*nDotH*hy - ny
-					lz := 2.0*nDotH*hz - nz
-					nDotL := nx*lx + ny*ly + nz*lz
-					if nDotL > 0 {
-						cr, cg, cb := sampleCubeLinear(src, srcDim, lx, ly, lz)
-						sumR += cr * nDotL
-						sumG += cg * nDotL
-						sumB += cb * nDotL
-						totalW += nDotL
-					}
-				}
-				off := (y*dstDim + x) * 3
-				if totalW > 1e-6 {
-					invW := 1.0 / totalW
-					dst[off] = float32(sumR * invW)
-					dst[off+1] = float32(sumG * invW)
-					dst[off+2] = float32(sumB * invW)
-				} else {
-					cr, cg, cb := sampleCubeLinear(src, srcDim, nx, ny, nz)
-					dst[off] = float32(cr)
-					dst[off+1] = float32(cg)
-					dst[off+2] = float32(cb)
-				}
-			}
-		}
-		out[f] = dst
-	}
-	return out
 }
 
 // UploadLightmaps uploads baked 2D lightmap layers to a GPU TEXTURE_2D_ARRAY, or creates
@@ -572,7 +270,7 @@ func (tx *Textures) UploadLightmaps(lms []*config.Lightmap) {
 // idxByDim returns the index of the first slot in the `slots` array with a value greater than or equal to `maxDim`.
 func (tx *Textures) idxByDim(maxDim int) int {
 	bIdx := len(tx.slots) - 1
-	for x := 0; x < bIdx; x++ {
+	for x := range bIdx {
 		if maxDim <= tx.slots[x] {
 			return x
 		}
@@ -603,7 +301,7 @@ func (tx *Textures) createTextureArray(width, height int, layers int32) uint32 {
 	tx.ctx.TexParameteri(api.TEXTURE_2D_ARRAY, api.TEXTURE_MAX_LEVEL, mipCount-1)
 
 	// Explicit "Immutable-Style" allocation
-	for i := int32(0); i < mipCount; i++ {
+	for i := range mipCount {
 		w := int32(width >> i)
 		h := int32(height >> i)
 		if w < 1 {

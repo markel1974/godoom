@@ -168,7 +168,7 @@ func (th *Things) CreateThingBSP(bspPath string, position geometry.XYZ, classnam
 		// Assignment of pre-calculated UVs from IBSPReader
 		for _, rawTri := range rawTriangles {
 			tri := config.NewModel3DEntryTriangle(specificMaterial)
-			for k := 0; k < 3; k++ {
+			for k := range 3 {
 				pos := rawTri[k]
 				u, v := float32(0.0), float32(0.0)
 				// Find corresponding UV index for vertex

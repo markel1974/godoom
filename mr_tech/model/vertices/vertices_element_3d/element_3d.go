@@ -60,6 +60,9 @@ type Element3D struct {
 	maxX               float64
 	maxY               float64
 	maxZ               float64
+	treeVol            *volumes.Volume
+	treeVolVer         uint64
+	treeRebuilds       uint64
 }
 
 // NewElement3D creates and initializes a 3D vertex entry from thing model frames, actions, tags, and materials.
@@ -79,10 +82,10 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 
 	actions := make([]*Action, len(model.ActionDefinitions))
 	for idx, name := range model.ActionDefinitions {
-		nameC := v3dCleanString(name)
+		nameC := CleanString(name)
 		actions[idx] = NewAction(nameC, model.ActionIntervals[idx][0], model.ActionIntervals[idx][1])
 		for _, z := range model.ActionClamp {
-			if strings.Contains(nameC, v3dCleanString(z)) {
+			if strings.Contains(nameC, CleanString(z)) {
 				actions[idx].Clamp = true
 				break
 			}
@@ -108,13 +111,23 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		}
 	}
 
+	maxFaces := 0
+	for _, cfgFrame := range model.Frames {
+		if len(cfgFrame.Triangles) > maxFaces {
+			maxFaces = len(cfgFrame.Triangles)
+		}
+	}
+	treeCap := uint(1)
+	if maxFaces > 0 {
+		// Pre-size a single shared AABB tree for 2*maxFaces nodes so frame rebuilds avoid heap growth.
+		treeCap = uint(maxFaces * 2)
+	}
+	sharedTree := aabb.NewTree(treeCap, 0.0)
 	sharedSolver := collisions.NewSolver(true, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 
 	for frameIdx, cfgFrame := range model.Frames {
 		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		//TODO TROPPO ONEROSO BISOGNA CREARE UN UNICO ALBERO PER TUTTE LE ANIMAZIONI
-		tree := aabb.NewTree(16, 0.0)
-		volume := volumes.NewVolumeDynamicShared(frameIdx, baseId, "thing", tree, sharedSolver)
+		volume := volumes.NewVolumeDynamicShared(frameIdx, baseId, "thing", sharedTree, sharedSolver)
 
 		for triIdx, tri := range cfgFrame.Triangles {
 			label := fmt.Sprintf("%s_%d", baseId, triIdx)
@@ -135,15 +148,12 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		for tagName, tagData := range cfgFrame.Tags {
 			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
-		volume.Rebuild()
+		volume.RebuildGeometry()
 		v.vols.Set(frameIdx, volume)
 	}
 
-	maxFaces := v.vols.GetFaceCount()
-	treeA := aabb.NewTree(uint(maxFaces), 0.0)
-	treeB := aabb.NewTree(uint(maxFaces), 0.0)
-	facesA := volumes.NewFaces(treeA, true)
-	facesB := volumes.NewFaces(treeB, true)
+	facesA := volumes.NewFacesSized(nil, maxFaces, true)
+	facesB := volumes.NewFacesSized(nil, maxFaces, true)
 	facesA.SetAllowTessellate(false)
 	facesB.SetAllowTessellate(false)
 	refVol := v.vols.Get(0)
@@ -162,6 +172,10 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 
 	v.groupSize = float64(model.GroupSize)
 	v.actions = actions
+	if refSolverVol := v.findReferenceVolume(); refSolverVol != nil {
+		// Restore shared solver extents to the standing/reference pose rather than leaving the last frame (often death).
+		rebuildSolverFromVolume(sharedSolver, refSolverVol)
+	}
 	v.startFrame = 0
 	v.endFrame = len(model.Frames) - 1
 	v.currentAction = -1
@@ -184,7 +198,7 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 	}
 
 	if len(v.actions) > 0 {
-		v.SetAction(0)
+		v.setActionState(0)
 	}
 	v.Compile(0)
 	return v
@@ -286,14 +300,40 @@ func (v *Element3D) QueryOverlaps(object aabb.IObject, callback func(object aabb
 	v.comp.QueryOverlaps(object, callback)
 }
 
-// SetAction switches to the action at idx and initializes its animation frame, volume, and interpolation state.
-func (v *Element3D) SetAction(idx int) {
-	if idx < 0 || idx >= len(v.actions) {
-		fmt.Printf("Invalid action index: %d\n", idx)
+// ensureActiveTree rebuilds the shared AABB tree from v.volA only when the active frame
+// volume or its geometry revision changes.
+func (v *Element3D) ensureActiveTree() {
+	if v.volA == nil {
 		return
 	}
-	if v.currentAction == idx {
+	faces := v.volA.GetFaces()
+	if faces == nil {
 		return
+	}
+	ver := faces.GetVersion()
+	if v.treeVol == v.volA && v.treeVolVer == ver {
+		return
+	}
+	v.volA.RebuildTree()
+	v.treeVol = v.volA
+	v.treeVolVer = ver
+	v.treeRebuilds++
+}
+
+// SetAction switches to the action at idx and initializes its animation frame, volume, and interpolation state.
+func (v *Element3D) SetAction(idx int) {
+	if v.setActionState(idx) {
+		v.ensureActiveTree()
+	}
+}
+
+func (v *Element3D) setActionState(idx int) bool {
+	if idx < 0 || idx >= len(v.actions) {
+		fmt.Printf("Invalid action index: %d\n", idx)
+		return false
+	}
+	if v.currentAction == idx {
+		return false
 	}
 	v.currentAction = idx
 	action := v.actions[idx]
@@ -314,6 +354,7 @@ func (v *Element3D) SetAction(idx int) {
 			v.lastVolA = v.volA
 		}
 	}
+	return true
 }
 
 // AdvanceAnimation advances the animation state to tick, selecting frame volumes and interpolation factor.
@@ -376,6 +417,8 @@ func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64
 	v.solver = partSolver
 	v.ent = partSolver.GetEntity()
 	v.lastVolA = v.volA
+	v.treeVol = nil
+	v.ensureActiveTree()
 }
 
 // IntersectRay tests a world-space ray against the thing's mesh geometry and returns the hit distance and face normal.
@@ -404,6 +447,29 @@ func (v *Element3D) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) 
 	return hitDist, geometry.XYZ{X: wnx, Y: wny, Z: wnz}, true
 }
 
+var standingReferenceNames = []string{"stand", "idle", "legs_idle", "hover"}
+
+// findReferenceVolume returns the first frame volume matching an idle/standing pose
+// so shared collider bounds match the upright stance instead of the final animation frame.
+func (v *Element3D) findReferenceVolume() *volumes.Volume {
+	for _, act := range v.actions {
+		if act == nil {
+			continue
+		}
+		for _, refName := range standingReferenceNames {
+			if strings.Contains(act.Name, refName) && act.Start >= 0 && act.Start < v.vols.Len() {
+				if vol := v.vols.Get(act.Start); vol != nil && vol.GetFaceCount() > 0 {
+					return vol
+				}
+			}
+		}
+	}
+	if v.vols.Len() > 0 {
+		return v.vols.Get(0)
+	}
+	return nil
+}
+
 // rebuildSolverFromVolume updates solver collision data from volume face bounds, centroid, and inertia when non-nil.
 func rebuildSolverFromVolume(solver *collisions.Solver, vol *volumes.Volume) {
 	if vol == nil || solver == nil {
@@ -428,7 +494,7 @@ func transformVolumeFaces(srcVol *volumes.Volume, dstFaces *volumes.Faces, rot *
 	dstFaces.EnsureLen(count)
 	dstFaces.SetCount(count)
 	limit := count
-	for j := 0; j < limit; j++ {
+	for j := range limit {
 		src := srcVol.GetFace(j)
 		dst := dstFaces.At(j)
 		if src == nil || dst == nil {
@@ -491,7 +557,11 @@ func (v *Element3D) FrameCenterB() geometry.XYZ {
 
 // SyncSolverToCurrentFrame updates the solver from the current frame volume when it has changed.
 func (v *Element3D) SyncSolverToCurrentFrame() {
-	if v.volA == nil || v.lastVolA == v.volA {
+	if v.volA == nil {
+		return
+	}
+	v.ensureActiveTree()
+	if v.lastVolA == v.volA {
 		return
 	}
 	v.comp.SetVolume(v.volA)
@@ -528,6 +598,7 @@ func (v *Element3D) CompileDetached() {
 	if v.volA == nil || v.ent == nil {
 		return
 	}
+	v.ensureActiveTree()
 	ent := v.ent
 	q := ent.GetQRotation()
 	qx, qy, qz, qw := q.Get()
@@ -594,6 +665,7 @@ func (v *Element3D) Compile(tick uint64) bool {
 		v.comp.SetVolume(v.volA)
 		v.lastVolA = v.volA
 	}
+	v.ensureActiveTree()
 
 	cx, cy, cz := ent.GetCenter()
 	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
@@ -650,11 +722,6 @@ func (v *Element3D) GetTagIndex(name string) int {
 	return -1
 }
 
-// v3dCleanString returns s with leading and trailing spaces removed and all letters converted to lowercase.
-func v3dCleanString(s string) string {
-	return strings.TrimSpace(strings.ToLower(s))
-}
-
 // Deform applies an impulse within the given radius and recompiles cached data when geometry changes.
 // Deform returns true if any vertex volume was modified.
 func (v *Element3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
@@ -662,6 +729,7 @@ func (v *Element3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius flo
 	if deformed {
 		v.lastRotVolA = nil
 		v.lastRotVolB = nil
+		v.treeVol = nil
 		v.Compile(v.tick)
 	}
 	return deformed
@@ -673,7 +741,7 @@ func (v *Element3D) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, 
 	return v.Deform(impact, impulse, radius)
 }
 
-// IntersectRay finds the closest solid face hit by a ray within maxDist.
+// IntersectRayFace finds the closest solid face hit by a ray within maxDist.
 // It returns the hit distance, the intersected face, and whether a hit occurred.
 func (v *Element3D) IntersectRayFace(locOx, locOy, locOz, locDirX, locDirY, locDirZ, maxDist float64) (float64, *volumes.Face, bool) {
 	if v.volA == nil {

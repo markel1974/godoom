@@ -33,6 +33,8 @@ type MultiSprite struct {
 	maxX          float64
 	maxY          float64
 	maxZ          float64
+	treeVol       *volumes.Volume
+	treeRebuilds  uint64
 	//currentAngle  int
 }
 
@@ -69,6 +71,9 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 	if v.debug {
 		v.renderMode = vertices.RenderModeModel3D
 	}
+	// Pre-size a single shared AABB tree for 14-face views (2 visual + 12 box = 27 nodes < 32) so switches allocate zero nodes.
+	const multiSpriteInitTreeNodes = 32
+	sharedTree := aabb.NewTree(multiSpriteInitTreeNodes, 0.0)
 	sharedSolver := collisions.NewSolver(true, v.cfg.Mass, v.cfg.Restitution, v.cfg.Friction, v.cfg.RestitutionCombine, v.cfg.FrictionCombine, v.cfg.GForce)
 	for viewIdx, view := range v.cfg.MultiSprite.Views {
 		if view == nil {
@@ -79,9 +84,7 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 		}
 		baseId := fmt.Sprintf("%s_multisprite_anim_%d", v.cfg.Id, viewIdx)
 		thingId := fmt.Sprintf("thing_%s_%d", v.cfg.Id, viewIdx)
-		//TODO TROPPO ONEROSO BISOGNA CREARE UN UNICO ALBERO PER TUTTE LE ANIMAZIONI
-		tree := aabb.NewTree(16, 0.0)
-		volume := volumes.NewVolumeDynamicShared(viewIdx, baseId, thingId, tree, sharedSolver)
+		volume := volumes.NewVolumeDynamicShared(viewIdx, baseId, thingId, sharedTree, sharedSolver)
 		mat := v.materials.GetMaterial(view)
 		faces, err := v.createFaces(mat)
 		if err != nil {
@@ -90,13 +93,14 @@ func NewMultiSprite(cfg *config.Thing, materials *materials.Materials) *MultiSpr
 		for _, face := range faces {
 			volume.AddFace(face)
 		}
-		volume.Rebuild()
+		volume.RebuildGeometry()
 		v.volumes[viewIdx] = volume
 	}
 
 	v.comp = NewComposer(v.volumes[0])
 	v.solver = v.comp.GetSolver()
 	v.ent = v.solver.GetEntity()
+	v.ensureActiveTree()
 
 	for _, viewIdx := range v.cfg.MultiSprite.Clamps {
 		if viewIdx < len(v.volumes) {
@@ -157,8 +161,23 @@ func (v *MultiSprite) GetAABB() *aabb.AABB {
 	return v.ent.GetAABB()
 }
 
+// ensureActiveTree rebuilds the shared AABB tree only when the active view volume changes.
+func (v *MultiSprite) ensureActiveTree() {
+	if v.comp == nil {
+		return
+	}
+	activeVol := v.comp.GetVolume()
+	if activeVol == nil || v.treeVol == activeVol {
+		return
+	}
+	activeVol.RebuildTree()
+	v.treeVol = activeVol
+	v.treeRebuilds++
+}
+
 // Compile updates the view volume to the current action volume and refreshes the enclosing AABB.
 func (v *MultiSprite) Compile(tick uint64) bool {
+	v.ensureActiveTree()
 	ent := v.ent
 	v.updateBounds()
 	cx, cy, cz := ent.GetCenter()
@@ -212,6 +231,7 @@ func (v *MultiSprite) computeAction(action int, angle int) bool {
 	activeVolume := v.volumes[action]
 	//activeVolume := v.volumes[v.currentAngle]
 	v.comp.SetVolume(activeVolume)
+	v.ensureActiveTree()
 	v.updateBounds()
 	return true
 }

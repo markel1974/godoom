@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -59,7 +60,7 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 	}, "C", mat)
 	fC.SetUV(0, 0, 1, 0, 1, 1)
 
-	faces := volumes.NewFaces(4, false)
+	faces := volumes.NewFaces(aabb.NewTree(4, 0.0), false)
 	faces.Add(fA)
 	faces.Add(fB)
 	faces.Add(fC)
@@ -118,7 +119,7 @@ func TestResidentMeshAndFrameVerticesZeroAllocsSteadyState(t *testing.T) {
 		{X: 0, Y: 10, Z: 0},
 	}, "anim_face", animMat)
 	f.SetUV(0, 0, 1, 0, 0, 1)
-	faces := volumes.NewFaces(2, false)
+	faces := volumes.NewFaces(aabb.NewTree(2, 0.0), false)
 	faces.Add(f)
 	faces.Rebuild()
 

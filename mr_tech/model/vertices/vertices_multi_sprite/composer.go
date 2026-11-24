@@ -40,6 +40,11 @@ func (vm *Composer) GetFaces() *volumes.Faces {
 	return vm.volume.GetFaces()
 }
 
+// GetVolume returns the currently active volume of the entity.
+func (vm *Composer) GetVolume() *volumes.Volume {
+	return vm.volume
+}
+
 // SetVolume updates the current volume of the entity.
 func (vm *Composer) SetVolume(activeVolume *volumes.Volume) {
 	if activeVolume == vm.volume {

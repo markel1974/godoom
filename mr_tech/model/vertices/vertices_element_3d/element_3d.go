@@ -168,7 +168,7 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		refVol = volume
 	} else {
 		tpl := v.materials.GetOrBuildTemplate(model, func() any {
-			return buildElementTemplate(model, v.materials)
+			return NewElementTemplate(model, v.materials)
 		}).(*ElementTemplate)
 		v.tpl = tpl
 		v.tagMap = tpl.tagMap
@@ -180,7 +180,7 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		for i := range slotCount {
 			v.slots[i] = frameSlot{
 				frameIdx: -1,
-				vol:      tpl.allocateSlotVolume(-1, sharedTree, sharedSolver, false),
+				vol:      tpl.AllocateSlotVolume(-1, sharedTree, sharedSolver, false),
 			}
 		}
 
@@ -345,7 +345,7 @@ func (v *Element3D) getFrameVolume(frameIdx int, keepFrame int) *volumes.Volume 
 		victim = 0
 	}
 	slot := &v.slots[victim]
-	v.tpl.applyTemplateFrameToVolume(frameIdx, slot.vol)
+	v.tpl.ApplyTemplateFrameToVolume(frameIdx, slot.vol)
 	v.slotSeq++
 	slot.frameIdx = frameIdx
 	slot.seq = v.slotSeq
@@ -369,8 +369,8 @@ func (v *Element3D) ensureMaterialized() {
 		if vols.Get(i) != nil {
 			continue
 		}
-		vol := v.tpl.allocateSlotVolume(i, v.sharedTree, v.solver, false)
-		v.tpl.applyTemplateFrameToVolume(i, vol)
+		vol := v.tpl.AllocateSlotVolume(i, v.sharedTree, v.solver, false)
+		v.tpl.ApplyTemplateFrameToVolume(i, vol)
 		vols.Set(i, vol)
 	}
 	v.vols = vols

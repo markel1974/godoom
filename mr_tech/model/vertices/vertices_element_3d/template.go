@@ -10,16 +10,105 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// PackedVec3 represents a 3D vector with x, y, and z components using compact float32 storage.
 type PackedVec3 struct {
 	x, y, z float32
 }
 
+// ToPackedVec3 converts a geometry.XYZ vector to a PackedVec3 format by casting its components to float32.
 func ToPackedVec3(v geometry.XYZ) PackedVec3 {
 	return PackedVec3{x: float32(v.X), y: float32(v.Y), z: float32(v.Z)}
 }
 
+// ToXYZ converts a PackedVec3 to a geometry.XYZ by mapping its float32 components to float64 components.
 func (p PackedVec3) ToXYZ() geometry.XYZ {
 	return geometry.XYZ{X: float64(p.x), Y: float64(p.y), Z: float64(p.z)}
+}
+
+// TemplateTag represents a label associated with an origin point and a set of axes in a 3D space.
+
+// ResolveFrameMaterials maps triangles to materials using the provided configuration and materials list, and returns the result.
+func ResolveFrameMaterials(cfgTris []config.Model3DEntryTriangle, mats *materials.Materials, dst []*textures.Material) []*textures.Material {
+	if cap(dst) < len(cfgTris) {
+		dst = make([]*textures.Material, len(cfgTris))
+	} else {
+		dst = dst[:len(cfgTris)]
+	}
+	for i, tri := range cfgTris {
+		if tri.Material != nil {
+			dst[i] = mats.GetMaterial(tri.Material)
+		} else {
+			dst[i] = nil
+		}
+	}
+	return dst
+}
+
+// CheckUniformTopology validates if all frames in a 3D model have identical topology, materials, and UV coordinates.
+// It returns whether the topology is uniform, base materials, base UV coordinates, and the maximum number of triangles.
+func CheckUniformTopology(model *config.Model3DEntry, mats *materials.Materials) (bool, []*textures.Material, [][3]float32, [][3]float32, int) {
+	maxFaces := 0
+	for _, cfgFrame := range model.Frames {
+		if len(cfgFrame.Triangles) > maxFaces {
+			maxFaces = len(cfgFrame.Triangles)
+		}
+	}
+	if len(model.Frames) == 0 {
+		return true, nil, nil, nil, 0
+	}
+	baseTris := model.Frames[0].Triangles
+	baseLen := len(baseTris)
+	baseMats := ResolveFrameMaterials(baseTris, mats, nil)
+	baseU := make([][3]float32, baseLen)
+	baseV := make([][3]float32, baseLen)
+	for i, tri := range baseTris {
+		baseU[i] = [3]float32{tri.Vertices[0].U, tri.Vertices[1].U, tri.Vertices[2].U}
+		baseV[i] = [3]float32{tri.Vertices[0].V, tri.Vertices[1].V, tri.Vertices[2].V}
+	}
+	uniform := true
+	var scratchMats []*textures.Material
+	for fIdx := 1; fIdx < len(model.Frames); fIdx++ {
+		fTris := model.Frames[fIdx].Triangles
+		if len(fTris) != baseLen {
+			uniform = false
+			break
+		}
+		scratchMats = ResolveFrameMaterials(fTris, mats, scratchMats)
+		for i, tri := range fTris {
+			if scratchMats[i] != baseMats[i] {
+				uniform = false
+				break
+			}
+			for k := range 3 {
+				if tri.Vertices[k].U != baseU[i][k] || tri.Vertices[k].V != baseV[i][k] {
+					uniform = false
+					break
+				}
+			}
+			if !uniform {
+				break
+			}
+		}
+		if !uniform {
+			break
+		}
+	}
+	if !uniform {
+		return false, nil, nil, nil, maxFaces
+	}
+	return true, baseMats, baseU, baseV, maxFaces
+}
+
+// AppendDedupVec appends a PackedVec3 to the slice if it is not already present and updates its index in the dedup map.
+// It returns the index of the PackedVec3 in the slice.
+func AppendDedupVec(vecs *[]PackedVec3, dedup map[PackedVec3]uint32, v PackedVec3) uint32 {
+	if idx, ok := dedup[v]; ok {
+		return idx
+	}
+	idx := uint32(len(*vecs))
+	*vecs = append(*vecs, v)
+	dedup[v] = idx
+	return idx
 }
 
 type TemplateTag struct {
@@ -28,6 +117,7 @@ type TemplateTag struct {
 	axis   [3]geometry.XYZ
 }
 
+// TemplateFrame represents a 3D geometry frame including vertex data, normals, topology indices, and spatial properties.
 type TemplateFrame struct {
 	faceCount   int
 	positions   []PackedVec3
@@ -60,6 +150,7 @@ type TemplateFrame struct {
 	geomHash    uint64
 }
 
+// ElementTemplate represents a 3D model template composed of multiple frames with geometry and topology information.
 type ElementTemplate struct {
 	numFrames       int
 	maxFaces        int
@@ -71,88 +162,11 @@ type ElementTemplate struct {
 	frames          []TemplateFrame
 }
 
-func resolveFrameMaterials(cfgTris []config.Model3DEntryTriangle, mats *materials.Materials, dst []*textures.Material) []*textures.Material {
-	if cap(dst) < len(cfgTris) {
-		dst = make([]*textures.Material, len(cfgTris))
-	} else {
-		dst = dst[:len(cfgTris)]
-	}
-	for i, tri := range cfgTris {
-		if tri.Material != nil {
-			dst[i] = mats.GetMaterial(tri.Material)
-		} else {
-			dst[i] = nil
-		}
-	}
-	return dst
-}
-
-func checkUniformTopology(model *config.Model3DEntry, mats *materials.Materials) (bool, []*textures.Material, [][3]float32, [][3]float32, int) {
-	maxFaces := 0
-	for _, cfgFrame := range model.Frames {
-		if len(cfgFrame.Triangles) > maxFaces {
-			maxFaces = len(cfgFrame.Triangles)
-		}
-	}
-	if len(model.Frames) == 0 {
-		return true, nil, nil, nil, 0
-	}
-	baseTris := model.Frames[0].Triangles
-	baseLen := len(baseTris)
-	baseMats := resolveFrameMaterials(baseTris, mats, nil)
-	baseU := make([][3]float32, baseLen)
-	baseV := make([][3]float32, baseLen)
-	for i, tri := range baseTris {
-		baseU[i] = [3]float32{tri.Vertices[0].U, tri.Vertices[1].U, tri.Vertices[2].U}
-		baseV[i] = [3]float32{tri.Vertices[0].V, tri.Vertices[1].V, tri.Vertices[2].V}
-	}
-	uniform := true
-	var scratchMats []*textures.Material
-	for fIdx := 1; fIdx < len(model.Frames); fIdx++ {
-		fTris := model.Frames[fIdx].Triangles
-		if len(fTris) != baseLen {
-			uniform = false
-			break
-		}
-		scratchMats = resolveFrameMaterials(fTris, mats, scratchMats)
-		for i, tri := range fTris {
-			if scratchMats[i] != baseMats[i] {
-				uniform = false
-				break
-			}
-			for k := range 3 {
-				if tri.Vertices[k].U != baseU[i][k] || tri.Vertices[k].V != baseV[i][k] {
-					uniform = false
-					break
-				}
-			}
-			if !uniform {
-				break
-			}
-		}
-		if !uniform {
-			break
-		}
-	}
-	if !uniform {
-		return false, nil, nil, nil, maxFaces
-	}
-	return true, baseMats, baseU, baseV, maxFaces
-}
-
-func appendDedupVec(vecs *[]PackedVec3, dedup map[PackedVec3]uint32, v PackedVec3) uint32 {
-	if idx, ok := dedup[v]; ok {
-		return idx
-	}
-	idx := uint32(len(*vecs))
-	*vecs = append(*vecs, v)
-	dedup[v] = idx
-	return idx
-}
-
-func buildElementTemplate(model *config.Model3DEntry, mats *materials.Materials) *ElementTemplate {
+// NewElementTemplate constructs and returns a new ElementTemplate based on the provided 3D model and materials data.
+// It initializes geometry, topology, materials, texture coordinates, and frame data for the template.
+func NewElementTemplate(model *config.Model3DEntry, mats *materials.Materials) *ElementTemplate {
 	tagMap := model.BuildTagMap()
-	uniform, baseMats, baseU, baseV, maxFaces := checkUniformTopology(model, mats)
+	uniform, baseMats, baseU, baseV, maxFaces := CheckUniformTopology(model, mats)
 	tpl := &ElementTemplate{
 		numFrames:       len(model.Frames),
 		maxFaces:        maxFaces,
@@ -183,7 +197,7 @@ func buildElementTemplate(model *config.Model3DEntry, mats *materials.Materials)
 			fU = baseU
 			fV = baseV
 		} else {
-			fMats = resolveFrameMaterials(cfgFrame.Triangles, mats, nil)
+			fMats = ResolveFrameMaterials(cfgFrame.Triangles, mats, nil)
 			fU = make([][3]float32, nTris)
 			fV = make([][3]float32, nTris)
 			for i, tri := range cfgFrame.Triangles {
@@ -216,14 +230,14 @@ func buildElementTemplate(model *config.Model3DEntry, mats *materials.Materials)
 			pts := fc.GetTri().Points
 			nx0, ny0, nz0, nx1, ny1, nz1, nx2, ny2, nz2 := fc.GetVertexNormalsFlat()
 			posIdx[i] = [3]uint32{
-				appendDedupVec(&positions, posDedup, ToPackedVec3(pts[0])),
-				appendDedupVec(&positions, posDedup, ToPackedVec3(pts[1])),
-				appendDedupVec(&positions, posDedup, ToPackedVec3(pts[2])),
+				AppendDedupVec(&positions, posDedup, ToPackedVec3(pts[0])),
+				AppendDedupVec(&positions, posDedup, ToPackedVec3(pts[1])),
+				AppendDedupVec(&positions, posDedup, ToPackedVec3(pts[2])),
 			}
 			normIdx[i] = [3]uint32{
-				appendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx0), y: float32(ny0), z: float32(nz0)}),
-				appendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx1), y: float32(ny1), z: float32(nz1)}),
-				appendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx2), y: float32(ny2), z: float32(nz2)}),
+				AppendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx0), y: float32(ny0), z: float32(nz0)}),
+				AppendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx1), y: float32(ny1), z: float32(nz1)}),
+				AppendDedupVec(&normals, normDedup, PackedVec3{x: float32(nx2), y: float32(ny2), z: float32(nz2)}),
 			}
 			activeEdges[i] = fc.ActiveEdgeMask()
 		}
@@ -273,7 +287,8 @@ func buildElementTemplate(model *config.Model3DEntry, mats *materials.Materials)
 	return tpl
 }
 
-func (tpl *ElementTemplate) allocateSlotVolume(frameIdx int, sharedTree *aabb.Tree, sharedSolver *collisions.Solver, allowTessellate bool) *volumes.Volume {
+// AllocateSlotVolume creates and returns a new dynamic volume with optional tessellation using the template's face data.
+func (tpl *ElementTemplate) AllocateSlotVolume(frameIdx int, sharedTree *aabb.Tree, sharedSolver *collisions.Solver, allowTessellate bool) *volumes.Volume {
 	vol := volumes.NewVolumeDynamicSharedSized(frameIdx, "", "thing", sharedTree, sharedSolver, tpl.maxFaces)
 	vol.SetAllowTessellate(allowTessellate)
 	for j := 0; j < tpl.maxFaces; j++ {
@@ -291,7 +306,8 @@ func (tpl *ElementTemplate) allocateSlotVolume(frameIdx int, sharedTree *aabb.Tr
 	return vol
 }
 
-func (tpl *ElementTemplate) applyTemplateFrameToVolume(frameIdx int, vol *volumes.Volume) {
+// ApplyTemplateFrameToVolume applies a specific frame of the template to the given volume, updating its geometry and metadata.
+func (tpl *ElementTemplate) ApplyTemplateFrameToVolume(frameIdx int, vol *volumes.Volume) {
 	tf := &tpl.frames[frameIdx]
 	faces := vol.GetFaces()
 	nTris := tf.faceCount

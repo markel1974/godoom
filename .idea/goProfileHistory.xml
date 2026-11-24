@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="GoProfileHistory">
-    <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-121322-278.pprof">
-      <GoProfileMapEntry>
-        <option name="buildAnchorMillis" value="1791195191135" />
-        <option name="file" value="godoom-cpu-2026-10-05-121322-278.pprof" />
-        <option name="ours" value="true" />
-        <option name="profileType" value="CPU" />
-      </GoProfileMapEntry>
-    </profile>
     <profile entry="$USER_HOME$/GoLandProfiles/godoom-cpu-2026-10-05-121901-093.pprof">
       <GoProfileMapEntry>
         <option name="buildAnchorMillis" value="1791195522916" />
@@ -159,6 +151,14 @@
         <option name="file" value="godoom-cpu-2026-11-23-143008-101.pprof" />
         <option name="ours" value="true" />
         <option name="profileType" value="CPU" />
+      </GoProfileMapEntry>
+    </profile>
+    <profile entry="$USER_HOME$/GoLandProfiles/godoom-allocs-2026-11-24-113051-400.pprof">
+      <GoProfileMapEntry>
+        <option name="buildAnchorMillis" value="1795516247854" />
+        <option name="file" value="godoom-allocs-2026-11-24-113051-400.pprof" />
+        <option name="ours" value="true" />
+        <option name="profileType" value="ALLOCS" />
       </GoProfileMapEntry>
     </profile>
   </component>

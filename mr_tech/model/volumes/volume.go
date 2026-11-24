@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	treeInitSize = 16
+	treeInitSize = 1
 )
 
 // Volume represents a spatial model element that groups geometry, lighting, physics, and sector data.
@@ -30,16 +30,13 @@ type Volume struct {
 	dirty      bool
 }
 
-// newVolume creates and returns a pointer to a new Volume instance with the provided parameters initialized.
-// The Volume instance is configured with properties such as dynamic state, model ID, identifier, tag, and associated AABB tree.
-// It initializes collision handling via the provided solver and sets default values for various internal properties.
-func newVolume(dynamic bool, modelId int, id string, tag string, tree *aabb.Tree, solver *collisions.Solver) *Volume {
+func newVolumeWithFaces(dynamic bool, modelId int, id string, tag string, faces *Faces, solver *collisions.Solver) *Volume {
 	v := &Volume{
 		dynamic:    dynamic,
 		modelId:    modelId,
 		id:         id,
 		tag:        tag,
-		faces:      NewFaces(tree, false),
+		faces:      faces,
 		solver:     solver,
 		vertexTags: make([]*articulated_dynamics.TagAxis, 0),
 		dirty:      true,
@@ -48,6 +45,13 @@ func newVolume(dynamic bool, modelId int, id string, tag string, tree *aabb.Tree
 	}
 	v.aabb = solver.GetEntity().GetAABB()
 	return v
+}
+
+// newVolume creates and returns a pointer to a new Volume instance with the provided parameters initialized.
+// The Volume instance is configured with properties such as dynamic state, model ID, identifier, tag, and associated AABB tree.
+// It initializes collision handling via the provided solver and sets default values for various internal properties.
+func newVolume(dynamic bool, modelId int, id string, tag string, tree *aabb.Tree, solver *collisions.Solver) *Volume {
+	return newVolumeWithFaces(dynamic, modelId, id, tag, NewFaces(tree, false), solver)
 }
 
 // NewVolumeDynamic creates a dynamic Volume with the given identifiers, tag, and physics settings.
@@ -62,6 +66,13 @@ func NewVolumeDynamic(modelId int, id string, tag string, mass, restitution, fri
 // NewVolumeDynamicShared creates a dynamic volume instance without attaching a collision solver. It disables tessellation.
 func NewVolumeDynamicShared(modelId int, id string, tag string, tree *aabb.Tree, solver *collisions.Solver) *Volume {
 	v := newVolume(true, modelId, id, tag, tree, solver)
+	v.SetAllowTessellate(false)
+	return v
+}
+
+// NewVolumeDynamicSharedSized creates a dynamic volume backed by a pre-sized Faces container without duplicating capacity.
+func NewVolumeDynamicSharedSized(modelId int, id string, tag string, tree *aabb.Tree, solver *collisions.Solver, faceCap int) *Volume {
+	v := newVolumeWithFaces(true, modelId, id, tag, NewFacesSized(tree, faceCap, false), solver)
 	v.SetAllowTessellate(false)
 	return v
 }
@@ -178,6 +189,11 @@ func (v *Volume) GetAABB() *aabb.AABB {
 // GetModelId returns the model identifier assigned to the volume.
 func (v *Volume) GetModelId() int {
 	return v.modelId
+}
+
+// SetModelId updates the model frame identifier assigned to the volume.
+func (v *Volume) SetModelId(modelId int) {
+	v.modelId = modelId
 }
 
 func (v *Volume) GetId() string {

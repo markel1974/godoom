@@ -213,6 +213,11 @@ func CreateConfigThing(classname string, category string, pos geometry.XYZ, cMod
 		return CreateConfigButton(classname, worldPos, cModel, 0.0, 16.0, 16.0)
 	}
 	cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+	return CreateConfigThingFromCenteredModel(classname, category, pos, cModel)
+}
+
+// CreateConfigThingFromCenteredModel wraps an already-centered Model3DEntry into a Thing instance without mutating or recentering cModel.
+func CreateConfigThingFromCenteredModel(classname string, category string, pos geometry.XYZ, cModel *config.Model3DEntry) *config.Thing {
 	if keyId := q2KeyId(classname); len(keyId) > 0 {
 		return CreateConfigKey(classname, pos, cModel, 0, 0.1, keyId)
 	}

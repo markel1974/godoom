@@ -19,6 +19,12 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+type frameSlot struct {
+	frameIdx int
+	seq      uint64
+	vol      *volumes.Volume
+}
+
 // Element3D stores runtime state for a 3D vertex-based entity with animation, volumes, and physics data.
 type Element3D struct {
 	solver             *collisions.Solver
@@ -27,7 +33,13 @@ type Element3D struct {
 	frictionCombine    int
 	materials          *materials.Materials
 	comp               *Composer
-	vols               *volumes.Volumes //[]*volumes.Volume
+	vols               *volumes.Volumes
+	tpl                *ElementTemplate
+	sharedTree         *aabb.Tree
+	slots              []frameSlot
+	slotSeq            uint64
+	numFrames          int
+	materializedAll    bool
 	startFrame         int
 	endFrame           int
 	startTick          uint64
@@ -40,6 +52,7 @@ type Element3D struct {
 	lerpT              float64
 	singleFrame        bool
 	lastVolA           *volumes.Volume
+	lastSolverFrameA   int
 	groupSize          float64
 	salt               uint64
 	tick               uint64
@@ -54,6 +67,8 @@ type Element3D struct {
 	lastQw             float64
 	lastRotVolA        *volumes.Volume
 	lastRotVolB        *volumes.Volume
+	lastRotFrameA      int
+	lastRotFrameB      int
 	minX               float64
 	minY               float64
 	minZ               float64
@@ -61,14 +76,16 @@ type Element3D struct {
 	maxY               float64
 	maxZ               float64
 	treeVol            *volumes.Volume
+	treeFrameIdx       int
 	treeVolVer         uint64
 	treeRebuilds       uint64
 }
 
+const maxCachedElementSlots = 4
+
 // NewElement3D creates and initializes a 3D vertex entry from thing model frames, actions, tags, and materials.
 // NewElement3D panics if required frame, action, or group size configuration is invalid.
 func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D {
-
 	model := cfg.Element3D
 	if len(model.Frames) <= 0 {
 		panic(fmt.Sprintf("no Model3DEntry frames for thing %s", cfg.Id))
@@ -92,25 +109,6 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 		}
 	}
 
-	v := &Element3D{
-		tagMap:             make(map[string]int),
-		vols:               volumes.NewVolumes(len(model.Frames)),
-		solver:             nil,
-		restitutionCombine: cfg.RestitutionCombine,
-		frictionCombine:    cfg.FrictionCombine,
-		materials:          materials,
-	}
-
-	tagCounter := 0
-	for _, cfgFrame := range model.Frames {
-		for tagName := range cfgFrame.Tags {
-			if _, exists := v.tagMap[tagName]; !exists {
-				v.tagMap[tagName] = tagCounter
-				tagCounter++
-			}
-		}
-	}
-
 	maxFaces := 0
 	for _, cfgFrame := range model.Frames {
 		if len(cfgFrame.Triangles) > maxFaces {
@@ -125,18 +123,35 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 	sharedTree := aabb.NewTree(treeCap, 0.0)
 	sharedSolver := collisions.NewSolver(true, cfg.Mass, cfg.Restitution, cfg.Friction, cfg.RestitutionCombine, cfg.FrictionCombine, cfg.GForce)
 
-	for frameIdx, cfgFrame := range model.Frames {
-		baseId := fmt.Sprintf("%s_md1_frame_%d", cfg.Id, frameIdx)
-		volume := volumes.NewVolumeDynamicShared(frameIdx, baseId, "thing", sharedTree, sharedSolver)
+	numFrames := len(model.Frames)
+	v := &Element3D{
+		solver:             sharedSolver,
+		restitutionCombine: cfg.RestitutionCombine,
+		frictionCombine:    cfg.FrictionCombine,
+		materials:          materials,
+		sharedTree:         sharedTree,
+		numFrames:          numFrames,
+		lastSolverFrameA:   -1,
+		lastRotFrameA:      -1,
+		lastRotFrameB:      -1,
+		treeFrameIdx:       -1,
+		actions:            actions,
+	}
 
-		for triIdx, tri := range cfgFrame.Triangles {
-			label := fmt.Sprintf("%s_%d", baseId, triIdx)
+	var refVol *volumes.Volume
+	if numFrames == 1 {
+		cfgFrame := model.Frames[0]
+		v.tagMap = model.BuildTagMap()
+		v.vols = volumes.NewVolumes(1)
+		v.materializedAll = true
+		volume := volumes.NewVolumeDynamicSharedSized(0, "", "thing", sharedTree, sharedSolver, maxFaces)
+		for _, tri := range cfgFrame.Triangles {
 			points := [3]geometry.XYZ{tri.Vertices[0].Pos, tri.Vertices[1].Pos, tri.Vertices[2].Pos}
 			var material *textures.Material
 			if tri.Material != nil {
 				material = v.materials.GetMaterial(tri.Material)
 			}
-			face := volumes.NewFace(points, label, material)
+			face := volumes.NewFace(points, "", material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
 			if tri.Vertices[0].HasNormal || tri.Vertices[1].HasNormal || tri.Vertices[2].HasNormal {
@@ -144,24 +159,48 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 			}
 			volume.AddFace(face)
 		}
-		// Copy tags to volume
 		for tagName, tagData := range cfgFrame.Tags {
 			volume.SetVertexTag(v.tagMap[tagName], tagData.Origin, tagData.Axis)
 		}
 		volume.RebuildGeometry()
-		v.vols.Set(frameIdx, volume)
+		v.vols.Set(0, volume)
+		v.vols.SetAllowTessellate(true)
+		refVol = volume
+	} else {
+		tpl := v.materials.GetOrBuildTemplate(model, func() any {
+			return buildElementTemplate(model, v.materials)
+		}).(*ElementTemplate)
+		v.tpl = tpl
+		v.tagMap = tpl.tagMap
+		v.vols = volumes.NewVolumes(0)
+		v.materializedAll = false
+
+		slotCount := min(numFrames, maxCachedElementSlots)
+		v.slots = make([]frameSlot, slotCount)
+		for i := range slotCount {
+			v.slots[i] = frameSlot{
+				frameIdx: -1,
+				vol:      tpl.allocateSlotVolume(-1, sharedTree, sharedSolver, false),
+			}
+		}
+
+		refIdx := v.findReferenceFrameIndex()
+		if refSolverVol := v.getFrameVolume(refIdx, -1); refSolverVol != nil {
+			// Restore shared solver extents to the standing/reference pose rather than leaving the last frame (often death).
+			rebuildSolverFromVolume(sharedSolver, refSolverVol)
+		}
+		refVol = v.getFrameVolume(0, -1)
 	}
 
 	facesA := volumes.NewFacesSized(nil, maxFaces, true)
 	facesB := volumes.NewFacesSized(nil, maxFaces, true)
 	facesA.SetAllowTessellate(false)
 	facesB.SetAllowTessellate(false)
-	refVol := v.vols.Get(0)
 
 	for j := range maxFaces {
 		var mat *textures.Material
 		var tu, tv [3]float64
-		if j < refVol.GetFaceCount() {
+		if refVol != nil && j < refVol.GetFaceCount() {
 			src := refVol.GetFace(j)
 			mat = src.GetMaterial()
 			tu, tv = src.GetUV()
@@ -171,13 +210,8 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 	}
 
 	v.groupSize = float64(model.GroupSize)
-	v.actions = actions
-	if refSolverVol := v.findReferenceVolume(); refSolverVol != nil {
-		// Restore shared solver extents to the standing/reference pose rather than leaving the last frame (often death).
-		rebuildSolverFromVolume(sharedSolver, refSolverVol)
-	}
 	v.startFrame = 0
-	v.endFrame = len(model.Frames) - 1
+	v.endFrame = numFrames - 1
 	v.currentAction = -1
 
 	v.volA = refVol
@@ -187,19 +221,17 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 	v.ent = v.solver.GetEntity()
 	v.lerpT = 0.0
 	v.lastVolA = nil
-	v.salt = uint64(rand.Intn(len(model.Frames)))
+	v.salt = uint64(rand.Intn(numFrames))
 	v.facesA = facesA
 	v.facesB = facesB
 	v.rot = articulated_dynamics.NewTagAxisIdentity()
 	v.lastQw = 1.0
 	v.singleFrame = v.endFrame == 0
-	if v.singleFrame {
-		v.vols.SetAllowTessellate(true)
-	}
 
 	if len(v.actions) > 0 {
 		v.setActionState(0)
 	}
+
 	v.Compile(0)
 	return v
 }
@@ -255,11 +287,13 @@ func (v *Element3D) GetLastRolVolB() *volumes.Volume {
 // UnsetLastRolVolA clears the stored last rotation volume A value.
 func (v *Element3D) UnsetLastRolVolA() {
 	v.lastRotVolA = nil
+	v.lastRotFrameA = -1
 }
 
 // UnsetLastRolVolB clears the stored last rotational volume B reference.
 func (v *Element3D) UnsetLastRolVolB() {
 	v.lastRotVolB = nil
+	v.lastRotFrameB = -1
 }
 
 // GetMinMax returns the local minimum and maximum bounds as minX, minY, minZ, maxX, maxY, and maxZ.
@@ -267,14 +301,98 @@ func (v *Element3D) GetMinMax() (float64, float64, float64, float64, float64, fl
 	return v.minX, v.minY, v.minZ, v.maxX, v.maxY, v.maxZ
 }
 
+// getFrameVolume returns the active Volume for frameIdx, loading it from the template LRU pool on demand
+// without evicting keepFrame or currently active animation frames unless necessary.
+func (v *Element3D) getFrameVolume(frameIdx int, keepFrame int) *volumes.Volume {
+	if frameIdx < 0 || frameIdx >= v.numFrames {
+		return nil
+	}
+	if v.materializedAll {
+		return v.vols.Get(frameIdx)
+	}
+	for i := range v.slots {
+		if v.slots[i].frameIdx == frameIdx {
+			v.slotSeq++
+			v.slots[i].seq = v.slotSeq
+			return v.slots[i].vol
+		}
+	}
+	victim := -1
+	bestSeq := uint64(math.MaxUint64)
+	for i := range v.slots {
+		sFrame := v.slots[i].frameIdx
+		if sFrame >= 0 && (sFrame == keepFrame || sFrame == v.frameIdxA || sFrame == v.frameIdxB) {
+			continue
+		}
+		if v.slots[i].seq < bestSeq {
+			bestSeq = v.slots[i].seq
+			victim = i
+		}
+	}
+	if victim < 0 {
+		for i := range v.slots {
+			sFrame := v.slots[i].frameIdx
+			if sFrame >= 0 && sFrame == keepFrame {
+				continue
+			}
+			if v.slots[i].seq < bestSeq {
+				bestSeq = v.slots[i].seq
+				victim = i
+			}
+		}
+	}
+	if victim < 0 {
+		victim = 0
+	}
+	slot := &v.slots[victim]
+	v.tpl.applyTemplateFrameToVolume(frameIdx, slot.vol)
+	v.slotSeq++
+	slot.frameIdx = frameIdx
+	slot.seq = v.slotSeq
+	return slot.vol
+}
+
+// ensureMaterialized allocates full per-frame volumes when operations such as Deform or CenterFrames
+// require independent persistent modifications across all animation frames.
+func (v *Element3D) ensureMaterialized() {
+	if v.materializedAll {
+		return
+	}
+	vols := volumes.NewVolumes(v.numFrames)
+	for i := range v.slots {
+		sf := v.slots[i].frameIdx
+		if sf >= 0 && sf < v.numFrames && vols.Get(sf) == nil {
+			vols.Set(sf, v.slots[i].vol)
+		}
+	}
+	for i := 0; i < v.numFrames; i++ {
+		if vols.Get(i) != nil {
+			continue
+		}
+		vol := v.tpl.allocateSlotVolume(i, v.sharedTree, v.solver, false)
+		v.tpl.applyTemplateFrameToVolume(i, vol)
+		vols.Set(i, vol)
+	}
+	v.vols = vols
+	v.slots = nil
+	v.materializedAll = true
+	if v.frameIdxA >= 0 && v.frameIdxA < v.numFrames {
+		v.volA = vols.Get(v.frameIdxA)
+		v.comp.SetVolume(v.volA)
+	}
+	if v.frameIdxB >= 0 && v.frameIdxB < v.numFrames {
+		v.volB = vols.Get(v.frameIdxB)
+	}
+}
+
 // GetVolume returns the volume at the specified index.
 func (v *Element3D) GetVolume(idx int) *volumes.Volume {
-	return v.vols.Get(idx)
+	return v.getFrameVolume(idx, -1)
 }
 
 // GetVolumesLen returns the number of volumes associated with the entry.
 func (v *Element3D) GetVolumesLen() int {
-	return v.vols.Len()
+	return v.numFrames
 }
 
 // GetActionsLen returns the number of actions associated with the entry.
@@ -301,7 +419,7 @@ func (v *Element3D) QueryOverlaps(object aabb.IObject, callback func(object aabb
 }
 
 // ensureActiveTree rebuilds the shared AABB tree from v.volA only when the active frame
-// volume or its geometry revision changes.
+// volume, frame index, or its geometry revision changes.
 func (v *Element3D) ensureActiveTree() {
 	if v.volA == nil {
 		return
@@ -311,11 +429,12 @@ func (v *Element3D) ensureActiveTree() {
 		return
 	}
 	ver := faces.GetVersion()
-	if v.treeVol == v.volA && v.treeVolVer == ver {
+	if v.treeVol == v.volA && v.treeFrameIdx == v.frameIdxA && v.treeVolVer == ver {
 		return
 	}
 	v.volA.RebuildTree()
 	v.treeVol = v.volA
+	v.treeFrameIdx = v.frameIdxA
 	v.treeVolVer = ver
 	v.treeRebuilds++
 }
@@ -345,13 +464,14 @@ func (v *Element3D) setActionState(idx int) bool {
 	if v.startFrame >= 0 {
 		v.frameIdxA = v.startFrame
 		v.frameIdxB = v.startFrame
-		refVol := v.vols.Get(v.startFrame)
+		refVol := v.getFrameVolume(v.startFrame, -1)
 		v.volA = refVol
 		v.volB = refVol
 		v.lerpT = 0.0
 		v.comp.SetVolume(v.volA)
 		if !v.vols.HasCenters() {
 			v.lastVolA = v.volA
+			v.lastSolverFrameA = v.frameIdxA
 		}
 	}
 	return true
@@ -396,13 +516,18 @@ func (v *Element3D) AdvanceAnimation(tick uint64) {
 	}
 	v.frameIdxA = v.startFrame + relativeFrameA
 	v.frameIdxB = v.startFrame + relativeFrameB
-	v.volA = v.vols.Get(v.frameIdxA)
-	v.volB = v.vols.Get(v.frameIdxB)
+	v.volA = v.getFrameVolume(v.frameIdxA, v.frameIdxB)
+	if v.frameIdxB == v.frameIdxA {
+		v.volB = v.volA
+	} else {
+		v.volB = v.getFrameVolume(v.frameIdxB, v.frameIdxA)
+	}
 	v.lerpT = lerpT
 }
 
 // CenterFrames recenters the entry volumes and rebuilds the collision solver using the given physics parameters.
 func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64) {
+	v.ensureMaterialized()
 	v.vols.BuildCenters()
 
 	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.restitutionCombine, v.frictionCombine, gForce)
@@ -417,7 +542,9 @@ func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64
 	v.solver = partSolver
 	v.ent = partSolver.GetEntity()
 	v.lastVolA = v.volA
+	v.lastSolverFrameA = v.frameIdxA
 	v.treeVol = nil
+	v.treeFrameIdx = -1
 	v.ensureActiveTree()
 }
 
@@ -449,25 +576,27 @@ func (v *Element3D) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) 
 
 var standingReferenceNames = []string{"stand", "idle", "legs_idle", "hover"}
 
-// findReferenceVolume returns the first frame volume matching an idle/standing pose
+// findReferenceFrameIndex returns the first frame index matching an idle/standing pose
 // so shared collider bounds match the upright stance instead of the final animation frame.
-func (v *Element3D) findReferenceVolume() *volumes.Volume {
+func (v *Element3D) findReferenceFrameIndex() int {
 	for _, act := range v.actions {
 		if act == nil {
 			continue
 		}
 		for _, refName := range standingReferenceNames {
-			if strings.Contains(act.Name, refName) && act.Start >= 0 && act.Start < v.vols.Len() {
-				if vol := v.vols.Get(act.Start); vol != nil && vol.GetFaceCount() > 0 {
-					return vol
+			if strings.Contains(act.Name, refName) && act.Start >= 0 && act.Start < v.numFrames {
+				if v.tpl != nil && v.tpl.frames[act.Start].faceCount > 0 {
+					return act.Start
+				}
+				if v.materializedAll {
+					if vol := v.vols.Get(act.Start); vol != nil && vol.GetFaceCount() > 0 {
+						return act.Start
+					}
 				}
 			}
 		}
 	}
-	if v.vols.Len() > 0 {
-		return v.vols.Get(0)
-	}
-	return nil
+	return 0
 }
 
 // rebuildSolverFromVolume updates solver collision data from volume face bounds, centroid, and inertia when non-nil.
@@ -561,12 +690,13 @@ func (v *Element3D) SyncSolverToCurrentFrame() {
 		return
 	}
 	v.ensureActiveTree()
-	if v.lastVolA == v.volA {
+	if v.lastVolA == v.volA && v.lastSolverFrameA == v.frameIdxA {
 		return
 	}
 	v.comp.SetVolume(v.volA)
 	rebuildSolverFromVolume(v.comp.solver, v.volA)
 	v.lastVolA = v.volA
+	v.lastSolverFrameA = v.frameIdxA
 }
 
 // CompileAttached updates transformed attached volumes and records their combined bounding extents.
@@ -602,8 +732,9 @@ func (v *Element3D) CompileDetached() {
 	ent := v.ent
 	q := ent.GetQRotation()
 	qx, qy, qz, qw := q.Get()
-	if v.lastRotVolA != v.volA || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
+	if v.lastRotVolA != v.volA || v.lastRotFrameA != v.frameIdxA || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
 		v.lastRotVolA = v.volA
+		v.lastRotFrameA = v.frameIdxA
 		v.lastQx, v.lastQy, v.lastQz, v.lastQw = qx, qy, qz, qw
 		isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
 		if !isIdent {
@@ -632,13 +763,15 @@ func (v *Element3D) Compile(tick uint64) bool {
 	qx, qy, qz, qw := q.Get()
 	isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
 
-	if v.volA != v.lastRotVolA || v.volB != v.lastRotVolB || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
+	if v.volA != v.lastRotVolA || v.volB != v.lastRotVolB || v.frameIdxA != v.lastRotFrameA || v.frameIdxB != v.lastRotFrameB || qx != v.lastQx || qy != v.lastQy || qz != v.lastQz || qw != v.lastQw {
 		if !isIdent {
 			v.rot.SetFromQuaternion(q)
 		}
 		v.lastQx, v.lastQy, v.lastQz, v.lastQw = qx, qy, qz, qw
 		v.lastRotVolA = v.volA
 		v.lastRotVolB = v.volB
+		v.lastRotFrameA = v.frameIdxA
+		v.lastRotFrameB = v.frameIdxB
 
 		minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
 		maxX, maxY, maxZ := -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
@@ -661,9 +794,10 @@ func (v *Element3D) Compile(tick uint64) bool {
 		}
 	}
 
-	if v.lastVolA != v.volA {
+	if v.lastVolA != v.volA || v.lastSolverFrameA != v.frameIdxA {
 		v.comp.SetVolume(v.volA)
 		v.lastVolA = v.volA
+		v.lastSolverFrameA = v.frameIdxA
 	}
 	v.ensureActiveTree()
 
@@ -725,11 +859,15 @@ func (v *Element3D) GetTagIndex(name string) int {
 // Deform applies an impulse within the given radius and recompiles cached data when geometry changes.
 // Deform returns true if any vertex volume was modified.
 func (v *Element3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	v.ensureMaterialized()
 	deformed := v.vols.Deform(impact, impulse, radius)
 	if deformed {
 		v.lastRotVolA = nil
 		v.lastRotVolB = nil
+		v.lastRotFrameA = -1
+		v.lastRotFrameB = -1
 		v.treeVol = nil
+		v.treeFrameIdx = -1
 		v.Compile(v.tick)
 	}
 	return deformed

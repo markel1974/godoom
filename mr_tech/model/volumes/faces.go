@@ -43,7 +43,6 @@ type Faces struct {
 	maxX, maxY, maxZ float64
 	w, h, d          float64
 
-	edgeAdj         map[EdgeKey]edgeAdjacency
 	markedEdges     map[EdgeKey]struct{}
 	midpoints       map[EdgeKey]geometry.XYZ
 	displacements   map[VertexKey]geometry.XYZ
@@ -118,6 +117,20 @@ func (f *Faces) BumpVersion() {
 	f.version++
 }
 
+// ApplyCachedSummary sets precomputed face count, bounding extents, centroid, inertia tensor, and geometry hash,
+// and increments the version counter.
+func (f *Faces) ApplyCachedSummary(count int, minX, minY, minZ, maxX, maxY, maxZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz float64, geomHash uint64) {
+	f.count = count
+	f.minX, f.minY, f.minZ = minX, minY, minZ
+	f.maxX, f.maxY, f.maxZ = maxX, maxY, maxZ
+	f.w, f.h, f.d = w, h, d
+	f.cx, f.cy, f.cz = cx, cy, cz
+	f.ixx, f.ixy, f.ixz = ixx, ixy, ixz
+	f.iyy, f.iyz, f.izz = iyy, iyz, izz
+	f.geomHash = geomHash
+	f.version++
+}
+
 // GetGeomHash returns the structural and vertex fingerprint for sharing identical static GPU meshes.
 func (f *Faces) GetGeomHash() uint64 {
 	return f.geomHash
@@ -175,7 +188,17 @@ func (f *Faces) RebuildTree() {
 // when adjacent faces fall within the crease threshold (cosCrease = 0.5 -> ~60 deg),
 // while preserving explicit artist vertex normals when already set.
 func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
-	if f.count <= 0 {
+	if f.count <= 1 {
+		return
+	}
+	needsSmooth := false
+	for i := 0; i < f.count; i++ {
+		if fc := f.container[i]; fc != nil && !fc.hasExplicitNormals {
+			needsSmooth = true
+			break
+		}
+	}
+	if !needsSmooth {
 		return
 	}
 	type adjFace struct {
@@ -190,7 +213,6 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 	adjMap := make(map[smoothVertKey][]int32, f.count*2)
 	faceData := make([]adjFace, f.count)
 
-	needsSmooth := false
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
 		if fc == nil {
@@ -207,43 +229,36 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 			nx:  fc.n.X, ny: fc.n.Y, nz: fc.n.Z,
 			ax: ax, ay: ay, az: az,
 		}
-		if !fc.hasExplicitNormals {
-			needsSmooth = true
-		}
-		if f.count > 1 {
-			for k := 0; k < 3; k++ {
-				key := makeSmoothVertKey(fc.tri.Points[k])
-				adjMap[key] = append(adjMap[key], int32(i))
-			}
+		for k := 0; k < 3; k++ {
+			key := makeSmoothVertKey(fc.tri.Points[k])
+			adjMap[key] = append(adjMap[key], int32(i))
 		}
 	}
 
-	if needsSmooth && f.count > 1 {
-		for i := 0; i < f.count; i++ {
-			fc := f.container[i]
-			if fc == nil || fc.hasExplicitNormals {
-				continue
-			}
-			fd := faceData[i]
-			if fd.nx == 0 && fd.ny == 0 && fd.nz == 0 {
-				continue
-			}
-			for k := 0; k < 3; k++ {
-				key := makeSmoothVertKey(fc.tri.Points[k])
-				refs := adjMap[key]
-				var sx, sy, sz float64
-				for _, rIdx := range refs {
-					ofd := faceData[rIdx]
-					if fd.nx*ofd.nx+fd.ny*ofd.ny+fd.nz*ofd.nz >= cosCrease {
-						sx += ofd.ax
-						sy += ofd.ay
-						sz += ofd.az
-					}
-				}
-				fc.vertexNormals[k] = normalizeXYZ(geometry.XYZ{X: sx, Y: sy, Z: sz}, fc.n)
-			}
-			fc.computeTangent()
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil || fc.hasExplicitNormals {
+			continue
 		}
+		fd := faceData[i]
+		if fd.nx == 0 && fd.ny == 0 && fd.nz == 0 {
+			continue
+		}
+		for k := 0; k < 3; k++ {
+			key := makeSmoothVertKey(fc.tri.Points[k])
+			refs := adjMap[key]
+			var sx, sy, sz float64
+			for _, rIdx := range refs {
+				ofd := faceData[rIdx]
+				if fd.nx*ofd.nx+fd.ny*ofd.ny+fd.nz*ofd.nz >= cosCrease {
+					sx += ofd.ax
+					sy += ofd.ay
+					sz += ofd.az
+				}
+			}
+			fc.vertexNormals[k] = normalizeXYZ(geometry.XYZ{X: sx, Y: sy, Z: sz}, fc.n)
+		}
+		fc.computeTangent()
 	}
 }
 
@@ -292,7 +307,8 @@ func (f *Faces) computeGeomHash() {
 	f.geomHash = h
 }
 
-// computeActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave).
+// computeActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave)
+// using a short-lived local adjacency map so no scratch buckets remain pinned after computation.
 func (f *Faces) computeActiveEdges() {
 	const (
 		coplanarCosThreshold = 0.9995
@@ -307,13 +323,7 @@ func (f *Faces) computeActiveEdges() {
 	if f.count < 2 {
 		return
 	}
-	if f.edgeAdj == nil {
-		f.edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
-	} else {
-		for k := range f.edgeAdj {
-			delete(f.edgeAdj, k)
-		}
-	}
+	edgeAdj := make(map[EdgeKey]edgeAdjacency, f.count*2)
 
 	canOccludeEdge := func(fc *Face) bool {
 		if fc == nil {
@@ -335,14 +345,14 @@ func (f *Faces) computeActiveEdges() {
 		keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
 		for eIdx := uint8(0); eIdx < 3; eIdx++ {
 			key := keys[eIdx]
-			adj := f.edgeAdj[key]
+			adj := edgeAdj[key]
 			if adj.count < 2 {
 				adj.refs[adj.count] = edgeFaceRef{faceIdx: int32(i), edgeIdx: eIdx}
 			}
 			if adj.count < 255 {
 				adj.count++
 			}
-			f.edgeAdj[key] = adj
+			edgeAdj[key] = adj
 		}
 	}
 
@@ -357,7 +367,7 @@ func (f *Faces) computeActiveEdges() {
 		return (dx*n.X + dy*n.Y + dz*n.Z) / math.Sqrt(lenSq)
 	}
 
-	for _, adj := range f.edgeAdj {
+	for _, adj := range edgeAdj {
 		if adj.count != 2 {
 			continue
 		}

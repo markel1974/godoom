@@ -7,18 +7,37 @@ import (
 
 // Materials is a type that manages a collection of named materials and provides access to these materials.
 type Materials struct {
-	handler   textures.ITextures
-	container map[string]*textures.Material
-	empty     *textures.Material
+	handler          textures.ITextures
+	container        map[string]*textures.Material
+	empty            *textures.Material
+	elementTemplates map[any]any
 }
 
 // NewMaterials creates a new Materials instance with the provided textures and initializes its material map.
 func NewMaterials(handler textures.ITextures) *Materials {
 	return &Materials{
-		handler:   handler,
-		container: make(map[string]*textures.Material),
-		empty:     textures.NewMaterial("empty", nil, int(config.MaterialKindNone)),
+		handler:          handler,
+		container:        make(map[string]*textures.Material),
+		empty:            textures.NewMaterial("empty", nil, int(config.MaterialKindNone)),
+		elementTemplates: make(map[any]any),
 	}
+}
+
+// GetOrBuildTemplate returns a cached compiled model template associated with key,
+// invoking build once on cache miss.
+func (r *Materials) GetOrBuildTemplate(key any, build func() any) any {
+	if r == nil || key == nil {
+		return build()
+	}
+	if r.elementTemplates == nil {
+		r.elementTemplates = make(map[any]any)
+	}
+	if cached, ok := r.elementTemplates[key]; ok {
+		return cached
+	}
+	built := build()
+	r.elementTemplates[key] = built
+	return built
 }
 
 // Setup initializes the Materials collection and prepares it for use, returning an error if setup fails.

@@ -90,6 +90,7 @@ func (tx *Textures) Setup(t textures.ITextures) error {
 		size := tx.buckets[bIdx].Size
 		layer := tx.buckets[bIdx].Layer
 		diffuse, normal, emissive := usable.tex.Compile(size)
+		usable.tex.Clear()
 
 		tx.ctx.BindTexture(api.TEXTURE_2D_ARRAY, tx.buckets[bIdx].DiffuseArray)
 		tx.ctx.TexSubImage3D(api.TEXTURE_2D_ARRAY, 0, 0, 0, layer, int32(size), int32(size), 1, api.RGBA, api.UNSIGNED_BYTE, tx.ctx.Ptr(diffuse))

@@ -155,6 +155,21 @@ func (m *Model3DEntry) Center(referenceFrames []string) {
 	_, _ = m.CenterWithBounds(referenceFrames)
 }
 
+// BuildTagMap generates a map of unique tag names to sequential integer indices from the frames of the 3D model.
+func (m *Model3DEntry) BuildTagMap() map[string]int {
+	tagMap := make(map[string]int)
+	tagCounter := 0
+	for _, cfgFrame := range m.Frames {
+		for tagName := range cfgFrame.Tags {
+			if _, exists := tagMap[tagName]; !exists {
+				tagMap[tagName] = tagCounter
+				tagCounter++
+			}
+		}
+	}
+	return tagMap
+}
+
 // resolveReferenceFrame returns the start frame index of the first action matching referenceFrames, or 0.
 func (m *Model3DEntry) resolveReferenceFrame(referenceFrames []string) int {
 	if len(m.ActionDefinitions) > 0 && len(m.ActionIntervals) == len(m.ActionDefinitions) {
@@ -362,11 +377,7 @@ func NormalizeNormalsAndWinding(tris []Model3DEntryTriangle, checkSignedVolume b
 		valid               bool
 	}
 	faceNormals := make([]faceNData, nTris)
-	type adjRef struct {
-		triIdx int
-	}
-	adjMap := make(map[modelVertKey][]adjRef, nTris)
-
+	needsSmooth := false
 	for i := range tris {
 		t := &tris[i]
 		ax, ay, az := triCross(t)
@@ -378,9 +389,31 @@ func NormalizeNormalsAndWinding(tris []Model3DEntryTriangle, checkSignedVolume b
 				unitX: ax * invL, unitY: ay * invL, unitZ: az * invL,
 				valid: true,
 			}
+		}
+		if !t.Vertices[0].HasNormal || !t.Vertices[1].HasNormal || !t.Vertices[2].HasNormal {
+			needsSmooth = true
+		}
+	}
+
+	var vertHead map[modelVertKey]int32
+	var vertNext []int32
+	if needsSmooth {
+		vertHead = make(map[modelVertKey]int32, nTris)
+		vertNext = make([]int32, nTris*3)
+		for i := range tris {
+			if !faceNormals[i].valid {
+				continue
+			}
+			t := &tris[i]
 			for k := range 3 {
+				e := int32(i*3 + k)
 				key := makeModelVertKey(t.Vertices[k].Pos)
-				adjMap[key] = append(adjMap[key], adjRef{triIdx: i})
+				if prev, ok := vertHead[key]; ok {
+					vertNext[e] = prev
+				} else {
+					vertNext[e] = -1
+				}
+				vertHead[key] = e
 			}
 		}
 	}
@@ -406,18 +439,16 @@ func NormalizeNormalsAndWinding(tris []Model3DEntryTriangle, checkSignedVolume b
 				continue
 			}
 			key := makeModelVertKey(t.Vertices[k].Pos)
-			refs := adjMap[key]
+			e, ok := vertHead[key]
 			var sx, sy, sz float64
-			for _, ref := range refs {
-				ofd := faceNormals[ref.triIdx]
-				if !ofd.valid {
-					continue
-				}
-				if fd.unitX*ofd.unitX+fd.unitY*ofd.unitY+fd.unitZ*ofd.unitZ >= cosCrease {
+			for ok && e >= 0 {
+				ofd := faceNormals[int(e)/3]
+				if ofd.valid && fd.unitX*ofd.unitX+fd.unitY*ofd.unitY+fd.unitZ*ofd.unitZ >= cosCrease {
 					sx += ofd.areaX
 					sy += ofd.areaY
 					sz += ofd.areaZ
 				}
+				e = vertNext[e]
 			}
 			sl := math.Sqrt(sx*sx + sy*sy + sz*sz)
 			if sl > 1e-12 {

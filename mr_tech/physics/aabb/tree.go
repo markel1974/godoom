@@ -27,6 +27,7 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		stack:              make([]uint, initialSize),
 		margin:             margin,
 	}
+
 	var nodeIndex uint
 
 	for nodeIndex = 0; nodeIndex < initialSize; nodeIndex++ {

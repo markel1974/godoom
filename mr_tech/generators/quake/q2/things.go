@@ -18,6 +18,7 @@ type Things struct {
 	texManager *textures.Textures
 	palette    [256]color.RGBA
 	il         *ImageLoader
+	modelCache map[string]*config.Model3DEntry
 }
 
 // NewThings creates and initializes a new Things instance with the provided archive, texture manager, and color palette.
@@ -27,6 +28,7 @@ func NewThings(arc interfaces.IArchive, texManager *textures.Textures, palette [
 		texManager: texManager,
 		palette:    palette,
 		il:         NewImageLoader(arc, texManager, palette),
+		modelCache: make(map[string]*config.Model3DEntry),
 	}
 }
 
@@ -58,6 +60,11 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 	case "monster":
 	default:
 		return nil, fmt.Errorf("unknown thing %s", classname)
+	}
+
+	cacheKey := fmt.Sprintf("%s|%s|%d", thingPath, classname, skinTargetIndex)
+	if cached, ok := th.modelCache[cacheKey]; ok {
+		return CreateConfigThingFromCenteredModel(classname, category, pos, cached), nil
 	}
 
 	rsMD2, err := th.arc.Open(thingPath)
@@ -118,7 +125,9 @@ func (th *Things) CreateThing(thingPath string, pos geometry.XYZ, classname stri
 		cFrame := config.NewModel3DEntryFrame(triangles)
 		cModel.Frames[idx] = cFrame
 	}
-	thingCfg := CreateConfigThing(classname, category, pos, cModel, nil)
+	cModel.Center([]string{"stand", "idle", "legs_idle", "hover"})
+	th.modelCache[cacheKey] = cModel
+	thingCfg := CreateConfigThingFromCenteredModel(classname, category, pos, cModel)
 	return thingCfg, nil
 }
 

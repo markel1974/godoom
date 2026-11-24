@@ -169,6 +169,16 @@ func (t *Texture) RGBA() (int, int, []uint8) {
 	return t.w, t.h, t.rgba(t.diffuse)
 }
 
+func (t *Texture) Clear() {
+	//fmt.Println("Clearing texture")
+	//time.Sleep(10 * time.Second)
+	//t.HasAlpha()
+	//t.normal = make([][]int, 0)
+	//t.emissive = make([][]int, 0)
+	//t.diffuse = make([][]int, 0)
+	//runtime.GC()
+}
+
 // Compile generates normal, diffuse, and emissive maps for the texture given a target size in pixels.
 func (t *Texture) Compile(size int) ([]uint8, []uint8, []uint8) {
 	const stride = 4

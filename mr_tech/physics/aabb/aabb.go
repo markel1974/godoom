@@ -28,13 +28,18 @@ type AABB struct {
 	onChange OnChangeT
 }
 
-// NewAABB creates and returns a new axis-aligned bounding box (AABB) with default uninitialized properties.
-func NewAABB() *AABB {
-	a := &AABB{
+// MakeAABB initializes an AABB value with default uninitialized bounds.
+func MakeAABB() AABB {
+	return AABB{
 		index:    -1,
 		onChange: _onChange,
 	}
-	return a
+}
+
+// NewAABB creates and returns a new axis-aligned bounding box (AABB) with default uninitialized properties.
+func NewAABB() *AABB {
+	a := MakeAABB()
+	return &a
 }
 
 // SetOnChange registers a callback function invoked whenever the AABB boundaries change.
@@ -66,7 +71,9 @@ func (a *AABB) Rebuild(minX float64, minY float64, minZ float64, maxX float64, m
 	a.maxY = maxY
 	a.maxZ = maxZ
 
-	a.onChange(a)
+	if a.onChange != nil {
+		a.onChange(a)
+	}
 }
 
 // Translate shifts the AABB by the specified displacement.
@@ -81,7 +88,9 @@ func (a *AABB) Translate(dx, dy, dz float64) {
 	a.minZ += dz
 	a.maxZ += dz
 
-	a.onChange(a)
+	if a.onChange != nil {
+		a.onChange(a)
+	}
 }
 
 // GetMinMax returns the minimum and maximum coordinates (minX, minY, minZ, maxX, maxY, maxZ) of the AABB.

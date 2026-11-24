@@ -368,3 +368,88 @@ func TestElement3DSolverUsesStandingPoseNotFinalDeathFrame(t *testing.T) {
 		t.Fatalf("expected fallback solver depth from frame 0 (50.0), got %.3f", depth)
 	}
 }
+
+func TestElement3DTemplateSharingLRUAndIsolation(t *testing.T) {
+	const numFrames = 12
+	mat := config.NewConfigMaterial("mat", []string{"t"}, config.MaterialKindSolid)
+	entryCfg := config.NewModel3DEntry(numFrames, nil, nil)
+	entryCfg.GroupSize = 1.0
+	entryCfg.ActionDefinitions = []string{"cycle"}
+	entryCfg.ActionIntervals = [][2]int{{0, numFrames - 1}}
+
+	for f := 0; f < numFrames; f++ {
+		tri := config.NewModel3DEntryTriangle(mat)
+		offsetX := float64(f * 20)
+		tri.Vertices[0].Pos = geometry.XYZ{X: offsetX, Y: 0, Z: 0}
+		tri.Vertices[1].Pos = geometry.XYZ{X: offsetX + 10, Y: 0, Z: 0}
+		tri.Vertices[2].Pos = geometry.XYZ{X: offsetX, Y: 10, Z: 2}
+		entryCfg.Frames[f] = config.NewModel3DEntryFrame([]config.Model3DEntryTriangle{tri})
+	}
+
+	cfg1 := config.NewConfigThing("clone_1", geometry.XYZ{}, 0, config.ThingEnemyDef, 20, 10, 20, 100)
+	cfg1.Element3D = entryCfg
+	cfg2 := config.NewConfigThing("clone_2", geometry.XYZ{}, 0, config.ThingEnemyDef, 20, 10, 20, 100)
+	cfg2.Element3D = entryCfg
+
+	tex := textures.NewTexture("t", 1, 2, 2, false)
+	mats := materials.NewMaterials(&stubTextures{tex: tex})
+
+	el1 := NewElement3D(cfg1, mats)
+	el2 := NewElement3D(cfg2, mats)
+	if el1.tpl == nil || el1.tpl != el2.tpl {
+		t.Fatalf("expected cloned Element3D instances to share compiled elementTemplate")
+	}
+	if el1.materializedAll || len(el1.slots) != maxCachedElementSlots {
+		t.Fatalf("expected LRU mode with %d slots, got materialized=%v slots=%d", maxCachedElementSlots, el1.materializedAll, len(el1.slots))
+	}
+	if el1.GetVolumesLen() != numFrames || el1.GetSolver() == el2.GetSolver() || el1.GetVolume(0).GetFacesTree() == el2.GetVolume(0).GetFacesTree() {
+		t.Fatalf("expected shared template with independent runtime solvers and spatial trees")
+	}
+
+	el1.SetSalt(0)
+	el2.SetSalt(0)
+	el1.SetAction(0)
+	el2.SetAction(0)
+
+	// Sweep through all 12 frames (> 4 LRU slots) with zero heap allocations and verify recycled slots update bounds/trees.
+	for step := uint64(0); step < numFrames; step++ {
+		el1.Compile(step)
+		minX, _, _, maxX, _, _ := el1.GetMinMax()
+		expectedMinX := float64(step * 20)
+		expectedCombinedMinX := expectedMinX
+		if step == numFrames-1 {
+			// frameB wraps to frame 0 (X=[0..10]), widening combined [volA, volB] minX to 0.
+			expectedCombinedMinX = 0
+		}
+		if minX < expectedCombinedMinX-0.01 || minX > expectedCombinedMinX+0.01 || maxX < expectedMinX+9.99 {
+			t.Fatalf("step %d expected X bounds near [%.1f, %.1f], got [%.2f, %.2f]", step, expectedCombinedMinX, expectedMinX+10, minX, maxX)
+		}
+		if _, _, ok := el1.IntersectRayFace(expectedMinX+2, 2, 10, 0, 0, -1, 50); !ok {
+			t.Fatalf("step %d expected ray hit at recycled frame X=%.1f", step, expectedMinX+2)
+		}
+	}
+
+	allocs := testing.AllocsPerRun(24, func() {
+		for tick := uint64(0); tick < numFrames; tick++ {
+			el1.Compile(tick)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 allocations cycling through 12 frames in LRU slots, got %v", allocs)
+	}
+
+	// Deform on el1 materializes el1 cleanly while leaving el2 untouched on its active frame.
+	el1.Compile(0)
+	el2.Compile(0)
+	if !el1.Deform(geometry.XYZ{X: 0, Y: 0, Z: 0}, geometry.XYZ{X: 0, Y: 0, Z: 5}, 3.0) {
+		t.Fatalf("expected el1 Deform to apply")
+	}
+	if !el1.materializedAll || el2.materializedAll {
+		t.Fatalf("expected only deformed el1 to materialize all volumes (el1=%v el2=%v)", el1.materializedAll, el2.materializedAll)
+	}
+	dist1, _, hit1 := el1.IntersectRayFace(0.1, 0.1, 20, 0, 0, -1, 50)
+	dist2, _, hit2 := el2.IntersectRayFace(0.1, 0.1, 20, 0, 0, -1, 50)
+	if !hit1 || !hit2 || !(dist1 < dist2-2.0) {
+		t.Fatalf("expected deformed el1 surface higher than untouched el2 (hit1=%v d1=%.3f hit2=%v d2=%.3f)", hit1, dist1, hit2, dist2)
+	}
+}

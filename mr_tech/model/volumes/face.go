@@ -21,34 +21,12 @@ const (
 	EdgeAllActive = EdgeABActive | EdgeBCActive | EdgeCAActive
 )
 
-func normalizeXYZ(v, fallback geometry.XYZ) geometry.XYZ {
-	l := math.Sqrt(v.X*v.X + v.Y*v.Y + v.Z*v.Z)
-	if l > 1e-12 {
-		inv := 1.0 / l
-		return geometry.XYZ{X: v.X * inv, Y: v.Y * inv, Z: v.Z * inv}
-	}
-	return fallback
-}
-
-func fallbackTangent(n geometry.XYZ) geometry.XYZ {
-	up := geometry.XYZ{X: 0, Y: 0, Z: 1}
-	if math.Abs(n.Z) > 0.99 {
-		up = geometry.XYZ{X: 1, Y: 0, Z: 0}
-	}
-	// up x n
-	tx := up.Y*n.Z - up.Z*n.Y
-	ty := up.Z*n.X - up.X*n.Z
-	tz := up.X*n.Y - up.Y*n.X
-	return normalizeXYZ(geometry.XYZ{X: tx, Y: ty, Z: tz}, geometry.XYZ{X: 1, Y: 0, Z: 0})
-}
-
 // Face represents a boundary or edge of a Sector, defined by its geometry, connectivity, and optional metadata.
 type Face struct {
 	id                 int
 	parent             *Volume
-	label              string
-	aabb               *aabb.AABB
-	tri                *geometry.Triangle3D
+	aabb               aabb.AABB
+	tri                geometry.Triangle3D
 	n                  geometry.XYZ
 	nAbs               geometry.XYZ
 	vertexNormals      [3]geometry.XYZ
@@ -71,8 +49,7 @@ type Face struct {
 func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 	out := &Face{
 		material:     material,
-		tri:          geometry.NewTriangle3D([3]geometry.XYZ{}),
-		aabb:         aabb.NewAABB(),
+		aabb:         aabb.MakeAABB(),
 		u:            u,
 		v:            v,
 		lightmapID:   -1,
@@ -85,21 +62,22 @@ func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
 func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Face {
 	out := &Face{
-		label:        label,
-		material:     material,
-		aabb:         aabb.NewAABB(),
-		tri:          geometry.NewTriangle3D(tri),
-		lightmapID:   -1,
-		tangentSigns: [3]float64{1, 1, 1},
-		activeEdges:  EdgeAllActive,
+		material:    material,
+		aabb:        aabb.MakeAABB(),
+		tri:         geometry.Triangle3D{Points: tri},
+		lightmapID:  -1,
+		activeEdges: EdgeAllActive,
 	}
+	out.tangentSigns[0] = 1
+	out.tangentSigns[1] = 1
+	out.tangentSigns[2] = 1
 	out.Rebuild()
 	return out
 }
 
 // NewFaceSubdivided returns a new face for tri, preserving metadata and applying UV coordinates when UVs are locked.
 func (fc *Face) NewFaceSubdivided(tri [3]geometry.XYZ, uvU, uvV [3]float64) *Face {
-	out := NewFace(tri, fc.label, fc.material)
+	out := NewFace(tri, "" /*fc.label*/, fc.material)
 	out.parent = fc.parent
 	out.singleSided = fc.singleSided
 	out.lightmapID = fc.lightmapID
@@ -114,7 +92,7 @@ func (fc *Face) NewFaceSubdivided(tri [3]geometry.XYZ, uvU, uvV [3]float64) *Fac
 
 // GetTri returns the three vertices that define the face triangle.
 func (fc *Face) GetTri() *geometry.Triangle3D {
-	return fc.tri
+	return &fc.tri
 }
 
 // Get0 returns the x, y, and z coordinates of the face's first vertex.
@@ -330,12 +308,12 @@ func (fc *Face) SetParent(parent *Volume) {
 
 // GetLabel returns the label associated with the face.
 func (fc *Face) GetLabel() string {
-	return fc.label
+	return "" //,fc.label
 }
 
 // SetLabel sets the label for the face.
 func (fc *Face) SetLabel(label string) {
-	fc.label = label
+	//fc.label = label
 }
 
 // GetNormal retrieves the normalized vector components (X, Y, Z) representing the face's orientation in 3D space.
@@ -461,9 +439,48 @@ func (fc *Face) Rebuild() {
 	fc.computeTangent()
 }
 
+// InitTemplateSource resets an existing Face in place to build a frame template without reallocating Face structs.
+func (fc *Face) InitTemplateSource(tri [3]geometry.XYZ, mat *textures.Material, u, v [3]float64, hasNormals bool, n0, n1, n2 geometry.XYZ) {
+	fc.tri.Points = tri
+	fc.material = mat
+	fc.u = u
+	fc.v = v
+	fc.lockUV = true
+	fc.lightmapID = -1
+	fc.singleSided = false
+	fc.activeEdges = EdgeAllActive
+	if hasNormals {
+		fc.computeNormal()
+		fc.explicitNormals[0] = normalizeXYZ(n0, fc.n)
+		fc.explicitNormals[1] = normalizeXYZ(n1, fc.n)
+		fc.explicitNormals[2] = normalizeXYZ(n2, fc.n)
+		fc.vertexNormals = fc.explicitNormals
+		fc.hasExplicitNormals = true
+	} else {
+		fc.hasExplicitNormals = false
+	}
+}
+
+// ApplyTemplateGeometry updates triangle vertices, normals, and active edges from a precomputed frame template
+// and recomputes derived bounds, plane normal, and tangents without extra allocations.
+func (fc *Face) ApplyTemplateGeometry(p0, p1, p2, n0, n1, n2 geometry.XYZ, activeEdges uint8) {
+	fc.tri.Points[0] = p0
+	fc.tri.Points[1] = p1
+	fc.tri.Points[2] = p2
+	fc.computeAABB()
+	fc.computeNormal()
+	fc.explicitNormals[0] = n0
+	fc.explicitNormals[1] = n1
+	fc.explicitNormals[2] = n2
+	fc.vertexNormals = fc.explicitNormals
+	fc.hasExplicitNormals = true
+	fc.activeEdges = activeEdges & EdgeAllActive
+	fc.computeTangent()
+}
+
 // GetAABB returns the axis-aligned bounding box (AABB) associated with the segment.
 func (fc *Face) GetAABB() *aabb.AABB {
-	return fc.aabb
+	return &fc.aabb
 }
 
 // Zero resets all triangle vertex coordinates of the face to the origin.
@@ -473,12 +490,12 @@ func (fc *Face) Zero() {
 
 // TransformPoints copies the source face points into this face, offset by the given origin coordinates.
 func (fc *Face) TransformPoints(src *Face, originX, originY, originZ float64) {
-	fc.tri.TransformPoints(src.tri, originX, originY, originZ)
+	fc.tri.TransformPoints(&src.tri, originX, originY, originZ)
 }
 
 // CopyPoints copies the coordinates of all triangle points from src into fc.
 func (fc *Face) CopyPoints(src *Face) {
-	fc.tri.CopyPoints(src.tri)
+	fc.tri.CopyPoints(&src.tri)
 }
 
 // SetSingleSided marks whether collisions only block from the face's front normal side.

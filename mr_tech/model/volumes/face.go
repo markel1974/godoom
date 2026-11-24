@@ -60,7 +60,7 @@ func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 }
 
 // NewFace creates a new 3D segment with specified neighbor, stage, points, tag, and material, and computes its n and AABB.
-func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Face {
+func NewFace(tri [3]geometry.XYZ, material *textures.Material) *Face {
 	out := &Face{
 		material:    material,
 		aabb:        aabb.MakeAABB(),
@@ -77,7 +77,7 @@ func NewFace(tri [3]geometry.XYZ, label string, material *textures.Material) *Fa
 
 // NewFaceSubdivided returns a new face for tri, preserving metadata and applying UV coordinates when UVs are locked.
 func (fc *Face) NewFaceSubdivided(tri [3]geometry.XYZ, uvU, uvV [3]float64) *Face {
-	out := NewFace(tri, "" /*fc.label*/, fc.material)
+	out := NewFace(tri, fc.material)
 	out.parent = fc.parent
 	out.singleSided = fc.singleSided
 	out.lightmapID = fc.lightmapID

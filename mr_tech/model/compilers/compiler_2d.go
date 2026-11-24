@@ -35,8 +35,8 @@ func buildQuad(v *volumes.Volume, s, e geometry.XY, zBS, zBE, zTS, zTE float64, 
 	v1 := geometry.XYZ{X: e.X, Y: e.Y, Z: zBE}
 	v2 := geometry.XYZ{X: e.X, Y: e.Y, Z: zTE}
 	v3 := geometry.XYZ{X: s.X, Y: s.Y, Z: zTS}
-	face1 := volumes.NewFace([3]geometry.XYZ{v0, v2, v1}, tag, material)
-	face2 := volumes.NewFace([3]geometry.XYZ{v0, v3, v2}, tag, material)
+	face1 := volumes.NewFace([3]geometry.XYZ{v0, v2, v1}, material)
+	face2 := volumes.NewFace([3]geometry.XYZ{v0, v3, v2}, material)
 	if singleSided {
 		face1.SetSingleSided(true)
 		face2.SetSingleSided(true)
@@ -383,7 +383,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 		zF2, zC2 := sector.ResolveZ(p2, curFloorY, curCeilY, false)
 
 		ceilP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zC0}, {X: p2.X, Y: p2.Y, Z: zC2}, {X: p1.X, Y: p1.Y, Z: zC1}}
-		ceilFace := volumes.NewFace(ceilP, sector.GetTag()+"_ceil", sector.GetMaterialIndex(1))
+		ceilFace := volumes.NewFace(ceilP, sector.GetMaterialIndex(1))
 		if align := sector.GetCeilAlign(); align != nil {
 			if w, h, ok := materialSize(ceilFace.GetMaterial()); ok {
 				u0, v0, u1, v1, u2, v2 := align.ComputePlanar(w, h, ceilFace.GetTri())
@@ -396,7 +396,7 @@ func (r *Compiler2d) upgrade3d(sectors2d []*sectors.Sector) []*volumes.Volume {
 		vol3d.AddFace(ceilFace)
 
 		floorP := [3]geometry.XYZ{{X: p0.X, Y: p0.Y, Z: zF0}, {X: p1.X, Y: p1.Y, Z: zF1}, {X: p2.X, Y: p2.Y, Z: zF2}}
-		floorFace := volumes.NewFace(floorP, sector.GetTag()+"_floor", sector.GetMaterialIndex(0))
+		floorFace := volumes.NewFace(floorP, sector.GetMaterialIndex(0))
 
 		if align := sector.GetFloorAlign(); align != nil {
 			if w, h, ok := materialSize(floorFace.GetMaterial()); ok {

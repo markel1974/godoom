@@ -131,8 +131,8 @@ func (v *Elements) UpdateEntityBounds(minX, minY, minZ, maxX, maxY, maxZ float64
 
 	v.ownerVol.ClearFaces()
 	addQuad := func(a, b, c, d geometry.XYZ) {
-		v.ownerVol.AddFace(volumes.NewFace([3]geometry.XYZ{a, b, c}, "", nil))
-		v.ownerVol.AddFace(volumes.NewFace([3]geometry.XYZ{a, c, d}, "", nil))
+		v.ownerVol.AddFace(volumes.NewFace([3]geometry.XYZ{a, b, c}, nil))
+		v.ownerVol.AddFace(volumes.NewFace([3]geometry.XYZ{a, c, d}, nil))
 	}
 	addQuad(v000, v010, v110, v100) // bottom
 	addQuad(v001, v101, v111, v011) // top

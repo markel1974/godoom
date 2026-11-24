@@ -151,7 +151,7 @@ func NewElement3D(cfg *config.Thing, materials *materials.Materials) *Element3D 
 			if tri.Material != nil {
 				material = v.materials.GetMaterial(tri.Material)
 			}
-			face := volumes.NewFace(points, "", material)
+			face := volumes.NewFace(points, material)
 			face.SetUV(float64(tri.Vertices[0].U), float64(tri.Vertices[0].V), float64(tri.Vertices[1].U), float64(tri.Vertices[1].V), float64(tri.Vertices[2].U), float64(tri.Vertices[2].V))
 			face.LockUV(true)
 			if tri.Vertices[0].HasNormal || tri.Vertices[1].HasNormal || tri.Vertices[2].HasNormal {

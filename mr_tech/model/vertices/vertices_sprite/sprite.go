@@ -71,8 +71,8 @@ func NewVerticesSprite(cfg *config.Thing, materials *materials.Materials) *Verti
 		t0 := [3]geometry.XYZ{vA, vB, vC}
 		t1 := [3]geometry.XYZ{vA, vC, vD}
 
-		f0 := volumes.NewFace(t0, "", material)
-		f1 := volumes.NewFace(t1, "", material)
+		f0 := volumes.NewFace(t0, material)
+		f1 := volumes.NewFace(t1, material)
 
 		f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 		f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)

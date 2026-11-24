@@ -315,11 +315,7 @@ func (tpl *ElementTemplate) ApplyTemplateFrameToVolume(frameIdx int, vol *volume
 		for j := range nTris {
 			fc := faces.At(j)
 			fc.SetMaterial(tf.materials[j])
-			fc.SetUV(
-				float64(tf.u[j][0]), float64(tf.v[j][0]),
-				float64(tf.u[j][1]), float64(tf.v[j][1]),
-				float64(tf.u[j][2]), float64(tf.v[j][2]),
-			)
+			fc.SetUV(float64(tf.u[j][0]), float64(tf.v[j][0]), float64(tf.u[j][1]), float64(tf.v[j][1]), float64(tf.u[j][2]), float64(tf.v[j][2]))
 		}
 	}
 	pos := tf.positions
@@ -328,11 +324,7 @@ func (tpl *ElementTemplate) ApplyTemplateFrameToVolume(frameIdx int, vol *volume
 		pi := tf.posIdx[j]
 		ni := tf.normIdx[j]
 		fc := faces.At(j)
-		fc.ApplyTemplateGeometry(
-			pos[pi[0]].ToXYZ(), pos[pi[1]].ToXYZ(), pos[pi[2]].ToXYZ(),
-			norm[ni[0]].ToXYZ(), norm[ni[1]].ToXYZ(), norm[ni[2]].ToXYZ(),
-			tf.activeEdges[j],
-		)
+		fc.ApplyTemplateGeometry(pos[pi[0]].ToXYZ(), pos[pi[1]].ToXYZ(), pos[pi[2]].ToXYZ(), norm[ni[0]].ToXYZ(), norm[ni[1]].ToXYZ(), norm[ni[2]].ToXYZ(), tf.activeEdges[j])
 	}
 	for _, tg := range tf.tags {
 		vol.SetVertexTag(tg.idx, tg.origin, tg.axis)

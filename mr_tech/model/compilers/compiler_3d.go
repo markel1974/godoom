@@ -66,7 +66,7 @@ func (r *Compiler3d) compile3d() []*volumes.Volume {
 					continue
 				}
 				tri := [3]geometry.XYZ{t[0], t[1], t[2]}
-				face := volumes.NewFace(tri, cf.Tag, material)
+				face := volumes.NewFace(tri, material)
 
 				// Map per-vertex UVs, explicit vertex normals, and lightmap UVs if provided by the config face
 				if len(cf.UVs) > 0 || len(cf.Normals) > 0 || len(cf.LmUVs) > 0 {

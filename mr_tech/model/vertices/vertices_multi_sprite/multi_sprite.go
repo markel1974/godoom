@@ -258,20 +258,20 @@ func (v *MultiSprite) createFaces(material *textures.Material) ([]*volumes.Face,
 	// PIANO VISIVO (Render) Posizionato ESATTAMENTE ancorato a zMin/zMax con il materiale visibile.
 	// TL BL BR
 	t0 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: zMax}, {X: -halfW, Y: 0.0, Z: zMin}, {X: halfW, Y: 0.0, Z: zMin}}
-	f0 := volumes.NewFace(t0, "", material)
+	f0 := volumes.NewFace(t0, material)
 	f0.SetUV(0.0, 0.0, 0.0, -1.0, 1.0, -1.0)
 	f0.LockUV(true)
 	faces = append(faces, f0)
 	// TL BR TR
 	t1 := [3]geometry.XYZ{{X: -halfW, Y: 0.0, Z: zMax}, {X: halfW, Y: 0.0, Z: zMin}, {X: halfW, Y: 0.0, Z: zMax}}
-	f1 := volumes.NewFace(t1, "", material)
+	f1 := volumes.NewFace(t1, material)
 	f1.SetUV(0.0, 0.0, 1.0, -1.0, 1.0, 0.0)
 	f1.LockUV(true)
 	faces = append(faces, f1)
 
 	addPhysicsQuad := func(vA, vB, vC, vD geometry.XYZ, tag string, mat *textures.Material) {
-		f0Phys := volumes.NewFace([3]geometry.XYZ{vA, vB, vC}, tag+"_A", mat) // NIL MATERIAL
-		f1Phys := volumes.NewFace([3]geometry.XYZ{vA, vC, vD}, tag+"_B", mat) // NIL MATERIAL
+		f0Phys := volumes.NewFace([3]geometry.XYZ{vA, vB, vC}, mat) // NIL MATERIAL
+		f1Phys := volumes.NewFace([3]geometry.XYZ{vA, vC, vD}, mat) // NIL MATERIAL
 		faces = append(faces, f0Phys, f1Phys)
 	}
 

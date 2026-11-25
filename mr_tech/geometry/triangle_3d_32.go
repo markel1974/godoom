@@ -206,6 +206,7 @@ func (tri *Triangle3D32) RotatePointInverse(pX, pY, pZ float32) (float32, float3
 	return x, y, z
 }
 
+// IsEmpty reports whether all three triangle vertex coordinates are zero.
 func (tri *Triangle3D32) IsEmpty() bool {
 	if tri.Points[0].X == 0 && tri.Points[0].Y == 0 && tri.Points[0].Z == 0 &&
 		tri.Points[1].X == 0 && tri.Points[1].Y == 0 && tri.Points[1].Z == 0 &&
@@ -229,7 +230,7 @@ func (tri *Triangle3D32) FindDeepestPoint(dir XYZ32) (float32, float32, float32)
 	return tri.Points[bestIdx].X, tri.Points[bestIdx].Y, tri.Points[bestIdx].Z
 }
 
-// Project returns the minimum and maximum dot-product values of the triangle's points along axis.
+// Project returns the minimum and maximum dot-product values of the tr\iangle's points along axis.
 func (tri *Triangle3D32) Project(axis XYZ32) (float32, float32) {
 	minP := axis.DotXYZ(tri.Points[0])
 	maxP := minP

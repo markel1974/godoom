@@ -1058,3 +1058,142 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 		}
 	}
 }
+
+type shadowUploadTrackCtx struct {
+	shadowTestCtx
+	orphanCalls  int
+	subDataCalls int
+}
+
+func (c *shadowUploadTrackCtx) resetUploadLogs() {
+	c.orphanCalls = 0
+	c.subDataCalls = 0
+}
+
+func (c *shadowUploadTrackCtx) BufferData(target uint32, size int, data unsafe.Pointer, usage uint32) {
+	if target == api.ARRAY_BUFFER && data == nil {
+		c.orphanCalls++
+	}
+	c.shadowTestCtx.BufferData(target, size, data, usage)
+}
+
+func (c *shadowUploadTrackCtx) BufferSubData(target uint32, offset int, size int, data unsafe.Pointer) {
+	if target == api.ARRAY_BUFFER {
+		c.subDataCalls++
+	}
+	c.shadowTestCtx.BufferSubData(target, offset, size, data)
+}
+
+func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
+	rigid_body.SetFps(120)
+	textures.SetFps(120)
+	defer rigid_body.SetFps(120)
+
+	tA := textures.NewTexture("SHAD_U", 1, 8, 8, false)
+	for x := range 8 {
+		for y := range 8 {
+			tA.SetDiffuse(x, y, 0x7f7f7fff)
+		}
+	}
+	texH := &multiTexHandler{frames: []*textures.Texture{tA}}
+	calCfg := config.NewConfigCalibration()
+	calCfg.AspectRatio = 1.1
+	calCfg.OrthoSize = 640
+	matSolid := config.NewConfigMaterial("solid", []string{"SHAD_U"}, config.MaterialKindSolid)
+	matCrate := config.NewConfigMaterial("crate", []string{"SHAD_U"}, config.MaterialKindSolid)
+
+	secs := []*config.Sector{makeBoxSector("room", 0, 0, 400, 0, 160, matSolid)}
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+
+	crateModel := makeRigidCrateModel(matCrate)
+	crateA := config.NewConfigItem("crate_a", geometry.XYZ{X: 160, Y: -20, Z: 0}, 0, 10, 0)
+	crateA.Radius, crateA.Height, crateA.GForce = 16, 24, 9.8*50
+	crateA.Element3D = crateModel
+	crateB := config.NewConfigItem("crate_b", geometry.XYZ{X: 200, Y: 20, Z: 0}, 0.5, 10, 0)
+	crateB.Radius, crateB.Height, crateB.GForce = 16, 24, 9.8*50
+	crateB.Element3D = crateModel
+
+	root := config.NewConfigRoot(calCfg, secs, p, []*config.Thing{crateA, crateB}, geometry.XYZ{X: 1, Y: 1, Z: 1}, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+	pl := en.GetPlayer()
+	vi := engine.NewViewMatrix()
+	vi.Update(pl)
+
+	rCtx := &shadowUploadTrackCtx{}
+	glTex := vramtex.NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+	mCal := en.GetCalibration()
+	mCal.EnableShadows = true
+	mCal.MSAASamples = 0
+
+	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
+	if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
+		t.Fatalf("Handler.Setup: %v", err)
+	}
+	if err := h.GetMain().Init(); err != nil {
+		t.Fatalf("Main.Init: %v", err)
+	}
+	d := h.GetDepth()
+	if err := d.Compile(&Assets{}); err != nil {
+		t.Fatalf("Depth.Compile: %v", err)
+	}
+	d.SetShadowsEnabled(true)
+
+	mm := h.GetMapMetrics()
+	mm.SetOrthoSize(640, 0.1, 4096)
+	mm.SetCenter(0, 0, 0)
+	mm.Update(vi, 1.0, 1.0)
+	fm := h.GetFlashlightMetrics()
+	fm.UpdateWithAim(mm.GetViewPtr(), 0, 0, 0, 0, 1)
+
+	bv.Compute(640, 480, vi, en)
+	for range 2 {
+		d.Prepare()
+		bv.ComputeShadows(en, d)
+		d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
+	}
+
+	// Frame 3 transitions from (Room+Flash) to Flash-only layout (4->2 matrices);
+	// Frame 4 (another Flash aim update with Room cached) must issue 0 BufferSubData calls and preserve VBO.
+	fm.UpdateWithAim(mm.GetViewPtr(), 0.002, 0, 0.002, 0, 1)
+	d.Prepare()
+	bv.ComputeShadows(en, d)
+	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
+	flashOnlyVBO := bv.shadowInstPool.ActiveVBO()
+
+	rCtx.resetUploadLogs()
+	fm.UpdateWithAim(mm.GetViewPtr(), 0.004, 0, 0.004, 0, 1)
+	d.Prepare()
+	bv.ComputeShadows(en, d)
+	if bv.GetShadowTiles()[shaders.ShadowTileFlash].Reuse {
+		t.Fatalf("expected Flash tile dirty after aim update")
+	}
+	if rCtx.subDataCalls != 0 {
+		t.Fatalf("expected 0 BufferSubData calls when rigid shadow instances did not change, got %d", rCtx.subDataCalls)
+	}
+	if bv.shadowInstPool.ActiveVBO() != flashOnlyVBO {
+		t.Fatalf("expected shadowInstPool to preserve VBO %d across unchanged instance upload, got %d", flashOnlyVBO, bv.shadowInstPool.ActiveVBO())
+	}
+	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
+
+	// Move crateA: ComputeShadows must orphan, advance ring VBO, and upload once.
+	en.GetThings().GetThing("crate_a").GetEntity().MoveCenterTo(165, -20, 0)
+	bv.Compute(640, 480, vi, en)
+	rCtx.resetUploadLogs()
+	d.Prepare()
+	bv.ComputeShadows(en, d)
+	if rCtx.subDataCalls != 1 || rCtx.orphanCalls == 0 {
+		t.Fatalf("expected 1 orphaned BufferSubData upload when crate_a moved, got orphan=%d subdata=%d", rCtx.orphanCalls, rCtx.subDataCalls)
+	}
+	if bv.shadowInstPool.ActiveVBO() == flashOnlyVBO {
+		t.Fatalf("expected shadowInstPool ring to advance VBO after instance mutation, stayed on %d", flashOnlyVBO)
+	}
+}

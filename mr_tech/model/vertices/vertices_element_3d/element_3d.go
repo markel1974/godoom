@@ -827,9 +827,38 @@ func (v *Element3D) Compile(tick uint64) bool {
 	return true
 }
 
-// IsStaticRigidPose reports whether this Element3D is currently on a fixed single frame without animation morphing.
-func (v *Element3D) IsStaticRigidPose() bool {
-	return v.singleFrame && v.volA != nil && (v.volA == v.volB || v.singleFrame)
+// GetHash returns a deterministic state hash combining active frame/morph geometry and animated materials.
+func (v *Element3D) GetHash() uint64 {
+	return v.GetHashForMode(true)
+}
+
+// GetHashForMode computes this element's geometry hash, allowing rigid instancing only when allowRigid is true.
+func (v *Element3D) GetHashForMode(allowRigid bool) uint64 {
+	if allowRigid && v.volA != nil && (v.singleFrame || v.volA == v.volB) {
+		if faces := v.volA.GetFaces(); faces != nil {
+			if fHash := faces.GetRenderHash(); fHash != 0 {
+				h := geometry.MixU64(0x7269676964336401, fHash)
+				if h == 0 {
+					return 1
+				}
+				return h
+			}
+		}
+		return 0
+	}
+	fHashA := v.facesA.GetRenderHash()
+	if fHashA == 0 {
+		return 0
+	}
+	fHashB := v.facesB.GetRenderHash()
+	h := geometry.MixU64(0x6d6f727068336402, fHashA)
+	h = geometry.MixU64(h, fHashB)
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(v.lerpT)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(vertices.RenderModeModel3D)))
+	if h == 0 {
+		return 1
+	}
+	return h
 }
 
 // GetUIFaces returns the face sets, interpolation value, and render mode for UI rendering.

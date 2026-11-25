@@ -141,9 +141,12 @@ func (v *Part) GetRigidFaces() *volumes.Faces {
 	return nil
 }
 
-// IsStaticRigidPose reports whether this detached part has a fixed single-frame rigid pose.
-func (v *Part) IsStaticRigidPose() bool {
-	return v.physicsFree && v.entry != nil && v.entry.IsStaticRigidPose()
+// GetHash returns the segment's current render state hash matching its attached/detached pose mode.
+func (v *Part) GetHash() uint64 {
+	if v.entry == nil {
+		return 0
+	}
+	return v.entry.GetHashForMode(v.physicsFree || v.entry.GetLerpT() == 0)
 }
 
 // SetAction delegates action selection on this entry.

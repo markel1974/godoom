@@ -3,10 +3,12 @@ package volumes
 import (
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 type edgeFaceRef struct {
@@ -51,6 +53,10 @@ type Faces struct {
 	allowTessellate bool
 	version         uint64
 	geomHash        uint64
+	animMats        []*textures.Material
+	renderHash      uint64
+	renderHashVer   uint64
+	renderHashReady bool
 }
 
 // NewFaces creates a Faces collection sized to the given tree capacity.
@@ -134,6 +140,50 @@ func (f *Faces) ApplyCachedSummary(count int, minX, minY, minZ, maxX, maxY, maxZ
 // GetGeomHash returns the structural and vertex fingerprint for sharing identical static GPU meshes.
 func (f *Faces) GetGeomHash() uint64 {
 	return f.geomHash
+}
+
+// GetRenderHash returns a content hash covering geometry revision, face identity, and animated material frames.
+func (f *Faces) GetRenderHash() uint64 {
+	if f == nil || f.count == 0 {
+		return 0
+	}
+	if !f.renderHashReady || f.renderHashVer != f.version {
+		h := geometry.MixUintptr(uintptr(unsafe.Pointer(f)))
+		h = geometry.MixU64(h, f.version)
+		h = geometry.MixU64(h, f.geomHash)
+		h = geometry.MixU64(h, uint64(f.count))
+		if h == 0 {
+			h = 1
+		}
+		f.renderHash = h
+		f.animMats = f.animMats[:0]
+		for i := 0; i < f.count; i++ {
+			fc := f.container[i]
+			if fc == nil || fc.material == nil || !fc.material.IsAnimated() {
+				continue
+			}
+			dup := false
+			for _, m := range f.animMats {
+				if m == fc.material {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				f.animMats = append(f.animMats, fc.material)
+			}
+		}
+		f.renderHashVer = f.version
+		f.renderHashReady = true
+	}
+	h := f.renderHash
+	for _, mat := range f.animMats {
+		h = geometry.MixU64(h, geometry.MixUintptr(uintptr(unsafe.Pointer(mat.GetCurrentFrame()))))
+	}
+	if h == 0 {
+		return 1
+	}
+	return h
 }
 
 // Rebuild recomputes cached bounds, normals, active edge masks, mass properties, and the spatial tree.

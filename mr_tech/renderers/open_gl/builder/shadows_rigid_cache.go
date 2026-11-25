@@ -52,9 +52,25 @@ func (c *ShadowRigidCache) Retrieve(ent *rigid_body.Entity, frame uint64) *Shado
 	}
 
 	entry := c.entries[slot]
-	entry.reset(entID, frame)
+	entry.Reset(entID, frame)
 	ent.SetShadowMarker(slot)
 	return entry
+}
+
+// Sweep recycles stale entries not seen for more than 256 frames back onto the free stack.
+func (c *ShadowRigidCache) Sweep(frame uint64) {
+	if c.nextSlot == 0 || frame-c.lastSweepTick < 256 {
+		return
+	}
+	c.lastSweepTick = frame
+	for slot := 0; slot < c.nextSlot; slot++ {
+		entry := c.entries[slot]
+		if entry.inUse && frame-entry.lastSeenFrame > 256 {
+			entry.Release()
+			c.freeSlots[c.freeLen] = slot
+			c.freeLen++
+		}
+	}
 }
 
 func (c *ShadowRigidCache) grow() {
@@ -70,20 +86,4 @@ func (c *ShadowRigidCache) grow() {
 	newFree := make([]int, newCap)
 	copy(newFree, c.freeSlots[:c.freeLen])
 	c.freeSlots = newFree
-}
-
-// Sweep recycles stale entries not seen for more than 256 frames back onto the free stack.
-func (c *ShadowRigidCache) Sweep(frame uint64) {
-	if c.nextSlot == 0 || frame-c.lastSweepTick < 256 {
-		return
-	}
-	c.lastSweepTick = frame
-	for slot := 0; slot < c.nextSlot; slot++ {
-		entry := c.entries[slot]
-		if entry.inUse && frame-entry.lastSeenFrame > 256 {
-			entry.release()
-			c.freeSlots[c.freeLen] = slot
-			c.freeLen++
-		}
-	}
 }

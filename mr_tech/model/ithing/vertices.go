@@ -35,6 +35,8 @@ type IVertices interface {
 
 	Compile(uint64) bool
 
+	GetHash() uint64
+
 	GetAABB() *aabb.AABB
 
 	GetSolver() *collisions.Solver

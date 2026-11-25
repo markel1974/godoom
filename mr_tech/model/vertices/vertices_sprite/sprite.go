@@ -148,6 +148,22 @@ func (v *VerticesSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, 
 	return f, f, 0.0, vertices.RenderModeBillboard
 }
 
+// GetHash returns a deterministic state hash covering sprite faces, animated textures, and billboard mode.
+func (v *VerticesSprite) GetHash() uint64 {
+	if v.volume == nil {
+		return 0
+	}
+	fHash := v.volume.GetFaces().GetRenderHash()
+	if fHash == 0 {
+		return 0
+	}
+	h := geometry.MixU64(fHash, geometry.F32BitsStable(float32(vertices.RenderModeBillboard)))
+	if h == 0 {
+		return 1
+	}
+	return h
+}
+
 // SetAction applies the vertex action identified by idx.
 func (v *VerticesSprite) SetAction(idx int) {
 	//TODO IMPLEMENT

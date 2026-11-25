@@ -597,6 +597,11 @@ func (v *MultiElement3D) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, 
 	return v.elements.emptyFaces, v.elements.emptyFaces, 0.0, vertices.RenderModeModel3D
 }
 
+// GetHash returns 0 for the composite container because individual segments render via Part entries in Things.tree.
+func (v *MultiElement3D) GetHash() uint64 {
+	return 0
+}
+
 // Deform applies an impulse-based deformation to all part views within radius of impact.
 // It returns true if any part was deformed.
 func (v *MultiElement3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {

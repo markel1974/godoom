@@ -170,6 +170,24 @@ func (v *Volume) ClearDirty() {
 	v.dirty = false
 }
 
+// GetHash returns a deterministic state hash owned by this volume, or 0 if empty.
+func (v *Volume) GetHash() uint64 {
+	if v == nil || v.faces == nil || v.faces.Len() == 0 {
+		return 0
+	}
+	h := v.faces.GetRenderHash()
+	if h == 0 {
+		return 0
+	}
+	if v.dirty {
+		h = geometry.MixU64(h, 0x9e3779b97f4a7c15)
+		if h == 0 {
+			return 1
+		}
+	}
+	return h
+}
+
 // SetMarker sets the marker identifier used to track staged volume data.
 func (v *Volume) SetMarker(marker int) {
 	v.marker = marker

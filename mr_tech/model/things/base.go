@@ -57,6 +57,11 @@ type Base struct {
 	maxStepFactor  float64
 	deformable     bool
 	done           chan struct{}
+	hashValid      bool
+	hashPoseGen    uint64
+	hashVerts      uint64
+	hashAngle      float64
+	cachedHash     uint64
 }
 
 // NewBase creates a new Base instance with specified configuration, material, sector, world, and things.
@@ -539,12 +544,40 @@ func (t *Base) GetRigidFaces() *volumes.Faces {
 	return nil
 }
 
-// IsStaticRigidPose reports whether this thing uses a fixed single-frame rigid pose independent of tick.
-func (t *Base) IsStaticRigidPose() bool {
-	if sr, ok := t.IVertices.(interface{ IsStaticRigidPose() bool }); ok {
-		return sr.IsStaticRigidPose()
+// GetHash returns a cached deterministic hash over this thing's entity pose, orientation, angle, and geometry.
+func (t *Base) GetHash() uint64 {
+	if !t.IsVisible() || t.IVertices == nil || t.ent == nil {
+		return 0
 	}
-	return false
+	vHash := t.IVertices.GetHash()
+	if vHash == 0 {
+		return 0
+	}
+	poseGen := t.ent.GetPoseGen()
+	ang := t.angle
+	if t.hashValid && t.hashPoseGen == poseGen && t.hashVerts == vHash && t.hashAngle == ang {
+		return t.cachedHash
+	}
+	tPosX, tPosY, zBot := t.ent.GetCenter()
+	qx, qy, qz, qw := t.ent.GetQRotation().Get()
+	h := geometry.MixU64(t.ent.GetId(), vHash)
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosX)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosY)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(zBot)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qx)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qy)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qz)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qw)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(ang)))
+	if h == 0 {
+		h = 1
+	}
+	t.hashPoseGen = poseGen
+	t.hashVerts = vHash
+	t.hashAngle = ang
+	t.cachedHash = h
+	t.hashValid = true
+	return h
 }
 
 // dentCompute returns the dent depth and radius derived from force, using defaults for non-positive force.

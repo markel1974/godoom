@@ -1,9 +1,9 @@
 package builder
 
 import (
-	"math"
 	"unsafe"
 
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 )
 
@@ -18,24 +18,11 @@ func glToEngineVP(m [16]float32) [16]float32 {
 }
 
 func mixU64(h, x uint64) uint64 {
-	z := h ^ x
-	z ^= z >> 30
-	z *= 0xbf58476d1ce4e5b9
-	z ^= z >> 27
-	z *= 0x94d049bb133111eb
-	z ^= z >> 31
-	return z
-}
-
-func f32BitsStable(v float32) uint64 {
-	if v == 0 {
-		return 0
-	}
-	return uint64(math.Float32bits(v))
+	return geometry.MixU64(h, x)
 }
 
 func mixPtrHash(p unsafe.Pointer) uint64 {
-	return mixU64(14695981039346656037, uint64(uintptr(p)))
+	return geometry.MixUintptr(uintptr(p))
 }
 
 // facesEquivalent reports whether two face collections contain the same ordered faces, materials, and points.

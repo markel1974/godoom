@@ -91,6 +91,14 @@ func (pr *Player) IsVisible() bool {
 	return pr.visible
 }
 
+// GetHash returns 0 while the player is hidden, otherwise delegates to Base.GetHash.
+func (pr *Player) GetHash() uint64 {
+	if !pr.visible {
+		return 0
+	}
+	return pr.Base.GetHash()
+}
+
 // IsEqual reports whether other is the same Player instance.
 func (pr *Player) IsEqual(other ithing.IThing) bool {
 	if v, ok := other.(*Player); ok && pr == v {

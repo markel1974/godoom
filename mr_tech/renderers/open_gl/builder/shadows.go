@@ -38,12 +38,11 @@ type ShadowsCollectedThing struct {
 }
 
 type shadowTileDeps struct {
-	valid         bool
-	atlasGen      uint64
-	sceneHash     uint64
-	worldToken    uint64
-	tick          uint64
-	hasTickDepend bool
+	valid      bool
+	atlasGen   uint64
+	sceneHash  uint64
+	worldToken uint64
+	tick       uint64
 }
 
 // Shadows manages per-light shadow tile frustum culling, O(1) entity caching, and shadow instance uploads.
@@ -154,7 +153,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 		if !streamKeepAlive {
 			if bufIdx, gen, cachedHash, ok := d2.PeekReusableTile(t, &mat); ok && bufIdx >= 0 && bufIdx < len(w.tileDeps) {
 				dep := &w.tileDeps[bufIdx][t]
-				if dep.valid && dep.atlasGen == gen && dep.sceneHash == cachedHash && dep.worldToken == worldToken && (!dep.hasTickDepend || dep.tick == tick) {
+				if dep.valid && dep.atlasGen == gen && dep.sceneHash == cachedHash && dep.worldToken == worldToken && dep.tick == tick {
 					ptr := &w.tiles[t]
 					ptr.Active = true
 					ptr.Matrix = mat
@@ -191,10 +190,9 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 	var volCount [shaders.MaxShadowTiles]int
 	var thingAcc, thingXor [shaders.MaxShadowTiles]uint64
 	var thingCount [shaders.MaxShadowTiles]int
-	var tileHasTickDep [shaders.MaxShadowTiles]bool
 
-	w.collectShadowVolumes(vols, queryMask, &volAcc, &volXor, &volCount, &tileHasTickDep)
-	w.collectShadowThings(th, queryMask, &thingAcc, &thingXor, &thingCount, &tileHasTickDep)
+	w.collectShadowVolumes(vols, queryMask, &volAcc, &volXor, &volCount)
+	w.collectShadowThings(th, queryMask, &thingAcc, &thingXor, &thingCount)
 
 	var tileHashes [shaders.MaxShadowTiles]uint64
 	var dirtyMask uint32
@@ -214,12 +212,11 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 			ptr.Reuse = true
 			if targetOK && targetBufIdx >= 0 && targetBufIdx < len(w.tileDeps) {
 				w.tileDeps[targetBufIdx][t] = shadowTileDeps{
-					valid:         true,
-					atlasGen:      targetGen,
-					sceneHash:     sceneHash,
-					worldToken:    worldToken,
-					tick:          tick,
-					hasTickDepend: tileHasTickDep[t],
+					valid:      true,
+					atlasGen:   targetGen,
+					sceneHash:  sceneHash,
+					worldToken: worldToken,
+					tick:       tick,
 				}
 			}
 			continue
@@ -255,12 +252,11 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 			ptr.Reuse = false
 			if targetOK && targetBufIdx >= 0 && targetBufIdx < len(w.tileDeps) {
 				w.tileDeps[targetBufIdx][t] = shadowTileDeps{
-					valid:         true,
-					atlasGen:      targetGen,
-					sceneHash:     tileHashes[t],
-					worldToken:    worldToken,
-					tick:          tick,
-					hasTickDepend: tileHasTickDep[t],
+					valid:      true,
+					atlasGen:   targetGen,
+					sceneHash:  tileHashes[t],
+					worldToken: worldToken,
+					tick:       tick,
 				}
 			}
 		}
@@ -284,7 +280,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 	}
 }
 
-func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[shaders.MaxShadowTiles]uint64, volCount *[shaders.MaxShadowTiles]int, tileHasTickDep *[shaders.MaxShadowTiles]bool) {
+func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[shaders.MaxShadowTiles]uint64, volCount *[shaders.MaxShadowTiles]int) {
 	w.volScratch = w.volScratch[:0]
 	if vols == nil || activeMask == 0 {
 		return
@@ -294,27 +290,13 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 		if !ok || vol == nil {
 			return false
 		}
-		faces := vol.GetFaces()
-		if faces == nil || faces.Len() == 0 {
+		h := vol.GetHash()
+		if h == 0 {
 			return false
 		}
 		w.volScratch = append(w.volScratch, ShadowsCollectedVol{vol: vol, mask: leafMask})
-
-		h := mixPtrHash(unsafe.Pointer(faces))
-		h = mixU64(h, faces.GetVersion())
-		h = mixU64(h, uint64(faces.Len()))
-		volHasAnim := false
-		if vol.IsDirty() {
-			h = mixU64(h, 0x9e3779b97f4a7c15)
-		} else if entry := w.bStatic.GetEntry(faces); entry != nil && !entry.detached {
-			if entry.chunk != nil {
-				entry.chunk.lastSeenFrame = w.bContext.meshFrame
-			}
-		} else if rm := w.bStatic.GetResidentMesh(faces); rm != nil && rm.AnimLen > 0 {
-			volHasAnim = true
-			for i := 0; i < rm.AnimLen; i++ {
-				h = mixU64(h, mixPtrHash(unsafe.Pointer(rm.AnimMats[i].GetCurrentFrame())))
-			}
+		if entry := w.bStatic.GetEntry(vol.GetFaces()); entry != nil && !entry.detached && entry.chunk != nil {
+			entry.chunk.lastSeenFrame = w.bContext.meshFrame
 		}
 
 		xorH := bits.RotateLeft64(h, 17)
@@ -324,110 +306,36 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 			volAcc[t] += h
 			volXor[t] ^= xorH
 			volCount[t]++
-			if volHasAnim {
-				tileHasTickDep[t] = true
-			}
 		}
 		return false
 	})
 }
 
-func (w *Shadows) hashStreamingThing(sEntry *ShadowRigidEntry, entID uint64, ent *rigid_body.Entity, thing ithing.IThing, entry *ThingRenderCache) uint64 {
-	pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
-	if pFaces == nil || pFaces.Len() == 0 {
-		return 0
-	}
-	lerp := float32(lp)
-	yaw := float32(thing.GetAngle())
-	if renderMode == vertices.RenderModeModel3D {
-		yaw = 0.0
-	}
-	renderModeF := float32(renderMode)
-	tPosX, tPosY, zBot := ent.GetCenter()
-	oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-	facesVer := pFaces.GetVersion()
-	facesLen := pFaces.Len()
-	var nextVer uint64
-	var nextLen int
-	if pNextFaces != nil {
-		nextVer = pNextFaces.GetVersion()
-		nextLen = pNextFaces.Len()
-	}
-
-	matched := entry != nil && entry.Equal(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ)
-	if matched && sEntry.streamHashValid && sEntry.streamHashSrc == entry && sEntry.streamHashGen == entry.gen {
-		return sEntry.streamHash
-	}
-
-	h := mixU64(entID, mixPtrHash(unsafe.Pointer(pFaces)))
-	h = mixU64(h, facesVer)
-	h = mixU64(h, uint64(facesLen))
-	h = mixU64(h, mixPtrHash(unsafe.Pointer(pNextFaces)))
-	h = mixU64(h, nextVer)
-	h = mixU64(h, uint64(nextLen))
-	h = mixU64(h, f32BitsStable(lerp))
-	h = mixU64(h, f32BitsStable(yaw))
-	h = mixU64(h, f32BitsStable(renderModeF))
-	h = mixU64(h, f32BitsStable(oX))
-	h = mixU64(h, f32BitsStable(oY))
-	h = mixU64(h, f32BitsStable(oZ))
-	gen := uint64(0)
-	if entry != nil {
-		gen = entry.gen
-	}
-	if !matched {
-		gen++
-	}
-	h = mixU64(h, gen)
-
-	if matched {
-		sEntry.streamHash = h
-		sEntry.streamHashGen = entry.gen
-		sEntry.streamHashSrc = entry
-		sEntry.streamHashValid = true
-	} else {
-		sEntry.streamHashValid = false
-	}
-	return h
-}
-
-func (w *Shadows) evalThingShadowHash(thing ithing.IThing, ent *rigid_body.Entity, sEntry *ShadowRigidEntry) (uint64, bool) {
-	if !sEntry.rigidSrcChecked {
-		sEntry.rigidSrc, _ = thing.(ithing.IRigidRenderSource)
-		sEntry.rigidSrcChecked = true
-	}
-	if sEntry.rigidSrc != nil {
-		if rigidFaces := sEntry.rigidSrc.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
-			h := sEntry.Update(sEntry.entID, ent, rigidFaces, w.bThings, w.shadowFrame)
-			if !sEntry.staticChecked {
-				sEntry.staticCap, _ = thing.(staticRigidPoseChecker)
-				sEntry.staticChecked = true
-			}
-			sEntry.staticFastOK = !sEntry.hasAnimMat && h != 0 && sEntry.staticCap != nil && sEntry.staticCap.IsStaticRigidPose()
-			return h, true
+func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, sEntry *ShadowRigidEntry, h uint64) {
+	sEntry.hash = h
+	if rs, ok := thing.(ithing.IRigidRenderSource); ok {
+		if rigidFaces := rs.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
+			sEntry.SyncRigid(ent, rigidFaces, w.bThings)
+			return
 		}
 	}
-
-	streamEntry := w.bThings.thingsRender.PeekIfCurrent(ent)
-	if streamEntry == nil {
-		streamEntry = sEntry.EnsureStreamCache()
-	}
-	h := w.hashStreamingThing(sEntry, sEntry.entID, ent, thing, streamEntry)
-	sEntry.staticFastOK = false
-	sEntry.poseGen = ent.GetPoseGen()
-	sEntry.hash = h
-	sEntry.seenFrame = w.shadowFrame
-	return h, false
+	sEntry.isRigidActive = false
+	sEntry.faces = nil
+	sEntry.rm = nil
 }
 
-func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int, tileHasTickDep *[shaders.MaxShadowTiles]bool) {
+func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int) {
 	w.thingScratch = w.thingScratch[:0]
 	if th == nil || activeMask == 0 {
 		return
 	}
 	th.QueryFrustumsMask(w.tileFrustums[:], activeMask, func(object aabb.IObject, leafMask uint32) bool {
 		thing, ok := object.(ithing.IThing)
-		if !ok || thing == nil || !thing.IsVisible() {
+		if !ok || thing == nil {
+			return false
+		}
+		h := thing.GetHash()
+		if h == 0 {
 			return false
 		}
 		ent := thing.GetEntity()
@@ -436,35 +344,20 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 		}
 
 		sEntry := w.entityCache.Retrieve(ent, w.shadowFrame)
-		var (
-			h       uint64
-			isRigid bool
-		)
-		if sEntry.seenFrame == w.shadowFrame {
-			h = sEntry.hash
-			isRigid = sEntry.isRigidActive
-		} else if sEntry.staticFastOK && sEntry.poseGen == ent.GetPoseGen() && sEntry.faces != nil && sEntry.faces.GetVersion() == sEntry.facesVer {
-			h = sEntry.hash
-			isRigid = true
-			sEntry.seenFrame = w.shadowFrame
-		} else {
-			h, isRigid = w.evalThingShadowHash(thing, ent, sEntry)
-			sEntry.isRigidActive = isRigid
-			sEntry.hash = h
+		if sEntry.seenFrame != w.shadowFrame {
+			if sEntry.hash != h {
+				w.syncShadowEntry(thing, ent, sEntry, h)
+			}
 			sEntry.seenFrame = w.shadowFrame
 		}
 
-		if h == 0 {
-			return false
-		}
 		w.thingScratch = append(w.thingScratch, ShadowsCollectedThing{
 			thing:   thing,
 			entry:   sEntry,
-			isRigid: isRigid,
+			isRigid: sEntry.isRigidActive,
 			mask:    leafMask,
 		})
 
-		isTickDep := !sEntry.staticFastOK
 		xorH := bits.RotateLeft64(h, 23)
 		for rem := leafMask; rem != 0; {
 			t := bits.TrailingZeros32(rem)
@@ -472,9 +365,6 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 			thingAcc[t] += h
 			thingXor[t] ^= xorH
 			thingCount[t]++
-			if isTickDep {
-				tileHasTickDep[t] = true
-			}
 		}
 		return false
 	})
@@ -537,10 +427,6 @@ func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, s
 			if rm == nil || rm.LastSeenFrame != w.bContext.meshFrame || rm.NeedsAnimRebuild() {
 				rm, _ = w.bThings.RetrieveMesh(rEntry.faces)
 				rEntry.rm = rm
-				if rm != nil && rm.AnimLen > 0 {
-					rEntry.hasAnimMat = true
-					rEntry.staticFastOK = false
-				}
 			}
 			if rm != nil && rm.SubMeshesLen > 0 {
 				var g *ShadowsRigidGroup

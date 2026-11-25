@@ -191,6 +191,22 @@ func (v *MultiSprite) GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, flo
 	return f, f, 0.0, v.renderMode
 }
 
+// GetHash returns a deterministic state hash covering current view faces, animated textures, and render mode.
+func (v *MultiSprite) GetHash() uint64 {
+	if v.comp == nil {
+		return 0
+	}
+	fHash := v.comp.GetFaces().GetRenderHash()
+	if fHash == 0 {
+		return 0
+	}
+	h := geometry.MixU64(fHash, geometry.F32BitsStable(float32(v.renderMode)))
+	if h == 0 {
+		return 1
+	}
+	return h
+}
+
 // SetAction switches to the action volume at idx and restarts its face material animations.
 func (v *MultiSprite) SetAction(idx int) {
 	if idx < 0 {

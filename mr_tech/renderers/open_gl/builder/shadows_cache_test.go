@@ -56,20 +56,20 @@ func TestShadowsRigidCacheABASafetyAndSweep(t *testing.T) {
 	if slot1 < 0 {
 		t.Fatalf("expected non-negative assigned shadowMarker slot, got %d", slot1)
 	}
-	s1.staticFastOK = true
+	s1.isRigidActive = true
 	s1.hash = 0xdeadbeef
 
 	// Evict e1 after 256+ frames without seeing e1.
 	cache.Sweep(300)
-	if s1.inUse || s1.staticFastOK {
-		t.Fatalf("expected swept entry released and fast state cleared")
+	if s1.inUse || s1.isRigidActive {
+		t.Fatalf("expected swept entry released and state cleared")
 	}
 
 	// Simulate an ABA collision: give e2 the recycled slot index manually before Retrieve.
 	e2.SetShadowMarker(slot1)
 	s2 := cache.Retrieve(e2, 301)
-	if s2.entID != e2.GetId() || s2.staticFastOK || s2.hash != 0 {
-		t.Fatalf("expected recycled slot initialized cleanly for new entity id=%d, got id=%d fast=%v hash=%x", e2.GetId(), s2.entID, s2.staticFastOK, s2.hash)
+	if s2.entID != e2.GetId() || s2.isRigidActive || s2.hash != 0 {
+		t.Fatalf("expected recycled slot initialized cleanly for new entity id=%d, got id=%d rigid=%v hash=%x", e2.GetId(), s2.entID, s2.isRigidActive, s2.hash)
 	}
 }
 
@@ -187,8 +187,8 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	}
 	sideEnt := en.GetThings().GetThing("static_side").GetEntity()
 	sideSlot := sideEnt.GetShadowMarker()
-	if sideSlot < 0 || !bv.bShadow.entityCache.entries[sideSlot].inUse || !bv.bShadow.entityCache.entries[sideSlot].staticFastOK {
-		t.Fatalf("expected static_side cache slot & staticFastOK preserved across >260 Flash-only frames")
+	if sideSlot < 0 || !bv.bShadow.entityCache.entries[sideSlot].inUse || bv.bShadow.entityCache.entries[sideSlot].hash == 0 {
+		t.Fatalf("expected static_side cache slot & owner hash preserved across >260 Flash-only frames")
 	}
 
 	// Step 2: Advance GlobalTick() and compile anim_behind externally (as simulation/Main does, NOT inside Shadows query):

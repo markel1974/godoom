@@ -10,21 +10,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-/*
-Y=2048 +------------------------+------------------------+
-       |                        |                        |
-       |      ROOM SHADOW       |    FLASHLIGHT SHADOW   |
-       |      (1024 x 1024)     |      (1024 x 1024)     |
-       |   UV: [0..0.5, 0.5..1] |  UV: [0.5..1, 0.5..1]  |
-       |                        |                        |
-Y=1024 +--------+--------+------+--+--------+------------+
-       | Light4 | Light5 |  Light6 | Light7 | (512x512)  |  Row 1 (Y: 512..1023)
- Y=512 +--------+--------+---------+--------+------------+
-       | Light0 | Light1 |  Light2 | Light3 | (512x512)  |  Row 0 (Y: 0..511)
-   Y=0 +--------+--------+---------+--------+------------+
-       X=0     X=512   X=1024    X=1536   X=2048
-*/
-
 // DepthLoc represents the location identifiers for shader uniform variables used in depth shaders.
 type DepthLoc int
 
@@ -40,88 +25,6 @@ const (
 	DepthLocLast
 )
 
-// DepthMap represents a structure for managing depth framebuffers and textures for shadow mapping and depth rendering.
-type DepthMap struct {
-	ctx            api.IContext
-	fbo            uint32
-	tex            uint32
-	width          int32
-	height         int32
-	gen            uint64
-	matrixPtr      *float32
-	emptyMatrix    [16]float32
-	emptyMatrixPtr *float32
-}
-
-// NewDepthMap creates and returns a new instance of DepthMap with default uninitialized properties.
-func NewDepthMap(ctx api.IContext) *DepthMap {
-	dm := &DepthMap{
-		ctx:       ctx,
-		fbo:       0,
-		tex:       0,
-		matrixPtr: nil,
-	}
-	dm.emptyMatrixPtr = &dm.emptyMatrix[0]
-	dm.matrixPtr = dm.emptyMatrixPtr
-	return dm
-}
-
-// Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.
-func (d *DepthMap) Update(width, height int32) {
-	if d.fbo != 0 && d.width == width && d.height == height {
-		return
-	}
-	nextGen := d.gen + 1
-	d.Shutdown()
-	d.gen = nextGen
-	d.width = width
-	d.height = height
-	var fbo, tex uint32
-	borderColor := [4]float32{1.0, 1.0, 1.0, 1.0}
-	d.ctx.GenFramebuffers(1, &fbo)
-	d.ctx.GenTextures(1, &tex)
-	d.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
-	d.ctx.BindTexture(api.TEXTURE_2D, tex)
-	d.ctx.TexImage2D(api.TEXTURE_2D, 0, api.DEPTH_COMPONENT32F, width, height, 0, api.DEPTH_COMPONENT, api.FLOAT, nil)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_COMPARE_MODE, api.COMPARE_REF_TO_TEXTURE)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_COMPARE_FUNC, api.LEQUAL)
-
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_BORDER)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_BORDER)
-	d.ctx.TexParameterfv(api.TEXTURE_2D, api.TEXTURE_BORDER_COLOR, &borderColor[0])
-
-	d.ctx.BindFramebuffer(api.FRAMEBUFFER, fbo)
-	d.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.TEXTURE_2D, tex, 0)
-	d.ctx.DrawBuffer(api.NONE)
-	d.ctx.ReadBuffer(api.NONE)
-	d.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
-	d.ctx.BindTexture(api.TEXTURE_2D, 0)
-	d.fbo = fbo
-	d.tex = tex
-}
-
-// SetMatrix assigns a 4x4 transformation matrix to the DepthMap instance.
-func (d *DepthMap) SetMatrix(matrix *float32) {
-	d.matrixPtr = matrix
-}
-
-// Shutdown releases OpenGL resources associated with the framebuffer and texture of the DepthMap.
-func (d *DepthMap) Shutdown() {
-	if d.fbo != 0 {
-		d.ctx.DeleteFramebuffers(1, &d.fbo)
-		d.fbo = 0
-	}
-	if d.tex != 0 {
-		d.ctx.DeleteTextures(1, &d.tex)
-		d.tex = 0
-	}
-	d.width = 0
-	d.height = 0
-	d.gen = 0
-}
-
 const (
 	depthDoubleBuffer = 2
 	shadowAtlasSize   = int32(2048)
@@ -136,8 +39,8 @@ const (
 	MaxShadowTiles = 10
 )
 
-// ShadowTileData carries per-light culled draw commands and cache keys for a single atlas tile.
-type ShadowTileData struct {
+// ShadowsTileData carries per-light culled draw commands and cache keys for a single atlas tile.
+type ShadowsTileData struct {
 	Active    bool
 	RenderDC  *draws.DrawCommandsRender
 	Matrix    [16]float32
@@ -145,26 +48,31 @@ type ShadowTileData struct {
 	Reuse     bool
 }
 
-type shadowTileCache struct {
-	valid     bool
-	atlasGen  uint64
-	matrix    [16]float32
-	sceneHash uint64
-}
+/*
+Y=2048 +------------------------+------------------------+
+       |                        |                        |
+       |      ROOM SHADOW       |    FLASHLIGHT SHADOW   |
+       |      (1024 x 1024)     |      (1024 x 1024)     |
+       |   UV: [0..0.5, 0.5..1] |  UV: [0.5..1, 0.5..1]  |
+       |                        |                        |
+Y=1024 +--------+--------+------+--+--------+------------+
+       | Light4 | Light5 |  Light6 | Light7 | (512x512)  |  Row 1 (Y: 512..1023)
+ Y=512 +--------+--------+---------+--------+------------+
+       | Light0 | Light1 |  Light2 | Light3 | (512x512)  |  Row 0 (Y: 0..511)
+   Y=0 +--------+--------+---------+--------+------------+
+       X=0     X=512   X=1024    X=1536   X=2048
+*/
 
 // Depth is responsible for managing depth shaders and shadow map framebuffers for rendering depth-based effects.
 type Depth struct {
-	ctx                 api.IContext
-	handler             *Handler
-	prg                 uint32
-	table               [DepthLocLast]int32
-	prgSolid            uint32
-	tableSolid          [DepthLocLast]int32
-	sWidth              int32
-	sHeight             int32
-	shadowAtlasMaps     [depthDoubleBuffer]*DepthMap
-	tileCache           [depthDoubleBuffer][MaxShadowTiles]shadowTileCache
-	frameIdx            int
+	ctx        api.IContext
+	handler    *Handler
+	prg        uint32
+	table      [DepthLocLast]int32
+	prgSolid   uint32
+	tableSolid [DepthLocLast]int32
+	atlas      *Atlas
+
 	shadows             bool
 	shadowLights        bool
 	mapMetrics          *metrics.Map
@@ -183,11 +91,9 @@ type Depth struct {
 
 // NewDepth initializes and returns a new instance of Depth with default uninitialized properties.
 func NewDepth(maxShadowLights int) *Depth {
-	d := &Depth{
+	return &Depth{
 		maxShadowLights: maxShadowLights,
 	}
-
-	return d
 }
 
 // Setup initializes the Depth instance by assigning the rendering context from the provided Handler.
@@ -200,11 +106,9 @@ func (s *Depth) Setup(h *Handler) error {
 	s.flash = h.GetFlash()
 	s.main = h.GetMain()
 	s.shadowLights = s.handler.GetCalibration().EnableShadowLights
-	for i := range depthDoubleBuffer {
-		s.shadowAtlasMaps[i] = NewDepthMap(s.ctx)
-	}
-	s.frameIdx = 0
-	s.InvalidateCache()
+	s.atlas = NewAtlas(s.ctx)
+	s.atlas.SetShadows(s.shadows)
+
 	s.matrixEmptyPtr = &s.matrixEmpty[0]
 	s.viewMatrixPtr = s.matrixEmptyPtr
 	s.roomSpaceMatrix = s.matrixEmptyPtr
@@ -225,40 +129,39 @@ func (s *Depth) Init() error {
 	return nil
 }
 
-// SetShadowsEnabled toggles shadow rendering by setting the internal shadows flag to the provided boolean value.
+// SetShadowsEnabled toggles shadow rendering and synchronizes the underlying atlas cache state.
 func (s *Depth) SetShadowsEnabled(shadows bool) {
-	if shadows && !s.shadows {
-		s.InvalidateCache()
-	}
 	s.shadows = shadows
-}
-
-// InvalidateCache forces all cached shadow atlas tiles across both double-buffers to redraw on next use.
-func (s *Depth) InvalidateCache() {
-	for b := range depthDoubleBuffer {
-		for t := range MaxShadowTiles {
-			s.tileCache[b][t].valid = false
-		}
+	if s.atlas != nil {
+		s.atlas.SetShadows(shadows)
 	}
-}
-
-// NextAtlasIndex returns the double-buffer atlas index that the next Render call will target.
-func (s *Depth) NextAtlasIndex() int {
-	return (s.frameIdx + 1) % depthDoubleBuffer
 }
 
 // CanReuseTile reports whether slot in the next target atlas buffer already matches matrix and sceneHash.
 func (s *Depth) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bool {
-	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrix == nil {
+	if !s.shadows || s.atlas == nil {
 		return false
 	}
-	nextIdx := s.NextAtlasIndex()
-	atlas := s.shadowAtlasMaps[nextIdx]
-	if atlas == nil || atlas.fbo == 0 || atlas.width != shadowAtlasSize || atlas.height != shadowAtlasSize {
-		return false
+	return s.atlas.CanReuseTile(slot, matrix, sceneHash)
+}
+
+// InvalidateCache forces all cached shadow atlas tiles across both double-buffers to redraw on next use.
+func (s *Depth) InvalidateCache() {
+	if s.atlas != nil {
+		s.atlas.InvalidateCache()
 	}
-	c := &s.tileCache[nextIdx][slot]
-	return c.valid && c.atlasGen == atlas.gen && c.sceneHash == sceneHash && c.matrix == *matrix
+}
+
+// GetAtlas returns the underlying master shadow Atlas instance managed by Depth.
+func (s *Depth) GetAtlas() *Atlas {
+	return s.atlas
+}
+
+// Shutdown releases GPU resources owned by the Depth shadow atlas.
+func (s *Depth) Shutdown() {
+	if s.atlas != nil {
+		s.atlas.Shutdown()
+	}
 }
 
 // GetTileConfig returns whether the given tile slot is active this frame, whether it requires DEPTH_CLAMP, and its matrix pointer.
@@ -299,31 +202,40 @@ func (s *Depth) GetUniform(id DepthLoc) int32 {
 	return s.table[id]
 }
 
-// GetRoomShadowTextures retrieves the texture ID associated with the room shadow map (Master Shadow Atlas).
-func (s *Depth) GetRoomShadowTextures() uint32 {
-	return s.shadowAtlasMaps[s.frameIdx].tex
-}
-
 // GetShadowLightCount returns the count of dynamic shadow lights currently managed by the Depth instance.
 func (s *Depth) GetShadowLightCount() uint32 {
 	return s.shadowLightsMetrics.GetLightCount()
 }
 
+// GetRoomShadowTextures retrieves the texture ID associated with the room shadow map (Master Shadow Atlas).
+func (s *Depth) GetRoomShadowTextures() uint32 {
+	return s.GetShadowAtlasTexture()
+}
+
 // GetFlashShadowTextures retrieves the OpenGL texture ID associated with the flashlight shadow map (Master Shadow Atlas).
 func (s *Depth) GetFlashShadowTextures() uint32 {
-	return s.shadowAtlasMaps[s.frameIdx].tex
+	return s.GetShadowAtlasTexture()
 }
 
 // GetShadowAtlasTexture retrieves the OpenGL texture ID of the master shadow atlas.
 func (s *Depth) GetShadowAtlasTexture() uint32 {
-	return s.shadowAtlasMaps[s.frameIdx].tex
+	if s.atlas == nil {
+		return 0
+	}
+	return s.atlas.GetShadowAtlasTexture()
 }
 
-// GetShadowLightTextures retrieves the texture ID for a specific dynamic shadow light by its index. Returns 0 if index is out of range.
+// GetShadowLightTextures retrieves the texture ID, framebuffer ID, and matrix pointer for a specific dynamic shadow light.
 func (s *Depth) GetShadowLightTextures(idx uint32) (uint32, uint32, *float32) {
 	_, lMatrix := s.shadowLightsMetrics.GetLight(int(idx))
-	atlas := s.shadowAtlasMaps[s.frameIdx]
-	return atlas.tex, atlas.fbo, lMatrix
+	if s.atlas == nil {
+		return 0, 0, lMatrix
+	}
+	dm := s.atlas.GetShadowAtlas()
+	if dm == nil {
+		return 0, 0, lMatrix
+	}
+	return dm.tex, dm.fbo, lMatrix
 }
 
 // Compile initializes and compiles the cutout and solid depth shader programs for shadow atlas rendering.
@@ -409,8 +321,8 @@ func (s *Depth) Render(dc *draws.DrawCommandsRender) {
 
 // RenderWithTiles renders dirty per-light tiles into the double-buffered master shadow atlas, skipping cached unchanged tiles.
 // When tiles is nil, it falls back to rendering fallbackDC across all active tiles.
-func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[MaxShadowTiles]ShadowTileData) {
-	if !s.shadows {
+func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[MaxShadowTiles]ShadowsTileData) {
+	if !s.shadows || s.atlas == nil {
 		return
 	}
 	if tiles == nil {
@@ -418,12 +330,10 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[Ma
 		return
 	}
 
-	idx := s.NextAtlasIndex()
-	s.frameIdx = idx
-	atlas := s.shadowAtlasMaps[idx]
-	atlas.Update(shadowAtlasSize, shadowAtlasSize)
-	s.sWidth = shadowAtlasSize
-	s.sHeight = shadowAtlasSize
+	idx, atlas := s.atlas.Update()
+	if atlas == nil || atlas.fbo == 0 {
+		return
+	}
 
 	var dirty [MaxShadowTiles]bool
 	anyDirty := false
@@ -432,11 +342,10 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[Ma
 	for t := range MaxShadowTiles {
 		tile := &tiles[t]
 		if !tile.Active {
-			s.tileCache[idx][t].valid = false
+			s.atlas.InvalidateTile(idx, t)
 			continue
 		}
-		c := &s.tileCache[idx][t]
-		if tile.Reuse && c.valid && c.atlasGen == atlas.gen && c.sceneHash == tile.SceneHash && c.matrix == tile.Matrix {
+		if tile.Reuse && s.atlas.IsTileCached(idx, t, tile, atlas.gen) {
 			continue
 		}
 		dirty[t] = true
@@ -475,13 +384,7 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[Ma
 		s.ctx.Viewport(tx, ty, tw, th)
 		s.ctx.Scissor(tx, ty, tw, th)
 		s.ctx.Clear(api.DEPTH_BUFFER_BIT)
-		tile := &tiles[t]
-		s.tileCache[idx][t] = shadowTileCache{
-			valid:     true,
-			atlasGen:  atlas.gen,
-			matrix:    tile.Matrix,
-			sceneHash: tile.SceneHash,
-		}
+		s.atlas.SetTile(idx, t, &tiles[t], atlas.gen)
 	}
 
 	interval := float32(textures.GlobalTick()) * 0.05
@@ -502,22 +405,18 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[Ma
 }
 
 func (s *Depth) renderSharedAtlas(dc *draws.DrawCommandsRender) {
-	if dc == nil || !dc.HasCommands() {
+	if dc == nil || !dc.HasCommands() || s.atlas == nil {
 		return
 	}
 
 	fbW, fbH := s.handler.GetSize()
 	mainVao := s.main.GetVAO()
-	idx := s.NextAtlasIndex()
-	s.frameIdx = idx
-	atlas := s.shadowAtlasMaps[idx]
-
-	atlas.Update(shadowAtlasSize, shadowAtlasSize)
-	s.sWidth = shadowAtlasSize
-	s.sHeight = shadowAtlasSize
-	for t := range MaxShadowTiles {
-		s.tileCache[idx][t].valid = false
+	idx, atlas := s.atlas.Update()
+	if atlas == nil || atlas.fbo == 0 {
+		return
 	}
+	s.atlas.InvalidateTiles(idx)
+
 	s.ctx.BindVertexArray(mainVao)
 
 	s.ctx.Disable(api.CULL_FACE)
@@ -530,8 +429,8 @@ func (s *Depth) renderSharedAtlas(dc *draws.DrawCommandsRender) {
 
 	// Bind single master shadow atlas FBO and clear entire depth atlas in one go
 	s.ctx.BindFramebuffer(api.FRAMEBUFFER, atlas.fbo)
-	s.ctx.Viewport(0, 0, shadowAtlasSize, shadowAtlasSize)
-	s.ctx.Scissor(0, 0, shadowAtlasSize, shadowAtlasSize)
+	s.ctx.Viewport(0, 0, s.atlas.width, s.atlas.height)
+	s.ctx.Scissor(0, 0, s.atlas.width, s.atlas.height)
 	s.ctx.Clear(api.DEPTH_BUFFER_BIT)
 
 	interval := float32(textures.GlobalTick()) * 0.05
@@ -554,7 +453,7 @@ func (s *Depth) renderSharedAtlas(dc *draws.DrawCommandsRender) {
 	s.ctx.Viewport(0, 0, fbW, fbH)
 }
 
-func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval float32, mainVao uint32, tiles *[MaxShadowTiles]ShadowTileData, dirty *[MaxShadowTiles]bool, cutout bool) {
+func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval float32, mainVao uint32, tiles *[MaxShadowTiles]ShadowsTileData, dirty *[MaxShadowTiles]bool, cutout bool) {
 	s.ctx.UseProgram(prg)
 	s.ctx.Uniform1f(table[DepthLocTime], interval)
 	s.ctx.UniformMatrix4fv(table[DepthLocView], 1, false, s.viewMatrixPtr)
@@ -647,14 +546,4 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 			}
 		}
 	}
-}
-
-// allocate configures the unified master shadow map atlas dimensions.
-func (s *Depth) allocate(width, height int32) {
-	s.sWidth = width
-	s.sHeight = height
-	for i := range depthDoubleBuffer {
-		s.shadowAtlasMaps[i].Update(width, height)
-	}
-	s.InvalidateCache()
 }

@@ -33,7 +33,7 @@ type Shadows struct {
 	bContext           *Context
 	bStatic            *Static
 	bThings            *Things
-	tiles              [shaders.MaxShadowTiles]shaders.ShadowTileData
+	tiles              [shaders.MaxShadowTiles]shaders.ShadowsTileData
 	builders           [shaders.MaxShadowTiles]*ShadowTileBuilder
 	instPool           *buffers.InstancePool
 	instGroups         buffers.PtrPool[ShadowsRigidGroup]
@@ -72,7 +72,7 @@ func (w *Shadows) DisableAllTiles() {
 }
 
 // GetTiles returns a pointer to the array of shadow tiles, which store per-light shadow data for the shadow atlas.
-func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.ShadowTileData {
+func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.ShadowsTileData {
 	return &w.tiles
 }
 

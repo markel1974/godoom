@@ -14,7 +14,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -118,7 +117,7 @@ func setupShadowBenchScene(b *testing.B, crateCount int) (*benchShadowCtx, *engi
 		b.Fatalf("Main.Init: %v", err)
 	}
 	d := h.GetDepth()
-	if err := d.Compile(&open_gl.Assets{}); err != nil {
+	if err := d.Compile(testShaderAssets{}); err != nil {
 		b.Fatalf("Depth.Compile: %v", err)
 	}
 	d.SetShadowsEnabled(true)
@@ -203,8 +202,8 @@ func BenchmarkComputeShadowsRealMaps(b *testing.B) {
 		pak  string
 		kind string
 	}{
-		{"quake2", "../../../build/resources/quake2/pak0.pak", "q2"},
-		{"doom3", "../../../build/resources/doom3/pak000.pk4", "d3"},
+		{"quake2", "../../../../build/resources/quake2/pak0.pak", "q2"},
+		{"doom3", "../../../../build/resources/doom3/pak000.pk4", "d3"},
 	}
 
 	for _, tc := range cases {
@@ -257,7 +256,7 @@ func BenchmarkComputeShadowsRealMaps(b *testing.B) {
 				b.Fatalf("Main.Init: %v", err)
 			}
 			d := h.GetDepth()
-			if err := d.Compile(&open_gl.Assets{}); err != nil {
+			if err := d.Compile(testShaderAssets{}); err != nil {
 				b.Fatalf("Depth.Compile: %v", err)
 			}
 			d.SetShadowsEnabled(true)

@@ -163,7 +163,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d *shaders.Dept
 	}
 
 	if shadowExtraSig != w.prevShadowExtraSig {
-		// Advance shadowExtraGen separately so Main uploads off-camera vertices without invalidating BuilderContext.Commit.
+		// Advance shadowExtraGen separately so Main uploads off-camera vertices without invalidating Context.Commit.
 		w.bContext.shadowExtraGen++
 		w.prevShadowExtraSig = shadowExtraSig
 	}

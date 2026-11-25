@@ -25,8 +25,7 @@ type ShadowRigidEntry struct {
 	hash           uint64
 }
 
-// updateShadowRigidEntry updates the shadow rigid entry's transform matrix, cached mesh, and hash if necessary.
-
+// Update updates the shadow rigid entry's transform matrix, cached mesh, and hash if necessary.
 func (rEntry *ShadowRigidEntry) Update(entID uint64, ent *rigid_body.Entity, rigidFaces *volumes.Faces, bThings *Things, shadowFrame uint64) uint64 {
 	tPosX, tPosY, zBot := ent.GetCenter()
 	qx, qy, qz, qw := ent.GetQRotation().Get()

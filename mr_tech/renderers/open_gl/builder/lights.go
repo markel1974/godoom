@@ -45,6 +45,7 @@ func (bl *Lights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, 
 	ls.QueryOverlaps(bl.lightBB, bl.doQuery)
 }
 
+// doQuery processes an object to determine if it is a valid light and classifies it based on distance and frustum intersection.
 func (bl *Lights) doQuery(object aabb.IObject) bool {
 	light, ok := object.(*lights.Light)
 	if !ok || light == nil || light.GetKind() == config.LightKindNone {

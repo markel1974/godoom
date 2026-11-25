@@ -44,7 +44,9 @@ func NewFrameLights(ctx api.IContext, maxLights int, useShadowLight bool) *Frame
 		stride:            stride,
 		useShadowLight:    useShadowLight,
 	}
-	fl.dataPtr = ctx.Ptr(fl.data2)
+	if ctx != nil {
+		fl.dataPtr = ctx.Ptr(fl.data2)
+	}
 	for idx := range fl.shadowLights {
 		fl.shadowLights[idx] = metrics.NewLight()
 	}
@@ -245,7 +247,9 @@ func (f *FrameLights) grow() {
 	newData := make([]float32, newSize)
 	copy(newData, f.data2)
 	f.data2 = newData
-	f.dataPtr = f.ctx.Ptr(f.data2)
+	if f.ctx != nil {
+		f.dataPtr = f.ctx.Ptr(f.data2)
+	}
 }
 
 // buildMinHeap constructs a min-heap for the shadowLights array based on their scores in O(n) time complexity.

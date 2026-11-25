@@ -69,8 +69,8 @@ type Static struct {
 	atlasVolCount   int
 }
 
-// NewBuilderStatic creates and returns a new Static builder using the provided Context for resource management.
-func NewBuilderStatic(bc *Context) *Static {
+// NewStatic creates and returns a new Static builder using the provided Context for resource management.
+func NewStatic(bc *Context) *Static {
 	return &Static{
 		bc:              bc,
 		visibleVol:      NewVisibleVols(8192),

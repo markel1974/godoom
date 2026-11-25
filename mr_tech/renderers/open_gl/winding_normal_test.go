@@ -10,11 +10,36 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/builder"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+type windingTestCtx struct{ api.IContext }
+
+func (windingTestCtx) Ptr(_ interface{}) unsafe.Pointer    { return nil }
+func (windingTestCtx) PtrOffset(offset int) unsafe.Pointer { return unsafe.Pointer(uintptr(offset)) }
+func (windingTestCtx) GenVertexArrays(_ int32, a *uint32) {
+	if a != nil {
+		*a = 1
+	}
+}
+func (windingTestCtx) GenBuffers(_ int32, b *uint32) {
+	if b != nil {
+		*b = 1
+	}
+}
+func (windingTestCtx) DeleteVertexArrays(_ int32, _ *uint32)                  {}
+func (windingTestCtx) DeleteBuffers(_ int32, _ *uint32)                       {}
+func (windingTestCtx) BindVertexArray(_ uint32)                               {}
+func (windingTestCtx) BindBuffer(_, _ uint32)                                 {}
+func (windingTestCtx) BufferData(_ uint32, _ int, _ unsafe.Pointer, _ uint32) {}
+func (windingTestCtx) BufferSubData(_ uint32, _, _ int, _ unsafe.Pointer)     {}
+func (windingTestCtx) VertexAttribPointer(_ uint32, _ int32, _ uint32, _ bool, _ int32, _ unsafe.Pointer) {
+}
+func (windingTestCtx) VertexAttribDivisor(_, _ uint32)  {}
+func (windingTestCtx) EnableVertexAttribArray(_ uint32) {}
 
 func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 	tex := textures.NewTexture("TEST", 1, 64, 64, false)
@@ -87,7 +112,7 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 
 	// Verify GL (u, -v) tangent & handedness sign + ResidentMesh 24-float GPU vertex packing.
 	fA.SetLightmap(2, 0.25, 0.75, 0.5, 0.75, 0.25, 0.5)
-	ctx := &builder.noopRenderCtx{}
+	ctx := windingTestCtx{}
 	rm := buffers.NewResidentMesh(ctx)
 	ok := rm.Rebuild(faces, func(_ *textures.Texture) (float32, bool) { return 3.0, true })
 	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%buffers.StaticVertexFloats != 0 {
@@ -126,7 +151,7 @@ func TestResidentMeshAndFrameVerticesZeroAllocsSteadyState(t *testing.T) {
 	faces.Add(f)
 	faces.Rebuild()
 
-	ctx := &builder.noopRenderCtx{}
+	ctx := windingTestCtx{}
 	rm := buffers.NewResidentMesh(ctx)
 	texFn := func(_ *textures.Texture) (float32, bool) { return 1.0, true }
 	if !rm.Rebuild(faces, texFn) {

@@ -34,7 +34,7 @@ func NewBuilder(ctx api.IContext, tex *vramtex.Textures, cal *model.Calibration,
 
 func newBuilderWithOcclusionMax(ctx api.IContext, tex *vramtex.Textures, cal *model.Calibration, player *things.Player, occMax int) *Builder {
 	bc := NewContextWithOcclusionMax(ctx, cal, tex, player, occMax)
-	bs := NewBuilderStatic(bc)
+	bs := NewStatic(bc)
 	bt := NewThings(bc)
 	bl := NewLights(bc)
 	bShadow := NewShadows(bc, bs, bt)

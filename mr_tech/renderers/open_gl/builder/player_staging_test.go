@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"math"
@@ -16,7 +16,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/builder"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -73,11 +72,11 @@ func (stubCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uin
 }
 func (stubCtx) GenerateMipmap(_ uint32) {}
 
-func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *builder.Builder {
-	return builder.newBuilderVolumeWithOcclusionMax(stubCtx{}, vramtex.NewTextures(stubCtx{}), cal, pl, 8)
+func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *Builder {
+	return newBuilderWithOcclusionMax(stubCtx{}, vramtex.NewTextures(stubCtx{}), cal, pl, 8)
 }
 
-func (w *builder.Builder) resetTestFrame() {
+func (w *Builder) resetTestFrame() {
 	w.bc.ResetDynamicDraws()
 	if w.bc.occlusion != nil {
 		w.bc.occlusion.Reset()
@@ -279,8 +278,8 @@ func TestJediBobbingWithinPlayerRadiusAndContinuousWalk(t *testing.T) {
 	rigid_body.SetFps(120)
 	defer rigid_body.SetFps(120)
 
-	const jediDir = "../../../build/resources/jedi"
-	const outlawsDir = "../../../build/resources/outlaws"
+	const jediDir = "../../../../build/resources/jedi"
+	const outlawsDir = "../../../../build/resources/outlaws"
 	cases := []struct {
 		name string
 		mode jedi.EngineMode
@@ -352,9 +351,9 @@ func TestQuakeBootAndStepFirstFrames(t *testing.T) {
 		name string
 		pak  string
 	}{
-		{"quake1", "../../../build/resources/quake/pak0.pak"},
-		{"quake2", "../../../build/resources/quake2/pak0.pak"},
-		{"quake3", "../../../build/resources/quake3arena/pak0.pk3"},
+		{"quake1", "../../../../build/resources/quake/pak0.pak"},
+		{"quake2", "../../../../build/resources/quake2/pak0.pak"},
+		{"quake3", "../../../../build/resources/quake3arena/pak0.pk3"},
 	}
 
 	for _, tc := range cases {

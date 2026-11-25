@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"unsafe"
 
@@ -14,13 +16,38 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
+
+type testShaderAssets struct{}
+
+func (testShaderAssets) BasePath(vPath string) string {
+	return filepath.Join("..", "assets", vPath)
+}
+
+func (testShaderAssets) Read(p string) ([]byte, error) {
+	data, err := os.ReadFile(filepath.Join("..", "assets", p))
+	if err != nil {
+		return []byte(""), nil
+	}
+	return data, nil
+}
+
+func (a testShaderAssets) ReadMulti(aPath, bPath string) ([]byte, []byte, error) {
+	aOut, err := a.Read(aPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	bOut, err := a.Read(bPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	return aOut, bOut, nil
+}
 
 type noopRenderCtx struct {
 	api.IContext
@@ -944,7 +971,7 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 		t.Fatalf("Main.Init: %v", err)
 	}
 	d := h.GetDepth()
-	if err := d.Compile(&open_gl.Assets{}); err != nil {
+	if err := d.Compile(testShaderAssets{}); err != nil {
 		t.Fatalf("Depth.Compile: %v", err)
 	}
 	d.SetShadowsEnabled(true)
@@ -1143,7 +1170,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 		t.Fatalf("Main.Init: %v", err)
 	}
 	d := h.GetDepth()
-	if err := d.Compile(&open_gl.Assets{}); err != nil {
+	if err := d.Compile(testShaderAssets{}); err != nil {
 		t.Fatalf("Depth.Compile: %v", err)
 	}
 	d.SetShadowsEnabled(true)

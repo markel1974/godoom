@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"sort"

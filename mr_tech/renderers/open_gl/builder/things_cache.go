@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"

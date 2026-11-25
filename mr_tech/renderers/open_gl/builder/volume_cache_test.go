@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"testing"
@@ -14,6 +14,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
@@ -170,7 +171,7 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}
-	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
 
 	// Frame 1: builds resident static meshes (zero streaming static prefix) and visible things.
 	bv.Compute(640, 480, vi, en)
@@ -466,7 +467,7 @@ func TestBuilderVolumeRigidInstancingAndTransparentSorting(t *testing.T) {
 	if err := baseTex.Setup(baseEn.GetTextures()); err != nil {
 		t.Fatalf("base textures setup failed: %v", err)
 	}
-	baseBv := NewBuilderVolume(baseCtx, baseTex, baseEn.GetCalibration(), basePl)
+	baseBv := NewBuilder(baseCtx, baseTex, baseEn.GetCalibration(), basePl)
 	baseBv.Compute(640, 480, baseVi, baseEn)
 	baseStreamVerts := baseBv.GetStreamingVertexCount()
 
@@ -508,7 +509,7 @@ func TestBuilderVolumeRigidInstancingAndTransparentSorting(t *testing.T) {
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}
-	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
 
 	// Frame 1: static world -> resident, three rigid crates -> single instanced batch (count=3), 0 added streaming verts.
 	bv.Compute(640, 480, vi, en)
@@ -614,17 +615,17 @@ func TestBuilderVolumeStaticAtlasCoalescesVolumesAndDetachesDirty(t *testing.T) 
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}
-	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
 	bv.Compute(640, 480, vi, en)
 
-	if bv.bs.staticAtlas == nil || bv.bs.staticAtlas.VAO == 0 {
-		t.Fatalf("expected built staticAtlas with valid VAO, got %+v", bv.bs.staticAtlas)
+	if bv.bs.atlas == nil || bv.bs.atlas.VAO == 0 {
+		t.Fatalf("expected built staticAtlas with valid VAO, got %+v", bv.bs.atlas)
 	}
 	if bv.bc.staticOpaque.Len == 0 {
 		t.Fatalf("expected non-zero staticOpaque items")
 	}
 	for i := 0; i < bv.bc.staticOpaque.Len; i++ {
-		if bv.bc.staticOpaque.Items[i].Mesh != bv.bs.staticAtlas {
+		if bv.bc.staticOpaque.Items[i].Mesh != bv.bs.atlas {
 			t.Fatalf("expected static item %d to share staticAtlas VAO, got separate mesh", i)
 		}
 	}
@@ -638,7 +639,7 @@ func TestBuilderVolumeStaticAtlasCoalescesVolumesAndDetachesDirty(t *testing.T) 
 	if sGen2 <= sGen1 {
 		t.Fatalf("expected staticGen advance on dirty volume detach, got %d -> %d", sGen1, sGen2)
 	}
-	entry0 := bv.bs.staticEntries[v0.GetFaces()]
+	entry0 := bv.bs.entries[v0.GetFaces()]
 	if entry0 == nil || !entry0.detached {
 		t.Fatalf("expected dirty volume 0 marked detached from staticAtlas")
 	}
@@ -809,10 +810,10 @@ func TestBuilderVolumeStreamingUsesChunkedStaticAtlas(t *testing.T) {
 		t.Fatalf("textures setup failed: %v", err)
 	}
 
-	bv := NewBuilderVolume(rCtx, glTex, en.GetCalibration(), pl)
+	bv := NewBuilder(rCtx, glTex, en.GetCalibration(), pl)
 	bv.Compute(640, 480, vi, en)
 
-	if !bv.bs.staticAtlasStreamMode {
+	if !bv.bs.atlasStreamMode {
 		t.Fatalf("expected staticAtlasStreamMode == true when HasStreamer() active")
 	}
 	if len(bv.bs.streamChunks) == 0 {
@@ -934,7 +935,7 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	mCal.EnableShadowLights = true
 	mCal.MSAASamples = 0
 
-	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
 	h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
 	if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
 		t.Fatalf("Handler.Setup: %v", err)
@@ -943,7 +944,7 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 		t.Fatalf("Main.Init: %v", err)
 	}
 	d := h.GetDepth()
-	if err := d.Compile(&Assets{}); err != nil {
+	if err := d.Compile(&open_gl.Assets{}); err != nil {
 		t.Fatalf("Depth.Compile: %v", err)
 	}
 	d.SetShadowsEnabled(true)
@@ -985,15 +986,15 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	if !spot0.RenderDC.HasSolid() || !spot1.RenderDC.HasSolid() {
 		t.Fatalf("expected Spotlight 0 (off-camera behind) and Spotlight 1 (side) to retain solid casters")
 	}
-	if bv.bShadow.shadowBuilders[shaders.ShadowTileLightBase].instItems.Len == 0 {
+	if bv.bShadow.builders[shaders.ShadowTileLightBase].instItems.Len == 0 {
 		t.Fatalf("expected Spotlight 0 to include off-camera crate_behind instanced caster")
 	}
-	if bv.bShadow.shadowBuilders[shaders.ShadowTileLightBase+1].instItems.Len == 0 {
+	if bv.bShadow.builders[shaders.ShadowTileLightBase+1].instItems.Len == 0 {
 		t.Fatalf("expected Spotlight 1 to include off-camera crate_side instanced caster")
 	}
 	// Spotlight 1 only overlaps side sector (not front/behind/roof), so it must cull strictly fewer submeshes than Room.
-	roomStaticCount := bv.bShadow.shadowBuilders[shaders.ShadowTileRoom].staticItems.Len
-	spot1StaticCount := bv.bShadow.shadowBuilders[shaders.ShadowTileLightBase+1].staticItems.Len
+	roomStaticCount := bv.bShadow.builders[shaders.ShadowTileRoom].staticItems.Len
+	spot1StaticCount := bv.bShadow.builders[shaders.ShadowTileLightBase+1].staticItems.Len
 	if spot1StaticCount == 0 || spot1StaticCount >= roomStaticCount {
 		t.Fatalf("expected per-light culling on Spotlight 1 (%d) < Room (%d) and > 0", spot1StaticCount, roomStaticCount)
 	}
@@ -1133,7 +1134,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	mCal.EnableShadows = true
 	mCal.MSAASamples = 0
 
-	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
 	h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
 	if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
 		t.Fatalf("Handler.Setup: %v", err)
@@ -1142,7 +1143,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 		t.Fatalf("Main.Init: %v", err)
 	}
 	d := h.GetDepth()
-	if err := d.Compile(&Assets{}); err != nil {
+	if err := d.Compile(&open_gl.Assets{}); err != nil {
 		t.Fatalf("Depth.Compile: %v", err)
 	}
 	d.SetShadowsEnabled(true)
@@ -1167,7 +1168,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	d.Prepare()
 	bv.ComputeShadows(en, d)
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
-	flashOnlyVBO := bv.bShadow.shadowInstPool.ActiveVBO()
+	flashOnlyVBO := bv.bShadow.instPool.ActiveVBO()
 
 	rCtx.resetUploadLogs()
 	fm.UpdateWithAim(mm.GetViewPtr(), 0.004, 0, 0.004, 0, 1)
@@ -1179,8 +1180,8 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	if rCtx.subDataCalls != 0 {
 		t.Fatalf("expected 0 BufferSubData calls when rigid shadow instances did not change, got %d", rCtx.subDataCalls)
 	}
-	if bv.bShadow.shadowInstPool.ActiveVBO() != flashOnlyVBO {
-		t.Fatalf("expected shadowInstPool to preserve VBO %d across unchanged instance upload, got %d", flashOnlyVBO, bv.bShadow.shadowInstPool.ActiveVBO())
+	if bv.bShadow.instPool.ActiveVBO() != flashOnlyVBO {
+		t.Fatalf("expected shadowInstPool to preserve VBO %d across unchanged instance upload, got %d", flashOnlyVBO, bv.bShadow.instPool.ActiveVBO())
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
 
@@ -1193,7 +1194,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	if rCtx.subDataCalls != 1 || rCtx.orphanCalls == 0 {
 		t.Fatalf("expected 1 orphaned BufferSubData upload when crate_a moved, got orphan=%d subdata=%d", rCtx.orphanCalls, rCtx.subDataCalls)
 	}
-	if bv.bShadow.shadowInstPool.ActiveVBO() == flashOnlyVBO {
+	if bv.bShadow.instPool.ActiveVBO() == flashOnlyVBO {
 		t.Fatalf("expected shadowInstPool ring to advance VBO after instance mutation, stayed on %d", flashOnlyVBO)
 	}
 }
@@ -1256,7 +1257,7 @@ func TestBuilderVolumeNilGuardsAndHWOcclusion(t *testing.T) {
 		t.Fatalf("textures setup failed: %v", err)
 	}
 
-	bvNil := NewBuilderVolume(rCtx, nil, nil, nil)
+	bvNil := NewBuilder(rCtx, nil, nil, nil)
 	if bvNil.GetHWOcclusion() == nil {
 		t.Fatalf("expected NewBuilderVolume to initialize HWOcclusion even with nil dependencies")
 	}
@@ -1267,7 +1268,7 @@ func TestBuilderVolumeNilGuardsAndHWOcclusion(t *testing.T) {
 	bvNil.ComputeShadows(nil, nil)
 	bvNil.ComputeShadows(en, nil)
 
-	bv := NewBuilderVolume(rCtx, glTex, en.GetCalibration(), nil)
+	bv := NewBuilder(rCtx, glTex, en.GetCalibration(), nil)
 	if bv.GetHWOcclusion() == nil {
 		t.Fatalf("expected NewBuilderVolume to initialize HWOcclusion")
 	}
@@ -1340,10 +1341,10 @@ func TestOffCameraResolveMeshDetachesStaticAtlasInvalidatesReuse(t *testing.T) {
 	if err := glTex.Setup(en.GetTextures()); err != nil {
 		t.Fatalf("textures setup failed: %v", err)
 	}
-	bv := NewBuilderVolume(rCtx, glTex, en.GetCalibration(), pl)
+	bv := NewBuilder(rCtx, glTex, en.GetCalibration(), pl)
 	bv.Compute(640, 480, vi, en)
 
-	if bv.bs.staticAtlas == nil || bv.bc.staticOpaque.Len == 0 {
+	if bv.bs.atlas == nil || bv.bc.staticOpaque.Len == 0 {
 		t.Fatalf("expected non-empty staticAtlas draws on initial Compute")
 	}
 	_, _, sGen1, _ := bv.GetUploadHints()
@@ -1353,8 +1354,8 @@ func TestOffCameraResolveMeshDetachesStaticAtlasInvalidatesReuse(t *testing.T) {
 	v0 := en.GetVolumes().GetVolumes().Get(0)
 	v0.SetDirty(true)
 	detachedMesh, entry, _ := bv.bs.ResolveMesh(v0, en.GetVolumes())
-	if detachedMesh == nil || detachedMesh == bv.bs.staticAtlas {
-		t.Fatalf("expected ResolveMesh to return a detached fallback mesh, got %p (staticAtlas=%p)", detachedMesh, bv.bs.staticAtlas)
+	if detachedMesh == nil || detachedMesh == bv.bs.atlas {
+		t.Fatalf("expected ResolveMesh to return a detached fallback mesh, got %p (staticAtlas=%p)", detachedMesh, bv.bs.atlas)
 	}
 	if entry != nil {
 		t.Fatalf("expected detached ResolveMesh call to return nil atlas entry")

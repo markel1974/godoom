@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"fmt"
@@ -14,6 +14,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -47,7 +48,7 @@ func (c *benchShadowCtx) BufferSubData(target uint32, offset int, size int, data
 	c.shadowTestCtx.BufferSubData(target, offset, size, data)
 }
 
-func setupShadowBenchScene(b *testing.B, crateCount int) (*benchShadowCtx, *engine.Engine, *things.Player, *engine.ViewMatrix, *BuilderVolume, *shaders.Handler, *shaders.Depth) {
+func setupShadowBenchScene(b *testing.B, crateCount int) (*benchShadowCtx, *engine.Engine, *things.Player, *engine.ViewMatrix, *Builder, *shaders.Handler, *shaders.Depth) {
 	b.Helper()
 	rigid_body.SetFps(120)
 	textures.SetFps(120)
@@ -108,7 +109,7 @@ func setupShadowBenchScene(b *testing.B, crateCount int) (*benchShadowCtx, *engi
 	mCal.EnableShadowLights = true
 	mCal.MSAASamples = 0
 
-	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
 	h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
 	if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
 		b.Fatalf("Handler.Setup: %v", err)
@@ -117,7 +118,7 @@ func setupShadowBenchScene(b *testing.B, crateCount int) (*benchShadowCtx, *engi
 		b.Fatalf("Main.Init: %v", err)
 	}
 	d := h.GetDepth()
-	if err := d.Compile(&Assets{}); err != nil {
+	if err := d.Compile(&open_gl.Assets{}); err != nil {
 		b.Fatalf("Depth.Compile: %v", err)
 	}
 	d.SetShadowsEnabled(true)
@@ -247,7 +248,7 @@ func BenchmarkComputeShadowsRealMaps(b *testing.B) {
 			mCal.EnableShadowLights = true
 			mCal.MSAASamples = 0
 
-			bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
+			bv := NewBuilder(rCtx, glTex, mCal, pl)
 			h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
 			if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
 				b.Fatalf("Handler.Setup: %v", err)
@@ -256,7 +257,7 @@ func BenchmarkComputeShadowsRealMaps(b *testing.B) {
 				b.Fatalf("Main.Init: %v", err)
 			}
 			d := h.GetDepth()
-			if err := d.Compile(&Assets{}); err != nil {
+			if err := d.Compile(&open_gl.Assets{}); err != nil {
 				b.Fatalf("Depth.Compile: %v", err)
 			}
 			d.SetShadowsEnabled(true)

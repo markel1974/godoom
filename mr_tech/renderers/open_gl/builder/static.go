@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"math"
@@ -12,19 +12,22 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
+// streamAtlasCellSize defines the size of each cell in the spatial atlas used for partitioning streaming chunks.
 const streamAtlasCellSize = 512.0
 
+// streamChunkKey represents a unique identifier for a stream-chunk based on its grid coordinates x and y.
 type streamChunkKey struct {
 	x, y int
 }
 
+// streamChunkEntry represents an entry in the streaming system for chunk data with mesh and volume face references.
 type streamChunkEntry struct {
 	atlas         *buffers.ResidentMesh
 	faces         []*volumes.Faces
 	lastSeenFrame uint64
 }
 
-// StaticVolumeEntry tracks a volume packed into either the world static atlas or a streamed chunk atlas.
+// StaticVolumeEntry represents a static volume in the graphics pipeline containing mesh, material, and rendering state.
 type StaticVolumeEntry struct {
 	atlas       *buffers.ResidentMesh
 	chunk       *streamChunkEntry
@@ -36,10 +39,9 @@ type StaticVolumeEntry struct {
 	detached    bool
 }
 
-// BuilderStatic manages visible world volumes, coalesced static atlases, streamed chunk atlases,
-// and detached per-volume fallback meshes.
-type BuilderStatic struct {
-	bc *BuilderContext
+// Static is a structure designed for managing and caching 3D static volume data, meshes, and rendering state.
+type Static struct {
+	bc *Context
 
 	visibleVol *VisibleVolumes
 	volMeshes  map[*volumes.Faces]*buffers.ResidentMesh
@@ -50,9 +52,9 @@ type BuilderStatic struct {
 	cachedRawVolsLen int
 	cachedSky        *textures.Material
 
-	staticGen           uint64
-	staticVertBytes     int
-	staticIdxBytes      int
+	gen                 uint64
+	vertBytes           int
+	idxBytes            int
 	lastChunkEvictFrame uint64
 
 	streamChunks map[streamChunkKey]*streamChunkEntry
@@ -60,16 +62,16 @@ type BuilderStatic struct {
 	chunkQueryBox  *aabb.BoundingBox
 	chunkQueryVols []*volumes.Volume
 
-	staticAtlas           *buffers.ResidentMesh
-	staticEntries         map[*volumes.Faces]*StaticVolumeEntry
-	staticAtlasBuilt      bool
-	staticAtlasStreamMode bool
-	staticAtlasVolCount   int
+	atlas           *buffers.ResidentMesh
+	entries         map[*volumes.Faces]*StaticVolumeEntry
+	atlasBuilt      bool
+	atlasStreamMode bool
+	atlasVolCount   int
 }
 
-// NewBuilderStatic allocates a BuilderStatic bound to bc.
-func NewBuilderStatic(bc *BuilderContext) *BuilderStatic {
-	return &BuilderStatic{
+// NewBuilderStatic creates and returns a new Static builder using the provided Context for resource management.
+func NewBuilderStatic(bc *Context) *Static {
+	return &Static{
 		bc:              bc,
 		visibleVol:      NewVisibleVols(8192),
 		cachedRawVols:   make([]*volumes.Volume, 8192),
@@ -78,45 +80,45 @@ func NewBuilderStatic(bc *BuilderContext) *BuilderStatic {
 	}
 }
 
-// GetUploadHints returns static vertex/index prefix byte sizes and the monotonic static generation counter.
-func (w *BuilderStatic) GetUploadHints() (staticVertBytes, staticIdxBytes int, staticGen uint64) {
-	return w.staticVertBytes, w.staticIdxBytes, w.staticGen
+// GetUploadHints returns the current static vertex and index byte counts along with the generation identifier.
+func (w *Static) GetUploadHints() (staticVertBytes, staticIdxBytes int, staticGen uint64) {
+	return w.vertBytes, w.idxBytes, w.gen
 }
 
-// GetSkyMaterial returns the sky material detected among active static volumes.
-func (w *BuilderStatic) GetSkyMaterial() *textures.Material {
+// GetSkyMaterial returns the material used for sky rendering in the Static object.
+func (w *Static) GetSkyMaterial() *textures.Material {
 	return w.cSky
 }
 
-// GetEntry returns the static atlas descriptor for faces when mapped, or nil.
-func (w *BuilderStatic) GetEntry(faces *volumes.Faces) *StaticVolumeEntry {
-	return w.staticEntries[faces]
+// GetEntry retrieves a StaticVolumeEntry associated with the given Faces instance from the staticEntries map.
+func (w *Static) GetEntry(faces *volumes.Faces) *StaticVolumeEntry {
+	return w.entries[faces]
 }
 
-// GetResidentMesh returns the standalone detached resident mesh for faces, or nil.
-func (w *BuilderStatic) GetResidentMesh(faces *volumes.Faces) *buffers.ResidentMesh {
+// GetResidentMesh returns the resident mesh associated with the given set of faces from the volume mesh mapping.
+func (w *Static) GetResidentMesh(faces *volumes.Faces) *buffers.ResidentMesh {
 	return w.volMeshes[faces]
 }
 
-// TryBuildStaticAtlas initializes or rebuilds the static/streaming atlas layout when volume storage mode or count changes.
-func (w *BuilderStatic) TryBuildStaticAtlas(vols *model.Volumes) {
+// TryBuildStaticAtlas attempts to rebuild the static atlas if conditions like stream mode or volume count have changed.
+func (w *Static) TryBuildStaticAtlas(vols *model.Volumes) {
 	if vols == nil {
 		return
 	}
 	hasStreamer := vols.HasStreamer()
 	volsLen := vols.Len()
-	if !w.staticAtlasBuilt || w.staticAtlasStreamMode != hasStreamer || (!hasStreamer && w.staticAtlasVolCount != volsLen) {
-		w.buildStaticAtlas(vols)
+	if !w.atlasBuilt || w.atlasStreamMode != hasStreamer || (!hasStreamer && w.atlasVolCount != volsLen) {
+		w.buildAtlas(vols)
 	}
 }
 
-// Process updates GPU-resident static volume meshes only when the visible volume set, mesh detachment, geometry, or animated textures change.
-func (w *BuilderStatic) Process(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
+// Process updates the static mesh state, processes visible volumes, and manages dynamic and static draw operations.
+func (w *Static) Process(vols *model.Volumes, frustumFront *aabb.Frustum, pX, pY, pZ float64) bool {
 	if w.bc.meshFrame == 0 {
 		w.bc.meshFrame = 1
 	}
 	if vols == nil {
-		if w.cachedRawVolsLen == 0 && w.staticGen > 0 {
+		if w.cachedRawVolsLen == 0 && w.gen > 0 {
 			w.bc.ResetDynamicDraws()
 			return false
 		}
@@ -130,8 +132,8 @@ func (w *BuilderStatic) Process(vols *model.Volumes, frustumFront *aabb.Frustum,
 		w.cSky = nil
 		w.cachedSky = nil
 		w.bc.FreezeDynamicDraws()
-		w.staticVertBytes, w.staticIdxBytes = w.bc.fv.FrozenBytes()
-		w.staticGen++
+		w.vertBytes, w.idxBytes = w.bc.fv.FrozenBytes()
+		w.gen++
 		return true
 	}
 
@@ -182,13 +184,13 @@ func (w *BuilderStatic) Process(vols *model.Volumes, frustumFront *aabb.Frustum,
 		}
 		if entry != nil && !entry.detached {
 			for sIdx := entry.subStart; sIdx < entry.subStart+entry.subCount; sIdx++ {
-				w.pushStaticSubMesh(entry.atlas, entry.atlas.SubMeshes[sIdx])
+				w.pushSubMesh(entry.atlas, entry.atlas.SubMeshes[sIdx])
 			}
 			continue
 		}
 		if rm != nil {
 			for sIdx := 0; sIdx < rm.SubMeshesLen; sIdx++ {
-				w.pushStaticSubMesh(rm, rm.SubMeshes[sIdx])
+				w.pushSubMesh(rm, rm.SubMeshes[sIdx])
 			}
 		}
 	}
@@ -199,13 +201,14 @@ func (w *BuilderStatic) Process(vols *model.Volumes, frustumFront *aabb.Frustum,
 
 	w.cachedSky = w.cSky
 	w.bc.FreezeDynamicDraws()
-	w.staticVertBytes, w.staticIdxBytes = w.bc.fv.FrozenBytes()
-	w.staticGen++
+	w.vertBytes, w.idxBytes = w.bc.fv.FrozenBytes()
+	w.gen++
 	return true
 }
 
-func (w *BuilderStatic) canReuseVisible(visLen int) bool {
-	if w.staticGen == 0 || visLen != w.cachedRawVolsLen {
+// canReuseVisible determines if cached visible volumes and meshes can be reused based on version, state, and configuration.
+func (w *Static) canReuseVisible(visLen int) bool {
+	if w.gen == 0 || visLen != w.cachedRawVolsLen {
 		return false
 	}
 	for i := range visLen {
@@ -220,7 +223,7 @@ func (w *BuilderStatic) canReuseVisible(visLen int) bool {
 			}
 			continue
 		}
-		if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
+		if entry := w.entries[faces]; entry != nil && !entry.detached {
 			if w.cachedVolMeshes[i] != entry.atlas || faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
 				return false
 			}
@@ -237,7 +240,8 @@ func (w *BuilderStatic) canReuseVisible(visLen int) bool {
 	return true
 }
 
-func (w *BuilderStatic) primaryMeshFor(vol *volumes.Volume) *buffers.ResidentMesh {
+// primaryMeshFor retrieves the primary mesh for a given volume, prioritizing atlas entries over standalone meshes.
+func (w *Static) primaryMeshFor(vol *volumes.Volume) *buffers.ResidentMesh {
 	rm, entry, _ := w.LookupResolved(vol)
 	if entry != nil && !entry.detached {
 		return entry.atlas
@@ -245,7 +249,8 @@ func (w *BuilderStatic) primaryMeshFor(vol *volumes.Volume) *buffers.ResidentMes
 	return rm
 }
 
-func (w *BuilderStatic) ensureCachedCapacity(visLen int) {
+// ensureCachedCapacity adjusts the capacity of cachedRawVols and cachedVolMeshes to accommodate at least visLen elements.
+func (w *Static) ensureCachedCapacity(visLen int) {
 	if len(w.cachedRawVols) < visLen {
 		newCap := max(len(w.cachedRawVols)*2, visLen)
 		w.cachedRawVols = make([]*volumes.Volume, newCap)
@@ -258,7 +263,8 @@ func (w *BuilderStatic) ensureCachedCapacity(visLen int) {
 	}
 }
 
-func (w *BuilderStatic) buildStreamChunkForVolume(vol *volumes.Volume, vols *model.Volumes) *StaticVolumeEntry {
+// buildStreamChunkForVolume creates or updates a stream chunk entry for the given volume, organizing its mesh within an atlas.
+func (w *Static) buildStreamChunkForVolume(vol *volumes.Volume, vols *model.Volumes) *StaticVolumeEntry {
 	if vol == nil || vols == nil {
 		return nil
 	}
@@ -267,8 +273,8 @@ func (w *BuilderStatic) buildStreamChunkForVolume(vol *volumes.Volume, vols *mod
 	if box == nil || targetFaces == nil {
 		return nil
 	}
-	if w.staticEntries == nil {
-		w.staticEntries = make(map[*volumes.Faces]*StaticVolumeEntry, 256)
+	if w.entries == nil {
+		w.entries = make(map[*volumes.Faces]*StaticVolumeEntry, 256)
 	}
 	if w.streamChunks == nil {
 		w.streamChunks = make(map[streamChunkKey]*streamChunkEntry, 64)
@@ -317,8 +323,8 @@ func (w *BuilderStatic) buildStreamChunkForVolume(vol *volumes.Volume, vols *mod
 		w.streamChunks[key] = chunk
 	} else {
 		for _, oldFaces := range chunk.faces {
-			if e := w.staticEntries[oldFaces]; e != nil && !e.detached && e.chunk == chunk {
-				delete(w.staticEntries, oldFaces)
+			if e := w.entries[oldFaces]; e != nil && !e.detached && e.chunk == chunk {
+				delete(w.entries, oldFaces)
 			}
 		}
 		chunk.faces = chunk.faces[:0]
@@ -332,18 +338,19 @@ func (w *BuilderStatic) buildStreamChunkForVolume(vol *volumes.Volume, vols *mod
 	if chunk.atlas.SubMeshesLen == 0 {
 		chunk.atlas = nil
 	}
-	return w.staticEntries[targetFaces]
+	return w.entries[targetFaces]
 }
 
-func (w *BuilderStatic) evictStaleStreamChunks() {
+// evictStaleStreamChunks removes outdated stream chunks from memory based on their age and clears associated resources.
+func (w *Static) evictStaleStreamChunks() {
 	const chunkMaxAgeFrames = 600
 	for key, chunk := range w.streamChunks {
 		if w.bc.meshFrame-chunk.lastSeenFrame <= chunkMaxAgeFrames {
 			continue
 		}
 		for _, f := range chunk.faces {
-			if e := w.staticEntries[f]; e != nil && e.chunk == chunk {
-				delete(w.staticEntries, f)
+			if e := w.entries[f]; e != nil && e.chunk == chunk {
+				delete(w.entries, f)
 			}
 		}
 		if chunk.atlas != nil {
@@ -354,14 +361,18 @@ func (w *BuilderStatic) evictStaleStreamChunks() {
 	}
 }
 
-func (w *BuilderStatic) packVolumesIntoAtlas(atlas *buffers.ResidentMesh, rawVols []*volumes.Volume, chunk *streamChunkEntry) {
+// packVolumesIntoAtlas packs a set of volumes into a static mesh atlas for efficient rendering and memory usage.
+// atlas represents the target ResidentMesh for packing the volumes into a static atlas.
+// rawVols is the list of volumes to be packed into the atlas.
+// chunk refers to the current streamChunkEntry associated with the packing operation.
+func (w *Static) packVolumesIntoAtlas(atlas *buffers.ResidentMesh, rawVols []*volumes.Volume, chunk *streamChunkEntry) {
 	totalFaces := 0
 	for _, vol := range rawVols {
 		if vol == nil {
 			continue
 		}
 		if faces := vol.GetFaces(); faces != nil {
-			if prev := w.staticEntries[faces]; prev != nil && prev.detached {
+			if prev := w.entries[faces]; prev != nil && prev.detached {
 				continue
 			}
 			totalFaces += faces.Len()
@@ -383,7 +394,7 @@ func (w *BuilderStatic) packVolumesIntoAtlas(atlas *buffers.ResidentMesh, rawVol
 		if faces == nil || faces.Len() == 0 {
 			continue
 		}
-		if prev := w.staticEntries[faces]; prev != nil {
+		if prev := w.entries[faces]; prev != nil {
 			if !prev.detached {
 				vol.ClearDirty()
 			}
@@ -393,12 +404,12 @@ func (w *BuilderStatic) packVolumesIntoAtlas(atlas *buffers.ResidentMesh, rawVol
 		if hasAnim {
 			// Remember animated volumes so streamed chunk builds do not retry packing them on subsequent frames.
 			if chunk != nil {
-				w.staticEntries[faces] = &StaticVolumeEntry{detached: true}
+				w.entries[faces] = &StaticVolumeEntry{detached: true}
 			}
 			continue
 		}
 		if ok || skyMat != nil {
-			w.staticEntries[faces] = &StaticVolumeEntry{
+			w.entries[faces] = &StaticVolumeEntry{
 				atlas:       atlas,
 				chunk:       chunk,
 				subStart:    subStart,
@@ -420,7 +431,8 @@ func (w *BuilderStatic) packVolumesIntoAtlas(atlas *buffers.ResidentMesh, rawVol
 	}
 }
 
-func (w *BuilderStatic) pushStaticSubMesh(rm *buffers.ResidentMesh, sub *buffers.ResidentSubMesh) {
+// pushSubMesh processes and organizes a given static sub-mesh according to its blend mode and other properties.
+func (w *Static) pushSubMesh(rm *buffers.ResidentMesh, sub *buffers.ResidentSubMesh) {
 	if sub.IndexCount == 0 {
 		return
 	}
@@ -455,8 +467,8 @@ func (w *BuilderStatic) pushStaticSubMesh(rm *buffers.ResidentMesh, sub *buffers
 	}
 }
 
-// LookupResolved returns the resident mesh, active atlas entry (when attached), and optional sky material for vol.
-func (w *BuilderStatic) LookupResolved(vol *volumes.Volume) (*buffers.ResidentMesh, *StaticVolumeEntry, *textures.Material) {
+// LookupResolved retrieves the mesh, volume entry, and sky material associated with the given volume, if available.
+func (w *Static) LookupResolved(vol *volumes.Volume) (*buffers.ResidentMesh, *StaticVolumeEntry, *textures.Material) {
 	if vol == nil {
 		return nil, nil, nil
 	}
@@ -464,7 +476,7 @@ func (w *BuilderStatic) LookupResolved(vol *volumes.Volume) (*buffers.ResidentMe
 	if faces == nil {
 		return nil, nil, nil
 	}
-	if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
+	if entry := w.entries[faces]; entry != nil && !entry.detached {
 		return entry.atlas, entry, entry.skyMaterial
 	}
 	if rm := w.volMeshes[faces]; rm != nil {
@@ -473,8 +485,8 @@ func (w *BuilderStatic) LookupResolved(vol *volumes.Volume) (*buffers.ResidentMe
 	return nil, nil, nil
 }
 
-// ResolveMesh ensures vol's GPU mesh representation (atlas-packed or detached fallback) is built and up to date.
-func (w *BuilderStatic) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers.ResidentMesh, *StaticVolumeEntry, *textures.Material) {
+// ResolveMesh generates or retrieves a mesh representation, associating it with a volume and its material properties.
+func (w *Static) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers.ResidentMesh, *StaticVolumeEntry, *textures.Material) {
 	if vol == nil {
 		return nil, nil, nil
 	}
@@ -483,7 +495,7 @@ func (w *BuilderStatic) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*
 		vol.ClearDirty()
 		return nil, nil, nil
 	}
-	if entry := w.staticEntries[faces]; entry != nil {
+	if entry := w.entries[faces]; entry != nil {
 		if !entry.detached {
 			if vol.IsDirty() || faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
 				entry.detached = true
@@ -516,9 +528,10 @@ func (w *BuilderStatic) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*
 	return rm, nil, rm.SkyMaterial
 }
 
-func (w *BuilderStatic) buildStaticAtlas(vols *model.Volumes) {
-	w.staticAtlasBuilt = true
-	w.staticAtlasVolCount = 0
+// buildAtlas initializes and constructs a static atlas by packing volumes into a mesh for rendering optimization.
+func (w *Static) buildAtlas(vols *model.Volumes) {
+	w.atlasBuilt = true
+	w.atlasVolCount = 0
 	for i := range w.cachedRawVolsLen {
 		w.cachedRawVols[i] = nil
 		w.cachedVolMeshes[i] = nil
@@ -526,30 +539,31 @@ func (w *BuilderStatic) buildStaticAtlas(vols *model.Volumes) {
 	w.cachedRawVolsLen = 0
 	hasStreamer := vols.HasStreamer()
 	volsLen := vols.Len()
-	w.staticAtlasStreamMode = hasStreamer
+	w.atlasStreamMode = hasStreamer
 	w.disposeStreamChunks()
 	if hasStreamer {
-		w.staticAtlas = nil
-		w.staticAtlasVolCount = volsLen
-		w.staticEntries = make(map[*volumes.Faces]*StaticVolumeEntry, 256)
+		w.atlas = nil
+		w.atlasVolCount = volsLen
+		w.entries = make(map[*volumes.Faces]*StaticVolumeEntry, 256)
 		w.streamChunks = make(map[streamChunkKey]*streamChunkEntry, 64)
 		return
 	}
-	w.staticAtlasVolCount = volsLen
+	w.atlasVolCount = volsLen
 	if volsLen == 0 {
-		w.staticAtlas = nil
-		w.staticEntries = make(map[*volumes.Faces]*StaticVolumeEntry)
+		w.atlas = nil
+		w.entries = make(map[*volumes.Faces]*StaticVolumeEntry)
 		return
 	}
 	rawVols := vols.GetVolumes().Slice()
-	if w.staticAtlas == nil {
-		w.staticAtlas = buffers.NewResidentMesh(w.bc.ctx)
+	if w.atlas == nil {
+		w.atlas = buffers.NewResidentMesh(w.bc.ctx)
 	}
-	w.staticEntries = make(map[*volumes.Faces]*StaticVolumeEntry, len(rawVols))
-	w.packVolumesIntoAtlas(w.staticAtlas, rawVols, nil)
+	w.entries = make(map[*volumes.Faces]*StaticVolumeEntry, len(rawVols))
+	w.packVolumesIntoAtlas(w.atlas, rawVols, nil)
 }
 
-func (w *BuilderStatic) disposeStreamChunks() {
+// disposeStreamChunks releases resources held by stream chunk entries and removes them from the streamChunks map.
+func (w *Static) disposeStreamChunks() {
 	for key, chunk := range w.streamChunks {
 		if chunk.atlas != nil {
 			chunk.atlas.Dispose()

@@ -16,6 +16,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/builder"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -72,11 +73,11 @@ func (stubCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uin
 }
 func (stubCtx) GenerateMipmap(_ uint32) {}
 
-func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVolume {
-	return newBuilderVolumeWithOcclusionMax(stubCtx{}, vramtex.NewTextures(stubCtx{}), cal, pl, 8)
+func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *builder.Builder {
+	return builder.newBuilderVolumeWithOcclusionMax(stubCtx{}, vramtex.NewTextures(stubCtx{}), cal, pl, 8)
 }
 
-func (w *BuilderVolume) resetTestFrame() {
+func (w *builder.Builder) resetTestFrame() {
 	w.bc.ResetDynamicDraws()
 	if w.bc.occlusion != nil {
 		w.bc.occlusion.Reset()

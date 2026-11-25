@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -14,9 +14,9 @@ import (
 
 const defaultOcclusionMaxEntities = 4096
 
-// BuilderContext owns shared GPU staging buffers, draw pools, occlusion queries, and frame generation state
+// Context owns shared GPU staging buffers, draw pools, occlusion queries, and frame generation state
 // coordinated across static, thing, light, and shadow sub-builders.
-type BuilderContext struct {
+type Context struct {
 	ctx           api.IContext
 	cal           *model.Calibration
 	tex           *vramtex.Textures
@@ -58,17 +58,17 @@ type BuilderContext struct {
 	lastCamGLZ float32
 }
 
-// NewBuilderContext allocates and initializes a BuilderContext with default hardware occlusion capacity.
-func NewBuilderContext(ctx api.IContext, cal *model.Calibration, tex *vramtex.Textures, player *things.Player) *BuilderContext {
-	return newBuilderContextWithOcclusionMax(ctx, cal, tex, player, defaultOcclusionMaxEntities)
+// NewContext allocates and initializes a Context with default hardware occlusion capacity.
+func NewContext(ctx api.IContext, cal *model.Calibration, tex *vramtex.Textures, player *things.Player) *Context {
+	return NewContextWithOcclusionMax(ctx, cal, tex, player, defaultOcclusionMaxEntities)
 }
 
-func newBuilderContextWithOcclusionMax(ctx api.IContext, cal *model.Calibration, tex *vramtex.Textures, player *things.Player, occMax int) *BuilderContext {
+func NewContextWithOcclusionMax(ctx api.IContext, cal *model.Calibration, tex *vramtex.Textures, player *things.Player, occMax int) *Context {
 	var occ *queries.OcclusionHW
 	if ctx != nil && occMax > 0 {
 		occ = queries.NewOcclusionHW(ctx, occMax)
 	}
-	bc := &BuilderContext{
+	bc := &Context{
 		ctx:                 ctx,
 		cal:                 cal,
 		tex:                 tex,
@@ -96,7 +96,7 @@ func newBuilderContextWithOcclusionMax(ctx api.IContext, cal *model.Calibration,
 }
 
 // LookupTexLayer returns the texture array layer identifier for tex, caching it on the texture on first resolve.
-func (w *BuilderContext) LookupTexLayer(tex *textures.Texture) (float32, bool) {
+func (w *Context) LookupTexLayer(tex *textures.Texture) (float32, bool) {
 	if tex == nil {
 		return 0, false
 	}
@@ -116,7 +116,7 @@ func (w *BuilderContext) LookupTexLayer(tex *textures.Texture) (float32, bool) {
 }
 
 // ResetDynamicDraws rewinds dynamic per-frame vertex/index commands back to the frozen static prefix.
-func (w *BuilderContext) ResetDynamicDraws() {
+func (w *Context) ResetDynamicDraws() {
 	w.fv.Reset()
 	w.dcOpaque.Reset()
 	w.dcAdditive.Reset()
@@ -127,7 +127,7 @@ func (w *BuilderContext) ResetDynamicDraws() {
 }
 
 // DeepResetDynamicDraws clears all buffered vertices, indices, and draw command batches including any frozen static prefix.
-func (w *BuilderContext) DeepResetDynamicDraws() {
+func (w *Context) DeepResetDynamicDraws() {
 	w.fv.DeepReset()
 	w.dcOpaque.DeepReset()
 	w.dcAdditive.DeepReset()
@@ -138,7 +138,7 @@ func (w *BuilderContext) DeepResetDynamicDraws() {
 }
 
 // FreezeDynamicDraws marks the end of the static prefix so subsequent dynamic thing batches preserve it across frames.
-func (w *BuilderContext) FreezeDynamicDraws() {
+func (w *Context) FreezeDynamicDraws() {
 	w.fv.Freeze()
 	w.dcOpaque.Freeze()
 	w.dcAdditive.Freeze()
@@ -149,7 +149,7 @@ func (w *BuilderContext) FreezeDynamicDraws() {
 }
 
 // ResetStaticPools clears pooled resident static draw items before rebuilding static visibility.
-func (w *BuilderContext) ResetStaticPools() {
+func (w *Context) ResetStaticPools() {
 	w.staticOpaque.Reset()
 	w.staticLiquid.Reset()
 	w.staticAdditive.Reset()
@@ -157,12 +157,12 @@ func (w *BuilderContext) ResetStaticPools() {
 }
 
 // UploadFrameGen returns the combined GPU upload generation key across main frame state and off-camera shadow streams.
-func (w *BuilderContext) UploadFrameGen() uint64 {
+func (w *Context) UploadFrameGen() uint64 {
 	return w.frameGen + w.shadowExtraGen
 }
 
 // Commit compiles updated opaque/additive/liquid draw lists and updates back-to-front translucent sorting when needed.
-func (w *BuilderContext) Commit(pX, pY, pZ float64, staticChanged bool, thingsChanged bool) {
+func (w *Context) Commit(pX, pY, pZ float64, staticChanged bool, thingsChanged bool) {
 	if staticChanged || thingsChanged || w.frameGen == 0 {
 		w.frameGen++
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/builder"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -86,7 +87,7 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 
 	// Verify GL (u, -v) tangent & handedness sign + ResidentMesh 24-float GPU vertex packing.
 	fA.SetLightmap(2, 0.25, 0.75, 0.5, 0.75, 0.25, 0.5)
-	ctx := &noopRenderCtx{}
+	ctx := &builder.noopRenderCtx{}
 	rm := buffers.NewResidentMesh(ctx)
 	ok := rm.Rebuild(faces, func(_ *textures.Texture) (float32, bool) { return 3.0, true })
 	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%buffers.StaticVertexFloats != 0 {
@@ -125,7 +126,7 @@ func TestResidentMeshAndFrameVerticesZeroAllocsSteadyState(t *testing.T) {
 	faces.Add(f)
 	faces.Rebuild()
 
-	ctx := &noopRenderCtx{}
+	ctx := &builder.noopRenderCtx{}
 	rm := buffers.NewResidentMesh(ctx)
 	texFn := func(_ *textures.Texture) (float32, bool) { return 1.0, true }
 	if !rm.Rebuild(faces, texFn) {

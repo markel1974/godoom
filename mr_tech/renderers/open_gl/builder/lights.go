@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -7,33 +7,33 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
-// BuilderLights collects and classifies visible lights around the camera into FrameLights.
-type BuilderLights struct {
+// Lights collects and classifies visible lights around the camera into FrameLights.
+type Lights struct {
 	fl           *FrameLights
 	lightBB      *aabb.BoundingBox
 	pX, pY, pZ   float64
 	frustumFront *aabb.Frustum
 }
 
-// NewBuilderLights creates and initializes a BuilderLights instance using shared BuilderContext configuration.
-func NewBuilderLights(bc *BuilderContext) *BuilderLights {
+// NewLights creates and initializes a Lights instance using shared Context configuration.
+func NewLights(bc *Context) *Lights {
 	enableShadowLights := false
 	if bc.cal != nil {
 		enableShadowLights = bc.cal.EnableShadowLights
 	}
-	return &BuilderLights{
+	return &Lights{
 		fl:      NewFrameLights(bc.ctx, 1024, enableShadowLights),
 		lightBB: aabb.NewBoundingBox(),
 	}
 }
 
-// GetFrameLights returns the FrameLights instance associated with this BuilderLights.
-func (bl *BuilderLights) GetFrameLights() *FrameLights {
+// GetFrameLights returns the FrameLights instance associated with this Lights.
+func (bl *Lights) GetFrameLights() *FrameLights {
 	return bl.fl
 }
 
 // Process gathers lights overlapping the camera light box and classifies them against frustumFront.
-func (bl *BuilderLights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, pZ float64, w, h, d float64) {
+func (bl *Lights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, pZ float64, w, h, d float64) {
 	bl.fl.DeepReset()
 	bl.fl.Prepare()
 	if ls == nil {
@@ -45,7 +45,7 @@ func (bl *BuilderLights) Process(ls *model.Lights, frustumFront *aabb.Frustum, p
 	ls.QueryOverlaps(bl.lightBB, bl.doQuery)
 }
 
-func (bl *BuilderLights) doQuery(object aabb.IObject) bool {
+func (bl *Lights) doQuery(object aabb.IObject) bool {
 	light, ok := object.(*lights.Light)
 	if !ok || light == nil || light.GetKind() == config.LightKindNone {
 		return false

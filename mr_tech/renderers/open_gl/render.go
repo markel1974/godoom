@@ -7,6 +7,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	builder2 "github.com/markel1974/godoom/mr_tech/renderers/open_gl/builder"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
@@ -23,7 +24,7 @@ type RenderOpenGL struct {
 	player *things.Player
 	tex    *vramtex.Textures
 
-	builder     *BuilderVolume
+	builder     *builder2.Builder
 	enableClear bool
 
 	flash                  *things.Flash
@@ -99,7 +100,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	cal := w.engine.GetCalibration()
 	w.tex = vramtex.NewTextures(w.ctx)
 	w.player.SetPitchOptions(-1.5, 1.5, 0.01)
-	w.builder = NewBuilderVolume(w.ctx, w.tex, cal, w.player)
+	w.builder = builder2.NewBuilder(w.ctx, w.tex, cal, w.player)
 	w.dcOpaque = w.builder.GetDrawCommandsOpaque()
 
 	w.dcAdditive = w.builder.GetDrawCommandsAdditive()

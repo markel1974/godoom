@@ -1,4 +1,4 @@
-package open_gl
+package builder
 
 import (
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -40,10 +40,10 @@ type thingMeshPtrEntry struct {
 	faceCount int
 }
 
-// BuilderThings manages entity render caches, GPU instancing for rigid objects,
+// Things manages entity render caches, GPU instancing for rigid objects,
 // and CPU vertex staging for morphing 3D models, sprites, and UI elements.
-type BuilderThings struct {
-	bc               *BuilderContext
+type Things struct {
+	bc               *Context
 	thingMeshesByPtr map[*volumes.Faces]thingMeshPtrEntry
 	thingMeshes      map[uint64][]*buffers.ResidentMesh
 	thingsRender     *ThingsRender
@@ -53,13 +53,13 @@ type BuilderThings struct {
 	playerId         uint64
 }
 
-// NewBuilderThings initializes a BuilderThings bound to bc.
-func NewBuilderThings(bc *BuilderContext) *BuilderThings {
+// NewThings initializes a Things bound to bc.
+func NewThings(bc *Context) *Things {
 	var playerID uint64
 	if bc.player != nil && bc.player.GetEntity() != nil {
 		playerID = bc.player.GetEntity().GetId()
 	}
-	bt := &BuilderThings{
+	bt := &Things{
 		bc:               bc,
 		playerId:         playerID,
 		thingMeshesByPtr: make(map[*volumes.Faces]thingMeshPtrEntry, 512),
@@ -71,7 +71,7 @@ func NewBuilderThings(bc *BuilderContext) *BuilderThings {
 	return bt
 }
 
-func (w *BuilderThings) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers.ResidentMesh, gh, ver uint64, faceCount int) {
+func (w *Things) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers.ResidentMesh, gh, ver uint64, faceCount int) {
 	w.thingMeshesByPtr[rigidFaces] = thingMeshPtrEntry{
 		rm:        rm,
 		geomHash:  gh,
@@ -82,7 +82,7 @@ func (w *BuilderThings) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers
 
 // RetrieveMesh returns a resident mesh for rigidFaces, reusing or rebuilding cached mesh data when needed.
 // The returned bool reports whether the mesh was rebuilt during the current mesh frame.
-func (w *BuilderThings) RetrieveMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh, bool) {
+func (w *Things) RetrieveMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh, bool) {
 	if rm := w.FindCachedMesh(rigidFaces); rm != nil {
 		needsAnim := rm.NeedsAnimRebuild()
 		if rm.LastSeenFrame != w.bc.meshFrame || needsAnim {
@@ -108,7 +108,7 @@ func (w *BuilderThings) RetrieveMesh(rigidFaces *volumes.Faces) (*buffers.Reside
 
 // Process stages visible things, routes rigid objects into GPU instancing,
 // and streams non-rigid geometry into FrameVertices.
-func (w *BuilderThings) Process(things *model.Things, frustumFront *aabb.Frustum) bool {
+func (w *Things) Process(things *model.Things, frustumFront *aabb.Frustum) bool {
 	if w.bc.meshFrame == 0 {
 		w.bc.meshFrame = 1
 	}
@@ -225,14 +225,14 @@ func (w *BuilderThings) Process(things *model.Things, frustumFront *aabb.Frustum
 	return thingsChanged
 }
 
-func (w *BuilderThings) resetInstancedPools() {
+func (w *Things) resetInstancedPools() {
 	w.bc.instOpaque.Reset()
 	w.bc.instLiquid.Reset()
 	w.bc.instAdditive.Reset()
 	w.bc.instTransSrc.Reset()
 }
 
-func (w *BuilderThings) rebuildInstancedDraws() {
+func (w *Things) rebuildInstancedDraws() {
 	w.resetInstancedPools()
 	w.instancePool.Reset()
 	for gi := 0; gi < w.instGroups.Len; gi++ {
@@ -260,7 +260,7 @@ func (w *BuilderThings) rebuildInstancedDraws() {
 	}
 }
 
-func (w *BuilderThings) appendInstancedGroup(g *RigidInstanceGroup, instVBO uint32) {
+func (w *Things) appendInstancedGroup(g *RigidInstanceGroup, instVBO uint32) {
 	cnt := int32(g.instances.Len)
 	for sIdx := 0; sIdx < g.mesh.SubMeshesLen; sIdx++ {
 		sub := g.mesh.SubMeshes[sIdx]
@@ -299,7 +299,7 @@ func (w *BuilderThings) appendInstancedGroup(g *RigidInstanceGroup, instVBO uint
 }
 
 // BuildNonRigidCache rebuilds or reuses CPU-staged vertex batches in entry2 for a streaming or morphed thing.
-func (w *BuilderThings) BuildNonRigidCache(thing ithing.IThing, entry2 *ThingRenderCache) bool {
+func (w *Things) BuildNonRigidCache(thing ithing.IThing, entry2 *ThingRenderCache) bool {
 	pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 	if pFaces == nil || pFaces.Len() == 0 {
 		return false
@@ -431,7 +431,7 @@ func (w *BuilderThings) BuildNonRigidCache(thing ithing.IThing, entry2 *ThingRen
 }
 
 // FindCachedMesh returns a cached resident mesh matching rigidFaces in O(1) after first verification, or nil if none exists.
-func (w *BuilderThings) FindCachedMesh(rigidFaces *volumes.Faces) *buffers.ResidentMesh {
+func (w *Things) FindCachedMesh(rigidFaces *volumes.Faces) *buffers.ResidentMesh {
 	gh := rigidFaces.GetGeomHash()
 	ver := rigidFaces.GetVersion()
 	faceCount := rigidFaces.Len()
@@ -445,33 +445,4 @@ func (w *BuilderThings) FindCachedMesh(rigidFaces *volumes.Faces) *buffers.Resid
 		}
 	}
 	return nil
-}
-
-// facesEquivalent reports whether two face collections contain the same ordered faces, materials, and points.
-func facesEquivalent(a, b *volumes.Faces) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil || a.Len() != b.Len() {
-		return false
-	}
-	n := a.Len()
-	for i := range n {
-		fa := a.At(i)
-		fb := b.At(i)
-		if fa == fb {
-			continue
-		}
-		if fa == nil || fb == nil || fa.GetMaterial() != fb.GetMaterial() {
-			return false
-		}
-		ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := fa.GetPointsFlat()
-		bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2 := fb.GetPointsFlat()
-		if ax0 != bx0 || ay0 != by0 || az0 != bz0 ||
-			ax1 != bx1 || ay1 != by1 || az1 != bz1 ||
-			ax2 != bx2 || ay2 != by2 || az2 != bz2 {
-			return false
-		}
-	}
-	return true
 }

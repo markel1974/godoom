@@ -25,6 +25,13 @@ uniform mat4 u_invView;
 uniform vec3 u_lightDir;
 uniform float u_envMaxLod;
 uniform int u_hasEnvMap;
+uniform int u_sunEnabled;
+uniform vec3 u_sunDirView;
+uniform int u_fogEnabled;
+uniform vec3 u_fogColor;
+uniform vec3 u_fogSunColor;
+uniform vec4 u_fogParams;
+uniform vec3 u_fogHeightParams;
 
 const float LIQUID_PI = 3.14159265359;
 
@@ -158,6 +165,34 @@ void renderFog(bool isSolid) {
     BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 
+void emitLiquidOutput(vec3 color, vec3 bloom) {
+    if (u_fogEnabled == 1) {
+        float dist = length(ViewPos);
+        float t = clamp((dist - u_fogParams.x) * u_fogParams.y, 0.0, 1.0);
+        float density = max(u_fogParams.z, 0.01);
+        float expNorm = (1.0 - exp(-t * density * 3.0)) / max(1.0 - exp(-density * 3.0), 1e-4);
+        float curve = mix(smoothstep(0.0, 1.0, t), expNorm, 0.65);
+        float heightMod = 1.0;
+        if (u_fogHeightParams.y > 0.0) {
+            float elev = max(WorldPos.y - u_fogHeightParams.x, 0.0);
+            float hAtten = exp(-elev * u_fogHeightParams.y);
+            heightMod = mix(hAtten, 1.0, t * t);
+        }
+        float fogFactor = clamp(curve * heightMod, 0.0, 1.0);
+        float scatter = 0.0;
+        if (u_sunEnabled == 1 && u_fogParams.w > 0.001) {
+            vec3 rayView = dist > 1e-4 ? (ViewPos / dist) : vec3(0.0, 0.0, -1.0);
+            float sunAlign = clamp(dot(rayView, -u_sunDirView), 0.0, 1.0);
+            scatter = clamp(pow(sunAlign, 8.0) * u_fogParams.w, 0.0, 1.0);
+        }
+        vec3 horizonFogColor = mix(u_fogColor, u_fogSunColor, scatter);
+        color = mix(color, horizonFogColor, fogFactor);
+        bloom *= (1.0 - fogFactor);
+    }
+    FragColor = vec4(color, 1.0);
+    BrightColor = vec4(bloom, 1.0);
+}
+
 void renderLava(bool isSolid) {
     vec3 texColor = getDiffuse(TexCoords).rgb;
     float t = u_time;
@@ -190,8 +225,7 @@ void renderLava(bool isSolid) {
     }
     float glow = dot(finalLava, vec3(0.35, 0.55, 0.10));
     vec3 bloomLava = glow > 0.85 ? (finalLava - 0.65) * 1.3 : vec3(0.0);
-    FragColor = vec4(finalLava, 1.0);
-    BrightColor = vec4(bloomLava, 1.0);
+    emitLiquidOutput(finalLava, bloomLava);
 }
 
 void renderSlime(bool isSolid) {
@@ -285,8 +319,7 @@ void renderSlime(bool isSolid) {
     finalSlime += vec3(0.8, 1.0, 0.6) * spec;
     float slimeGlow = finalSlime.g;
     vec3 bloomSlime = slimeGlow > 0.75 ? vec3(0.12, 0.55, 0.08) * (slimeGlow - 0.75) * 2.0 : vec3(0.0);
-    FragColor = vec4(finalSlime, 1.0);
-    BrightColor = vec4(bloomSlime, 1.0);
+    emitLiquidOutput(finalSlime, bloomSlime);
 }
 
 void renderBlood(bool isSolid) {
@@ -378,8 +411,7 @@ void renderBlood(bool isSolid) {
     finalBlood = mix(finalBlood, envBlood * vec3(0.95, 0.45, 0.45), fresnel * 0.35);
     float spec = evalGGXLiquid(waveNormal, V, L, 0.18) * 0.55 * (0.25 + 0.75 * fresnel);
     finalBlood += vec3(1.0, 0.85, 0.85) * spec;
-    FragColor = vec4(finalBlood, 1.0);
-    BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
+    emitLiquidOutput(finalBlood, vec3(0.0));
 }
 
 // Multi-scale Gerstner wave spectrum with camera distance LOD filtering
@@ -599,11 +631,10 @@ void renderWater(bool isSolid, bool isSea) {
     vec3 sunSpecular = vec3(1.0, 0.98, 0.92) * ggxSun * (0.20 + 0.80 * fresnel);
     finalWater += sunSpecular;
 
-    FragColor = vec4(finalWater, 1.0);
     // Write specular glints to bloom channel
     float bloomLum = dot(sunSpecular, vec3(0.2126, 0.7152, 0.0722));
     vec3 bloomColor = bloomLum > 0.8 ? (sunSpecular - 0.8) * 1.2 : vec3(0.0);
-    BrightColor = vec4(bloomColor, 1.0);
+    emitLiquidOutput(finalWater, bloomColor);
 }
 
 void main() {

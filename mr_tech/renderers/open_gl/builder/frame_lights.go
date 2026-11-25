@@ -28,8 +28,12 @@ type FrameLights struct {
 	//glCamX            float32
 	//glCamY            float32
 	//glCamZ            float32
-	useShadowLight bool
-	debug          bool
+	useShadowLight    bool
+	suppressDirForCSM bool
+	hasSceneDir       bool
+	sceneDirGL        [3]float32
+	sceneColorInt     [4]float32
+	debug             bool
 }
 
 // NewFrameLights initializes and returns a new FrameLights instance with a specified maximum number of lights.
@@ -87,12 +91,24 @@ func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*metrics.Light, int3
 	return f.shadowLights, f.shadowLightsIndex
 }
 
+// SetSuppressDirectionalForCSM controls whether LightKindDirectional entries are omitted from the
+// unshadowed clustered UBO because the outdoor SunCSM pass already evaluates shadowed directional sun lighting.
+func (f *FrameLights) SetSuppressDirectionalForCSM(suppress bool) {
+	f.suppressDirForCSM = suppress
+}
+
+// GetSceneDirectional returns the latest global directional light collected in the frame, if any.
+func (f *FrameLights) GetSceneDirectional() (dirGL [3]float32, colorInt [4]float32, ok bool) {
+	return f.sceneDirGL, f.sceneColorInt, f.hasSceneDir
+}
+
 // Prepare initializes camera position for lighting calculations and resets the shadow lights index to zero.
 func (f *FrameLights) Prepare() {
 	//TODO VERIFICA
 	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pY), float32(pZ)
 	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
 	f.shadowLightsIndex = 0
+	f.hasSceneDir = false
 }
 
 // Create adds a new light to the FrameLights based on its type, position, intensity, and other properties.
@@ -121,6 +137,14 @@ func (f *FrameLights) Create(light *lights.Light, distSq float64, isFront bool) 
 	case config.LightKindAmbient:
 		lType = 3
 	case config.LightKindDirectional:
+		if !f.hasSceneDir {
+			f.hasSceneDir = true
+			f.sceneDirGL = [3]float32{glDirX, glDirY, glDirZ}
+			f.sceneColorInt = [4]float32{float32(r), float32(g), float32(b), intensity}
+		}
+		if f.suppressDirForCSM {
+			return
+		}
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1

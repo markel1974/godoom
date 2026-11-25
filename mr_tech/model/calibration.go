@@ -24,6 +24,25 @@ type Calibration struct {
 	AoFactor           float64
 	EnableShadowLights bool
 	EnableShadows      bool
+	EnableSunCSM       bool
+	SunDirX            float64
+	SunDirY            float64
+	SunDirZ            float64
+	SunColor           [3]float64
+	SunIntensity       float64
+	SunSkyColor        [3]float64
+	SunGroundColor     [3]float64
+	SunShadowDistance  float64
+	SunCascadeLambda   float64
+	EnableHorizonFog   bool
+	FogColor           [3]float64
+	FogSunColor        [3]float64
+	FogStart           float64
+	FogEnd             float64
+	FogDensity         float64
+	FogHeightBase      float64
+	FogHeightFalloff   float64
+	FogSunScatter      float64
 	MSAASamples        int
 	RenderScale        float64
 	EnableFXAA         bool
@@ -48,6 +67,25 @@ func NewCalibration(cfg *config.Calibration, volumes *Volumes) *Calibration {
 		BeamRatio:          cfg.BeamRatio,
 		VolSteps:           cfg.VolSteps,
 		AoFactor:           cfg.AoFactor,
+		EnableSunCSM:       cfg.EnableSunCSM,
+		SunDirX:            cfg.SunDirX,
+		SunDirY:            cfg.SunDirY,
+		SunDirZ:            cfg.SunDirZ,
+		SunColor:           cfg.SunColor,
+		SunIntensity:       cfg.SunIntensity,
+		SunSkyColor:        cfg.SunSkyColor,
+		SunGroundColor:     cfg.SunGroundColor,
+		SunShadowDistance:  cfg.SunShadowDistance,
+		SunCascadeLambda:   cfg.SunCascadeLambda,
+		EnableHorizonFog:   cfg.EnableHorizonFog,
+		FogColor:           cfg.FogColor,
+		FogSunColor:        cfg.FogSunColor,
+		FogStart:           cfg.FogStart,
+		FogEnd:             cfg.FogEnd,
+		FogDensity:         cfg.FogDensity,
+		FogHeightBase:      cfg.FogHeightBase,
+		FogHeightFalloff:   cfg.FogHeightFalloff,
+		FogSunScatter:      cfg.FogSunScatter,
 		MSAASamples:        DefaultMSAASamples,
 		RenderScale:        1.0,
 		volumes:            volumes,

@@ -150,6 +150,8 @@ func main() {
 	var fps int
 	var enableShadows int
 	var enableShadowLights int
+	var enableSunCSM int
+	var enableHorizonFog int
 	var msaaSamples int
 	var renderScale float64
 	var enableVSync int
@@ -169,6 +171,8 @@ func main() {
 	flag.IntVar(&height, "height", 480, "height")
 	flag.IntVar(&enableShadows, "shadows", 1, "enable shadows")
 	flag.IntVar(&enableShadowLights, "shadowLights", 1, "enable shadows lights")
+	flag.IntVar(&enableSunCSM, "sun", -1, "enable outdoor directional sun and CSM shadows [-1 = config, 0 = off, 1 = on]")
+	flag.IntVar(&enableHorizonFog, "fog", -1, "enable atmospheric horizon fog [-1 = config, 0 = off, 1 = on]")
 	flag.IntVar(&msaaSamples, "msaa", model.DefaultMSAASamples, "MSAA samples for the 3D scene [0 = off, 2, 4, 8]")
 	flag.Float64Var(&renderScale, "scale", 1.0, "internal 3D render resolution scale (e.g. 0.5, 0.75, 1.0)")
 	flag.IntVar(&enableVSync, "vsync", 1, "enable vsync [0 = off, 1 = on]")
@@ -220,7 +224,7 @@ func main() {
 	runtime.GC()
 
 	en := engine.NewEngine()
-	ctx, err := compileAndPrepareEngine(app, en, cfg, enableShadows, enableShadowLights, msaaSamples, renderScale, enableFXAA, enableVSync)
+	ctx, err := compileAndPrepareEngine(app, en, cfg, enableShadows, enableShadowLights, enableSunCSM, enableHorizonFog, msaaSamples, renderScale, enableFXAA, enableVSync)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -251,13 +255,19 @@ func buildLevelConfig(app *App, gen ModeDef, level int) (*config.Root, error) {
 }
 
 // compileAndPrepareEngine compiles the engine configuration, applies calibration flags, and creates the window context.
-func compileAndPrepareEngine(app *App, en *engine.Engine, cfg *config.Root, enableShadows, enableShadowLights, msaaSamples int, renderScale float64, enableFXAA, enableVSync int) (api.IContext, error) {
+func compileAndPrepareEngine(app *App, en *engine.Engine, cfg *config.Root, enableShadows, enableShadowLights, enableSunCSM, enableHorizonFog, msaaSamples int, renderScale float64, enableFXAA, enableVSync int) (api.IContext, error) {
 	if err := en.Setup(cfg); err != nil {
 		return nil, err
 	}
 	cal := en.GetCalibration()
 	cal.EnableShadows = IntToBool(enableShadows)
 	cal.EnableShadowLights = IntToBool(enableShadowLights)
+	if enableSunCSM >= 0 {
+		cal.EnableSunCSM = IntToBool(enableSunCSM)
+	}
+	if enableHorizonFog >= 0 {
+		cal.EnableHorizonFog = IntToBool(enableHorizonFog)
+	}
 	cal.MSAASamples = msaaSamples
 	cal.RenderScale = renderScale
 	cal.EnableFXAA = IntToBool(enableFXAA)

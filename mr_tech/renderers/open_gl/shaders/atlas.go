@@ -7,11 +7,11 @@ import (
 
 /*
 Y=2048 +------------------------+------------------------+
-       |                        |                        |
-       |      ROOM SHADOW       |    FLASHLIGHT SHADOW   |
-       |      (1024 x 1024)     |      (1024 x 1024)     |
-       |   UV: [0..0.5, 0.5..1] |  UV: [0.5..1, 0.5..1]  |
-       |                        |                        |
+       |   Sun2   |   Sun3     |                        |
+       | (512x512)| (512x512)  |    FLASHLIGHT SHADOW   |
+Y=1536 +----------+------------+      (1024 x 1024)     |
+       |   Sun0   |   Sun1     |  UV: [0.5..1, 0.5..1]  |
+       | (512x512)| (512x512)  |   (or Room 1024x1024)  |
 Y=1024 +--------+--------+------+--+--------+------------+
        | Light4 | Light5 |  Light6 | Light7 | (512x512)  |  Row 1 (Y: 512..1023)
  Y=512 +--------+--------+---------+--------+------------+
@@ -30,8 +30,12 @@ const (
 	ShadowTileFlash = 1
 	// ShadowTileLightBase is the starting atlas slot index for dynamic spotlights.
 	ShadowTileLightBase = 2
+	// ShadowTileSunBase is the starting atlas slot index for the 4 outdoor sun CSM cascades.
+	ShadowTileSunBase = 10
+	// SunCascadeCount is the number of cascades in the outdoor sun CSM quadrant.
+	SunCascadeCount = 4
 	// MaxShadowTiles is the total number of tiles managed inside the master shadow atlas.
-	MaxShadowTiles = 10
+	MaxShadowTiles = 14
 )
 
 // ShadowsTileData carries per-light culled draw commands and cache keys for a single atlas tile.
@@ -166,9 +170,15 @@ func (s *Atlas) TileRect(slot int) (x, y, w, h int32, depthClamp bool, polyUnits
 	if slot == ShadowTileFlash {
 		return halfW, halfH, halfW, halfH, false, 1.5, 2.0
 	}
-	idx := slot - ShadowTileLightBase
 	tileW := s.width / 4
 	tileH := s.height / 4
+	if slot >= ShadowTileSunBase && slot < MaxShadowTiles {
+		c := slot - ShadowTileSunBase
+		col := int32(c & 1)
+		row := int32(c >> 1)
+		return col * tileW, halfH + row*tileH, tileW, tileH, true, 2.0, 4.0
+	}
+	idx := slot - ShadowTileLightBase
 	col := int32(idx % 4)
 	row := int32(idx / 4)
 	return col * tileW, row * tileH, tileW, tileH, false, 1.5, 2.0

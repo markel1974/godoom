@@ -21,30 +21,47 @@ const (
 	ShaderSkyLocSkyLayer
 	ShaderSkyLocScrollU
 	ShaderSkyLocScrollV
+	ShaderSkyLocHasTex
+	ShaderSkyLocSunEnabled
+	ShaderSkyLocSunDirWorld
+	ShaderSkyLocSunColorIntensity
+	ShaderSkyLocSunSkyColor
+	ShaderSkyLocFogEnabled
+	ShaderSkyLocFogColor
+	ShaderSkyLocFogSunColor
+	ShaderSkyLocFogScatter
 	ShaderSkyLocLast
 )
 
 // Sky is a type that manages the state and rendering of the sky shader in a graphics application.
 type Sky struct {
-	ctx        api.IContext
-	prg        uint32
-	table      [ShaderSkyLocLast]int32
-	skyVAO     uint32
-	skyVBO     uint32
-	mapMetrics *metrics.Map
+	ctx           api.IContext
+	prg           uint32
+	table         [ShaderSkyLocLast]int32
+	skyVAO        uint32
+	skyVBO        uint32
+	mapMetrics    *metrics.Map
+	sunCSM        *metrics.SunCSM
+	atmosphereFog *metrics.AtmosphereFog
 }
 
 // NewSky creates and returns a new instance of Sky with default uninitialized properties.
 func NewSky() *Sky {
-	return &Sky{
+	s := &Sky{
 		prg: 0,
 	}
+	for i := range s.table {
+		s.table[i] = -1
+	}
+	return s
 }
 
 // Setup initializes the Sky instance by assigning the rendering context from the provided Handler.
 func (s *Sky) Setup(h *Handler) error {
 	s.ctx = h.GetContext()
 	s.mapMetrics = h.GetMapMetrics()
+	s.sunCSM = h.GetSunCSM()
+	s.atmosphereFog = h.GetAtmosphereFog()
 	return nil
 }
 
@@ -117,16 +134,34 @@ func (s *Sky) Compile(a IAssets) error {
 	s.table[ShaderSkyLocSkyLayer] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_skyLayer\x00"))
 	s.table[ShaderSkyLocScrollU] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_scrollU\x00"))
 	s.table[ShaderSkyLocScrollV] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_scrollV\x00"))
-	for idx, v := range s.table {
-		if v < 0 {
+	s.table[ShaderSkyLocHasTex] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_hasSkyTex\x00"))
+	s.table[ShaderSkyLocSunEnabled] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sunEnabled\x00"))
+	s.table[ShaderSkyLocSunDirWorld] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sunDirWorld\x00"))
+	s.table[ShaderSkyLocSunColorIntensity] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sunColorIntensity\x00"))
+	s.table[ShaderSkyLocSunSkyColor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sunSkyColor\x00"))
+	s.table[ShaderSkyLocFogEnabled] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_fogEnabled\x00"))
+	s.table[ShaderSkyLocFogColor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_fogColor\x00"))
+	s.table[ShaderSkyLocFogSunColor] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_fogSunColor\x00"))
+	s.table[ShaderSkyLocFogScatter] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_fogScatter\x00"))
+	for idx := range int(ShaderSkyLocHasTex) {
+		if s.table[idx] < 0 {
 			return fmt.Errorf("invalid uniform location in sky: %d", idx)
 		}
 	}
 	return nil
 }
 
-// Render handles the rendering of the sky by setting up shaders, texture bindings, and drawing the vertex array.
+// Render handles the rendering of the textured skybox with optional horizon fog and sun aureole blending.
 func (s *Sky) Render(skyLayer float32, u, v float32) {
+	s.renderInternal(true, skyLayer, u, v)
+}
+
+// RenderProcedural draws the procedural outdoor sky gradient, sun disc, and horizon haze without a sky texture.
+func (s *Sky) RenderProcedural() {
+	s.renderInternal(false, 0, 0, 0)
+}
+
+func (s *Sky) renderInternal(hasTex bool, skyLayer float32, u, v float32) {
 	viewPtr := s.mapMetrics.GetViewPtr()
 	projPtr := s.mapMetrics.GetProjPtr()
 
@@ -140,9 +175,59 @@ func (s *Sky) Render(skyLayer float32, u, v float32) {
 
 	s.ctx.BindVertexArray(s.skyVAO)
 
+	if loc := s.GetUniform(ShaderSkyLocHasTex); loc >= 0 {
+		if hasTex {
+			s.ctx.Uniform1i(loc, 1)
+		} else {
+			s.ctx.Uniform1i(loc, 0)
+		}
+	}
 	s.ctx.Uniform1f(s.GetUniform(ShaderSkyLocSkyLayer), skyLayer)
 	s.ctx.Uniform1f(s.GetUniform(ShaderSkyLocScrollU), u)
 	s.ctx.Uniform1f(s.GetUniform(ShaderSkyLocScrollV), v)
+
+	if s.sunCSM != nil && s.sunCSM.IsEnabled() {
+		if loc := s.GetUniform(ShaderSkyLocSunEnabled); loc >= 0 {
+			s.ctx.Uniform1i(loc, 1)
+		}
+		if loc := s.GetUniform(ShaderSkyLocSunDirWorld); loc >= 0 {
+			dx, dy, dz := s.sunCSM.GetDirectionGL()
+			s.ctx.Uniform3f(loc, dx, dy, dz)
+		}
+		if loc := s.GetUniform(ShaderSkyLocSunColorIntensity); loc >= 0 {
+			sr, sg, sb, si := s.sunCSM.GetColorIntensity()
+			s.ctx.Uniform4f(loc, sr, sg, sb, si)
+		}
+		if loc := s.GetUniform(ShaderSkyLocSunSkyColor); loc >= 0 {
+			skyR, skyG, skyB, _, _, _ := s.sunCSM.GetSkyAmbient()
+			s.ctx.Uniform3f(loc, skyR, skyG, skyB)
+		}
+	} else {
+		if loc := s.GetUniform(ShaderSkyLocSunEnabled); loc >= 0 {
+			s.ctx.Uniform1i(loc, 0)
+		}
+		if loc := s.GetUniform(ShaderSkyLocSunSkyColor); loc >= 0 {
+			s.ctx.Uniform3f(loc, 0.42, 0.62, 0.92)
+		}
+	}
+
+	if s.atmosphereFog != nil {
+		fogEn, fogCol, fogSunCol, fogParams, _ := s.atmosphereFog.GetShaderParams()
+		if loc := s.GetUniform(ShaderSkyLocFogEnabled); loc >= 0 {
+			s.ctx.Uniform1i(loc, fogEn)
+		}
+		if loc := s.GetUniform(ShaderSkyLocFogColor); loc >= 0 {
+			s.ctx.Uniform3f(loc, fogCol[0], fogCol[1], fogCol[2])
+		}
+		if loc := s.GetUniform(ShaderSkyLocFogSunColor); loc >= 0 {
+			s.ctx.Uniform3f(loc, fogSunCol[0], fogSunCol[1], fogSunCol[2])
+		}
+		if loc := s.GetUniform(ShaderSkyLocFogScatter); loc >= 0 {
+			s.ctx.Uniform1f(loc, fogParams[3])
+		}
+	} else if loc := s.GetUniform(ShaderSkyLocFogEnabled); loc >= 0 {
+		s.ctx.Uniform1i(loc, 0)
+	}
 
 	s.ctx.DrawArrays(api.TRIANGLE_STRIP, 0, 4)
 

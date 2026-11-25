@@ -18,11 +18,15 @@ type Lights struct {
 // NewLights creates and initializes a Lights instance using shared Context configuration.
 func NewLights(bc *Context) *Lights {
 	enableShadowLights := false
+	suppressDir := false
 	if bc.cal != nil {
 		enableShadowLights = bc.cal.EnableShadowLights
+		suppressDir = bc.cal.EnableSunCSM
 	}
+	fl := NewFrameLights(bc.ctx, 1024, enableShadowLights)
+	fl.SetSuppressDirectionalForCSM(suppressDir)
 	return &Lights{
-		fl:      NewFrameLights(bc.ctx, 1024, enableShadowLights),
+		fl:      fl,
 		lightBB: aabb.NewBoundingBox(),
 	}
 }
@@ -39,6 +43,12 @@ func (bl *Lights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, 
 	if ls == nil {
 		return
 	}
+	for _, light := range ls.Globals() {
+		if light == nil || light.GetKind() == config.LightKindNone {
+			continue
+		}
+		bl.fl.Create(light, 0, true)
+	}
 	bl.frustumFront = frustumFront
 	bl.pX, bl.pY, bl.pZ = pX, pY, pZ
 	bl.lightBB.RebuildCenter(pX, pY, pZ, w, h, d)
@@ -48,7 +58,7 @@ func (bl *Lights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, 
 // doQuery processes an object to determine if it is a valid light and classifies it based on distance and frustum intersection.
 func (bl *Lights) doQuery(object aabb.IObject) bool {
 	light, ok := object.(*lights.Light)
-	if !ok || light == nil || light.GetKind() == config.LightKindNone {
+	if !ok || light == nil || light.GetKind() == config.LightKindNone || light.GetKind() == config.LightKindDirectional {
 		return false
 	}
 	distSq := light.GetDistSq(bl.pX, bl.pY, bl.pZ)

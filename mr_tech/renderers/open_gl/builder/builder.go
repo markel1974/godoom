@@ -59,6 +59,16 @@ func (w *Builder) GetShadowLights() ([8]*metrics.Light, int32) {
 	return w.bl.GetFrameLights().GetShadowLights()
 }
 
+// GetSceneDirectional returns the active global directional light collected this frame, if present.
+func (w *Builder) GetSceneDirectional() ([3]float32, [4]float32, bool) {
+	return w.bl.GetFrameLights().GetSceneDirectional()
+}
+
+// SetSuppressDirectionalForCSM controls whether directional scene lights are omitted from the UBO when SunCSM shades them.
+func (w *Builder) SetSuppressDirectionalForCSM(suppress bool) {
+	w.bl.GetFrameLights().SetSuppressDirectionalForCSM(suppress)
+}
+
 // GetVerticesStride returns the byte stride of streaming vertices.
 func (w *Builder) GetVerticesStride() int32 {
 	return w.bc.fv.VerticesStride()

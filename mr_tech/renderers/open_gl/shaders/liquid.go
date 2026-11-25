@@ -38,28 +38,36 @@ const (
 	ShaderLiquidLocEnvMap
 	ShaderLiquidLocEnvMaxLod
 	ShaderLiquidLocHasEnvMap
+	ShaderLiquidLocSunEnabled
+	ShaderLiquidLocSunDirView
 	ShaderLiquidLocLast
 )
 
 // Liquid represents a shader program for rendering liquid effects within a 3D graphical context.
 type Liquid struct {
-	ctx       api.IContext
-	prg       uint32
-	table     [ShaderLiquidLocLast]int32
-	hasEnvMap int32
-	envMaxLod float32
-
-	handler *Handler
-	main    *Main
-	post    *Post
-	metrics *metrics.Map
+	ctx             api.IContext
+	prg             uint32
+	table           [ShaderLiquidLocLast]int32
+	fogLocs         fogUniformLocs
+	boundSunEnabled int32
+	boundFogEnabled int32
+	hasEnvMap       int32
+	envMaxLod       float32
+	handler         *Handler
+	main            *Main
+	post            *Post
+	metrics         *metrics.Map
+	sunCSM          *metrics.SunCSM
+	atmosphereFog   *metrics.AtmosphereFog
 }
 
 // NewLiquid initializes and returns a new Liquid instance with the provided graphics context.
 func NewLiquid() *Liquid {
 	l := &Liquid{
-		prg:       0,
-		envMaxLod: 5.0,
+		prg:             0,
+		envMaxLod:       5.0,
+		boundSunEnabled: -1,
+		boundFogEnabled: -1,
 	}
 	for i := range l.table {
 		l.table[i] = -1
@@ -93,6 +101,10 @@ func (s *Liquid) Setup(h *Handler) error {
 	s.main = h.GetMain()
 	s.post = h.GetPost()
 	s.metrics = h.GetMapMetrics()
+	s.sunCSM = h.GetSunCSM()
+	s.atmosphereFog = h.GetAtmosphereFog()
+	s.boundSunEnabled = -1
+	s.boundFogEnabled = -1
 	return nil
 }
 
@@ -128,6 +140,14 @@ func (s *Liquid) SetupSamplers() error {
 	}
 	if loc := s.GetUniform(ShaderLiquidLocInstanceMode); loc >= 0 {
 		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
+	}
+	if loc := s.GetUniform(ShaderLiquidLocSunEnabled); loc >= 0 {
+		s.ctx.Uniform1i(loc, 0)
+		s.boundSunEnabled = 0
+	}
+	if s.fogLocs.enabled >= 0 {
+		s.ctx.Uniform1i(s.fogLocs.enabled, 0)
+		s.boundFogEnabled = 0
 	}
 
 	return nil
@@ -185,12 +205,19 @@ func (s *Liquid) Compile(a IAssets) error {
 	s.table[ShaderLiquidLocEnvMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_envMap\x00"))
 	s.table[ShaderLiquidLocEnvMaxLod] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_envMaxLod\x00"))
 	s.table[ShaderLiquidLocHasEnvMap] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_hasEnvMap\x00"))
+	s.table[ShaderLiquidLocSunEnabled] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sunEnabled\x00"))
+	s.table[ShaderLiquidLocSunDirView] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_sunDirView\x00"))
+	s.fogLocs = resolveFogUniformLocs(s.ctx, s.prg)
 
+	s.boundSunEnabled = -1
+	s.boundFogEnabled = -1
 	return nil
 }
 
 // Init initializes the Liquid shader, setting up necessary state or resources. Returns an error if initialization fails.
 func (s *Liquid) Init() error {
+	s.boundSunEnabled = -1
+	s.boundFogEnabled = -1
 	return nil
 }
 
@@ -236,7 +263,24 @@ func (s *Liquid) Render(renderGeometry func()) {
 		s.ctx.Uniform1f(loc, s.envMaxLod)
 	}
 
-	if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
+	sunActive := s.sunCSM != nil && s.sunCSM.IsEnabled()
+	sunEn := int32(0)
+	if sunActive {
+		sunEn = 1
+	}
+	if loc := s.GetUniform(ShaderLiquidLocSunEnabled); loc >= 0 && sunEn != s.boundSunEnabled {
+		s.ctx.Uniform1i(loc, sunEn)
+		s.boundSunEnabled = sunEn
+	}
+	if sunActive {
+		dvx, dvy, dvz := s.sunCSM.GetDirectionView(s.metrics)
+		if loc := s.GetUniform(ShaderLiquidLocSunDirView); loc >= 0 {
+			s.ctx.Uniform3f(loc, dvx, dvy, dvz)
+		}
+		if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
+			s.ctx.Uniform3f(loc, -dvx, -dvy, -dvz)
+		}
+	} else if loc := s.GetUniform(ShaderLiquidLocLightDir); loc != -1 {
 		const (
 			normLx float32 = 0.2977
 			normLy float32 = 0.8437
@@ -249,6 +293,7 @@ func (s *Liquid) Render(renderGeometry func()) {
 			s.ctx.Uniform3f(loc, 0.35, 0.85, 0.40)
 		}
 	}
+	s.bindLiquidFogUniforms()
 
 	s.ctx.BindVertexArray(vao)
 
@@ -269,4 +314,26 @@ func (s *Liquid) Render(renderGeometry func()) {
 	s.ctx.Disable(api.BLEND)
 	s.ctx.DepthMask(true)
 	s.ctx.DepthFunc(api.LESS)
+}
+
+func (s *Liquid) bindLiquidFogUniforms() {
+	fogEn := int32(0)
+	if s.atmosphereFog == nil {
+		if s.fogLocs.enabled >= 0 && s.boundFogEnabled != 0 {
+			s.ctx.Uniform1i(s.fogLocs.enabled, 0)
+			s.boundFogEnabled = 0
+		}
+		return
+	}
+	var fogCol, fogSunCol [3]float32
+	var fogParams [4]float32
+	var fogHeight [3]float32
+	fogEn, fogCol, fogSunCol, fogParams, fogHeight = s.atmosphereFog.GetShaderParams()
+	if s.fogLocs.enabled >= 0 && fogEn != s.boundFogEnabled {
+		s.ctx.Uniform1i(s.fogLocs.enabled, fogEn)
+		s.boundFogEnabled = fogEn
+	}
+	if fogEn == 1 {
+		bindFogValueUniforms(s.ctx, s.fogLocs, fogCol, fogSunCol, fogParams, fogHeight)
+	}
 }

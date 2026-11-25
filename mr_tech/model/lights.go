@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
@@ -8,6 +9,7 @@ import (
 // Lights represents a collection of Light instances managed within a spatial partitioning structure (AABBTree).
 type Lights struct {
 	container []*lights.Light
+	globals   []*lights.Light
 	tree      *aabb.Tree
 }
 
@@ -19,6 +21,9 @@ func NewLights(e []*lights.Light) *Lights {
 	}
 	for idx, light := range e {
 		l.container[idx] = light
+		if light != nil && light.GetKind() == config.LightKindDirectional {
+			l.globals = append(l.globals, light)
+		}
 		l.tree.InsertObject(light)
 	}
 	return l
@@ -37,7 +42,15 @@ func (l *Lights) Len() int {
 // AddLight appends a Light object to the container and inserts it into the spatial tree for spatial partitioning.
 func (l *Lights) AddLight(e *lights.Light) {
 	l.container = append(l.container, e)
+	if e != nil && e.GetKind() == config.LightKindDirectional {
+		l.globals = append(l.globals, e)
+	}
 	l.tree.InsertObject(e)
+}
+
+// Globals returns global directional lights that affect the scene regardless of spatial proximity.
+func (l *Lights) Globals() []*lights.Light {
+	return l.globals
 }
 
 // Get retrieves all Light objects stored in the Lights container.

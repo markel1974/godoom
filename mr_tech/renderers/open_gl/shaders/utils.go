@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // IAssets represents an interface for handling asset operations such as resolving base paths and reading asset files.
@@ -59,4 +60,53 @@ func ShaderCreateProgram(ctx api.IContext, id string, vertexShader uint32, fragm
 	ctx.DeleteShader(vertexShader)
 
 	return shaderProgram, nil
+}
+
+type fogUniformLocs struct {
+	enabled      int32
+	color        int32
+	sunColor     int32
+	params       int32
+	heightParams int32
+}
+
+func resolveFogUniformLocs(ctx api.IContext, prg uint32) fogUniformLocs {
+	return fogUniformLocs{
+		enabled:      ctx.GetUniformLocation(prg, ctx.Str("u_fogEnabled\x00")),
+		color:        ctx.GetUniformLocation(prg, ctx.Str("u_fogColor\x00")),
+		sunColor:     ctx.GetUniformLocation(prg, ctx.Str("u_fogSunColor\x00")),
+		params:       ctx.GetUniformLocation(prg, ctx.Str("u_fogParams\x00")),
+		heightParams: ctx.GetUniformLocation(prg, ctx.Str("u_fogHeightParams\x00")),
+	}
+}
+
+func bindFogUniforms(ctx api.IContext, fog *metrics.AtmosphereFog, locs fogUniformLocs) {
+	if fog == nil {
+		if locs.enabled >= 0 {
+			ctx.Uniform1i(locs.enabled, 0)
+		}
+		return
+	}
+	fogEn, fogCol, fogSunCol, fogParams, fogHeight := fog.GetShaderParams()
+	if locs.enabled >= 0 {
+		ctx.Uniform1i(locs.enabled, fogEn)
+	}
+	if fogEn == 1 {
+		bindFogValueUniforms(ctx, locs, fogCol, fogSunCol, fogParams, fogHeight)
+	}
+}
+
+func bindFogValueUniforms(ctx api.IContext, locs fogUniformLocs, fogCol, fogSunCol [3]float32, fogParams [4]float32, fogHeight [3]float32) {
+	if locs.color >= 0 {
+		ctx.Uniform3f(locs.color, fogCol[0], fogCol[1], fogCol[2])
+	}
+	if locs.sunColor >= 0 {
+		ctx.Uniform3f(locs.sunColor, fogSunCol[0], fogSunCol[1], fogSunCol[2])
+	}
+	if locs.params >= 0 {
+		ctx.Uniform4f(locs.params, fogParams[0], fogParams[1], fogParams[2], fogParams[3])
+	}
+	if locs.heightParams >= 0 {
+		ctx.Uniform3f(locs.heightParams, fogHeight[0], fogHeight[1], fogHeight[2])
+	}
 }

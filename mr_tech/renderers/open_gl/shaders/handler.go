@@ -22,6 +22,8 @@ type Handler struct {
 	flash               *things.Flash
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
+	sunCSM              *metrics.SunCSM
+	atmosphereFog       *metrics.AtmosphereFog
 
 	main        *Main
 	sky         *Sky
@@ -109,6 +111,10 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *things.
 	h.mapMetrics.SetCenter(float32(h.cal.MapCenterX), float32(h.cal.MapCenterZ), float32(h.cal.LightCamY)+2.0)
 	h.flashlightMetrics = metrics.NewFlashlight(h.flash)
 	h.shadowLightsMetrics = metrics.NewShadowLights()
+	h.sunCSM = metrics.NewSunCSM()
+	h.sunCSM.ConfigureFromCalibration(h.cal)
+	h.atmosphereFog = metrics.NewAtmosphereFog()
+	h.atmosphereFog.ConfigureFromCalibration(h.cal)
 
 	if err := h.additive.Setup(h); err != nil {
 		return err
@@ -183,6 +189,58 @@ func (h *Handler) GetFlashlightMetrics() *metrics.Flashlight {
 // GetShadowLightsMetrics retrieves the shadow light metrics associated with the Handler.
 func (h *Handler) GetShadowLightsMetrics() *metrics.ShadowLights {
 	return h.shadowLightsMetrics
+}
+
+// GetSunCSM returns the Cascaded Shadow Map state for outdoor sunlight.
+func (h *Handler) GetSunCSM() *metrics.SunCSM {
+	return h.sunCSM
+}
+
+// GetAtmosphereFog returns the atmospheric horizon fog state.
+func (h *Handler) GetAtmosphereFog() *metrics.AtmosphereFog {
+	return h.atmosphereFog
+}
+
+// UpdateSunAndFog updates sun cascade matrices and far-plane-derived fog bounds for the active view.
+func (h *Handler) UpdateSunAndFog(scaleX, scaleY float32) {
+	if h.mapMetrics == nil {
+		return
+	}
+	zNear := h.mapMetrics.GetRoomZNear()
+	zFar := h.mapMetrics.GetRoomZFar()
+	if h.sunCSM != nil {
+		h.sunCSM.Update(h.mapMetrics, scaleX, scaleY, zNear, zFar)
+	}
+	if h.atmosphereFog != nil {
+		h.atmosphereFog.UpdateZFar(zFar)
+	}
+}
+
+// SetSunEnabled toggles outdoor Sun + CSM shadow rendering and invalidates stale shadow atlas tiles.
+func (h *Handler) SetSunEnabled(enabled bool) {
+	if h.sunCSM != nil {
+		h.sunCSM.SetEnabled(enabled)
+	}
+	if h.depth != nil {
+		h.depth.InvalidateCache()
+	}
+}
+
+// IsSunEnabled reports whether outdoor directional Sun + CSM shadows are enabled.
+func (h *Handler) IsSunEnabled() bool {
+	return h.sunCSM != nil && h.sunCSM.IsEnabled()
+}
+
+// SetHorizonFogEnabled toggles atmospheric horizon fog.
+func (h *Handler) SetHorizonFogEnabled(enabled bool) {
+	if h.atmosphereFog != nil {
+		h.atmosphereFog.SetEnabled(enabled)
+	}
+}
+
+// IsHorizonFogEnabled reports whether atmospheric horizon fog is enabled.
+func (h *Handler) IsHorizonFogEnabled() bool {
+	return h.atmosphereFog != nil && h.atmosphereFog.IsEnabled()
 }
 
 // GetFlash retrieves the Flash instance associated with the Handler, providing access to its rendering and shading parameters.

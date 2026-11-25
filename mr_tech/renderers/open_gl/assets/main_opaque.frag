@@ -79,6 +79,23 @@ uniform float u_clusterNear;
 uniform float u_clusterLogScale;
 uniform int u_numGlobalLights;
 
+// Outdoor Directional Sun & 4-Cascade CSM
+uniform int u_sunEnabled;
+uniform vec3 u_sunDirView;
+uniform vec4 u_sunColorIntensity;
+uniform vec3 u_sunSkyColor;
+uniform vec3 u_sunGroundColor;
+uniform vec4 u_sunCascadeSplits;
+uniform vec4 u_sunCascadeBias;
+uniform mat4 u_sunSpaceMatrices[4];
+
+// Atmospheric Horizon Fog
+uniform int u_fogEnabled;
+uniform vec3 u_fogColor;
+uniform vec3 u_fogSunColor;
+uniform vec4 u_fogParams;        // x: start, y: invRange, z: density, w: sunScatter
+uniform vec3 u_fogHeightParams;  // x: heightBase, y: heightFalloff, z: zFar
+
 const float PI = 3.14159265359;
 const vec2 kShadowAtlasTexel = vec2(1.0 / 2048.0);
 
@@ -164,6 +181,101 @@ float sampleShadowAtlasVogel6(vec2 tileMin, vec2 tileSize, vec2 projXY, float co
         shadow += texture(u_shadowAtlas, vec3(uv, compareZ - bias));
     }
     return shadow * 0.16666667;
+}
+
+mat4 selectSunMatrix(int c) {
+    if (c == 0) return u_sunSpaceMatrices[0];
+    if (c == 1) return u_sunSpaceMatrices[1];
+    if (c == 2) return u_sunSpaceMatrices[2];
+    return u_sunSpaceMatrices[3];
+}
+
+float selectSunDepthBias(int c) {
+    if (c == 0) return u_sunCascadeBias.x;
+    if (c == 1) return u_sunCascadeBias.y;
+    if (c == 2) return u_sunCascadeBias.z;
+    return u_sunCascadeBias.w;
+}
+
+float sampleSunCascade(int c, float cosTheta, float noiseAngle) {
+    vec4 clip = selectSunMatrix(c) * vec4(WorldPos, 1.0);
+    vec3 proj = clip.xyz * 0.5 + 0.5;
+    if (proj.z > 1.0 || proj.z < 0.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+        return 1.0;
+    }
+    float col = float(c & 1);
+    float row = float(c >> 1);
+    vec2 tileMin = vec2(col * 0.25, 0.5 + row * 0.25);
+    vec2 tileSize = vec2(0.25, 0.25);
+    float baseBias = max(selectSunDepthBias(c), 0.00012);
+    float bias = clamp(baseBias * (1.2 + 2.5 * (1.0 - cosTheta)), 0.00015, 0.0045);
+    return sampleShadowAtlasVogel8(tileMin, tileSize, proj.xy, proj.z, bias, 1.50, noiseAngle);
+}
+
+float sampleSunCSMShadow(float viewDepth, float cosTheta, float noiseAngle) {
+    float shadowMax = u_sunCascadeSplits.w;
+    if (viewDepth > shadowMax || shadowMax <= 0.0) {
+        return 1.0;
+    }
+    int c = 3;
+    float splitStart = 0.0;
+    float splitEnd = shadowMax;
+    if (viewDepth <= u_sunCascadeSplits.x) {
+        c = 0;
+        splitStart = 0.0;
+        splitEnd = u_sunCascadeSplits.x;
+    } else if (viewDepth <= u_sunCascadeSplits.y) {
+        c = 1;
+        splitStart = u_sunCascadeSplits.x;
+        splitEnd = u_sunCascadeSplits.y;
+    } else if (viewDepth <= u_sunCascadeSplits.z) {
+        c = 2;
+        splitStart = u_sunCascadeSplits.y;
+        splitEnd = u_sunCascadeSplits.z;
+    } else {
+        c = 3;
+        splitStart = u_sunCascadeSplits.z;
+        splitEnd = shadowMax;
+    }
+
+    float s0 = sampleSunCascade(c, cosTheta, noiseAngle);
+    float sliceSpan = max(splitEnd - splitStart, 1.0);
+    float blendBand = sliceSpan * 0.15;
+    float distToEnd = splitEnd - viewDepth;
+    if (distToEnd < blendBand) {
+        float tBlend = clamp(1.0 - distToEnd / max(blendBand, 1e-4), 0.0, 1.0);
+        if (c < 3) {
+            float s1 = sampleSunCascade(c + 1, cosTheta, noiseAngle);
+            s0 = mix(s0, s1, tBlend);
+        } else {
+            s0 = mix(s0, 1.0, tBlend);
+        }
+    }
+    return s0;
+}
+
+void computeHorizonFog(out float fogFactor, out vec3 horizonFogColor) {
+    float dist = length(ViewPos);
+    float t = clamp((dist - u_fogParams.x) * u_fogParams.y, 0.0, 1.0);
+    float density = max(u_fogParams.z, 0.01);
+    float expNorm = (1.0 - exp(-t * density * 3.0)) / max(1.0 - exp(-density * 3.0), 1e-4);
+    float curve = mix(smoothstep(0.0, 1.0, t), expNorm, 0.65);
+
+    float heightMod = 1.0;
+    if (u_fogHeightParams.y > 0.0) {
+        float elev = max(WorldPos.y - u_fogHeightParams.x, 0.0);
+        float hAtten = exp(-elev * u_fogHeightParams.y);
+        heightMod = mix(hAtten, 1.0, t * t);
+    }
+    fogFactor = clamp(curve * heightMod, 0.0, 1.0);
+
+    float scatter = 0.0;
+    if (u_sunEnabled == 1 && u_fogParams.w > 0.001) {
+        vec3 rayView = dist > 1e-4 ? (ViewPos / dist) : vec3(0.0, 0.0, -1.0);
+        float sunAlign = clamp(dot(rayView, -u_sunDirView), 0.0, 1.0);
+        scatter = clamp(pow(sunAlign, 8.0) * u_fogParams.w, 0.0, 1.0);
+    }
+    horizonFogColor = mix(u_fogColor, u_fogSunColor, scatter);
 }
 
 void computeSurfacePBR(vec3 albedo, vec3 envTint, out float roughness, out float metalness, out vec3 F0, out float specScale) {
@@ -313,8 +425,16 @@ void main() {
     // Fullbright geometry bypasses all lighting calculations
     if (IsFullbright > 0.5) {
         vec3 fullbrightColor = albedo + getEmissive(TexCoords) * u_emissiveIntensity * edgeFade;
+        if (u_fogEnabled == 1 && FragDepth > 0.001) {
+            float fogFactor;
+            vec3 horizonFogColor;
+            computeHorizonFog(fogFactor, horizonFogColor);
+            fullbrightColor = mix(fullbrightColor, horizonFogColor, fogFactor);
+            BrightColor = vec4(extractBloom(fullbrightColor) * (1.0 - fogFactor * 0.65), 1.0);
+        } else {
+            BrightColor = vec4(extractBloom(fullbrightColor), 1.0);
+        }
         FragColor = vec4(fullbrightColor, texColor.a);
-        BrightColor = vec4(extractBloom(fullbrightColor), 1.0);
         return;
     }
 
@@ -333,24 +453,54 @@ void main() {
         ao = clamp(mix(1.0, texture(u_ssao, screenUV).r, clamp(u_aoFactor, 0.0, 1.5)), 0.05, 1.0);
     }
 
-    // AMBIENT & ROOM LIGHT
-    vec3 L_room_dir = normalize(u_view[1].xyz);
-    float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
-    float roomShadow = 1.0;
-    if (u_enableShadows == 1 && FragPosLightRoom.w > 0.0) {
-        vec3 projRoom = FragPosLightRoom.xyz / FragPosLightRoom.w * 0.5 + 0.5;
-        if (projRoom.z <= 1.0 && projRoom.x >= 0.0 && projRoom.x <= 1.0 && projRoom.y >= 0.0 && projRoom.y <= 1.0) {
-            float roomBias = max(0.005 * (1.0 - NdotL_room), 0.001);
-            roomShadow = sampleShadowAtlasVogel8(vec2(0.0, 0.5), vec2(0.5, 0.5), projRoom.xy, projRoom.z, roomBias, 1.75, shadowNoiseAngle);
+    // AMBIENT & OUTDOOR SUN CSM OR INDOOR ROOM LIGHT
+    vec3 litRoom = vec3(0.0);
+    if (u_sunEnabled == 1) {
+        vec3 worldUpView = normalize(u_view[1].xyz);
+        float upFactor = clamp(dot(finalNormal, worldUpView) * 0.5 + 0.5, 0.0, 1.0);
+        vec3 hemiFill = mix(u_sunGroundColor, u_sunSkyColor, upFactor) * max(u_ambient_light, 0.35);
+        if (LightmapUV.z >= 0.0) {
+            vec3 lmSample = texture(u_lightmaps, vec3(LightmapUV.xy, floor(LightmapUV.z + 0.5))).rgb;
+            vec3 lmLinear = pow(max(lmSample, vec3(0.0)), vec3(2.2));
+            hemiFill = mix(hemiFill, max(lmLinear * 1.6, hemiFill * 0.35), 0.75);
         }
+        litRoom = albedo * (1.0 - metalness * 0.5) * hemiFill * ao;
+
+        vec3 L_sun = -u_sunDirView;
+        float rawSunNdotL = dot(finalNormal, L_sun);
+        if (rawSunNdotL > 0.0 && u_sunColorIntensity.w > 0.001) {
+            float sunShadow = 1.0;
+            if (u_enableShadows == 1) {
+                float nLenSq = dot(ViewNormal, ViewNormal);
+                vec3 geoSunN = (nLenSq > 1e-8) ? (ViewNormal * inversesqrt(nLenSq)) : finalNormal;
+                if (!gl_FrontFacing) {
+                    geoSunN = -geoSunN;
+                }
+                float cosSun = clamp(dot(geoSunN, L_sun), 0.0, 1.0);
+                sunShadow = sampleSunCSMShadow(max(-ViewPos.z, 0.0), cosSun, shadowNoiseAngle);
+            }
+            vec3 pbrSun = evalPBRDirect(finalNormal, V, L_sun, rawSunNdotL, albedo, u_sunColorIntensity.rgb, roughness, metalness, F0, specScale);
+            litRoom += pbrSun * (u_sunColorIntensity.w * sunShadow);
+        }
+    } else {
+        vec3 L_room_dir = normalize(u_view[1].xyz);
+        float NdotL_room = max(dot(finalNormal, L_room_dir), 0.0);
+        float roomShadow = 1.0;
+        if (u_enableShadows == 1 && FragPosLightRoom.w > 0.0) {
+            vec3 projRoom = FragPosLightRoom.xyz / FragPosLightRoom.w * 0.5 + 0.5;
+            if (projRoom.z <= 1.0 && projRoom.x >= 0.0 && projRoom.x <= 1.0 && projRoom.y >= 0.0 && projRoom.y <= 1.0) {
+                float roomBias = max(0.005 * (1.0 - NdotL_room), 0.001);
+                roomShadow = sampleShadowAtlasVogel8(vec2(0.0, 0.5), vec2(0.5, 0.5), projRoom.xy, projRoom.z, roomBias, 1.75, shadowNoiseAngle);
+            }
+        }
+        vec3 baseLight = vec3(u_ambient_light * (0.2 + 0.8 * NdotL_room * roomShadow));
+        if (LightmapUV.z >= 0.0) {
+            vec3 lmSample = texture(u_lightmaps, vec3(LightmapUV.xy, floor(LightmapUV.z + 0.5))).rgb;
+            vec3 lmLinear = pow(max(lmSample, vec3(0.0)), vec3(2.2));
+            baseLight = mix(baseLight, max(lmLinear * 1.6, baseLight * 0.35), 0.85);
+        }
+        litRoom = albedo * (1.0 - metalness * 0.5) * baseLight * ao;
     }
-    vec3 baseLight = vec3(u_ambient_light * (0.2 + 0.8 * NdotL_room * roomShadow));
-    if (LightmapUV.z >= 0.0) {
-        vec3 lmSample = texture(u_lightmaps, vec3(LightmapUV.xy, floor(LightmapUV.z + 0.5))).rgb;
-        vec3 lmLinear = pow(max(lmSample, vec3(0.0)), vec3(2.2));
-        baseLight = mix(baseLight, max(lmLinear * 1.6, baseLight * 0.35), 0.85);
-    }
-    vec3 litRoom = albedo * (1.0 - metalness * 0.5) * baseLight * ao;
 
     // FLASHLIGHT
     vec3 litFlash = vec3(0.0);
@@ -517,6 +667,14 @@ void main() {
         outAlpha = max(outAlpha, clamp(dot(envReflection, vec3(0.3, 0.6, 0.1)) * 0.75, 0.0, 0.85));
     }
 
+    if (u_fogEnabled == 1) {
+        float fogFactor;
+        vec3 horizonFogColor;
+        computeHorizonFog(fogFactor, horizonFogColor);
+        finalColor = mix(finalColor, horizonFogColor, fogFactor);
+        BrightColor = vec4(extractBloom(finalColor) * (1.0 - fogFactor * 0.65), 1.0);
+    } else {
+        BrightColor = vec4(extractBloom(finalColor), 1.0);
+    }
     FragColor = vec4(finalColor, outAlpha);
-    BrightColor = vec4(extractBloom(finalColor), 1.0);
 }

@@ -6,8 +6,12 @@ layout (location = 1) out vec4 BrightColor;
 in vec3 TexCoords;
 in float FragDepth;
 in vec3 ViewPos;
+in vec3 WorldPos;
 
 uniform sampler2DArray u_texture[3];
+uniform int u_fogEnabled;
+uniform vec4 u_fogParams;
+uniform vec3 u_fogHeightParams;
 
 vec4 getDiffuse(vec3 tc) {
     int b = int(tc.z) / 1000;
@@ -35,6 +39,21 @@ void main() {
     // when the final HDR buffer is gamma-corrected, which is exactly what we want
     // for intense additive glowing effects, while preserving their original color ratio.
     vec3 albedo = texColor.rgb * 8.0;
+    if (u_fogEnabled == 1) {
+        float dist = length(ViewPos);
+        float t = clamp((dist - u_fogParams.x) * u_fogParams.y, 0.0, 1.0);
+        float density = max(u_fogParams.z, 0.01);
+        float expNorm = (1.0 - exp(-t * density * 3.0)) / max(1.0 - exp(-density * 3.0), 1e-4);
+        float curve = mix(smoothstep(0.0, 1.0, t), expNorm, 0.65);
+        float heightMod = 1.0;
+        if (u_fogHeightParams.y > 0.0) {
+            float elev = max(WorldPos.y - u_fogHeightParams.x, 0.0);
+            float hAtten = exp(-elev * u_fogHeightParams.y);
+            heightMod = mix(hAtten, 1.0, t * t);
+        }
+        float fogFactor = clamp(curve * heightMod, 0.0, 1.0);
+        albedo *= (1.0 - fogFactor);
+    }
 
     // Additive materials do not evaluate lights or SSAO
     FragColor = vec4(albedo, texColor.a);

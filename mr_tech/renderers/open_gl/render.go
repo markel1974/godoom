@@ -31,6 +31,7 @@ type RenderOpenGL struct {
 	container              []IShader
 	enableShadows          bool
 	enableBoundingBoxDebug bool
+	sunUserOverride        bool
 
 	mapMetrics          *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
@@ -202,6 +203,15 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	px, _, pz := w.vi.GetView()
 	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
 	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
+	if w.handler.IsSunEnabled() && !w.sunUserOverride {
+		if dirGL, colInt, ok := w.builder.GetSceneDirectional(); ok {
+			if sunCSM := w.handler.GetSunCSM(); sunCSM != nil {
+				sunCSM.SetDirectionGL(dirGL[0], dirGL[1], dirGL[2])
+				sunCSM.SetColor(colInt[0], colInt[1], colInt[2], colInt[3])
+			}
+		}
+	}
+	w.handler.UpdateSunAndFog(w.scaleX, w.scaleY)
 
 	swayX, swayY, swaySensitivity := w.vi.GetSway()
 	rawFlashX, rawFlashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
@@ -245,7 +255,11 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 			u, v := float32(skyMat.GetU()), float32(skyMat.GetV())
 			tick := float32(textures.TickF())
 			w.sky.Render(skyTexId, u*tick, v*tick)
+		} else if w.handler.IsSunEnabled() || w.handler.IsHorizonFogEnabled() {
+			w.sky.RenderProcedural()
 		}
+	} else if w.handler.IsSunEnabled() || w.handler.IsHorizonFogEnabled() {
+		w.sky.RenderProcedural()
 	}
 	// MAIN LIQUID (Refraction & Depth Fog)
 	if w.dcLiquid.HasCommands() {
@@ -356,6 +370,54 @@ func (w *RenderOpenGL) SetBoundingBoxDebug(debug bool) {
 	w.enableBoundingBoxDebug = debug
 	w.hwOcc.SetDebug(debug)
 	w.handler.SetBoundingBoxDebug(w.enableBoundingBoxDebug)
+}
+
+// SetSunEnabled enables or disables outdoor directional sunlight and 4-cascade CSM shadows.
+func (w *RenderOpenGL) SetSunEnabled(enabled bool) {
+	if w.handler != nil {
+		w.handler.SetSunEnabled(enabled)
+	}
+	if w.builder != nil {
+		w.builder.SetSuppressDirectionalForCSM(enabled)
+	}
+}
+
+// SetSunDirection sets the outdoor directional sun travel ray in engine Z-up coordinates.
+func (w *RenderOpenGL) SetSunDirection(ex, ey, ez float32) {
+	w.sunUserOverride = true
+	if w.handler != nil {
+		if sun := w.handler.GetSunCSM(); sun != nil {
+			sun.SetDirectionEngine(ex, ey, ez)
+		}
+	}
+}
+
+// SetSunColor updates outdoor sun linear RGB radiance, intensity multiplier, and sky/ground fill ambient.
+func (w *RenderOpenGL) SetSunColor(r, g, b, intensity, skyR, skyG, skyB, groundR, groundG, groundB float32) {
+	w.sunUserOverride = true
+	if w.handler != nil {
+		if sun := w.handler.GetSunCSM(); sun != nil {
+			sun.SetColor(r, g, b, intensity)
+			sun.SetSkyAmbient(skyR, skyG, skyB, groundR, groundG, groundB)
+		}
+	}
+}
+
+// SetHorizonFogEnabled enables or disables global atmospheric distance/horizon fog.
+func (w *RenderOpenGL) SetHorizonFogEnabled(enabled bool) {
+	if w.handler != nil {
+		w.handler.SetHorizonFogEnabled(enabled)
+	}
+}
+
+// SetHorizonFog configures horizon fog colors, distance bounds, density, and sun in-scattering at runtime.
+func (w *RenderOpenGL) SetHorizonFog(r, g, b, sunR, sunG, sunB, start, end, density, scatter float32) {
+	if w.handler != nil {
+		if fog := w.handler.GetAtmosphereFog(); fog != nil {
+			fog.SetColors(r, g, b, sunR, sunG, sunB)
+			fog.SetRange(start, end, density, scatter)
+		}
+	}
 }
 
 type solidRaycaster interface {

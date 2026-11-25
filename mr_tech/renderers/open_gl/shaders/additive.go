@@ -26,12 +26,13 @@ const (
 
 // Additive represents a shader-based rendering effect supporting additive blending for dynamic rendering.
 type Additive struct {
-	ctx   api.IContext
-	prg   uint32
-	table [ShaderAdditiveLocLast]int32
-
-	main    *Main
-	metrics *metrics.Map
+	ctx           api.IContext
+	prg           uint32
+	table         [ShaderAdditiveLocLast]int32
+	fogLocs       fogUniformLocs
+	main          *Main
+	metrics       *metrics.Map
+	atmosphereFog *metrics.AtmosphereFog
 }
 
 // NewAdditive creates and returns a new instance of Additive initialized with the provided graphics context.
@@ -50,6 +51,7 @@ func (s *Additive) Setup(h *Handler) error {
 	s.ctx = h.GetContext()
 	s.main = h.GetMain()
 	s.metrics = h.GetMapMetrics()
+	s.atmosphereFog = h.GetAtmosphereFog()
 	return nil
 }
 
@@ -109,6 +111,7 @@ func (s *Additive) Compile(a IAssets) error {
 	s.table[ShaderAdditiveLocTime] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_time\x00"))
 	s.table[ShaderAdditiveLocTexture] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_texture\x00"))
 	s.table[ShaderAdditiveLocInstanceMode] = s.ctx.GetUniformLocation(s.prg, s.ctx.Str("u_instanceMode\x00"))
+	s.fogLocs = resolveFogUniformLocs(s.ctx, s.prg)
 
 	return nil
 }
@@ -135,6 +138,7 @@ func (s *Additive) RenderAdditive(renderGeometry func()) {
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderAdditiveLocView), 1, false, view)
 	s.ctx.UniformMatrix4fv(s.GetUniform(ShaderAdditiveLocProjection), 1, false, proj)
 	s.ctx.Uniform1f(s.GetUniform(ShaderAdditiveLocTime), interval)
+	bindFogUniforms(s.ctx, s.atmosphereFog, s.fogLocs)
 
 	s.ctx.DepthMask(false)
 	s.ctx.Enable(api.DEPTH_TEST)

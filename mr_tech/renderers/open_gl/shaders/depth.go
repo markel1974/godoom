@@ -47,6 +47,7 @@ type Depth struct {
 
 	maxShadowLights int
 	main            *Main
+	sunCSM          *metrics.SunCSM
 }
 
 // NewDepth creates a Depth renderer configured with the maximum number of shadow-casting lights.
@@ -63,6 +64,7 @@ func (s *Depth) Setup(h *Handler) error {
 	s.mapMetrics = h.GetMapMetrics()
 	s.flashlightMetrics = h.GetFlashlightMetrics()
 	s.shadowLightsMetrics = h.GetShadowLightsMetrics()
+	s.sunCSM = h.GetSunCSM()
 	s.flash = h.GetFlash()
 	s.main = h.GetMain()
 	s.shadowLights = s.handler.GetCalibration().EnableShadowLights
@@ -144,15 +146,19 @@ func (s *Depth) GetTileConfig(slot int) (active bool, orthoDepthClamp bool, matP
 	if !s.shadows {
 		return false, false, nil
 	}
+	useSunCSM := s.sunCSM != nil && s.sunCSM.IsEnabled()
 	switch {
 	case slot == ShadowTileRoom:
+		if useSunCSM {
+			return false, false, nil
+		}
 		return true, true, s.roomSpaceMatrix
 	case slot == ShadowTileFlash:
 		if s.flash == nil || s.flash.GetIntensity() <= 0.001 {
 			return false, false, nil
 		}
 		return true, false, s.flashSpaceMatrix
-	case slot >= ShadowTileLightBase && slot < MaxShadowTiles:
+	case slot >= ShadowTileLightBase && slot < ShadowTileSunBase:
 		x := slot - ShadowTileLightBase
 		if !s.shadowLights || x >= s.maxShadowLights || uint32(x) >= s.shadowLightsMetrics.GetLightCount() {
 			return false, false, nil
@@ -162,6 +168,16 @@ func (s *Depth) GetTileConfig(slot int) (active bool, orthoDepthClamp bool, matP
 			return false, false, nil
 		}
 		return true, false, lMatrix
+	case slot >= ShadowTileSunBase && slot < MaxShadowTiles:
+		if !useSunCSM {
+			return false, false, nil
+		}
+		c := slot - ShadowTileSunBase
+		matPtr := s.sunCSM.GetCascadeMatrixPtr(c)
+		if matPtr == nil {
+			return false, false, nil
+		}
+		return true, true, matPtr
 	default:
 		return false, false, nil
 	}
@@ -260,6 +276,9 @@ func (s *Depth) Prepare() {
 	s.roomSpaceMatrix = s.mapMetrics.GetRoomSpacePtr()
 	s.flashSpaceMatrix = s.flashlightMetrics.GetShadowSpacePtr()
 	s.viewMatrixPtr = s.mapMetrics.GetViewPtr()
+	if s.sunCSM != nil && s.atlas != nil && s.atlas.width >= 32 {
+		s.sunCSM.SetTileResolution(float32(s.atlas.width / 4))
+	}
 }
 
 // Render renders the depth pass using the provided draw commands and default shadow tile handling.
@@ -457,15 +476,29 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 
 	locLightSpace := table[DepthLocLightSpaceMatrix]
 
-	// OMBRA STANZA (Ortografica - quadrant superiore sinistro)
-	rx, ry, rw, rh, _, rpUnits, rpFactor := s.atlas.TileRect(ShadowTileRoom)
-	s.ctx.Enable(api.DEPTH_CLAMP)
-	s.ctx.Viewport(rx, ry, rw, rh)
-	s.ctx.Scissor(rx, ry, rw, rh)
-	s.ctx.PolygonOffset(rpUnits, rpFactor)
-	s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.roomSpaceMatrix)
-	dc.RenderCutoutFiltered(cutout)
-	s.ctx.Disable(api.DEPTH_CLAMP)
+	useSunCSM := s.sunCSM != nil && s.sunCSM.IsEnabled()
+	if useSunCSM {
+		s.ctx.Enable(api.DEPTH_CLAMP)
+		for c := range SunCascadeCount {
+			rx, ry, rw, rh, _, rpUnits, rpFactor := s.atlas.TileRect(ShadowTileSunBase + c)
+			s.ctx.Viewport(rx, ry, rw, rh)
+			s.ctx.Scissor(rx, ry, rw, rh)
+			s.ctx.PolygonOffset(rpUnits, rpFactor)
+			s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.sunCSM.GetCascadeMatrixPtr(c))
+			dc.RenderCutoutFiltered(cutout)
+		}
+		s.ctx.Disable(api.DEPTH_CLAMP)
+	} else {
+		// OMBRA STANZA (Ortografica - quadrant superiore sinistro)
+		rx, ry, rw, rh, _, rpUnits, rpFactor := s.atlas.TileRect(ShadowTileRoom)
+		s.ctx.Enable(api.DEPTH_CLAMP)
+		s.ctx.Viewport(rx, ry, rw, rh)
+		s.ctx.Scissor(rx, ry, rw, rh)
+		s.ctx.PolygonOffset(rpUnits, rpFactor)
+		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, s.roomSpaceMatrix)
+		dc.RenderCutoutFiltered(cutout)
+		s.ctx.Disable(api.DEPTH_CLAMP)
+	}
 
 	// OMBRE TORCIA (Prospettica - quadrante superiore destro)
 	hasFlash := s.flash != nil && s.flash.GetIntensity() > 0.001

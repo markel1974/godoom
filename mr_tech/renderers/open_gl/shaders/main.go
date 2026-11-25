@@ -63,6 +63,13 @@ const (
 	MainLocEnableSSAO
 	MainLocAoFactor
 	MainLocEnvMaxLod
+	MainLocSunEnabled
+	MainLocSunDirView
+	MainLocSunColorIntensity
+	MainLocSunSkyColor
+	MainLocSunGroundColor
+	MainLocSunCascadeSplits
+	MainLocSunCascadeBias
 	MainLocLast
 )
 
@@ -78,6 +85,8 @@ type mainProgram struct {
 	prg             uint32
 	table           [MainLocLast]int32
 	shadowLightLocs [metrics.ShadowLightsCount]shadowLightLocs
+	sunSpaceLocs    [metrics.SunCascadeCount]int32
+	fogLocs         fogUniformLocs
 }
 
 type zPrepassProgram struct {
@@ -133,6 +142,8 @@ type Main struct {
 	metrics             *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
 	shadowLightsMetrics *metrics.ShadowLights
+	sunCSM              *metrics.SunCSM
+	atmosphereFog       *metrics.AtmosphereFog
 	flash               *things.Flash
 	depth               *Depth
 	lights              *Lights
@@ -160,6 +171,8 @@ func (s *Main) Setup(h *Handler) error {
 	s.metrics = h.GetMapMetrics()
 	s.flashlightMetrics = h.GetFlashlightMetrics()
 	s.shadowLightsMetrics = h.GetShadowLightsMetrics()
+	s.sunCSM = h.GetSunCSM()
+	s.atmosphereFog = h.GetAtmosphereFog()
 	s.flash = h.GetFlash()
 	s.depth = h.GetDepth()
 	s.lights = h.GetLights()
@@ -397,6 +410,18 @@ func (s *Main) compileForwardProgram(dst *mainProgram, progName, vertID string, 
 	dst.table[MainLocAoFactor] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_aoFactor\x00"))
 	dst.table[MainLocEnvMaxLod] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_envMaxLod\x00"))
 
+	dst.table[MainLocSunEnabled] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunEnabled\x00"))
+	dst.table[MainLocSunDirView] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunDirView\x00"))
+	dst.table[MainLocSunColorIntensity] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunColorIntensity\x00"))
+	dst.table[MainLocSunSkyColor] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunSkyColor\x00"))
+	dst.table[MainLocSunGroundColor] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunGroundColor\x00"))
+	dst.table[MainLocSunCascadeSplits] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunCascadeSplits\x00"))
+	dst.table[MainLocSunCascadeBias] = s.ctx.GetUniformLocation(prg, s.ctx.Str("u_sunCascadeBias\x00"))
+	for i := range metrics.SunCascadeCount {
+		dst.sunSpaceLocs[i] = s.ctx.GetUniformLocation(prg, s.ctx.Str(fmt.Sprintf("u_sunSpaceMatrices[%d]\x00", i)))
+	}
+	dst.fogLocs = resolveFogUniformLocs(s.ctx, prg)
+
 	blockIndex := s.ctx.GetUniformBlockIndex(prg, s.ctx.Str("LightsBlock\x00"))
 	if blockIndex != api.INVALID_INDEX {
 		s.ctx.UniformBlockBinding(prg, blockIndex, 0)
@@ -617,7 +642,50 @@ func (s *Main) bindForwardUniforms(
 	if loc := p.table[MainLocInstanceMode]; loc >= 0 {
 		s.ctx.Uniform1i(loc, buffers.InstanceModeStreaming)
 	}
+	s.bindSunAndFogUniforms(p)
 	s.ctx.BindBufferBase(api.UNIFORM_BUFFER, 0, s.lights.GetActiveUBO())
+}
+
+func (s *Main) bindSunAndFogUniforms(p *mainProgram) {
+	sunEnabled := int32(0)
+	if s.sunCSM != nil && s.sunCSM.IsEnabled() {
+		sunEnabled = 1
+		if loc := p.table[MainLocSunDirView]; loc >= 0 {
+			dvx, dvy, dvz := s.sunCSM.GetDirectionView(s.metrics)
+			s.ctx.Uniform3f(loc, dvx, dvy, dvz)
+		}
+		if loc := p.table[MainLocSunColorIntensity]; loc >= 0 {
+			sr, sg, sb, si := s.sunCSM.GetColorIntensity()
+			s.ctx.Uniform4f(loc, sr, sg, sb, si)
+		}
+		if loc := p.table[MainLocSunSkyColor]; loc >= 0 {
+			skyR, skyG, skyB, grR, grG, grB := s.sunCSM.GetSkyAmbient()
+			s.ctx.Uniform3f(loc, skyR, skyG, skyB)
+			if gLoc := p.table[MainLocSunGroundColor]; gLoc >= 0 {
+				s.ctx.Uniform3f(gLoc, grR, grG, grB)
+			}
+		} else if gLoc := p.table[MainLocSunGroundColor]; gLoc >= 0 {
+			_, _, _, grR, grG, grB := s.sunCSM.GetSkyAmbient()
+			s.ctx.Uniform3f(gLoc, grR, grG, grB)
+		}
+		splits := s.sunCSM.GetCascadeSplitsView()
+		if loc := p.table[MainLocSunCascadeSplits]; loc >= 0 {
+			s.ctx.Uniform4f(loc, splits[0], splits[1], splits[2], splits[3])
+		}
+		texelBias := s.sunCSM.GetCascadeDepthBias()
+		if loc := p.table[MainLocSunCascadeBias]; loc >= 0 {
+			s.ctx.Uniform4f(loc, texelBias[0], texelBias[1], texelBias[2], texelBias[3])
+		}
+		for c := range metrics.SunCascadeCount {
+			if loc := p.sunSpaceLocs[c]; loc >= 0 {
+				s.ctx.UniformMatrix4fv(loc, 1, false, s.sunCSM.GetCascadeMatrixPtr(c))
+			}
+		}
+	}
+	if loc := p.table[MainLocSunEnabled]; loc >= 0 {
+		s.ctx.Uniform1i(loc, sunEnabled)
+	}
+	bindFogUniforms(s.ctx, s.atmosphereFog, p.fogLocs)
 }
 
 // Render executes a Z-prepass followed by Early-Z forward opaque shading and conditional alpha-cutout shading.

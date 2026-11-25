@@ -1620,7 +1620,18 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 		t.Fatalf("expected CanReuseTile=false after SetShadows(false->true) invalidation")
 	}
 
-	// Re-warm and verify Allocate invalidates cache for new dimensions.
+	// Verify proportional TileRect coordinates at default 2048x2048.
+	rx, ry, rw, rh, rClamp, _, _ := a.TileRect(ShadowTileRoom)
+	fx, fy, fw, fh, fClamp, _, _ := a.TileRect(ShadowTileFlash)
+	lx5, ly5, lw5, lh5, _, _, _ := a.TileRect(ShadowTileLightBase + 5)
+	if rx != 0 || ry != 1024 || rw != 1024 || rh != 1024 || !rClamp ||
+		fx != 1024 || fy != 1024 || fw != 1024 || fh != 1024 || fClamp ||
+		lx5 != 512 || ly5 != 512 || lw5 != 512 || lh5 != 512 {
+		t.Fatalf("unexpected 2048 TileRects: room=(%d,%d,%d,%d,%v) flash=(%d,%d,%d,%d,%v) light5=(%d,%d,%d,%d)",
+			rx, ry, rw, rh, rClamp, fx, fy, fw, fh, fClamp, lx5, ly5, lw5, lh5)
+	}
+
+	// Re-warm and verify Allocate scales TileRects and invalidates cache for new dimensions.
 	for range depthDoubleBuffer {
 		idx, dm := a.Update()
 		a.SetTile(idx, ShadowTileRoom, &tile, dm.gen)
@@ -1629,10 +1640,21 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	if a.CanReuseTile(ShadowTileRoom, &mat, tile.SceneHash) {
 		t.Fatalf("expected Allocate resize to invalidate cached tiles")
 	}
+	srx, sry, srw, srh, _, _, _ := a.TileRect(ShadowTileRoom)
+	slx, sly, slw, slh, _, _, _ := a.TileRect(ShadowTileLightBase + 5)
+	if srx != 0 || sry != 512 || srw != 512 || srh != 512 ||
+		slx != 256 || sly != 256 || slw != 256 || slh != 256 {
+		t.Fatalf("unexpected 1024 TileRects after Allocate: room=(%d,%d,%d,%d) light5=(%d,%d,%d,%d)",
+			srx, sry, srw, srh, slx, sly, slw, slh)
+	}
 
-	// Shutdown clears backing GPU handles and cache safely.
+	// Shutdown clears backing GPU handles, resets frameIdx, and clears cache safely.
+	a.Update()
 	a.Shutdown()
 	a.Shutdown()
+	if a.frameIdx != 0 {
+		t.Fatalf("expected frameIdx=0 after Shutdown, got %d", a.frameIdx)
+	}
 	if a.GetShadowAtlasTexture() != 0 {
 		t.Fatalf("expected GetShadowAtlasTexture=0 after Shutdown")
 	}

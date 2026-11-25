@@ -77,8 +77,8 @@ func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.ShadowsTileData {
 }
 
 // Process performs shadow computation for the given volumes, things, and depth settings, updating shadow tiles and buffers.
-func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d *shaders.Depth) {
-	if d == nil {
+func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Depth) {
+	if d2 == nil {
 		w.DisableAllTiles()
 		return
 	}
@@ -99,7 +99,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d *shaders.Dept
 	w.rigidCache.Sweep(w.shadowFrame)
 
 	for t := range shaders.MaxShadowTiles {
-		active, orthoDepthClamp, matPtr := d.GetTileConfig(t)
+		active, orthoDepthClamp, matPtr := d2.GetTileConfig(t)
 		if !active || matPtr == nil {
 			w.tiles[t].Active = false
 			w.tiles[t].Reuse = false
@@ -121,7 +121,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d *shaders.Dept
 		sceneHash = mixU64(sceneHash, thingAcc^thingXor)
 		sceneHash = mixU64(sceneHash, uint64(thingCount))
 
-		if d.CanReuseTile(t, &mat, sceneHash) {
+		if d2.CanReuseTile(t, &mat, sceneHash) {
 			ptr := &w.tiles[t]
 			ptr.Active = true
 			ptr.Matrix = mat

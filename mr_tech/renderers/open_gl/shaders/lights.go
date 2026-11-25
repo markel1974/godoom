@@ -384,7 +384,7 @@ func siftDownLightMaxHeap(heap *[maxUBOLights]lightCandidate, i, n int) {
 // Render configures the shader program and draws geometry with lighting, shadows, and volumetric effects applied.
 func (s *Lights) Render(renderGeometry func(), ambient float32) {
 	vao := s.main.GetVAO()
-	roomShadowTex := s.depth.GetRoomShadowTextures()
+	roomShadowTex := s.depth.GetShadowAtlasTexture()
 	proj := s.mapMetrics.GetProjPtr()
 	view := s.mapMetrics.GetViewPtr()
 	fbW, fbH := s.handler.GetSize()

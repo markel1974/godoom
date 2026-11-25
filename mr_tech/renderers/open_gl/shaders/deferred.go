@@ -269,9 +269,9 @@ func (s *Deferred) Render(ambient float32, flashX, flashY, flashDirX, flashDirY 
 	s.ctx.ActiveTexture(api.TEXTURE4)
 	s.ctx.BindTexture(api.TEXTURE_2D, s.ssao.GetSSAOBlurTexture())
 	s.ctx.ActiveTexture(api.TEXTURE5)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetFlashShadowTextures())
+	s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
 	s.ctx.ActiveTexture(api.TEXTURE6)
-	s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetRoomShadowTextures())
+	s.ctx.BindTexture(api.TEXTURE_2D, s.depth.GetShadowAtlasTexture())
 
 	// Dynamic shadow textures on units 7..14
 	for i := int32(0); i < s.numShadowLights; i++ {

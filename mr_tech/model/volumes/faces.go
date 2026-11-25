@@ -794,7 +794,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 	}
 	coarseCutSq := coarseCut * coarseCut
 
-	for pass := 0; pass < deformMaxSubdivisionPasses; pass++ {
+	for range deformMaxSubdivisionPasses {
 		clear(f.midpoints)
 		// individua gli spigoli da raffinare nella regione d'impatto.
 		for i := 0; i < f.count; i++ {
@@ -806,7 +806,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				continue
 			}
 			p := fc.tri.Points
-			if distPointToTriangleSq(impact, p[0], p[1], p[2]) > searchRadiusSq {
+			if geometry.DistPointToTriangleSq(impact, p[0], p[1], p[2]) > searchRadiusSq {
 				continue
 			}
 			edges := [3][2]geometry.XYZ32{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
@@ -816,7 +816,7 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				if d2 <= maxEdgeSq || d2 <= minEdgeSq {
 					continue
 				}
-				if d2 <= coarseCutSq && distPointToSegmentSq(impact, edge[0], edge[1]) > searchRadiusSq {
+				if d2 <= coarseCutSq && geometry.DistPointToSegmentSq(impact, edge[0], edge[1]) > searchRadiusSq {
 					continue
 				}
 				key := MakeEdgeKey(edge[0], edge[1])
@@ -866,108 +866,4 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		f.count = len(f.container)
 	}
 	return f.count - initialCount, nil
-}
-
-// distPointToSegmentSq returns the squared distance from p to the line segment from a to b.
-// It treats a near-zero-length segment as a single point at a.
-func distPointToSegmentSq(p geometry.XYZ, a, b geometry.XYZ32) float64 {
-	abX := float64(b.X) - float64(a.X)
-	abY := float64(b.Y) - float64(a.Y)
-	abZ := float64(b.Z) - float64(a.Z)
-	apX := p.X - float64(a.X)
-	apY := p.Y - float64(a.Y)
-	apZ := p.Z - float64(a.Z)
-	abLenSq := abX*abX + abY*abY + abZ*abZ
-	if abLenSq <= 1e-18 {
-		return apX*apX + apY*apY + apZ*apZ
-	}
-	t := (apX*abX + apY*abY + apZ*abZ) / abLenSq
-	if t < 0 {
-		t = 0
-	} else if t > 1 {
-		t = 1
-	}
-	cx := apX - abX*t
-	cy := apY - abY*t
-	cz := apZ - abZ*t
-	return cx*cx + cy*cy + cz*cz
-}
-
-func distPointToTriangleSq(p geometry.XYZ, a32, b32, c32 geometry.XYZ32) float64 {
-	ax, ay, az := float64(a32.X), float64(a32.Y), float64(a32.Z)
-	bx, by, bz := float64(b32.X), float64(b32.Y), float64(b32.Z)
-	cx, cy, cz := float64(c32.X), float64(c32.Y), float64(c32.Z)
-
-	abX, abY, abZ := bx-ax, by-ay, bz-az
-	acX, acY, acZ := cx-ax, cy-ay, cz-az
-	apX, apY, apZ := p.X-ax, p.Y-ay, p.Z-az
-
-	d1 := abX*apX + abY*apY + abZ*apZ
-	d2 := acX*apX + acY*apY + acZ*apZ
-	if d1 <= 0 && d2 <= 0 {
-		return apX*apX + apY*apY + apZ*apZ
-	}
-
-	bpX, bpY, bpZ := p.X-bx, p.Y-by, p.Z-bz
-	d3 := abX*bpX + abY*bpY + abZ*bpZ
-	d4 := acX*bpX + acY*bpY + acZ*bpZ
-	if d3 >= 0 && d4 <= d3 {
-		return bpX*bpX + bpY*bpY + bpZ*bpZ
-	}
-
-	vc := d1*d4 - d3*d2
-	if vc <= 0 && d1 >= 0 && d3 <= 0 {
-		if denom := d1 - d3; denom > 1e-18 {
-			v := d1 / denom
-			dx, dy, dz := apX-abX*v, apY-abY*v, apZ-abZ*v
-			return dx*dx + dy*dy + dz*dz
-		}
-	}
-
-	cpX, cpY, cpZ := p.X-cx, p.Y-cy, p.Z-cz
-	d5 := abX*cpX + abY*cpY + abZ*cpZ
-	d6 := acX*cpX + acY*cpY + acZ*cpZ
-	if d6 >= 0 && d5 <= d6 {
-		return cpX*cpX + cpY*cpY + cpZ*cpZ
-	}
-
-	vb := d5*d2 - d1*d6
-	if vb <= 0 && d2 >= 0 && d6 <= 0 {
-		if denom := d2 - d6; denom > 1e-18 {
-			w := d2 / denom
-			dx, dy, dz := apX-acX*w, apY-acY*w, apZ-acZ*w
-			return dx*dx + dy*dy + dz*dz
-		}
-	}
-
-	va := d3*d6 - d5*d4
-	if va <= 0 && (d4-d3) >= 0 && (d5-d6) >= 0 {
-		if denom := (d4 - d3) + (d5 - d6); denom > 1e-18 {
-			w := (d4 - d3) / denom
-			bcX, bcY, bcZ := cx-bx, cy-by, cz-bz
-			dx, dy, dz := bpX-bcX*w, bpY-bcY*w, bpZ-bcZ*w
-			return dx*dx + dy*dy + dz*dz
-		}
-	}
-
-	denom := va + vb + vc
-	if denom <= 1e-18 {
-		dAB := distPointToSegmentSq(p, a32, b32)
-		dBC := distPointToSegmentSq(p, b32, c32)
-		dCA := distPointToSegmentSq(p, c32, a32)
-		if dBC < dAB {
-			dAB = dBC
-		}
-		if dCA < dAB {
-			dAB = dCA
-		}
-		return dAB
-	}
-	inv := 1.0 / denom
-	v := vb * inv
-	w := vc * inv
-	dx := apX - abX*v - acX*w
-	dy := apY - abY*v - acY*w
-	dz := apZ - abZ*v - acZ*w
-	return dx*dx + dy*dy + dz*dz
 }

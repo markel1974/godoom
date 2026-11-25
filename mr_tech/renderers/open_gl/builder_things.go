@@ -8,13 +8,70 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-func (w *BuilderVolume) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers.ResidentMesh, gh, ver uint64, faceCount int) {
-	if w.thingMeshesByPtr == nil {
-		w.thingMeshesByPtr = make(map[*volumes.Faces]thingMeshPtrEntry, 512)
+// RigidInstance stores world-space translation and quaternion orientation for one instanced rigid entity.
+type RigidInstance struct {
+	cx, cy, cz     float64
+	qx, qy, qz, qw float64
+}
+
+// RigidInstanceGroup batches instances sharing one GPU ResidentMesh and upload offset.
+type RigidInstanceGroup struct {
+	mesh           *buffers.ResidentMesh
+	instances      buffers.PtrPool[RigidInstance]
+	baseByteOffset int32
+}
+
+// RigidTransItem tracks a single translucent instanced submesh draw for back-to-front sorting.
+type RigidTransItem struct {
+	mesh           *buffers.ResidentMesh
+	sub            *buffers.ResidentSubMesh
+	baseByteOffset int32
+	cx, cy, cz     float32
+}
+
+type thingMeshPtrEntry struct {
+	rm        *buffers.ResidentMesh
+	geomHash  uint64
+	version   uint64
+	faceCount int
+}
+
+// BuilderThings manages entity render caches, GPU instancing for rigid objects,
+// and CPU vertex staging for morphing 3D models, sprites, and UI elements.
+type BuilderThings struct {
+	bc               *BuilderContext
+	thingMeshesByPtr map[*volumes.Faces]thingMeshPtrEntry
+	thingMeshes      map[uint64][]*buffers.ResidentMesh
+	thingsRender     *ThingsRender
+	instancePool     *buffers.InstancePool
+	instGroups       buffers.PtrPool[RigidInstanceGroup]
+	instFrame        uint64
+	playerId         uint64
+}
+
+// NewBuilderThings initializes a BuilderThings bound to bc.
+func NewBuilderThings(bc *BuilderContext) *BuilderThings {
+	var playerID uint64
+	if bc.player != nil && bc.player.GetEntity() != nil {
+		playerID = bc.player.GetEntity().GetId()
 	}
+	bt := &BuilderThings{
+		bc:               bc,
+		playerId:         playerID,
+		thingMeshesByPtr: make(map[*volumes.Faces]thingMeshPtrEntry, 512),
+		thingMeshes:      make(map[uint64][]*buffers.ResidentMesh, 256),
+		thingsRender:     NewThingsRender(),
+		instancePool:     buffers.NewInstancePool(bc.ctx, 256),
+	}
+	bt.instGroups.Init(32)
+	return bt
+}
+
+func (w *BuilderThings) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers.ResidentMesh, gh, ver uint64, faceCount int) {
 	w.thingMeshesByPtr[rigidFaces] = thingMeshPtrEntry{
 		rm:        rm,
 		geomHash:  gh,
@@ -23,58 +80,52 @@ func (w *BuilderVolume) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers
 	}
 }
 
-// retrieveThingMesh returns a resident mesh for the given faces, reusing or rebuilding cached mesh data when needed.
+// RetrieveMesh returns a resident mesh for rigidFaces, reusing or rebuilding cached mesh data when needed.
 // The returned bool reports whether the mesh was rebuilt during the current mesh frame.
-func (w *BuilderVolume) retrieveThingMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh, bool) {
-	if rm := w.findCachedThingMesh(rigidFaces); rm != nil {
-		if rm.LastSeenFrame != w.meshFrame {
-			rm.LastSeenFrame = w.meshFrame
-			if (rm.SrcFaces == rigidFaces && rm.NeedsRebuild(rigidFaces, true)) || rm.NeedsAnimRebuild() {
-				rm.Rebuild(rigidFaces, w.texLookupFn)
-				rm.RebuiltFrame = w.meshFrame
+func (w *BuilderThings) RetrieveMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh, bool) {
+	if rm := w.FindCachedMesh(rigidFaces); rm != nil {
+		needsAnim := rm.NeedsAnimRebuild()
+		if rm.LastSeenFrame != w.bc.meshFrame || needsAnim {
+			rm.LastSeenFrame = w.bc.meshFrame
+			if (rm.SrcFaces == rigidFaces && rm.NeedsRebuild(rigidFaces, true)) || needsAnim {
+				rm.Rebuild(rigidFaces, w.bc.LookupTexLayer)
+				rm.RebuiltFrame = w.bc.meshFrame
 			}
 		}
-		return rm, rm.RebuiltFrame == w.meshFrame
+		return rm, rm.RebuiltFrame == w.bc.meshFrame
 	}
 	gh := rigidFaces.GetGeomHash()
 	ver := rigidFaces.GetVersion()
 	faceCount := rigidFaces.Len()
-	rm := buffers.NewResidentMesh(w.ctx)
-	rm.LastSeenFrame = w.meshFrame
-	rm.RebuiltFrame = w.meshFrame
-	rm.Rebuild(rigidFaces, w.texLookupFn)
+	rm := buffers.NewResidentMesh(w.bc.ctx)
+	rm.LastSeenFrame = w.bc.meshFrame
+	rm.RebuiltFrame = w.bc.meshFrame
+	rm.Rebuild(rigidFaces, w.bc.LookupTexLayer)
 	w.thingMeshes[gh] = append(w.thingMeshes[gh], rm)
 	w.cacheThingMeshPtr(rigidFaces, rm, gh, ver, faceCount)
 	return rm, true
 }
 
-// pushQThings processes visible things: rigid props/vehicles/buildings route into GPU instancing,
-// while morphing 3D models, billboards, and UI elements route through the streaming vertex cache.
-func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Frustum) bool {
-	if w.thingsRender == nil {
-		w.thingsRender = NewThingsRender()
+// Process stages visible things, routes rigid objects into GPU instancing,
+// and streams non-rigid geometry into FrameVertices.
+func (w *BuilderThings) Process(things *model.Things, frustumFront *aabb.Frustum) bool {
+	if w.bc.meshFrame == 0 {
+		w.bc.meshFrame = 1
 	}
-	if w.thingMeshes == nil {
-		w.thingMeshes = make(map[uint64][]*buffers.ResidentMesh, 256)
+	if things == nil {
+		if w.bc.frameGen == 0 {
+			w.resetInstancedPools()
+			w.instancePool.Reset()
+			w.bc.lastInstVBO = 0
+		}
+		return false
 	}
-	if w.thingMeshesByPtr == nil {
-		w.thingMeshesByPtr = make(map[*volumes.Faces]thingMeshPtrEntry, 512)
-	}
-	if w.meshFrame == 0 {
-		w.meshFrame = 1
-	}
-	if w.instancePool == nil {
-		w.instancePool = buffers.NewInstancePool(w.ctx, 256)
-	}
-	if w.texLookupFn == nil {
-		w.texLookupFn = w.lookupTexLayer
-	}
+
 	w.thingsRender.Prepare()
 	w.instFrame++
 	w.instGroups.Reset()
 
 	tick := textures.GlobalTick()
-
 	things.StagePrepare()
 
 	addRigidInstance := func(rm *buffers.ResidentMesh, cx, cy, cz, qx, qy, qz, qw float64) {
@@ -100,21 +151,21 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 
 	pushPassThing := func(thing ithing.IThing) {
 		ent := thing.GetEntity()
-		entry2 := w.thingsRender.Retrieve(ent)
+		entry := w.thingsRender.Retrieve(ent)
 		thing.Compile(tick)
-		entry2.compileFrame = w.meshFrame
+		entry.compileFrame = w.bc.meshFrame
 
 		if rs, ok := thing.(ithing.IRigidRenderSource); ok {
 			if rigidFaces := rs.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
-				rm, meshRebuilt := w.retrieveThingMesh(rigidFaces)
+				rm, meshRebuilt := w.RetrieveMesh(rigidFaces)
 				tPosX, tPosY, zBot := ent.GetCenter()
 				qx, qy, qz, qw := ent.GetQRotation().Get()
 				oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
 				fqx, fqy, fqz, fqw := float32(qx), float32(qy), float32(qz), float32(qw)
-				if meshRebuilt || !entry2.EqualRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw) {
-					entry2.AssignRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw)
+				if meshRebuilt || !entry.EqualRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw) {
+					entry.AssignRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw)
 				}
-				w.thingsRender.AddRef(entry2)
+				w.thingsRender.AddRef(entry)
 				if rm.SubMeshesLen > 0 {
 					addRigidInstance(rm, tPosX, tPosY, zBot, qx, qy, qz, qw)
 				}
@@ -122,12 +173,12 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			}
 		}
 
-		if !w.buildNonRigidThingCache(thing, entry2) {
+		if !w.BuildNonRigidCache(thing, entry) {
 			return
 		}
-		entry2.committedBaseIdx = w.fv.CommitWithOffset(entry2.GetFrameVertices(), w.modes)
-		entry2.committedFrame = w.meshFrame
-		w.thingsRender.AddRef(entry2)
+		entry.committedBaseIdx = w.bc.fv.CommitWithOffset(entry.GetFrameVertices(), w.bc.modes)
+		entry.committedFrame = w.bc.meshFrame
+		w.thingsRender.AddRef(entry)
 	}
 
 	qOcclusion := func(object aabb.IObject) bool {
@@ -136,17 +187,17 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 			return false
 		}
 		entId := thing.GetEntity().GetId()
-		if w.playerId != entId {
+		if w.bc.player == nil || w.playerId != entId {
 			things.StageAdd(thing)
 		}
-		if thing.GetKind() != config.ThingDoorDef {
+		if w.bc.occlusion != nil && thing.GetKind() != config.ThingDoorDef {
 			ab := thing.GetAABB()
-			occState := w.occlusion.GetState(entId)
+			occState := w.bc.occlusion.GetState(entId)
 			if occState != nil && !occState.IsVisible {
-				w.occlusion.Add(ab, occState) // Schedulalo per controllarlo al prossimo frame
-				return false                  // CULLATO! Non generiamo i vertici
+				w.bc.occlusion.Add(ab, occState)
+				return false
 			}
-			w.occlusion.Add(ab, occState) // Lo vediamo, aggiungiamolo ai test GPU
+			w.bc.occlusion.Add(ab, occState)
 		}
 		pushPassThing(thing)
 		return false
@@ -157,90 +208,98 @@ func (w *BuilderVolume) pushQThings(things *model.Things, frustumFront *aabb.Fru
 		return false
 	}
 
-	things.StageAdd(w.player)
-
-	things.QueryStatic(qStatic) // UI Objects
-	things.QueryFrustum(frustumFront, qOcclusion)
-
+	if w.bc.player != nil {
+		things.StageAdd(w.bc.player)
+	}
+	things.QueryStatic(qStatic)
+	if frustumFront != nil {
+		things.QueryFrustum(frustumFront, qOcclusion)
+	}
 	things.StageCommit()
 
 	thingsChanged := w.thingsRender.Commit()
-	if thingsChanged || w.frameGen == 0 {
-		w.instOpaque.Reset()
-		w.instLiquid.Reset()
-		w.instAdditive.Reset()
-		w.instTransSrc.Reset()
-
-		w.instancePool.Reset()
-		for gi := 0; gi < w.instGroups.Len; gi++ {
-			g := w.instGroups.Items[gi]
-			cnt := g.instances.Len
-			if cnt == 0 {
-				continue
-			}
-			baseByteOff, baseFloat := w.instancePool.Reserve(cnt)
-			g.baseByteOffset = baseByteOff
-			for k := range cnt {
-				inst := g.instances.Items[k]
-				w.instancePool.WriteTransformAt(baseFloat+k*buffers.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
-			}
-		}
-		instVBO := w.instancePool.Upload()
-		w.lastInstVBO = instVBO
-
-		for gi := 0; gi < w.instGroups.Len; gi++ {
-			g := w.instGroups.Items[gi]
-			cnt := int32(g.instances.Len)
-			if cnt == 0 {
-				continue
-			}
-			for sIdx := 0; sIdx < g.mesh.SubMeshesLen; sIdx++ {
-				sub := g.mesh.SubMeshes[sIdx]
-				if sub.IndexCount == 0 {
-					continue
-				}
-				switch sub.BlendMode {
-				case config.BlendModeLiquid:
-					item := w.instLiquid.Acquire()
-					item.Mesh = g.mesh
-					item.Sub = sub
-					item.InstanceVBO = instVBO
-					item.BaseByteOffset = g.baseByteOffset
-					item.InstanceCount = cnt
-				case config.BlendModeAdditive:
-					item := w.instAdditive.Acquire()
-					item.Mesh = g.mesh
-					item.Sub = sub
-					item.InstanceVBO = instVBO
-					item.BaseByteOffset = g.baseByteOffset
-					item.InstanceCount = cnt
-				case config.BlendModeTransparent:
-					for k := 0; k < int(cnt); k++ {
-						inst := g.instances.Items[k]
-						rt := w.instTransSrc.Acquire()
-						rt.mesh = g.mesh
-						rt.sub = sub
-						rt.baseByteOffset = g.baseByteOffset + int32(k*buffers.InstanceMatrixFloats*4)
-						rt.cx = float32(inst.cx)
-						rt.cy = float32(inst.cz)
-						rt.cz = float32(-inst.cy)
-					}
-				default:
-					item := w.instOpaque.Acquire()
-					item.Mesh = g.mesh
-					item.Sub = sub
-					item.InstanceVBO = instVBO
-					item.BaseByteOffset = g.baseByteOffset
-					item.InstanceCount = cnt
-				}
-			}
-		}
+	if thingsChanged || w.bc.frameGen == 0 {
+		w.rebuildInstancedDraws()
 	}
 
 	return thingsChanged
 }
 
-func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *ThingRenderCache) bool {
+func (w *BuilderThings) resetInstancedPools() {
+	w.bc.instOpaque.Reset()
+	w.bc.instLiquid.Reset()
+	w.bc.instAdditive.Reset()
+	w.bc.instTransSrc.Reset()
+}
+
+func (w *BuilderThings) rebuildInstancedDraws() {
+	w.resetInstancedPools()
+	w.instancePool.Reset()
+	for gi := 0; gi < w.instGroups.Len; gi++ {
+		g := w.instGroups.Items[gi]
+		cnt := g.instances.Len
+		if cnt == 0 {
+			continue
+		}
+		baseByteOff, baseFloat := w.instancePool.Reserve(cnt)
+		g.baseByteOffset = baseByteOff
+		for k := range cnt {
+			inst := g.instances.Items[k]
+			w.instancePool.WriteTransformAt(baseFloat+k*buffers.InstanceMatrixFloats, inst.cx, inst.cy, inst.cz, inst.qx, inst.qy, inst.qz, inst.qw)
+		}
+	}
+	instVBO := w.instancePool.Upload()
+	w.bc.lastInstVBO = instVBO
+
+	for gi := 0; gi < w.instGroups.Len; gi++ {
+		g := w.instGroups.Items[gi]
+		if g.instances.Len == 0 {
+			continue
+		}
+		w.appendInstancedGroup(g, instVBO)
+	}
+}
+
+func (w *BuilderThings) appendInstancedGroup(g *RigidInstanceGroup, instVBO uint32) {
+	cnt := int32(g.instances.Len)
+	for sIdx := 0; sIdx < g.mesh.SubMeshesLen; sIdx++ {
+		sub := g.mesh.SubMeshes[sIdx]
+		if sub.IndexCount == 0 {
+			continue
+		}
+		if sub.BlendMode == config.BlendModeTransparent {
+			for k := 0; k < int(cnt); k++ {
+				inst := g.instances.Items[k]
+				rt := w.bc.instTransSrc.Acquire()
+				rt.mesh = g.mesh
+				rt.sub = sub
+				rt.baseByteOffset = g.baseByteOffset + int32(k*buffers.InstanceMatrixFloats*4)
+				rt.cx = float32(inst.cx)
+				rt.cy = float32(inst.cz)
+				rt.cz = float32(-inst.cy)
+			}
+			continue
+		}
+		var dst *buffers.PtrPool[draws.DrawItemInstanced]
+		switch sub.BlendMode {
+		case config.BlendModeLiquid:
+			dst = &w.bc.instLiquid
+		case config.BlendModeAdditive:
+			dst = &w.bc.instAdditive
+		default:
+			dst = &w.bc.instOpaque
+		}
+		item := dst.Acquire()
+		item.Mesh = g.mesh
+		item.Sub = sub
+		item.InstanceVBO = instVBO
+		item.BaseByteOffset = g.baseByteOffset
+		item.InstanceCount = cnt
+	}
+}
+
+// BuildNonRigidCache rebuilds or reuses CPU-staged vertex batches in entry2 for a streaming or morphed thing.
+func (w *BuilderThings) BuildNonRigidCache(thing ithing.IThing, entry2 *ThingRenderCache) bool {
 	pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 	if pFaces == nil || pFaces.Len() == 0 {
 		return false
@@ -319,7 +378,9 @@ func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *Thi
 		}
 		tId := tex.GetIdentifier()
 		if tId < 0 {
-			tId, _ = w.tex.Get(tex)
+			if w.bc.tex != nil {
+				tId, _ = w.bc.tex.Get(tex)
+			}
 			tex.SetIdentifier(tId)
 		}
 
@@ -366,5 +427,51 @@ func (w *BuilderVolume) buildNonRigidThingCache(thing ithing.IThing, entry2 *Thi
 
 	flushBatch()
 	entry2.Assign(pFaces, pNextFaces, facesVer, nextVer, facesLen, nextLen, lerp, yaw, renderModeF, oX, oY, oZ)
+	return true
+}
+
+// FindCachedMesh returns a cached resident mesh matching rigidFaces in O(1) after first verification, or nil if none exists.
+func (w *BuilderThings) FindCachedMesh(rigidFaces *volumes.Faces) *buffers.ResidentMesh {
+	gh := rigidFaces.GetGeomHash()
+	ver := rigidFaces.GetVersion()
+	faceCount := rigidFaces.Len()
+	if pe, ok := w.thingMeshesByPtr[rigidFaces]; ok && pe.rm != nil && pe.geomHash == gh && pe.version == ver && pe.faceCount == faceCount {
+		return pe.rm
+	}
+	for _, rm := range w.thingMeshes[gh] {
+		if rm.SrcFaces == rigidFaces || (rm.FaceCount == faceCount && rm.SrcFaces.GetGeomHash() == gh && facesEquivalent(rigidFaces, rm.SrcFaces)) {
+			w.cacheThingMeshPtr(rigidFaces, rm, gh, ver, faceCount)
+			return rm
+		}
+	}
+	return nil
+}
+
+// facesEquivalent reports whether two face collections contain the same ordered faces, materials, and points.
+func facesEquivalent(a, b *volumes.Faces) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil || a.Len() != b.Len() {
+		return false
+	}
+	n := a.Len()
+	for i := range n {
+		fa := a.At(i)
+		fb := b.At(i)
+		if fa == fb {
+			continue
+		}
+		if fa == nil || fb == nil || fa.GetMaterial() != fb.GetMaterial() {
+			return false
+		}
+		ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := fa.GetPointsFlat()
+		bx0, by0, bz0, bx1, by1, bz1, bx2, by2, bz2 := fb.GetPointsFlat()
+		if ax0 != bx0 || ay0 != by0 || az0 != bz0 ||
+			ax1 != bx1 || ay1 != by1 || az1 != bz1 ||
+			ax2 != bx2 || ay2 != by2 || az2 != bz2 {
+			return false
+		}
+	}
 	return true
 }

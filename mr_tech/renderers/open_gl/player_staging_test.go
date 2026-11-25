@@ -16,8 +16,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/textures"
@@ -75,40 +73,14 @@ func (stubCtx) TexSubImage3D(_ uint32, _ int32, _, _, _, _, _, _ int32, _, _ uin
 func (stubCtx) GenerateMipmap(_ uint32) {}
 
 func newTestBuilderVolume(cal *model.Calibration, pl *things.Player) *BuilderVolume {
-	dcOpaque := draws.NewDrawCommands(config.BlendModeOpaque, 32768)
-	dcAdditive := draws.NewDrawCommands(config.BlendModeAdditive, 4096)
-	dcLiquid := draws.NewDrawCommands(config.BlendModeLiquid, 4096)
-	modes := make([]*draws.DrawCommands, config.BlendModeLatest)
-	modes[dcOpaque.GetBlendMode()] = dcOpaque
-	modes[dcAdditive.GetBlendMode()] = dcAdditive
-	modes[dcLiquid.GetBlendMode()] = dcLiquid
-
-	var plID uint64
-	if pl != nil {
-		plID = pl.GetEntity().GetId()
-	}
-
-	return &BuilderVolume{
-		ctx:        stubCtx{},
-		tex:        vramtex.NewTextures(stubCtx{}),
-		fv:         draws.NewFrameVertices(stubCtx{}, 1048576),
-		dcOpaque:   dcOpaque,
-		dcAdditive: dcAdditive,
-		dcLiquid:   dcLiquid,
-		modes:      modes,
-		cal:        cal,
-		occlusion:  queries.NewOcclusionHW(stubCtx{}, 8),
-		player:     pl,
-		playerId:   plID,
-	}
+	return newBuilderVolumeWithOcclusionMax(stubCtx{}, vramtex.NewTextures(stubCtx{}), cal, pl, 8)
 }
 
 func (w *BuilderVolume) resetTestFrame() {
-	w.fv.Reset()
-	w.dcOpaque.Reset()
-	w.dcAdditive.Reset()
-	w.dcLiquid.Reset()
-	w.occlusion.Reset()
+	w.bc.ResetDynamicDraws()
+	if w.bc.occlusion != nil {
+		w.bc.occlusion.Reset()
+	}
 }
 
 func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T) {
@@ -168,7 +140,7 @@ func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T)
 
 	bv := newTestBuilderVolume(mCal, pl)
 	// Simulate OcclusionHW having marked the player invisible on an earlier readback.
-	bv.occlusion.GetState(pl.GetEntity().GetId()).IsVisible = false
+	bv.GetHWOcclusion().GetState(pl.GetEntity().GetId()).IsVisible = false
 
 	// Place frustum far away so the player AABB is also outside QueryFrustum.
 	ff := metrics.NewFrustum()
@@ -180,7 +152,7 @@ func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T)
 	for i := 0; i < 60; i++ {
 		bv.resetTestFrame()
 		pl.Move(0.13, true, false, false, false)
-		bv.pushQThings(th, farFrustum)
+		bv.bt.Process(th, farFrustum)
 		en.Compute(pl, vi)
 	}
 	endX, endY, _ := pl.GetEntity().GetCenter()
@@ -188,7 +160,7 @@ func TestPushQThingsAlwaysStagesPlayerWhenOccludedOrOutsideFrustum(t *testing.T)
 	if moved < 20.0 {
 		t.Fatalf("player stalled when occluded/outside frustum: moved=%.4f (start=(%.2f,%.2f) end=(%.2f,%.2f))", moved, startX, startY, endX, endY)
 	}
-	if bv.occlusion.HasDrawTests() {
+	if bv.GetHWOcclusion().HasDrawTests() {
 		t.Fatalf("expected invisible player not to queue OcclusionHW tests")
 	}
 }
@@ -264,7 +236,7 @@ func TestPlayerBobbingAndLandingBounceActiveThroughCoordinator(t *testing.T) {
 	landed := false
 	for i := 0; i < 180; i++ {
 		bv.resetTestFrame()
-		bv.pushQThings(th, vi.GetFrontFrustum(ff.Get()))
+		bv.bt.Process(th, vi.GetFrontFrustum(ff.Get()))
 		en.Compute(pl, vi)
 		if pl.GetEntity().IsOnGround() {
 			landed = true
@@ -287,7 +259,7 @@ func TestPlayerBobbingAndLandingBounceActiveThroughCoordinator(t *testing.T) {
 	for i := 0; i < 120; i++ {
 		bv.resetTestFrame()
 		pl.Move(0.13, true, false, false, false)
-		bv.pushQThings(th, vi.GetFrontFrustum(ff.Get()))
+		bv.bt.Process(th, vi.GetFrontFrustum(ff.Get()))
 		en.Compute(pl, vi)
 		bx, by, _ := pl.GetBob()
 		if math.Abs(bx) > maxAbsBobX {
@@ -347,11 +319,11 @@ func TestJediBobbingWithinPlayerRadiusAndContinuousWalk(t *testing.T) {
 			ff.Setup(float32(mCal.AspectRatio), float32(mCal.ZFar), float32(mCal.ZNear), mCal.PrjScale, mCal.PrjScale)
 
 			bv := newTestBuilderVolume(mCal, pl)
-			bv.occlusion.GetState(pl.GetEntity().GetId()).IsVisible = false
+			bv.GetHWOcclusion().GetState(pl.GetEntity().GetId()).IsVisible = false
 
 			for i := 0; i < 300; i++ {
 				bv.resetTestFrame()
-				bv.pushQThings(th, vi.GetFrontFrustum(ff.Get()))
+				bv.bt.Process(th, vi.GetFrontFrustum(ff.Get()))
 				en.Compute(pl, vi)
 			}
 			startX, startY, _ := pl.GetEntity().GetCenter()
@@ -360,7 +332,7 @@ func TestJediBobbingWithinPlayerRadiusAndContinuousWalk(t *testing.T) {
 				pl.Move(0.13, true, false, false, false)
 				ex, ey, ez := vi.GetView()
 				ff.Update(float32(ex), float32(ey), float32(ez), vi.GetAngle(), -vi.GetPitch(), vi.GetRoll())
-				bv.pushQThings(th, vi.GetFrontFrustum(ff.Get()))
+				bv.bt.Process(th, vi.GetFrontFrustum(ff.Get()))
 				en.Compute(pl, vi)
 			}
 			endX, endY, _ := pl.GetEntity().GetCenter()
@@ -413,7 +385,7 @@ func TestQuakeBootAndStepFirstFrames(t *testing.T) {
 				bv.resetTestFrame()
 				ex, ey, ez := vi.GetView()
 				ff.Update(float32(ex), float32(ey), float32(ez), vi.GetAngle(), -vi.GetPitch(), vi.GetRoll())
-				bv.pushQThings(th, vi.GetFrontFrustum(ff.Get()))
+				bv.bt.Process(th, vi.GetFrontFrustum(ff.Get()))
 				en.Compute(pl, vi)
 			}
 		})

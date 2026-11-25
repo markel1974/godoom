@@ -192,8 +192,8 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	if medikitThing == nil || ammoThing == nil {
 		t.Fatalf("expected medikit and ammo in front frustum")
 	}
-	medCacheGen1 := bv.thingsRender.Retrieve(medikitThing.GetEntity()).GetGen()
-	ammoCacheGen1 := bv.thingsRender.Retrieve(ammoThing.GetEntity()).GetGen()
+	medCacheGen1 := bv.bt.thingsRender.Retrieve(medikitThing.GetEntity()).GetGen()
+	ammoCacheGen1 := bv.bt.thingsRender.Retrieve(ammoThing.GetEntity()).GetGen()
 
 	// Frame 2: nothing moved and animated texture tick interval (32) not crossed -> full reuse.
 	bv.Compute(640, 480, vi, en)
@@ -212,10 +212,10 @@ func TestBuilderVolumeStaticCacheAnimInvalidationAndThingCache(t *testing.T) {
 	if fGen3 <= fGen2 {
 		t.Fatalf("expected frameGen to advance when visible item moved, got %d -> %d", fGen2, fGen3)
 	}
-	if genNow := bv.thingsRender.Retrieve(medikitThing.GetEntity()).GetGen(); genNow <= medCacheGen1 {
+	if genNow := bv.bt.thingsRender.Retrieve(medikitThing.GetEntity()).GetGen(); genNow <= medCacheGen1 {
 		t.Fatalf("expected moved item cache gen to advance, got %d -> %d", medCacheGen1, genNow)
 	}
-	if ammoNow := bv.thingsRender.Retrieve(ammoThing.GetEntity()).GetGen(); ammoNow != ammoCacheGen1 {
+	if ammoNow := bv.bt.thingsRender.Retrieve(ammoThing.GetEntity()).GetGen(); ammoNow != ammoCacheGen1 {
 		t.Fatalf("expected stationary item vertex cache gen=%d reused, got %d", ammoCacheGen1, ammoNow)
 	}
 
@@ -617,14 +617,14 @@ func TestBuilderVolumeStaticAtlasCoalescesVolumesAndDetachesDirty(t *testing.T) 
 	bv := NewBuilderVolume(rCtx, glTex, mCal, pl)
 	bv.Compute(640, 480, vi, en)
 
-	if bv.staticAtlas == nil || bv.staticAtlas.VAO == 0 {
-		t.Fatalf("expected built staticAtlas with valid VAO, got %+v", bv.staticAtlas)
+	if bv.bs.staticAtlas == nil || bv.bs.staticAtlas.VAO == 0 {
+		t.Fatalf("expected built staticAtlas with valid VAO, got %+v", bv.bs.staticAtlas)
 	}
-	if bv.staticOpaque.Len == 0 {
+	if bv.bc.staticOpaque.Len == 0 {
 		t.Fatalf("expected non-zero staticOpaque items")
 	}
-	for i := 0; i < bv.staticOpaque.Len; i++ {
-		if bv.staticOpaque.Items[i].Mesh != bv.staticAtlas {
+	for i := 0; i < bv.bc.staticOpaque.Len; i++ {
+		if bv.bc.staticOpaque.Items[i].Mesh != bv.bs.staticAtlas {
 			t.Fatalf("expected static item %d to share staticAtlas VAO, got separate mesh", i)
 		}
 	}
@@ -638,12 +638,12 @@ func TestBuilderVolumeStaticAtlasCoalescesVolumesAndDetachesDirty(t *testing.T) 
 	if sGen2 <= sGen1 {
 		t.Fatalf("expected staticGen advance on dirty volume detach, got %d -> %d", sGen1, sGen2)
 	}
-	entry0 := bv.staticEntries[v0.GetFaces()]
+	entry0 := bv.bs.staticEntries[v0.GetFaces()]
 	if entry0 == nil || !entry0.detached {
 		t.Fatalf("expected dirty volume 0 marked detached from staticAtlas")
 	}
-	if len(bv.volMeshes) != 1 {
-		t.Fatalf("expected exactly 1 detached fallback mesh in volMeshes, got %d", len(bv.volMeshes))
+	if len(bv.bs.volMeshes) != 1 {
+		t.Fatalf("expected exactly 1 detached fallback mesh in volMeshes, got %d", len(bv.bs.volMeshes))
 	}
 }
 
@@ -812,24 +812,24 @@ func TestBuilderVolumeStreamingUsesChunkedStaticAtlas(t *testing.T) {
 	bv := NewBuilderVolume(rCtx, glTex, en.GetCalibration(), pl)
 	bv.Compute(640, 480, vi, en)
 
-	if !bv.staticAtlasStreamMode {
+	if !bv.bs.staticAtlasStreamMode {
 		t.Fatalf("expected staticAtlasStreamMode == true when HasStreamer() active")
 	}
-	if len(bv.streamChunks) == 0 {
+	if len(bv.bs.streamChunks) == 0 {
 		t.Fatalf("expected at least one streamed chunk static atlas built")
 	}
-	if len(bv.volMeshes) != 0 {
-		t.Fatalf("expected static streamed volumes to use chunk atlas instead of per-volume volMeshes, got volMeshes=%d", len(bv.volMeshes))
+	if len(bv.bs.volMeshes) != 0 {
+		t.Fatalf("expected static streamed volumes to use chunk atlas instead of per-volume volMeshes, got volMeshes=%d", len(bv.bs.volMeshes))
 	}
-	if bv.staticOpaque.Len < 3 {
-		t.Fatalf("expected multiple visible static submeshes coalesced in chunk (0,0), got %d", bv.staticOpaque.Len)
+	if bv.bc.staticOpaque.Len < 3 {
+		t.Fatalf("expected multiple visible static submeshes coalesced in chunk (0,0), got %d", bv.bc.staticOpaque.Len)
 	}
-	chunk0 := bv.streamChunks[streamChunkKey{x: 0, y: 0}]
+	chunk0 := bv.bs.streamChunks[streamChunkKey{x: 0, y: 0}]
 	if chunk0 == nil || chunk0.atlas == nil || chunk0.atlas.VAO == 0 {
 		t.Fatalf("expected valid chunk (0,0) atlas")
 	}
-	for i := 0; i < bv.staticOpaque.Len; i++ {
-		if bv.staticOpaque.Items[i].Mesh != chunk0.atlas {
+	for i := 0; i < bv.bc.staticOpaque.Len; i++ {
+		if bv.bc.staticOpaque.Items[i].Mesh != chunk0.atlas {
 			t.Fatalf("expected streamed static item %d to share chunk (0,0) atlas VAO", i)
 		}
 	}
@@ -847,7 +847,7 @@ func TestBuilderVolumeStreamingUsesChunkedStaticAtlas(t *testing.T) {
 	pl.GetEntity().MoveTo(1650, 120, 20)
 	vi.Update(pl)
 	bv.Compute(640, 480, vi, en)
-	if chunk3 := bv.streamChunks[streamChunkKey{x: 3, y: 0}]; chunk3 == nil || chunk3.atlas == nil || chunk3.atlas.VAO == 0 {
+	if chunk3 := bv.bs.streamChunks[streamChunkKey{x: 3, y: 0}]; chunk3 == nil || chunk3.atlas == nil || chunk3.atlas.VAO == 0 {
 		t.Fatalf("expected dynamically streamed chunk (3,0) atlas after moving viewer")
 	}
 
@@ -856,11 +856,11 @@ func TestBuilderVolumeStreamingUsesChunkedStaticAtlas(t *testing.T) {
 	pl.GetEntity().MoveTo(100, 120, 20)
 	vi.Update(pl)
 	bv.Compute(640, 480, vi, en)
-	v0 := bv.cachedRawVols[0]
+	v0 := bv.bs.cachedRawVols[0]
 	v0.SetDirty(true)
 	bv.Compute(640, 480, vi, en)
-	if len(bv.volMeshes) != 1 {
-		t.Fatalf("expected 1 detached fallback mesh after dirtying streamed volume, got %d", len(bv.volMeshes))
+	if len(bv.bs.volMeshes) != 1 {
+		t.Fatalf("expected 1 detached fallback mesh after dirtying streamed volume, got %d", len(bv.bs.volMeshes))
 	}
 }
 
@@ -985,15 +985,15 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	if !spot0.RenderDC.HasSolid() || !spot1.RenderDC.HasSolid() {
 		t.Fatalf("expected Spotlight 0 (off-camera behind) and Spotlight 1 (side) to retain solid casters")
 	}
-	if bv.shadowBuilders[shaders.ShadowTileLightBase].instItems.Len == 0 {
+	if bv.bShadow.shadowBuilders[shaders.ShadowTileLightBase].instItems.Len == 0 {
 		t.Fatalf("expected Spotlight 0 to include off-camera crate_behind instanced caster")
 	}
-	if bv.shadowBuilders[shaders.ShadowTileLightBase+1].instItems.Len == 0 {
+	if bv.bShadow.shadowBuilders[shaders.ShadowTileLightBase+1].instItems.Len == 0 {
 		t.Fatalf("expected Spotlight 1 to include off-camera crate_side instanced caster")
 	}
 	// Spotlight 1 only overlaps side sector (not front/behind/roof), so it must cull strictly fewer submeshes than Room.
-	roomStaticCount := bv.shadowBuilders[shaders.ShadowTileRoom].staticItems.Len
-	spot1StaticCount := bv.shadowBuilders[shaders.ShadowTileLightBase+1].staticItems.Len
+	roomStaticCount := bv.bShadow.shadowBuilders[shaders.ShadowTileRoom].staticItems.Len
+	spot1StaticCount := bv.bShadow.shadowBuilders[shaders.ShadowTileLightBase+1].staticItems.Len
 	if spot1StaticCount == 0 || spot1StaticCount >= roomStaticCount {
 		t.Fatalf("expected per-light culling on Spotlight 1 (%d) < Room (%d) and > 0", spot1StaticCount, roomStaticCount)
 	}
@@ -1167,7 +1167,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	d.Prepare()
 	bv.ComputeShadows(en, d)
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
-	flashOnlyVBO := bv.shadowInstPool.ActiveVBO()
+	flashOnlyVBO := bv.bShadow.shadowInstPool.ActiveVBO()
 
 	rCtx.resetUploadLogs()
 	fm.UpdateWithAim(mm.GetViewPtr(), 0.004, 0, 0.004, 0, 1)
@@ -1179,8 +1179,8 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	if rCtx.subDataCalls != 0 {
 		t.Fatalf("expected 0 BufferSubData calls when rigid shadow instances did not change, got %d", rCtx.subDataCalls)
 	}
-	if bv.shadowInstPool.ActiveVBO() != flashOnlyVBO {
-		t.Fatalf("expected shadowInstPool to preserve VBO %d across unchanged instance upload, got %d", flashOnlyVBO, bv.shadowInstPool.ActiveVBO())
+	if bv.bShadow.shadowInstPool.ActiveVBO() != flashOnlyVBO {
+		t.Fatalf("expected shadowInstPool to preserve VBO %d across unchanged instance upload, got %d", flashOnlyVBO, bv.bShadow.shadowInstPool.ActiveVBO())
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
 
@@ -1193,7 +1193,190 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	if rCtx.subDataCalls != 1 || rCtx.orphanCalls == 0 {
 		t.Fatalf("expected 1 orphaned BufferSubData upload when crate_a moved, got orphan=%d subdata=%d", rCtx.orphanCalls, rCtx.subDataCalls)
 	}
-	if bv.shadowInstPool.ActiveVBO() == flashOnlyVBO {
+	if bv.bShadow.shadowInstPool.ActiveVBO() == flashOnlyVBO {
 		t.Fatalf("expected shadowInstPool ring to advance VBO after instance mutation, stayed on %d", flashOnlyVBO)
+	}
+}
+
+func TestBuilderVolumeNilGuardsAndHWOcclusion(t *testing.T) {
+	rigid_body.SetFps(120)
+	textures.SetFps(120)
+	defer rigid_body.SetFps(120)
+
+	t1 := textures.NewTexture("NIL_W", 1, 64, 64, false)
+	texH := &multiTexHandler{frames: []*textures.Texture{t1}}
+	cal := config.NewConfigCalibration()
+	cal.AspectRatio = 1.1
+	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	matWall := config.NewConfigMaterial("nil_wall", []string{"NIL_W"}, config.MaterialKindSolid)
+
+	sec := config.NewConfigSector("0", 1.0, config.LightKindAmbient, 100)
+	sec.FloorY = 0
+	sec.CeilY = 200
+	sec.Floor = matWall
+	sec.Ceil = matWall
+	sec.Segments = []*config.Segment{
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -200, Y: -200}, geometry.XY{X: 200, Y: -200})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 200, Y: -200}, geometry.XY{X: 200, Y: 200})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 200, Y: 200}, geometry.XY{X: -200, Y: 200})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -200, Y: 200}, geometry.XY{X: -200, Y: -200})
+			s.Middle = matWall
+			return s
+		}(),
+	}
+
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+
+	root := config.NewConfigRoot(cal, []*config.Sector{sec}, p, nil, scale, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+	vi := engine.NewViewMatrix()
+	vi.Update(en.GetPlayer())
+
+	rCtx := &noopRenderCtx{}
+	glTex := vramtex.NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+
+	bvNil := NewBuilderVolume(rCtx, nil, nil, nil)
+	if bvNil.GetHWOcclusion() == nil {
+		t.Fatalf("expected NewBuilderVolume to initialize HWOcclusion even with nil dependencies")
+	}
+	bvNil.Compute(640, 480, nil, nil)
+	bvNil.Compute(640, 480, vi, nil)
+	bvNil.Compute(640, 480, nil, en)
+	bvNil.Compute(640, 480, vi, en)
+	bvNil.ComputeShadows(nil, nil)
+	bvNil.ComputeShadows(en, nil)
+
+	bv := NewBuilderVolume(rCtx, glTex, en.GetCalibration(), nil)
+	if bv.GetHWOcclusion() == nil {
+		t.Fatalf("expected NewBuilderVolume to initialize HWOcclusion")
+	}
+	frustumFront := vi.GetFrontFrustum(bv.frustumFront.Get())
+	bv.bs.Process(nil, frustumFront, 0, 0, 20)
+	bv.bs.Process(en.GetVolumes(), nil, 0, 0, 20)
+	bv.bl.Process(nil, frustumFront, 0, 0, 20, 100, 100, 100)
+	bv.bl.Process(en.GetLights(), nil, 0, 0, 20, 100, 100, 100)
+	bv.bt.Process(nil, frustumFront)
+	bv.bt.Process(en.GetThings(), nil)
+	bv.Compute(640, 480, vi, en)
+	bv.ComputeShadows(en, nil)
+}
+
+func TestOffCameraResolveMeshDetachesStaticAtlasInvalidatesReuse(t *testing.T) {
+	rigid_body.SetFps(120)
+	textures.SetFps(120)
+	defer rigid_body.SetFps(120)
+
+	t1 := textures.NewTexture("DETACH_W", 1, 64, 64, false)
+	texH := &multiTexHandler{frames: []*textures.Texture{t1}}
+	cal := config.NewConfigCalibration()
+	cal.AspectRatio = 1.1
+	scale := geometry.XYZ{X: 1, Y: 1, Z: 1}
+	matWall := config.NewConfigMaterial("detach_wall", []string{"DETACH_W"}, config.MaterialKindSolid)
+
+	sec := config.NewConfigSector("0", 1.0, config.LightKindAmbient, 100)
+	sec.FloorY = 0
+	sec.CeilY = 200
+	sec.Floor = matWall
+	sec.Ceil = matWall
+	sec.Segments = []*config.Segment{
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -400, Y: -400}, geometry.XY{X: 400, Y: -400})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 400, Y: -400}, geometry.XY{X: 400, Y: 400})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: 400, Y: 400}, geometry.XY{X: -400, Y: 400})
+			s.Middle = matWall
+			return s
+		}(),
+		func() *config.Segment {
+			s := config.NewConfigSegment("0", config.SegmentWall, geometry.XY{X: -400, Y: 400}, geometry.XY{X: -400, Y: -400})
+			s.Middle = matWall
+			return s
+		}(),
+	}
+
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+
+	root := config.NewConfigRoot(cal, []*config.Sector{sec}, p, nil, scale, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+
+	pl := en.GetPlayer()
+	vi := engine.NewViewMatrix()
+	vi.Update(pl)
+	rCtx := &noopRenderCtx{}
+	glTex := vramtex.NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+	bv := NewBuilderVolume(rCtx, glTex, en.GetCalibration(), pl)
+	bv.Compute(640, 480, vi, en)
+
+	if bv.bs.staticAtlas == nil || bv.bc.staticOpaque.Len == 0 {
+		t.Fatalf("expected non-empty staticAtlas draws on initial Compute")
+	}
+	_, _, sGen1, _ := bv.GetUploadHints()
+
+	// Simulate an off-camera pass (e.g., ComputeShadows) detaching v0 and clearing its dirty flag
+	// before the next Compute with an unchanged camera frustum.
+	v0 := en.GetVolumes().GetVolumes().Get(0)
+	v0.SetDirty(true)
+	detachedMesh, entry, _ := bv.bs.ResolveMesh(v0, en.GetVolumes())
+	if detachedMesh == nil || detachedMesh == bv.bs.staticAtlas {
+		t.Fatalf("expected ResolveMesh to return a detached fallback mesh, got %p (staticAtlas=%p)", detachedMesh, bv.bs.staticAtlas)
+	}
+	if entry != nil {
+		t.Fatalf("expected detached ResolveMesh call to return nil atlas entry")
+	}
+	if v0.IsDirty() {
+		t.Fatalf("expected ResolveMesh to clear volume dirty flag")
+	}
+
+	bv.Compute(640, 480, vi, en)
+	_, _, sGen2, _ := bv.GetUploadHints()
+	if sGen2 <= sGen1 {
+		t.Fatalf("expected staticGen to advance when detached mesh replaces cached atlas draws (%d -> %d)", sGen1, sGen2)
+	}
+
+	foundDetached := false
+	for i := 0; i < bv.bc.staticOpaque.Len; i++ {
+		if bv.bc.staticOpaque.Items[i].Mesh == detachedMesh {
+			foundDetached = true
+			break
+		}
+	}
+	if !foundDetached {
+		t.Fatalf("expected staticOpaque to emit detached mesh instead of reusing stale staticAtlas")
 	}
 }

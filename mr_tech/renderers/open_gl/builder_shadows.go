@@ -6,27 +6,25 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
-	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// shadowInstRange describes a contiguous range of shadow mesh instances and its base buffer offset.
 type shadowInstRange struct {
 	mesh           *buffers.ResidentMesh
 	baseByteOffset int32
 	instanceCount  int32
 }
 
-// shadowTileBuilder assembles draw commands and pooled draw items for rendering a shadow tile.
 type shadowRigidGroup struct {
 	mesh    *buffers.ResidentMesh
 	entries []*shadowRigidEntry
@@ -112,14 +110,12 @@ type shadowTileBuilder struct {
 	instRanges  []shadowInstRange
 }
 
-// shadowThingCache caches per-thing shadow render state and recycles stale entries across frames.
 type shadowThingCache struct {
 	slots         map[uint64]*ThingRenderCache
 	free          []*ThingRenderCache
 	lastSweepTick uint64
 }
 
-// retrieve returns the cache entry for entID, creating or reusing one and marking it seen for frame.
 func (c *shadowThingCache) retrieve(entID uint64, frame uint64) *ThingRenderCache {
 	if c.slots == nil {
 		c.slots = make(map[uint64]*ThingRenderCache, 128)
@@ -149,8 +145,6 @@ func (c *shadowThingCache) retrieve(entID uint64, frame uint64) *ThingRenderCach
 	return entry
 }
 
-// sweep removes stale cache entries not seen for over 256 frames and recycles them for reuse.
-// sweep runs at most once every 256 frames.
 func (c *shadowThingCache) sweep(frame uint64) {
 	if len(c.slots) == 0 || frame-c.lastSweepTick < 256 {
 		return
@@ -169,17 +163,14 @@ func (c *shadowThingCache) sweep(frame uint64) {
 	}
 }
 
-// newShadowTileBuilder creates and initializes a shadow tile builder for the given builder volume.
-func newShadowTileBuilder(w *BuilderVolume) *shadowTileBuilder {
+func newShadowTileBuilder(ctx api.IContext) *shadowTileBuilder {
 	return &shadowTileBuilder{
-		dcRender:   draws.NewDrawCommandsRender(w.ctx, "shadow_tile", false),
+		dcRender:   draws.NewDrawCommandsRender(ctx, "shadow_tile", false),
 		streamDC:   draws.NewDrawCommands(config.BlendModeOpaque, 128),
 		instRanges: make([]shadowInstRange, 0, 32),
 	}
 }
 
-// glToEngineVP converts an OpenGL Y-up view-projection matrix to the engine's Z-up coordinate basis.
-// It remaps axes for frustum tests against engine AABBs.
 func glToEngineVP(m [16]float32) [16]float32 {
 	// Engine AABBs use Z-up (ex, ey, ez); OpenGL world positions use Y-up (ex, ez, -ey).
 	return [16]float32{
@@ -190,7 +181,6 @@ func glToEngineVP(m [16]float32) [16]float32 {
 	}
 }
 
-// mixU64 combines a hash state and value into a well-distributed 64-bit hash.
 func mixU64(h, x uint64) uint64 {
 	z := h ^ x
 	z ^= z >> 30
@@ -201,7 +191,6 @@ func mixU64(h, x uint64) uint64 {
 	return z
 }
 
-// f32BitsStable returns the IEEE 754 bits of v as uint64, normalizing both +0 and -0 to 0.
 func f32BitsStable(v float32) uint64 {
 	if v == 0 {
 		return 0
@@ -209,70 +198,71 @@ func f32BitsStable(v float32) uint64 {
 	return uint64(math.Float32bits(v))
 }
 
-// mixPtrHash returns a mixed 64-bit hash of p's address.
 func mixPtrHash(p unsafe.Pointer) uint64 {
 	return mixU64(14695981039346656037, uint64(uintptr(p)))
 }
 
-// ensureShadowState initializes any missing shadow rendering state, caches, pools, and tile builders.
-func (w *BuilderVolume) ensureShadowState() {
-	if w.texLookupFn == nil {
-		w.texLookupFn = w.lookupTexLayer
+// BuilderShadow performs per-light frustum culling, tile cache reuse validation,
+// and shadow draw compilation across all atlas tiles.
+type BuilderShadow struct {
+	bc                 *BuilderContext
+	bStatic            *BuilderStatic
+	bThing             *BuilderThings
+	shadowTiles        [shaders.MaxShadowTiles]shaders.ShadowTileData
+	shadowBuilders     [shaders.MaxShadowTiles]*shadowTileBuilder
+	shadowInstPool     *buffers.InstancePool
+	shadowInstGroups   buffers.PtrPool[shadowRigidGroup]
+	shadowGroupToken   uint64
+	shadowFrustum      *aabb.Frustum
+	shadowVolScratch   []*volumes.Volume
+	shadowThingScratch []shadowCollectedThing
+	shadowStreamCache  shadowThingCache
+	shadowRigidCache   shadowRigidCache
+	prevShadowExtraSig uint64
+	shadowFrame        uint64
+}
+
+// NewBuilderShadow allocates and initializes a BuilderShadow connected to bc, bStatic, and bThing.
+func NewBuilderShadow(bc *BuilderContext, bStatic *BuilderStatic, bThing *BuilderThings) *BuilderShadow {
+	bs := &BuilderShadow{
+		bc:             bc,
+		bStatic:        bStatic,
+		bThing:         bThing,
+		shadowFrustum:  aabb.NewFrustum(),
+		shadowInstPool: buffers.NewInstancePool(bc.ctx, 256),
 	}
-	if w.volMeshes == nil {
-		w.volMeshes = make(map[*volumes.Faces]*buffers.ResidentMesh, 256)
-	}
-	if w.thingMeshes == nil {
-		w.thingMeshes = make(map[uint64][]*buffers.ResidentMesh, 256)
-	}
-	if w.thingMeshesByPtr == nil {
-		w.thingMeshesByPtr = make(map[*volumes.Faces]thingMeshPtrEntry, 512)
-	}
-	if w.thingsRender == nil {
-		w.thingsRender = NewThingsRender()
-	}
-	if w.shadowFrustum == nil {
-		w.shadowFrustum = aabb.NewFrustum()
-	}
-	if w.shadowInstPool == nil {
-		w.shadowInstPool = buffers.NewInstancePool(w.ctx, 256)
-		w.shadowInstGroups.Init(32)
-	}
+	bs.shadowInstGroups.Init(32)
 	for t := range shaders.MaxShadowTiles {
-		if w.shadowBuilders[t] == nil {
-			w.shadowBuilders[t] = newShadowTileBuilder(w)
-		}
+		bs.shadowBuilders[t] = newShadowTileBuilder(bc.ctx)
+	}
+	return bs
+}
+
+// DisableAllTiles marks every shadow atlas tile inactive and non-reusable.
+func (w *BuilderShadow) DisableAllTiles() {
+	for t := range shaders.MaxShadowTiles {
+		w.shadowTiles[t].Active = false
+		w.shadowTiles[t].Reuse = false
 	}
 }
 
-// GetShadowTiles returns the shadow tile data array used by the builder volume.
-func (w *BuilderVolume) GetShadowTiles() *[shaders.MaxShadowTiles]shaders.ShadowTileData {
+// GetShadowTiles returns the compiled per-light shadow tile array for Depth.RenderWithTiles.
+func (w *BuilderShadow) GetShadowTiles() *[shaders.MaxShadowTiles]shaders.ShadowTileData {
 	return &w.shadowTiles
 }
 
 // ComputeShadows updates shadow tile draw data for active depth tiles, reusing cached tiles when possible.
-// It disables all shadow tiles when the engine or depth shader state is nil.
-func (w *BuilderVolume) ComputeShadows(en *engine.Engine, d *shaders.Depth) {
-	if d == nil || en == nil {
-		for t := range shaders.MaxShadowTiles {
-			w.shadowTiles[t].Active = false
-			w.shadowTiles[t].Reuse = false
-		}
+func (w *BuilderShadow) ComputeShadows(vols *model.Volumes, th *model.Things, d *shaders.Depth) {
+	if d == nil {
+		w.DisableAllTiles()
 		return
 	}
-
-	w.ensureShadowState()
-	if w.meshFrame == 0 {
-		w.meshFrame = 1
+	if w.bc.meshFrame == 0 {
+		w.bc.meshFrame = 1
 	}
 	w.shadowFrame++
 
-	vols := en.GetVolumes()
-	th := en.GetThings()
-	hasStreamer := vols != nil && vols.HasStreamer()
-	if vols != nil && (!w.staticAtlasBuilt || w.staticAtlasStreamMode != hasStreamer || (!hasStreamer && w.staticAtlasVolCount != vols.Len())) {
-		w.buildStaticAtlas(vols)
-	}
+	w.bStatic.TryBuildStaticAtlas(vols)
 
 	w.shadowInstPool.Reset()
 	tick := textures.GlobalTick()
@@ -364,13 +354,13 @@ func (w *BuilderVolume) ComputeShadows(en *engine.Engine, d *shaders.Depth) {
 	}
 
 	if shadowExtraSig != w.prevShadowExtraSig {
-		w.frameGen++
+		// Advance shadowExtraGen separately so Main uploads off-camera vertices without invalidating BuilderContext.Commit.
+		w.bc.shadowExtraGen++
 		w.prevShadowExtraSig = shadowExtraSig
 	}
 }
 
-// collectShadowVolumes gathers visible shadow volumes and returns aggregate hash data and the collected count.
-func (w *BuilderVolume) collectShadowVolumes(vols *model.Volumes) (acc uint64, xorHash uint64, count int) {
+func (w *BuilderShadow) collectShadowVolumes(vols *model.Volumes) (acc uint64, xorHash uint64, count int) {
 	w.shadowVolScratch = w.shadowVolScratch[:0]
 	if vols == nil {
 		return 0, 0, 0
@@ -391,11 +381,11 @@ func (w *BuilderVolume) collectShadowVolumes(vols *model.Volumes) (acc uint64, x
 		h = mixU64(h, uint64(faces.Len()))
 		if vol.IsDirty() {
 			h = mixU64(h, 0x9e3779b97f4a7c15)
-		} else if entry := w.staticEntries[faces]; entry != nil && !entry.detached {
+		} else if entry := w.bStatic.GetEntry(faces); entry != nil && !entry.detached {
 			if entry.chunk != nil {
-				entry.chunk.lastSeenFrame = w.meshFrame
+				entry.chunk.lastSeenFrame = w.bc.meshFrame
 			}
-		} else if rm := w.volMeshes[faces]; rm != nil {
+		} else if rm := w.bStatic.GetResidentMesh(faces); rm != nil {
 			for i := 0; i < rm.AnimLen; i++ {
 				h = mixU64(h, mixPtrHash(unsafe.Pointer(rm.AnimMats[i].GetCurrentFrame())))
 			}
@@ -409,25 +399,7 @@ func (w *BuilderVolume) collectShadowVolumes(vols *model.Volumes) (acc uint64, x
 	return acc, xorHash, count
 }
 
-// findCachedThingMesh returns a cached resident mesh matching the given faces, or nil if none exists.
-func (w *BuilderVolume) findCachedThingMesh(rigidFaces *volumes.Faces) *buffers.ResidentMesh {
-	gh := rigidFaces.GetGeomHash()
-	ver := rigidFaces.GetVersion()
-	faceCount := rigidFaces.Len()
-	if pe, ok := w.thingMeshesByPtr[rigidFaces]; ok && pe.rm != nil && pe.geomHash == gh && pe.version == ver && pe.faceCount == faceCount {
-		return pe.rm
-	}
-	for _, rm := range w.thingMeshes[gh] {
-		if rm.SrcFaces == rigidFaces || (rm.FaceCount == faceCount && rm.SrcFaces.GetGeomHash() == gh && facesEquivalent(rigidFaces, rm.SrcFaces)) {
-			w.cacheThingMeshPtr(rigidFaces, rm, gh, ver, faceCount)
-			return rm
-		}
-	}
-	return nil
-}
-
-// updateShadowRigidEntry refreshes a rigid shadow caster's transform matrix, cached mesh ref, and state hash at most once per shadow frame.
-func (w *BuilderVolume) updateShadowRigidEntry(rEntry *shadowRigidEntry, entID uint64, ent *rigid_body.Entity, rigidFaces *volumes.Faces) uint64 {
+func (w *BuilderShadow) updateShadowRigidEntry(rEntry *shadowRigidEntry, entID uint64, ent *rigid_body.Entity, rigidFaces *volumes.Faces) uint64 {
 	tPosX, tPosY, zBot := ent.GetCenter()
 	qx, qy, qz, qw := ent.GetQRotation().Get()
 	if !rEntry.matValid || rEntry.cx != tPosX || rEntry.cy != tPosY || rEntry.cz != zBot || rEntry.qx != qx || rEntry.qy != qy || rEntry.qz != qz || rEntry.qw != qw {
@@ -440,7 +412,7 @@ func (w *BuilderVolume) updateShadowRigidEntry(rEntry *shadowRigidEntry, entID u
 	facesVer := rigidFaces.GetVersion()
 	facesLen := rigidFaces.Len()
 	if rEntry.rm == nil || rEntry.faces != rigidFaces || rEntry.facesVer != facesVer || rEntry.facesLen != facesLen {
-		rEntry.rm = w.findCachedThingMesh(rigidFaces)
+		rEntry.rm = w.bThing.FindCachedMesh(rigidFaces)
 		rEntry.faces = rigidFaces
 		rEntry.facesVer = facesVer
 		rEntry.facesLen = facesLen
@@ -466,8 +438,7 @@ func (w *BuilderVolume) updateShadowRigidEntry(rEntry *shadowRigidEntry, entID u
 	return h
 }
 
-// hashStreamingThing returns a hash of a thing's streaming render state, or 0 when it has no render faces.
-func (w *BuilderVolume) hashStreamingThing(entID uint64, ent *rigid_body.Entity, thing ithing.IThing, entry *ThingRenderCache) uint64 {
+func (w *BuilderShadow) hashStreamingThing(entID uint64, ent *rigid_body.Entity, thing ithing.IThing, entry *ThingRenderCache) uint64 {
 	pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 	if pFaces == nil || pFaces.Len() == 0 {
 		return 0
@@ -512,8 +483,7 @@ func (w *BuilderVolume) hashStreamingThing(entID uint64, ent *rigid_body.Entity,
 	return h
 }
 
-// collectShadowThings gathers visible shadow-casting things in the shadow frustum and returns aggregate hashes.
-func (w *BuilderVolume) collectShadowThings(th *model.Things, tick uint64) (acc uint64, xorHash uint64, count int) {
+func (w *BuilderShadow) collectShadowThings(th *model.Things, tick uint64) (acc uint64, xorHash uint64, count int) {
 	w.shadowThingScratch = w.shadowThingScratch[:0]
 	if th == nil {
 		return 0, 0, 0
@@ -531,7 +501,7 @@ func (w *BuilderVolume) collectShadowThings(th *model.Things, tick uint64) (acc 
 		if okR && rEntry.seenFrame == w.shadowFrame {
 			h = rEntry.hash
 		} else {
-			entry := w.thingsRender.PeekIfCurrent(ent)
+			entry := w.bThing.thingsRender.PeekIfCurrent(ent)
 			if entry == nil {
 				if sEntry, okCache := w.shadowStreamCache.slots[entID]; okCache {
 					if sEntry.compileFrame != w.shadowFrame {
@@ -579,43 +549,35 @@ func (w *BuilderVolume) collectShadowThings(th *model.Things, tick uint64) (acc 
 	return acc, xorHash, count
 }
 
-// buildShadowTileStatic populates the tile builder with opaque static draw items from resolved shadow volumes.
-func (w *BuilderVolume) buildShadowTileStatic(tb *shadowTileBuilder, vols *model.Volumes) {
+func pushShadowStaticSubMeshes(tb *shadowTileBuilder, mesh *buffers.ResidentMesh, startIdx, endIdx int) {
+	for sIdx := startIdx; sIdx < endIdx; sIdx++ {
+		sub := mesh.SubMeshes[sIdx]
+		if sub.IndexCount == 0 || sub.BlendMode != config.BlendModeOpaque {
+			continue
+		}
+		item := tb.staticItems.Acquire()
+		item.Mesh = mesh
+		item.Sub = sub
+	}
+}
+
+func (w *BuilderShadow) buildShadowTileStatic(tb *shadowTileBuilder, vols *model.Volumes) {
 	for _, vol := range w.shadowVolScratch {
-		w.resolveVolumeMesh(vol, vols)
+		w.bStatic.ResolveMesh(vol, vols)
 	}
 	for _, vol := range w.shadowVolScratch {
-		rm, entry, _ := w.lookupResolvedVolume(vol)
+		rm, entry, _ := w.bStatic.LookupResolved(vol)
 		if entry != nil && !entry.detached {
-			for sIdx := entry.subStart; sIdx < entry.subStart+entry.subCount; sIdx++ {
-				sub := entry.atlas.SubMeshes[sIdx]
-				if sub.IndexCount == 0 || sub.BlendMode != config.BlendModeOpaque {
-					continue
-				}
-				item := tb.staticItems.Acquire()
-				item.Mesh = entry.atlas
-				item.Sub = sub
-			}
+			pushShadowStaticSubMeshes(tb, entry.atlas, entry.subStart, entry.subStart+entry.subCount)
 			continue
 		}
 		if rm != nil {
-			for sIdx := 0; sIdx < rm.SubMeshesLen; sIdx++ {
-				sub := rm.SubMeshes[sIdx]
-				if sub.IndexCount == 0 || sub.BlendMode != config.BlendModeOpaque {
-					continue
-				}
-				item := tb.staticItems.Acquire()
-				item.Mesh = rm
-				item.Sub = sub
-			}
+			pushShadowStaticSubMeshes(tb, rm, 0, rm.SubMeshesLen)
 		}
 	}
 }
 
-// buildShadowTileThings builds shadow draw data for queued shadow things into tb.
-// It reuses cached non-rigid geometry when possible and batches rigid meshes into instance ranges.
-// It updates shadowExtraSig for streamed non-rigid entries and reports whether rigid instances were added.
-func (w *BuilderVolume) buildShadowTileThings(tb *shadowTileBuilder, tick uint64, shadowExtraSig *uint64) bool {
+func (w *BuilderShadow) buildShadowTileThings(tb *shadowTileBuilder, tick uint64, shadowExtraSig *uint64) bool {
 	if len(w.shadowThingScratch) == 0 {
 		return false
 	}
@@ -625,8 +587,8 @@ func (w *BuilderVolume) buildShadowTileThings(tb *shadowTileBuilder, tick uint64
 	for _, ct := range w.shadowThingScratch {
 		if rEntry := ct.rigid; rEntry != nil {
 			rm := rEntry.rm
-			if rm == nil || rm.LastSeenFrame != w.meshFrame {
-				rm, _ = w.retrieveThingMesh(rEntry.faces)
+			if rm == nil || rm.LastSeenFrame != w.bc.meshFrame || rm.NeedsAnimRebuild() {
+				rm, _ = w.bThing.RetrieveMesh(rEntry.faces)
 				rEntry.rm = rm
 			}
 			if rm != nil && rm.SubMeshesLen > 0 {
@@ -647,8 +609,8 @@ func (w *BuilderVolume) buildShadowTileThings(tb *shadowTileBuilder, tick uint64
 
 		thing := ct.thing
 		ent := thing.GetEntity()
-		if entry := w.thingsRender.PeekIfCurrent(ent); entry != nil && entry.committedFrame == w.meshFrame {
-			w.fv.ReplayOpaqueBatches(entry.committedBaseIdx, entry.GetFrameVertices(), tb.streamDC)
+		if entry := w.bThing.thingsRender.PeekIfCurrent(ent); entry != nil && entry.committedFrame == w.bc.meshFrame {
+			w.bc.fv.ReplayOpaqueBatches(entry.committedBaseIdx, entry.GetFrameVertices(), tb.streamDC)
 			continue
 		}
 
@@ -657,18 +619,18 @@ func (w *BuilderVolume) buildShadowTileThings(tb *shadowTileBuilder, tick uint64
 			thing.Compile(tick)
 			sEntry.compileFrame = w.shadowFrame
 		}
-		if !w.buildNonRigidThingCache(thing, sEntry) {
+		if !w.bThing.BuildNonRigidCache(thing, sEntry) {
 			continue
 		}
-		if sEntry.committedFrame != w.meshFrame {
-			sEntry.committedBaseIdx = w.fv.CommitVerticesOnly(sEntry.GetFrameVertices())
-			sEntry.committedFrame = w.meshFrame
+		if sEntry.committedFrame != w.bc.meshFrame {
+			sEntry.committedBaseIdx = w.bc.fv.CommitVerticesOnly(sEntry.GetFrameVertices())
+			sEntry.committedFrame = w.bc.meshFrame
 		}
 		if sEntry.committedBaseIdx >= 0 {
 			sig := mixU64(ent.GetId(), sEntry.gen)
 			*shadowExtraSig += sig
 			*shadowExtraSig ^= bits.RotateLeft64(sig, 13)
-			w.fv.ReplayOpaqueBatches(sEntry.committedBaseIdx, sEntry.GetFrameVertices(), tb.streamDC)
+			w.bc.fv.ReplayOpaqueBatches(sEntry.committedBaseIdx, sEntry.GetFrameVertices(), tb.streamDC)
 		}
 	}
 

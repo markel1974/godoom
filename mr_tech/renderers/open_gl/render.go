@@ -15,33 +15,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// IBuilder provides methods for constructing and managing rendering data, such as vertices, lights, textures, and draw commands.
-type IBuilder interface {
-	Compute(fbw, fbh int32, vi *engine.ViewMatrix, engine *engine.Engine)
-
-	GetSkyTexture() *textures.Texture
-
-	GetSkyUV() (float64, float64)
-
-	GetVerticesStride() int32
-
-	GetLightsStride() int32
-
-	GetDrawCommands() *draws.DrawCommandsRender
-
-	GetDrawCommandsAdditive() *draws.DrawCommandsRender
-
-	GetDrawCommandsLiquid() *draws.DrawCommandsRender
-
-	GetHWOcclusion() *queries.OcclusionHW
-
-	GetVertices() ([]float32, int32, []uint32, int32)
-
-	GetLights() ([]float32, int32)
-
-	GetShadowLights() ([8]*metrics.Light, int32)
-}
-
 // RenderOpenGL encapsulates rendering logic using the OpenGL API.
 type RenderOpenGL struct {
 	ctx    api.IContext
@@ -241,9 +214,11 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	// RENDER START HERE
 	w.depth.Prepare()
+
 	if w.enableShadows {
 		w.builder.ComputeShadows(w.engine, w.depth)
 	}
+
 	vert, vertSize, _, indices, indexSize, _ := w.builder.GetVertices()
 	staticVertBytes, staticIdxBytes, staticGen, frameGen := w.builder.GetUploadHints()
 	// MAIN PREPARE (VBO and EBO)

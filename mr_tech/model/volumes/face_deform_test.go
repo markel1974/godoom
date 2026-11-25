@@ -11,13 +11,14 @@ import (
 )
 
 func TestFaceDeform(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
 	// A horizontal triangle on Z=0 facing upwards (+Z normal)
 	tri := [3]geometry.XYZ{
 		{X: 0, Y: 0, Z: 0},
 		{X: 10, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
 	}
-	face := NewFace(tri, nil)
+	face := NewFace(tri, solidMat)
 
 	nx, ny, nz := face.GetNormal()
 	if math.Abs(nz-1.0) > 1e-6 || math.Abs(nx) > 1e-6 || math.Abs(ny) > 1e-6 {
@@ -69,13 +70,14 @@ func TestFaceDeform(t *testing.T) {
 }
 
 func TestFaceDeformDent(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
 	// A vertical wall on X=0 facing +X
 	tri := [3]geometry.XYZ{
 		{X: 0, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
 		{X: 0, Y: 0, Z: 10},
 	}
-	face := NewFace(tri, nil)
+	face := NewFace(tri, solidMat)
 
 	vol := NewVolumeConcrete(1, "vol_test", "wall")
 	face.SetParent(vol)
@@ -132,6 +134,7 @@ func TestFaceIntersectRay(t *testing.T) {
 }
 
 func TestVolumeDeformDent(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
 	// A quad composed of two triangles sharing the hypotenuse edge
 	t1 := [3]geometry.XYZ{
 		{X: 0, Y: 0, Z: 0},
@@ -145,13 +148,13 @@ func TestVolumeDeformDent(t *testing.T) {
 	}
 
 	vol := NewVolumeConcrete(1, "vol_quad", "floor")
-	f1 := NewFace(t1, nil)
-	f2 := NewFace(t2, nil)
+	f1 := NewFace(t1, solidMat)
+	f2 := NewFace(t2, solidMat)
 	f1.SetParent(vol)
 	f2.SetParent(vol)
 
-	vol.faces.container = append(vol.faces.container, f1, f2)
-	vol.faces.count = 2
+	vol.AddFace(f1)
+	vol.AddFace(f2)
 	vol.Rebuild()
 	vol.SetDirty(false)
 
@@ -164,14 +167,21 @@ func TestVolumeDeformDent(t *testing.T) {
 	}
 
 	// Both faces sharing (0, 10, 0) should have their vertex deformed down along -Z
-	_, _, f1z := f1.Get2() // point 2 in t1 is (0, 10, 0)
-	_, _, f2z := f2.Get2() // point 2 in t2 is (0, 10, 0)
-
-	if math.Abs(f1z-(-4.0)) > 1e-4 {
-		t.Errorf("expected f1 vertex 2 Z -4.0, got %f", f1z)
+	checkedVerts := 0
+	for i := 0; i < vol.faces.Len(); i++ {
+		fc := vol.faces.At(i)
+		for j := 0; j < 3; j++ {
+			p := fc.tri.Points[j]
+			if math.Abs(float64(p.X)-impact.X) < 1e-4 && math.Abs(float64(p.Y)-impact.Y) < 1e-4 {
+				checkedVerts++
+				if math.Abs(float64(p.Z)-(-4.0)) > 1e-4 {
+					t.Errorf("expected face %d vertex %d Z -4.0, got %f", i, j, p.Z)
+				}
+			}
+		}
 	}
-	if math.Abs(f2z-(-4.0)) > 1e-4 {
-		t.Errorf("expected f2 vertex 2 Z -4.0, got %f", f2z)
+	if checkedVerts == 0 {
+		t.Fatalf("expected at least one face vertex at impact (0, 10)")
 	}
 	if !vol.IsDirty() {
 		t.Errorf("volume should be marked dirty")
@@ -179,13 +189,14 @@ func TestVolumeDeformDent(t *testing.T) {
 }
 
 func TestLargePolygonBarycentricDeform(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
 	// A massive triangle (500x500 units)
 	tri := [3]geometry.XYZ{
 		{X: 0, Y: 0, Z: 0},
 		{X: 500, Y: 0, Z: 0},
 		{X: 0, Y: 500, Z: 0},
 	}
-	face := NewFace(tri, nil)
+	face := NewFace(tri, solidMat)
 
 	// Impact in the middle at (100, 100, 0), where distance to all vertices is > 100 units
 	impact := geometry.XYZ{X: 100, Y: 100, Z: 0}
@@ -213,13 +224,14 @@ func TestLargePolygonBarycentricDeform(t *testing.T) {
 }
 
 func TestFacesTessellateMinEdgeAndBuffers(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
 	tri := [3]geometry.XYZ{
 		{X: 0, Y: 0, Z: 0},
 		{X: 10, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
 	}
 	f := NewFaces(aabb.NewTree(16, 0.0), false)
-	f.Add(NewFace(tri, nil))
+	f.Add(NewFace(tri, solidMat))
 
 	impact := geometry.XYZ{X: 0, Y: 0, Z: 0}
 

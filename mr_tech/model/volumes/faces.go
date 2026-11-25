@@ -350,7 +350,7 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 			nx:  float64(fc.n.X), ny: float64(fc.n.Y), nz: float64(fc.n.Z),
 			ax: ax, ay: ay, az: az,
 		}
-		for k := 0; k < 3; k++ {
+		for k := range 3 {
 			key := makeSmoothVertKey(fc.tri.Points[k])
 			slot := i*3 + k
 			smoothNext[slot] = smoothHead[key]
@@ -372,7 +372,7 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 			fc.computeTangent()
 			continue
 		}
-		for k := 0; k < 3; k++ {
+		for k := range 3 {
 			key := makeSmoothVertKey(fc.tri.Points[k])
 			var sx, sy, sz float64
 			for cur := smoothHead[key]; cur > 0; cur = smoothNext[cur-1] {

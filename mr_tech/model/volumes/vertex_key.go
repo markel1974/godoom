@@ -10,7 +10,7 @@ const (
 	deformMaxSubdivisionPasses = 12
 	deformMaxFaces             = 65536
 	deformMinEdge              = 1.0
-	minEdgeSq                  = deformMinEdge * deformMinEdge
+	minEdgeSq                  = (deformMinEdge * 2.0) * (deformMinEdge * 2.0)
 )
 
 type VertexKey struct {

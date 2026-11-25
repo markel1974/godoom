@@ -301,27 +301,32 @@ func slabAxis(o, minB, maxB, invDir float64) (float64, float64) {
 	return min(t1, t2), max(t1, t2)
 }
 
-// IntersectFrustum determines whether the AABB intersects with or is partially contained within the given Frustum.
-func (a *AABB) IntersectFrustum(f *Frustum) bool {
+func intersectFrustumBounds(minX, minY, minZ, maxX, maxY, maxZ float64, f *Frustum) bool {
+	if f.hasBounds && (maxX < f.bMinX || minX > f.bMaxX || maxY < f.bMinY || minY > f.bMaxY || maxZ < f.bMinZ || minZ > f.bMaxZ) {
+		return false
+	}
 	for i := 0; i < 6; i++ {
-		plane := f.Planes[i]
-		// Find the "Positive Vertex" (the AABB vertex most aligned with the plane normal)
-		pX, pY, pZ := a.minX, a.minY, a.minZ
-		if plane.NormalX > 0 {
-			pX = a.maxX
+		p := &f.Planes[i]
+		pX := minX
+		if p.NormalX > 0 {
+			pX = maxX
 		}
-		if plane.NormalY > 0 {
-			pY = a.maxY
+		pY := minY
+		if p.NormalY > 0 {
+			pY = maxY
 		}
-		if plane.NormalZ > 0 {
-			pZ = a.maxZ
+		pZ := minZ
+		if p.NormalZ > 0 {
+			pZ = maxZ
 		}
-		// Calculate the distance of the P-Vertex from the plane (Dot Product)
-		// If the distance is less than 0, the entire AABB is in the negative half-space (outside the frustum)
-		if (plane.NormalX*pX + plane.NormalY*pY + plane.NormalZ*pZ + plane.D) < 0 {
-			return false // Rejected!
+		if p.NormalX*pX+p.NormalY*pY+p.NormalZ*pZ+p.D < 0 {
+			return false
 		}
 	}
-	// If no plane has rejected it, the AABB is visible (at least partially)
 	return true
+}
+
+// IntersectFrustum determines whether the AABB intersects with or is partially contained within the given Frustum.
+func (a *AABB) IntersectFrustum(f *Frustum) bool {
+	return intersectFrustumBounds(a.minX, a.minY, a.minZ, a.maxX, a.maxY, a.maxZ, f)
 }

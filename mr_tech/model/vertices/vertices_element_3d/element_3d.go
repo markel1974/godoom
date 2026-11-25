@@ -79,6 +79,7 @@ type Element3D struct {
 	treeFrameIdx       int
 	treeVolVer         uint64
 	treeRebuilds       uint64
+	lastPoseGen        uint64
 }
 
 const maxCachedElementSlots = 4
@@ -249,6 +250,7 @@ func (v *Element3D) Setup(thing ithing.IThing) error {
 	}
 	v.solver = v.comp.GetSolver()
 	v.ent = v.solver.GetEntity()
+	v.lastPoseGen = 0
 	return nil
 }
 
@@ -477,6 +479,11 @@ func (v *Element3D) setActionState(idx int) bool {
 			v.lastSolverFrameA = v.frameIdxA
 		}
 	}
+	v.lastPoseGen = 0
+	vertices.BumpStateEpoch()
+	if v.ent != nil {
+		v.ent.BumpPoseGen()
+	}
 	return true
 }
 
@@ -548,7 +555,11 @@ func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64
 	v.lastSolverFrameA = v.frameIdxA
 	v.treeVol = nil
 	v.treeFrameIdx = -1
+	v.lastPoseGen = 0
 	v.ensureActiveTree()
+	if v.ent != nil {
+		v.ent.BumpPoseGen()
+	}
 }
 
 // IntersectRay tests a world-space ray against the thing's mesh geometry and returns the hit distance and face normal.
@@ -750,9 +761,23 @@ func (v *Element3D) CompileDetached() {
 
 // Compile advances animation, updates rotated bounds and volume state, rebuilds the entity AABB, and returns true.
 func (v *Element3D) Compile(tick uint64) bool {
+	if v.singleFrame && v.ent != nil && v.volA != nil && v.volB == v.volA &&
+		v.lastVolA == v.volA && v.lastRotVolA == v.volA &&
+		v.lastRotFrameA == v.frameIdxA && v.lastSolverFrameA == v.frameIdxA &&
+		v.treeVol == v.volA && v.treeFrameIdx == v.frameIdxA &&
+		v.ent.GetPoseGen() == v.lastPoseGen {
+		if faces := v.volA.GetFaces(); faces != nil && v.treeVolVer == faces.GetVersion() {
+			v.lerpT = 0.0
+			return true
+		}
+	}
+
 	v.AdvanceAnimation(tick)
 
-	ent := v.comp.GetSolver().GetEntity()
+	ent := v.ent
+	if ent == nil {
+		ent = v.comp.GetSolver().GetEntity()
+	}
 	q := ent.GetQRotation()
 	qx, qy, qz, qw := q.Get()
 	isIdent := qx == 0.0 && qy == 0.0 && qz == 0.0 && qw == 1.0
@@ -797,8 +822,14 @@ func (v *Element3D) Compile(tick uint64) bool {
 
 	cx, cy, cz := ent.GetCenter()
 	ent.GetAABB().Rebuild(cx+v.minX, cy+v.minY, cz+v.minZ, cx+v.maxX, cy+v.maxY, cz+v.maxZ)
+	v.lastPoseGen = ent.GetPoseGen()
 
 	return true
+}
+
+// IsStaticRigidPose reports whether this Element3D is currently on a fixed single frame without animation morphing.
+func (v *Element3D) IsStaticRigidPose() bool {
+	return v.singleFrame && v.volA != nil && (v.volA == v.volB || v.singleFrame)
 }
 
 // GetUIFaces returns the face sets, interpolation value, and render mode for UI rendering.
@@ -839,6 +870,11 @@ func (v *Element3D) FreezeCurrentFrame() {
 		v.volB = v.volA
 	}
 	v.lerpT = 0.0
+	v.lastPoseGen = 0
+	vertices.BumpStateEpoch()
+	if v.ent != nil {
+		v.ent.BumpPoseGen()
+	}
 }
 
 // GetTagIndex returns the index for the named tag, or -1 if the tag is not found.
@@ -862,6 +898,11 @@ func (v *Element3D) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius flo
 		v.lastRotFrameB = -1
 		v.treeVol = nil
 		v.treeFrameIdx = -1
+		v.lastPoseGen = 0
+		vertices.BumpStateEpoch()
+		if v.ent != nil {
+			v.ent.BumpPoseGen()
+		}
 		v.Compile(v.tick)
 	}
 	return deformed

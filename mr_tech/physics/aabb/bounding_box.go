@@ -2,7 +2,15 @@ package aabb
 
 import (
 	"math"
+	"sync/atomic"
 )
+
+var globalBoxPoseEpoch atomic.Uint64
+
+// GlobalBoxPoseEpoch returns a monotonic global counter incremented whenever any BoundingBox pose or size changes.
+func GlobalBoxPoseEpoch() uint64 {
+	return globalBoxPoseEpoch.Load()
+}
 
 const maxTiltSin = 0.30
 
@@ -25,6 +33,7 @@ type BoundingBox struct {
 	halfExtents      Point // Oriented half-extents projected onto world axes.
 	prevHalfExtents  Point // Pre-rotation world AABB half-extents for broadphase angular sweep.
 	tiltLimitEnabled bool
+	poseGen          uint64
 }
 
 // NewBoundingBox creates a bounding box with identity rotation.
@@ -40,6 +49,7 @@ func NewBoundingBox() *BoundingBox {
 		axis:             NewAxis(0, 0, 0, 0, 0, 0, 0, 0, 0),
 		sat:              NewSat(),
 		tiltLimitEnabled: false, //true //MODIFICATO,
+		poseGen:          1,
 	}
 	r.qRotation.SetIdentity()
 	r.qYaw.SetIdentity()
@@ -206,6 +216,7 @@ func (r *BoundingBox) ProjectExtent(nx, ny, nz float64) float64 {
 // rebuild recalculates the center, local axes and enclosing AABB.
 // The box rotates around its geometric center.
 func (r *BoundingBox) rebuild() {
+	r.BumpPoseGen()
 	hx, hy, hz := r.size.GetCenter()
 
 	cx := r.bottomLeft.GetX() + hx
@@ -220,6 +231,17 @@ func (r *BoundingBox) rebuild() {
 	r.halfExtents.Set(ex, ey, ez)
 
 	r.aabb.Rebuild(cx-ex, cy-ey, cz-ez, cx+ex, cy+ey, cz+ez)
+}
+
+// GetPoseGen returns the monotonic pose generation incremented whenever this box moves, rotates, or resizes.
+func (r *BoundingBox) GetPoseGen() uint64 {
+	return r.poseGen
+}
+
+// BumpPoseGen advances this bounding box's pose generation and the global pose epoch.
+func (r *BoundingBox) BumpPoseGen() {
+	r.poseGen++
+	globalBoxPoseEpoch.Add(1)
 }
 
 // GetAABB returns the enclosing axis-aligned bounding box.

@@ -1,57 +1,89 @@
 package builder
 
-// ShadowRigidCache manages a cache of shadowRigidEntry objects with lifecycle control and periodic sweeping logic.
-// It includes a pool of reusable entries to minimize allocations and a map for efficient retrieval by unique identifiers.
-// lastSweepTick tracks the frame of the last cleanup operation to determine when to Sweep stale entries.
+import "github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+
+const defaultShadowCacheCap = 128
+
+// ShadowRigidCache manages O(1) slot-indexed per-entity shadow entries via Entity.GetShadowMarker
+// with free-slot recycling and zero map lookups in hot paths.
 type ShadowRigidCache struct {
-	slots         map[uint64]*ShadowRigidEntry
-	free          []*ShadowRigidEntry
+	entries       []*ShadowRigidEntry
+	freeSlots     []int
+	freeLen       int
+	nextSlot      int
 	lastSweepTick uint64
 }
 
-// Retrieve retrieves or creates a shadowRigidEntry for the given entity ID and updates its last seen frame.
-func (c *ShadowRigidCache) Retrieve(entID uint64, frame uint64) *ShadowRigidEntry {
-	if c.slots == nil {
-		c.slots = make(map[uint64]*ShadowRigidEntry, 128)
+func (c *ShadowRigidCache) initPool(initCap int) {
+	if initCap < defaultShadowCacheCap {
+		initCap = defaultShadowCacheCap
 	}
-	if entry, ok := c.slots[entID]; ok {
-		entry.lastSeenFrame = frame
-		return entry
+	c.entries = make([]*ShadowRigidEntry, initCap)
+	for i := range c.entries {
+		c.entries[i] = &ShadowRigidEntry{}
 	}
-	var entry *ShadowRigidEntry
-	if n := len(c.free); n > 0 {
-		entry = c.free[n-1]
-		c.free = c.free[:n-1]
+	c.freeSlots = make([]int, initCap)
+}
+
+// Retrieve returns the preallocated shadow entry bound to ent in O(1), assigning or recycling a slot if needed.
+func (c *ShadowRigidCache) Retrieve(ent *rigid_body.Entity, frame uint64) *ShadowRigidEntry {
+	if c.entries == nil {
+		c.initPool(defaultShadowCacheCap)
+	}
+	entID := ent.GetId()
+	slot := ent.GetShadowMarker()
+	if slot >= 0 && slot < c.nextSlot {
+		entry := c.entries[slot]
+		if entry.inUse && entry.entID == entID {
+			entry.lastSeenFrame = frame
+			return entry
+		}
+	}
+
+	if c.freeLen > 0 {
+		c.freeLen--
+		slot = c.freeSlots[c.freeLen]
 	} else {
-		entry = &ShadowRigidEntry{}
+		if c.nextSlot >= len(c.entries) {
+			c.grow()
+		}
+		slot = c.nextSlot
+		c.nextSlot++
 	}
-	entry.entID = entID
-	entry.inUse = true
-	entry.seenFrame = 0
-	entry.lastSeenFrame = frame
-	entry.matValid = false
-	entry.faces = nil
-	entry.facesVer = 0
-	entry.facesLen = 0
-	entry.rm = nil
-	entry.hash = 0
-	c.slots[entID] = entry
+
+	entry := c.entries[slot]
+	entry.reset(entID, frame)
+	ent.SetShadowMarker(slot)
 	return entry
 }
 
-// Sweep removes stale entries from the cache if they have not been accessed for more than 256 frames.
+func (c *ShadowRigidCache) grow() {
+	oldCap := len(c.entries)
+	newCap := max(oldCap*2, defaultShadowCacheCap)
+	newEntries := make([]*ShadowRigidEntry, newCap)
+	copy(newEntries, c.entries)
+	for i := oldCap; i < newCap; i++ {
+		newEntries[i] = &ShadowRigidEntry{}
+	}
+	c.entries = newEntries
+
+	newFree := make([]int, newCap)
+	copy(newFree, c.freeSlots[:c.freeLen])
+	c.freeSlots = newFree
+}
+
+// Sweep recycles stale entries not seen for more than 256 frames back onto the free stack.
 func (c *ShadowRigidCache) Sweep(frame uint64) {
-	if len(c.slots) == 0 || frame-c.lastSweepTick < 256 {
+	if c.nextSlot == 0 || frame-c.lastSweepTick < 256 {
 		return
 	}
 	c.lastSweepTick = frame
-	for id, entry := range c.slots {
-		if frame-entry.lastSeenFrame > 256 {
-			entry.inUse = false
-			entry.faces = nil
-			entry.rm = nil
-			delete(c.slots, id)
-			c.free = append(c.free, entry)
+	for slot := 0; slot < c.nextSlot; slot++ {
+		entry := c.entries[slot]
+		if entry.inUse && frame-entry.lastSeenFrame > 256 {
+			entry.release()
+			c.freeSlots[c.freeLen] = slot
+			c.freeLen++
 		}
 	}
 }

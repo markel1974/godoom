@@ -141,6 +141,11 @@ func (v *Part) GetRigidFaces() *volumes.Faces {
 	return nil
 }
 
+// IsStaticRigidPose reports whether this detached part has a fixed single-frame rigid pose.
+func (v *Part) IsStaticRigidPose() bool {
+	return v.physicsFree && v.entry != nil && v.entry.IsStaticRigidPose()
+}
+
 // SetAction delegates action selection on this entry.
 func (v *Part) SetAction(idx int) {
 	v.entry.SetAction(idx)

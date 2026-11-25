@@ -256,6 +256,37 @@ func (s *Atlas) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bo
 	return s.tileCache[nextIdx][slot].Matches(atlas.gen, matrix, sceneHash)
 }
 
+// PeekReusableTile returns the target atlas buffer index, atlas generation, and cached sceneHash
+// when slot in the next target buffer already holds a valid render for matrix.
+func (s *Atlas) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, uint64, bool) {
+	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrix == nil {
+		return 0, 0, 0, false
+	}
+	nextIdx := s.NextAtlasIndex()
+	atlas := s.shadowAtlasMaps[nextIdx]
+	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
+		return 0, 0, 0, false
+	}
+	c := &s.tileCache[nextIdx][slot]
+	if !c.valid || c.atlasGen != atlas.gen || c.matrix != *matrix {
+		return 0, 0, 0, false
+	}
+	return nextIdx, atlas.gen, c.sceneHash, true
+}
+
+// TargetInfo returns the next writable double-buffer index, its current atlas generation, and whether its FBO is ready.
+func (s *Atlas) TargetInfo() (int, uint64, bool) {
+	if !s.shadows {
+		return 0, 0, false
+	}
+	nextIdx := s.NextAtlasIndex()
+	atlas := s.shadowAtlasMaps[nextIdx]
+	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
+		return 0, 0, false
+	}
+	return nextIdx, atlas.gen, true
+}
+
 // InvalidateCache forces all cached shadow atlas tiles across both double-buffers to redraw on next use.
 func (s *Atlas) InvalidateCache() {
 	for b := range depthDoubleBuffer {

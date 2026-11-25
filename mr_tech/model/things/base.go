@@ -539,6 +539,14 @@ func (t *Base) GetRigidFaces() *volumes.Faces {
 	return nil
 }
 
+// IsStaticRigidPose reports whether this thing uses a fixed single-frame rigid pose independent of tick.
+func (t *Base) IsStaticRigidPose() bool {
+	if sr, ok := t.IVertices.(interface{ IsStaticRigidPose() bool }); ok {
+		return sr.IsStaticRigidPose()
+	}
+	return false
+}
+
 // dentCompute returns the dent depth and radius derived from force, using defaults for non-positive force.
 func (t *Base) dentCompute(force float64) (float64, float64) {
 	dentDepth := 2.5

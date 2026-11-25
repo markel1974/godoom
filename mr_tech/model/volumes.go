@@ -162,6 +162,16 @@ func (s *Volumes) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.
 	s.tree.QueryFrustum(frustum, callback)
 }
 
+// QueryFrustumsMask traverses the volumes tree once across all frustums enabled in activeMask.
+func (s *Volumes) QueryFrustumsMask(frustums []aabb.Frustum, activeMask uint32, callback func(object aabb.IObject, leafMask uint32) bool) {
+	s.tree.QueryFrustumsMask(frustums, activeMask, callback)
+}
+
+// TreeVersion returns the spatial tree's monotonic mutation counter.
+func (s *Volumes) TreeVersion() uint64 {
+	return s.tree.Version()
+}
+
 // QueryMultiFrustum performs a spatial query using two frustums, invoking the callback for each overlapping object.
 func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
 	s.tree.QueryMultiFrustum(front, rear, callback)

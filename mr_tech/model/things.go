@@ -197,6 +197,16 @@ func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IO
 	th.tree.QueryFrustum(front, callback)
 }
 
+// QueryFrustumsMask performs a batched query? Wait — QueryFrustumsMask traverses the things tree once across all frustums enabled in activeMask.
+func (th *Things) QueryFrustumsMask(frustums []aabb.Frustum, activeMask uint32, callback func(object aabb.IObject, leafMask uint32) bool) {
+	th.tree.QueryFrustumsMask(frustums, activeMask, callback)
+}
+
+// TreeVersion returns the spatial tree's monotonic mutation counter.
+func (th *Things) TreeVersion() uint64 {
+	return th.tree.Version()
+}
+
 // QueryStatic calls callback for each static object.
 func (th *Things) QueryStatic(callback func(object aabb.IObject) bool) {
 	for _, st := range th.statics {

@@ -2,6 +2,7 @@ package builder
 
 import (
 	"math"
+	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -67,6 +68,8 @@ type Static struct {
 	atlasBuilt      bool
 	atlasStreamMode bool
 	atlasVolCount   int
+	stateVer        uint64
+	animMeshes      []*buffers.ResidentMesh
 }
 
 // NewStatic creates and returns a new Static builder using the provided Context for resource management.
@@ -78,6 +81,37 @@ func NewStatic(bc *Context) *Static {
 		cachedVolMeshes: make([]*buffers.ResidentMesh, 8192),
 		volMeshes:       make(map[*volumes.Faces]*buffers.ResidentMesh, 1024),
 	}
+}
+
+// StateVersion returns a monotonic counter incremented when static atlas entries or detached meshes change.
+func (w *Static) StateVersion() uint64 {
+	return w.stateVer
+}
+
+// AnimTickSig returns a hash over current animated frames of detached static volume meshes, or 0 if none exist.
+func (w *Static) AnimTickSig() uint64 {
+	if len(w.animMeshes) == 0 {
+		return 0
+	}
+	h := uint64(0x517cc1b727220a95)
+	for _, rm := range w.animMeshes {
+		for i := 0; i < rm.AnimLen; i++ {
+			h = mixU64(h, mixPtrHash(unsafe.Pointer(rm.AnimMats[i].GetCurrentFrame())))
+		}
+	}
+	return h
+}
+
+func (w *Static) trackAnimMesh(rm *buffers.ResidentMesh) {
+	if rm == nil || rm.AnimLen == 0 {
+		return
+	}
+	for _, existing := range w.animMeshes {
+		if existing == rm {
+			return
+		}
+	}
+	w.animMeshes = append(w.animMeshes, rm)
 }
 
 // GetUploadHints returns the current static vertex and index byte counts along with the generation identifier.
@@ -499,6 +533,7 @@ func (w *Static) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers
 		if !entry.detached {
 			if vol.IsDirty() || faces.GetVersion() != entry.version || faces.Len() != entry.faceCount {
 				entry.detached = true
+				w.stateVer++
 			} else {
 				if entry.chunk != nil {
 					entry.chunk.lastSeenFrame = w.bc.meshFrame
@@ -511,6 +546,7 @@ func (w *Static) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers
 			if entry.chunk != nil {
 				entry.chunk.lastSeenFrame = w.bc.meshFrame
 			}
+			w.stateVer++
 			return entry.atlas, entry, entry.skyMaterial
 		}
 	}
@@ -519,11 +555,14 @@ func (w *Static) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers
 	if rm == nil {
 		rm = buffers.NewResidentMesh(w.bc.ctx)
 		w.volMeshes[faces] = rm
+		w.stateVer++
 	}
 	rm.LastSeenFrame = w.bc.meshFrame
 	if vol.IsDirty() || rm.NeedsRebuild(faces, true) {
 		rm.Rebuild(faces, w.bc.LookupTexLayer)
 		vol.ClearDirty()
+		w.trackAnimMesh(rm)
+		w.stateVer++
 	}
 	return rm, nil, rm.SkyMaterial
 }
@@ -532,6 +571,8 @@ func (w *Static) ResolveMesh(vol *volumes.Volume, vols *model.Volumes) (*buffers
 func (w *Static) buildAtlas(vols *model.Volumes) {
 	w.atlasBuilt = true
 	w.atlasVolCount = 0
+	w.stateVer++
+	w.animMeshes = w.animMeshes[:0]
 	for i := range w.cachedRawVolsLen {
 		w.cachedRawVols[i] = nil
 		w.cachedVolMeshes[i] = nil

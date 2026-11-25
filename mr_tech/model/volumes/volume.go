@@ -1,6 +1,8 @@
 package volumes
 
 import (
+	"sync/atomic"
+
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -8,6 +10,13 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
+
+var globalVolumeDirtyEpoch atomic.Uint64
+
+// GlobalDirtyEpoch returns a monotonic counter incremented whenever any volume geometry rebuilds or becomes dirty.
+func GlobalDirtyEpoch() uint64 {
+	return globalVolumeDirtyEpoch.Load()
+}
 
 const (
 	treeInitSize = 1
@@ -109,6 +118,7 @@ func (v *Volume) RebuildGeometry() bool {
 	v.faces.RebuildGeometry()
 	v.syncSolverFromFaces()
 	v.dirty = true
+	globalVolumeDirtyEpoch.Add(1)
 	return true
 }
 
@@ -150,6 +160,9 @@ func (v *Volume) IsDirty() bool {
 // SetDirty sets whether the volume is marked dirty.
 func (v *Volume) SetDirty(dirty bool) {
 	v.dirty = dirty
+	if dirty {
+		globalVolumeDirtyEpoch.Add(1)
+	}
 }
 
 // ClearDirty clears the dirty flag.

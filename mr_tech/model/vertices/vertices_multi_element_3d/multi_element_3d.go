@@ -302,6 +302,10 @@ func (v *MultiElement3D) SetRagdollMode() {
 	if v.joints.IsRagdoll() {
 		return
 	}
+	vertices.BumpStateEpoch()
+	if v.ent != nil {
+		v.ent.BumpPoseGen()
+	}
 	v.compiled = false
 	v.Compile(v.compiledTick)
 

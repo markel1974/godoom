@@ -1,5 +1,7 @@
 package aabb
 
+import "math/bits"
+
 // Tree is a spatial data structure optimized for efficient querying and management of Axes-Aligned Bounding Boxes (AABBs).
 type Tree struct {
 	nodes              []*Node
@@ -10,6 +12,13 @@ type Tree struct {
 	growthSize         uint
 	margin             float64
 	stack              []uint
+	stackMask          []uint32
+	version            uint64
+}
+
+// Version returns a monotonic counter incremented on spatial mutations (insert, remove, update, clear).
+func (a *Tree) Version() uint64 {
+	return a.version
 }
 
 // NewTree initializes and returns a new instance of Tree with a specified initial node capacity.
@@ -25,6 +34,7 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		growthSize:         initialSize,
 		nodes:              make([]*Node, initialSize),
 		stack:              make([]uint, initialSize),
+		stackMask:          make([]uint32, initialSize),
 		margin:             margin,
 	}
 
@@ -70,6 +80,7 @@ func (a *Tree) Clear() {
 	if a.nodeCapacity > 0 {
 		a.nodes[a.nodeCapacity-1].nextNodeIndex = NullNode
 	}
+	a.version++
 	//a.objectNodeIndexMap = make(map[IObject]uint)
 }
 
@@ -83,6 +94,7 @@ func (a *Tree) InsertObject(object IObject) {
 	node.aabb.ExpandInPlace(object.GetAABB(), a.margin)
 	a.insertLeaf(nodeIndex)
 	object.GetAABB().SetIndex(int64(nodeIndex))
+	a.version++
 }
 
 // RemoveObject removes the specified object from the Tree if it exists.
@@ -106,6 +118,7 @@ func (a *Tree) RemoveObject(object IObject) {
 	}
 	a.removeLeaf(nodeIndex)
 	a.deallocateNode(nodeIndex)
+	a.version++
 }
 
 // UpdateObject updates the position of an object in the tree by modifying its AABB and repositioning it if necessary.
@@ -126,6 +139,7 @@ func (a *Tree) UpdateObject(object IObject) {
 	if node.object != object {
 		return
 	}
+	a.version++
 	// Branch Prediction amichevole: se è nel Fat Margin e non si è ristretto eccessivamente, non facciamo nulla
 	if node.aabb.Contains(aabb) {
 		maxExcess := a.margin * 4.0
@@ -238,33 +252,137 @@ func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IObject) bo
 
 // QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
 func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool) {
+	if a.rootNodeIndex == NullNode || frustum == nil {
+		return
+	}
+	nodes := a.nodes
+	stack := a.stack
 	stackIndex := 0
-	a.stack[stackIndex] = a.rootNodeIndex
+	stack[stackIndex] = a.rootNodeIndex
 	stackIndex++
 
 	for stackIndex > 0 {
 		stackIndex--
-		nodeIndex := a.stack[stackIndex]
+		nodeIndex := stack[stackIndex]
 		if nodeIndex == NullNode {
 			continue
 		}
-		node := a.nodes[nodeIndex]
-		if node.aabb.IntersectFrustum(frustum) {
+		node := nodes[nodeIndex]
+		box := node.aabb
+		if intersectFrustumBounds(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, frustum) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break
 				}
 			} else {
-				if (stackIndex + 2) > len(a.stack) {
+				if (stackIndex + 2) > len(stack) {
 					a.stackGrow()
+					stack = a.stack
 				}
-				a.stack[stackIndex] = node.leftNodeIndex
+				stack[stackIndex] = node.leftNodeIndex
 				stackIndex++
-				a.stack[stackIndex] = node.rightNodeIndex
+				stack[stackIndex] = node.rightNodeIndex
 				stackIndex++
 			}
 		}
 		// Altrimenti, se il nodo è fuori dal Frustum, l'intero ramo viene scartato! (Frustum Culling)
+	}
+}
+
+// QueryFrustumsMask traverses the tree once against all frustums enabled in activeMask,
+// pruning subtrees per frustum bit and invoking callback once per leaf with its matching bitmask.
+func (a *Tree) QueryFrustumsMask(frustums []Frustum, activeMask uint32, callback func(object IObject, leafMask uint32) bool) {
+	if a.rootNodeIndex == NullNode || activeMask == 0 || len(frustums) == 0 {
+		return
+	}
+	if len(frustums) < 32 {
+		activeMask &= (uint32(1) << len(frustums)) - 1
+		if activeMask == 0 {
+			return
+		}
+	}
+	nodes := a.nodes
+	stack := a.stack
+	if activeMask&(activeMask-1) == 0 {
+		f := &frustums[bits.TrailingZeros32(activeMask)]
+		stackIndex := 0
+		stack[0] = a.rootNodeIndex
+		stackIndex++
+		for stackIndex > 0 {
+			stackIndex--
+			nodeIndex := stack[stackIndex]
+			if nodeIndex == NullNode {
+				continue
+			}
+			node := nodes[nodeIndex]
+			box := node.aabb
+			if intersectFrustumBounds(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ, f) {
+				if node.IsLeaf() {
+					if callback(node.object, activeMask) {
+						break
+					}
+				} else {
+					if (stackIndex + 2) > len(stack) {
+						a.stackGrow()
+						stack = a.stack
+					}
+					stack[stackIndex] = node.leftNodeIndex
+					stackIndex++
+					stack[stackIndex] = node.rightNodeIndex
+					stackIndex++
+				}
+			}
+		}
+		return
+	}
+	stackMask := a.stackMask
+
+	stackIndex := 0
+	stack[0] = a.rootNodeIndex
+	stackMask[0] = activeMask
+	stackIndex++
+
+	for stackIndex > 0 {
+		stackIndex--
+		nodeIndex := stack[stackIndex]
+		mask := stackMask[stackIndex]
+		if nodeIndex == NullNode || mask == 0 {
+			continue
+		}
+		node := nodes[nodeIndex]
+		box := node.aabb
+		minX, minY, minZ := box.minX, box.minY, box.minZ
+		maxX, maxY, maxZ := box.maxX, box.maxY, box.maxZ
+
+		var hitMask uint32
+		rem := mask
+		for rem != 0 {
+			bit := bits.TrailingZeros32(rem)
+			rem &^= 1 << bit
+			if intersectFrustumBounds(minX, minY, minZ, maxX, maxY, maxZ, &frustums[bit]) {
+				hitMask |= 1 << bit
+			}
+		}
+		if hitMask == 0 {
+			continue
+		}
+		if node.IsLeaf() {
+			if callback(node.object, hitMask) {
+				break
+			}
+		} else {
+			if (stackIndex + 2) > len(stack) {
+				a.stackGrow()
+				stack = a.stack
+				stackMask = a.stackMask
+			}
+			stack[stackIndex] = node.leftNodeIndex
+			stackMask[stackIndex] = hitMask
+			stackIndex++
+			stack[stackIndex] = node.rightNodeIndex
+			stackMask[stackIndex] = hitMask
+			stackIndex++
+		}
 	}
 }
 
@@ -551,7 +669,15 @@ func (a *Tree) fixUpwardsTree(treeNodeIndex uint) {
 
 // stackGrow doubles the size of the internal stack and copies existing elements into the expanded stack.
 func (a *Tree) stackGrow() {
-	newStack := make([]uint, len(a.stack)*2)
+	newCap := len(a.stack) * 2
+	if newCap < 16 {
+		newCap = 16
+	}
+	newStack := make([]uint, newCap)
 	copy(newStack, a.stack)
 	a.stack = newStack
+
+	newMask := make([]uint32, newCap)
+	copy(newMask, a.stackMask)
+	a.stackMask = newMask
 }

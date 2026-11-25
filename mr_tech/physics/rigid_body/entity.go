@@ -37,6 +37,7 @@ func init() {
 type Entity struct {
 	id               uint64
 	renderMarker     int
+	shadowMarker     int
 	ecx              float64
 	ecy              float64
 	ecz              float64
@@ -60,6 +61,7 @@ func NewEntity(mass, restitution, groundFriction float64, restCombine, frictionC
 	e := &Entity{
 		id:           uint64(GetGlobalId()),
 		renderMarker: -1,
+		shadowMarker: -1,
 		BoundingBox:  aabb.NewBoundingBox(),
 		Cinematic:    NewCinematic(_dt, mass, restitution, groundFriction, restCombine, frictionCombine, gForce),
 		hasCentroid:  false,
@@ -80,6 +82,16 @@ func (e *Entity) GetRenderMarker() int {
 // SetRenderMarker assigns the renderer cache slot index for this Entity.
 func (e *Entity) SetRenderMarker(marker int) {
 	e.renderMarker = marker
+}
+
+// GetShadowMarker returns the shadow cache slot index assigned to this Entity, or -1 if unassigned.
+func (e *Entity) GetShadowMarker() int {
+	return e.shadowMarker
+}
+
+// SetShadowMarker assigns the shadow cache slot index for this Entity.
+func (e *Entity) SetShadowMarker(marker int) {
+	e.shadowMarker = marker
 }
 
 // syncInertia updates the cuboid fallback inertia for (w, h, d), reapplies any custom inertia tensor, and syncs world tensors.

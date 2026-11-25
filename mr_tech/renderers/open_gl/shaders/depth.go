@@ -104,6 +104,23 @@ func (s *Depth) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bo
 	return s.atlas.CanReuseTile(slot, matrix, sceneHash)
 }
 
+// PeekReusableTile returns the target buffer index, atlas generation, and cached sceneHash
+// if slot in the next target atlas buffer already holds a valid render matching matrix.
+func (s *Depth) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, uint64, bool) {
+	if !s.shadows {
+		return 0, 0, 0, false
+	}
+	return s.atlas.PeekReusableTile(slot, matrix)
+}
+
+// TargetInfo returns the next writable double-buffer index, its current atlas generation, and whether its FBO is ready.
+func (s *Depth) TargetInfo() (int, uint64, bool) {
+	if !s.shadows {
+		return 0, 0, false
+	}
+	return s.atlas.TargetInfo()
+}
+
 // InvalidateCache clears cached shadow atlas tiles, if an atlas is available.
 func (s *Depth) InvalidateCache() {
 	s.atlas.InvalidateCache()

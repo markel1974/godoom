@@ -33,7 +33,7 @@ const (
 	ShaderSkyLocLast
 )
 
-// Sky is a type that manages the state and rendering of the sky shader in a graphics application.
+// Sky manages rendering resources and shader state for drawing the sky and related atmospheric effects.
 type Sky struct {
 	ctx           api.IContext
 	prg           uint32

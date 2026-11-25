@@ -746,7 +746,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 		if fc == nil || (!usedFallback && !fc.NearPoint(impact, radius)) {
 			continue
 		}
-		for j := 0; j < geometry.Triangle3DPoints32; j++ {
+		for j := range geometry.Triangle3DPoints32 {
 			p := &fc.tri.Points[j]
 			if displacement, ok := f.displacements[MakeVertexKey(*p)]; ok {
 				p.X += displacement.X

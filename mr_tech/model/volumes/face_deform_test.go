@@ -6,6 +6,7 @@ import (
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -16,7 +17,7 @@ func TestFaceDeform(t *testing.T) {
 		{X: 10, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
 	}
-	face := NewFace(tri, "test_floor", nil)
+	face := NewFace(tri, nil)
 
 	nx, ny, nz := face.GetNormal()
 	if math.Abs(nz-1.0) > 1e-6 || math.Abs(nx) > 1e-6 || math.Abs(ny) > 1e-6 {
@@ -33,7 +34,7 @@ func TestFaceDeform(t *testing.T) {
 		t.Fatalf("expected face to be deformed")
 	}
 
-	p0x, p0y, p0z := face.Get0()
+	_, _, p0z := face.Get0()
 	p1x, p1y, p1z := face.Get1()
 	p2x, p2y, p2z := face.Get2()
 
@@ -74,7 +75,7 @@ func TestFaceDeformDent(t *testing.T) {
 		{X: 0, Y: 10, Z: 0},
 		{X: 0, Y: 0, Z: 10},
 	}
-	face := NewFace(tri, "test_wall", nil)
+	face := NewFace(tri, nil)
 
 	vol := NewVolumeConcrete(1, "vol_test", "wall")
 	face.SetParent(vol)
@@ -106,7 +107,7 @@ func TestFaceIntersectRay(t *testing.T) {
 		{X: 10, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
 	}
-	face := NewFace(tri, "floor", nil)
+	face := NewFace(tri, nil)
 
 	// Ray from (2, 2, 10) pointing straight down (0, 0, -1)
 	dist, hit := face.IntersectRay(2, 2, 10, 0, 0, -1, 100)
@@ -144,8 +145,8 @@ func TestVolumeDeformDent(t *testing.T) {
 	}
 
 	vol := NewVolumeConcrete(1, "vol_quad", "floor")
-	f1 := NewFace(t1, "f1", nil)
-	f2 := NewFace(t2, "f2", nil)
+	f1 := NewFace(t1, nil)
+	f2 := NewFace(t2, nil)
 	f1.SetParent(vol)
 	f2.SetParent(vol)
 
@@ -184,7 +185,7 @@ func TestLargePolygonBarycentricDeform(t *testing.T) {
 		{X: 500, Y: 0, Z: 0},
 		{X: 0, Y: 500, Z: 0},
 	}
-	face := NewFace(tri, "huge_floor", nil)
+	face := NewFace(tri, nil)
 
 	// Impact in the middle at (100, 100, 0), where distance to all vertices is > 100 units
 	impact := geometry.XYZ{X: 100, Y: 100, Z: 0}
@@ -217,8 +218,8 @@ func TestFacesTessellateMinEdgeAndBuffers(t *testing.T) {
 		{X: 10, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
 	}
-	f := NewFaces(16, false)
-	f.Add(NewFace(tri, "floor", nil))
+	f := NewFaces(aabb.NewTree(16, 0.0), false)
+	f.Add(NewFace(tri, nil))
 
 	impact := geometry.XYZ{X: 0, Y: 0, Z: 0}
 
@@ -245,9 +246,9 @@ func TestFacesTessellateMinEdgeAndBuffers(t *testing.T) {
 	for i := 0; i < f.Len(); i++ {
 		face := f.At(i)
 		p := face.tri.Points
-		edges := [3][2]geometry.XYZ{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
+		edges := [3][2]geometry.XYZ32{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 		for _, e := range edges {
-			lenEdge := math.Hypot(math.Hypot(e[0].X-e[1].X, e[0].Y-e[1].Y), e[0].Z-e[1].Z)
+			lenEdge := math.Hypot(math.Hypot(float64(e[0].X-e[1].X), float64(e[0].Y-e[1].Y)), float64(e[0].Z-e[1].Z))
 			// Midpoint split can produce diagonal edges slightly under 1.0 (e.g. 1.0/sqrt(2) = 0.707)
 			// but must never produce sub-millimetric slivers (e.g. < 0.1)
 			if lenEdge < 0.5 {
@@ -274,14 +275,14 @@ func TestFacesRebuildActiveEdges(t *testing.T) {
 			{X: 0, Y: 0, Z: 0},
 			{X: 10, Y: 0, Z: 0},
 			{X: 0, Y: 10, Z: 0},
-		}, "q1", nil)
+		}, nil)
 		f2 := NewFace([3]geometry.XYZ{
 			{X: 10, Y: 0, Z: 0},
 			{X: 10, Y: 10, Z: 0},
 			{X: 0, Y: 10, Z: 0},
-		}, "q2", nil)
+		}, nil)
 
-		faces := NewFaces(0, false)
+		faces := NewFaces(aabb.NewTree(4, 0.0), false)
 		faces.Add(f1)
 		faces.Add(f2)
 		faces.Rebuild()
@@ -308,14 +309,14 @@ func TestFacesRebuildActiveEdges(t *testing.T) {
 			{X: 0, Y: 0, Z: 0},
 			{X: 10, Y: 0, Z: 0},
 			{X: 0, Y: 10, Z: 0},
-		}, "floor", nil)
+		}, nil)
 		wallTri := NewFace([3]geometry.XYZ{
 			{X: 10, Y: 0, Z: 0},
 			{X: 0, Y: 0, Z: 0},
 			{X: 0, Y: 0, Z: 10},
-		}, "wall", nil)
+		}, nil)
 
-		faces := NewFaces(0, false)
+		faces := NewFaces(aabb.NewTree(4, 0.0), false)
 		faces.Add(floorTri)
 		faces.Add(wallTri)
 		faces.Rebuild()
@@ -337,14 +338,14 @@ func TestFacesRebuildActiveEdges(t *testing.T) {
 			{X: 0, Y: 0, Z: 10},
 			{X: 10, Y: 0, Z: 10},
 			{X: 0, Y: 10, Z: 10},
-		}, "top", nil)
+		}, nil)
 		frontTri := NewFace([3]geometry.XYZ{
 			{X: 10, Y: 0, Z: 10},
 			{X: 0, Y: 0, Z: 10},
 			{X: 0, Y: 0, Z: 0},
-		}, "front", nil)
+		}, nil)
 
-		faces := NewFaces(0, false)
+		faces := NewFaces(aabb.NewTree(4, 0.0), false)
 		faces.Add(topTri)
 		faces.Add(frontTri)
 		faces.Rebuild()
@@ -369,12 +370,12 @@ func TestVolumeDeformUpdatesActiveEdges(t *testing.T) {
 		{X: 0, Y: 0, Z: 0},
 		{X: 10, Y: 0, Z: 0},
 		{X: 0, Y: 10, Z: 0},
-	}, "f1", solidMat)
+	}, solidMat)
 	f2 := NewFace([3]geometry.XYZ{
 		{X: 10, Y: 0, Z: 0},
 		{X: 10, Y: 10, Z: 0},
 		{X: 0, Y: 10, Z: 0},
-	}, "f2", solidMat)
+	}, solidMat)
 	vol.AddFace(f1)
 	vol.AddFace(f2)
 	vol.Rebuild()
@@ -405,12 +406,12 @@ func TestVolumeDeformUpdatesActiveEdges(t *testing.T) {
 		{X: 0, Y: 0, Z: 0},
 		{X: 40, Y: 0, Z: 0},
 		{X: 0, Y: 40, Z: 0},
-	}, "t1", solidMat)
+	}, solidMat)
 	t2 := NewFace([3]geometry.XYZ{
 		{X: 40, Y: 0, Z: 0},
 		{X: 40, Y: 40, Z: 0},
 		{X: 0, Y: 40, Z: 0},
-	}, "t2", solidMat)
+	}, solidMat)
 	volTess.AddFace(t1)
 	volTess.AddFace(t2)
 	volTess.Rebuild()
@@ -432,5 +433,97 @@ func TestVolumeDeformUpdatesActiveEdges(t *testing.T) {
 	}
 	if inactiveCount == 0 {
 		t.Errorf("expected tessellated volume to classify coplanar/concave shared edges as inactive")
+	}
+}
+
+func TestVolumeDeformLocalityAndIncrementalTreeSync(t *testing.T) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
+	vol := NewVolumeConcrete(3, "wall_grid", "wall")
+	for ix := 0; ix < 10; ix++ {
+		for iz := 0; iz < 10; iz++ {
+			x0, x1 := float64(ix)*64.0, float64(ix+1)*64.0
+			z0, z1 := float64(iz)*64.0, float64(iz+1)*64.0
+			vol.AddFace(NewFace([3]geometry.XYZ{{X: x0, Y: 0, Z: z0}, {X: x1, Y: 0, Z: z0}, {X: x1, Y: 0, Z: z1}}, solidMat))
+			vol.AddFace(NewFace([3]geometry.XYZ{{X: x0, Y: 0, Z: z0}, {X: x1, Y: 0, Z: z1}, {X: x0, Y: 0, Z: z1}}, solidMat))
+		}
+	}
+	vol.Rebuild()
+
+	impact := geometry.XYZ{X: 320, Y: 0, Z: 320}
+	normal := geometry.XYZ{X: 0, Y: -1, Z: 0}
+	if !vol.DeformDent(impact, normal, 3.0, 15.0) {
+		t.Fatalf("expected wall dent to deform")
+	}
+	if n := vol.GetFaceCount(); n <= 200 || n > 600 {
+		t.Fatalf("expected localized crater tessellation cleanly bounded from 200 initial faces, got %d", n)
+	}
+
+	faces := vol.GetFaces()
+	tree := faces.GetTree()
+	for i := 0; i < faces.Len(); i++ {
+		fc := faces.At(i)
+		if !tree.ContainsObject(fc) {
+			t.Fatalf("face %d missing from incremental tree", i)
+		}
+	}
+
+	// Verify ray query directly against the deformed spot hits a dented face inside the crater.
+	var hitFace *Face
+	bestDist := 200.0
+	tree.QueryRay(impact.X, -50, impact.Z, 0, 1, 0, bestDist, func(obj aabb.IObject, _ float64) (float64, bool) {
+		fc, ok := obj.(*Face)
+		if !ok {
+			return bestDist, false
+		}
+		if d, hit := fc.IntersectRay(impact.X, -50, impact.Z, 0, 1, 0, bestDist); hit {
+			bestDist = d
+			hitFace = fc
+			return d, true
+		}
+		return bestDist, false
+	})
+	if hitFace == nil {
+		t.Fatalf("expected ray query to hit dented face in incremental AABB tree")
+	}
+	if math.Abs(bestDist-53.0) > 1.0 {
+		t.Fatalf("expected hit distance near dented surface (~53), got %.3f", bestDist)
+	}
+
+	// Subsequent hit on the same spot must not explode faces or fail tree consistency.
+	beforeSecond := faces.Len()
+	if !vol.DeformDent(impact, normal, 2.0, 15.0) {
+		t.Fatalf("expected second wall dent to succeed")
+	}
+	if faces.Len() > beforeSecond+32 {
+		t.Fatalf("expected converged crater on repeat shot, grew from %d to %d", beforeSecond, faces.Len())
+	}
+	for i := 0; i < faces.Len(); i++ {
+		if !tree.ContainsObject(faces.At(i)) {
+			t.Fatalf("face %d missing from tree after repeat dent", i)
+		}
+	}
+}
+
+func BenchmarkVolumeDeformRepeat(b *testing.B) {
+	solidMat := textures.NewMaterial("stone", nil, int(config.MaterialKindSolid))
+	vol := NewVolumeConcrete(4, "bench_wall", "wall")
+	for ix := 0; ix < 12; ix++ {
+		for iz := 0; iz < 12; iz++ {
+			x0, x1 := float64(ix)*64.0, float64(ix+1)*64.0
+			z0, z1 := float64(iz)*64.0, float64(iz+1)*64.0
+			vol.AddFace(NewFace([3]geometry.XYZ{{X: x0, Y: 0, Z: z0}, {X: x1, Y: 0, Z: z0}, {X: x1, Y: 0, Z: z1}}, solidMat))
+			vol.AddFace(NewFace([3]geometry.XYZ{{X: x0, Y: 0, Z: z0}, {X: x1, Y: 0, Z: z1}, {X: x0, Y: 0, Z: z1}}, solidMat))
+		}
+	}
+	vol.Rebuild()
+	impact := geometry.XYZ{X: 350, Y: 0, Z: 350}
+	normal := geometry.XYZ{X: 0, Y: -1, Z: 0}
+	vol.DeformDent(impact, normal, 2.5, 15.0)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		imp := geometry.XYZ{X: 350 + float64(i%5)*0.5, Y: 0, Z: 350}
+		vol.DeformDent(imp, normal, 0.2, 15.0)
 	}
 }

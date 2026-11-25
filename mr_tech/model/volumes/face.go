@@ -76,31 +76,38 @@ func NewFaceEmpty(material *textures.Material, u, v [3]float64) *Face {
 // NewFace creates a new 3D segment with specified points and material, and computes its normal and AABB.
 func NewFace(tri [3]geometry.XYZ, material *textures.Material) *Face {
 	out := &Face{
-		material:    material,
-		aabb:        aabb.MakeAABB(),
-		tri:         toTri32(tri),
-		lightmapID:  -1,
-		activeEdges: EdgeAllActive,
+		material:     material,
+		aabb:         aabb.MakeAABB(),
+		tri:          toTri32(tri),
+		lightmapID:   -1,
+		activeEdges:  EdgeAllActive,
+		tangentSigns: [3]float32{1, 1, 1},
 	}
-	out.tangentSigns[0] = 1
-	out.tangentSigns[1] = 1
-	out.tangentSigns[2] = 1
 	out.Rebuild()
 	return out
 }
 
 // NewFaceSubdivided returns a new face for tri, preserving metadata and applying UV coordinates when UVs are locked.
 func (fc *Face) NewFaceSubdivided(tri [3]geometry.XYZ, uvU, uvV [3]float64) *Face {
-	out := NewFace(tri, fc.material)
-	out.parent = fc.parent
-	out.singleSided = fc.singleSided
-	out.lightmapID = fc.lightmapID
-	out.lmU = fc.lmU
-	out.lmV = fc.lmV
-	out.lockUV = fc.lockUV
+	out := &Face{
+		material:    fc.material,
+		aabb:        aabb.MakeAABB(),
+		tri:         toTri32(tri),
+		parent:      fc.parent,
+		singleSided: fc.singleSided,
+		lightmapID:  fc.lightmapID,
+		lmU:         fc.lmU,
+		lmV:         fc.lmV,
+		lockUV:      fc.lockUV,
+		activeEdges: EdgeAllActive,
+	}
+	out.tangentSigns[0] = 1
+	out.tangentSigns[1] = 1
+	out.tangentSigns[2] = 1
 	if fc.lockUV {
 		out.SetUV(uvU[0], uvV[0], uvU[1], uvV[1], uvU[2], uvV[2])
 	}
+	out.Rebuild()
 	return out
 }
 
@@ -129,23 +136,20 @@ func (fc *Face) Get2() (float64, float64, float64) {
 
 // Set0 sets the coordinates of the first point in the face.
 func (fc *Face) Set0(x, y, z float64) {
-	fc.tri.Points[0].X = float32(x)
-	fc.tri.Points[0].Y = float32(y)
-	fc.tri.Points[0].Z = float32(z)
+	p := &fc.tri.Points[0]
+	p.X, p.Y, p.Z = float32(x), float32(y), float32(z)
 }
 
 // Set1 updates the second point of the face to the given x, y, and z coordinates.
 func (fc *Face) Set1(x, y, z float64) {
-	fc.tri.Points[1].X = float32(x)
-	fc.tri.Points[1].Y = float32(y)
-	fc.tri.Points[1].Z = float32(z)
+	p := &fc.tri.Points[1]
+	p.X, p.Y, p.Z = float32(x), float32(y), float32(z)
 }
 
 // Set2 updates the coordinates of the face's third vertex.
 func (fc *Face) Set2(x, y, z float64) {
-	fc.tri.Points[2].X = float32(x)
-	fc.tri.Points[2].Y = float32(y)
-	fc.tri.Points[2].Z = float32(z)
+	p := &fc.tri.Points[2]
+	p.X, p.Y, p.Z = float32(x), float32(y), float32(z)
 }
 
 // Translate shifts the coordinates of a triangle vertex by specified offsets in X, Y, and Z directions.
@@ -460,8 +464,8 @@ func (fc *Face) IntersectRay(oX, oY, oZ, dirX, dirY, dirZ, maxDist float64) (flo
 	return 0, false
 }
 
-// Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
-func (fc *Face) Rebuild() {
+// rebuildBase updates the face AABB, plane normal, default planar UVs (unless locked), and initial vertex normals without recomputing tangents.
+func (fc *Face) rebuildBase() {
 	fc.computeAABB()
 	fc.computeNormal()
 	fc.computeUV()
@@ -470,6 +474,11 @@ func (fc *Face) Rebuild() {
 	} else {
 		fc.vertexNormals = [3]geometry.XYZ32{fc.n, fc.n, fc.n}
 	}
+}
+
+// Rebuild calculates the axis-aligned bounding box (AABB) for the segment, considering both 2D and 3D cases.
+func (fc *Face) Rebuild() {
+	fc.rebuildBase()
 	fc.computeTangent()
 }
 
@@ -670,6 +679,11 @@ func (fc *Face) SumPoints(cx, cy, cz float64, count int) (float64, float64, floa
 	return cx, cy, cz, count
 }
 
+//func (fc *Face) GetMinMax(iMinX, iMinY, iMinZ float64, iMaxX, iMaxY, iMaxZ float64) (float64, float64, float64, float64, float64, float64) {
+//	minX, minY, minZ, maxX, maxY, maxZ := fc.aabb.GetMinMax()
+//	return min(minX, iMinX), min(minY, iMinY), min(minZ, iMinZ), max(maxX, iMaxX), max(maxY, iMaxY), max(maxZ, iMaxZ)
+//}
+
 // GetMinMax returns the bounds expanded to include all vertices of the face in float64.
 func (fc *Face) GetMinMax(minX, minY, minZ, maxX, maxY, maxZ float64) (float64, float64, float64, float64, float64, float64) {
 	for i := range geometry.Triangle3DPoints32 {
@@ -796,6 +810,16 @@ func (fc *Face) SplitFace(mask uint8, mab32, mbc32, mca32 geometry.XYZ32) []*Fac
 	if mask == 0 {
 		return []*Face{fc}
 	}
+	out := make([]*Face, 0, 4)
+	fc.appendSplitFaces(mask, mab32, mbc32, mca32, &out)
+	return out
+}
+
+func (fc *Face) appendSplitFaces(mask uint8, mab32, mbc32, mca32 geometry.XYZ32, dst *[]*Face) {
+	if mask == 0 {
+		*dst = append(*dst, fc)
+		return
+	}
 	averageUV := func(a, b float32) float64 {
 		return (float64(a) + float64(b)) * 0.5
 	}
@@ -817,45 +841,45 @@ func (fc *Face) SplitFace(mask uint8, mab32, mbc32, mca32 geometry.XYZ32) []*Fac
 
 	switch mask {
 	case 1:
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{a, mab, c}, [3]float64{u64[0], uvAB[0], u64[2]}, [3]float64{v64[0], uvAB[1], v64[2]}),
 			newFace([3]geometry.XYZ{mab, b, c}, [3]float64{uvAB[0], u64[1], u64[2]}, [3]float64{uvAB[1], v64[1], v64[2]}),
-		}
+		)
 	case 2:
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{a, b, mbc}, [3]float64{u64[0], u64[1], uvBC[0]}, [3]float64{v64[0], v64[1], uvBC[1]}),
 			newFace([3]geometry.XYZ{a, mbc, c}, [3]float64{u64[0], uvBC[0], u64[2]}, [3]float64{v64[0], uvBC[1], v64[2]}),
-		}
+		)
 	case 4:
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{a, b, mca}, [3]float64{u64[0], u64[1], uvCA[0]}, [3]float64{v64[0], v64[1], uvCA[1]}),
 			newFace([3]geometry.XYZ{mca, b, c}, [3]float64{uvCA[0], u64[1], u64[2]}, [3]float64{uvCA[1], v64[1], v64[2]}),
-		}
+		)
 	case 3:
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{b, mbc, mab}, [3]float64{u64[1], uvBC[0], uvAB[0]}, [3]float64{v64[1], uvBC[1], uvAB[1]}),
 			newFace([3]geometry.XYZ{a, mab, c}, [3]float64{u64[0], uvAB[0], u64[2]}, [3]float64{v64[0], uvAB[1], v64[2]}),
 			newFace([3]geometry.XYZ{mab, mbc, c}, [3]float64{uvAB[0], uvBC[0], u64[2]}, [3]float64{uvAB[1], uvBC[1], v64[2]}),
-		}
+		)
 	case 5:
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{a, mab, mca}, [3]float64{u64[0], uvAB[0], uvCA[0]}, [3]float64{v64[0], uvAB[1], uvCA[1]}),
 			newFace([3]geometry.XYZ{mab, b, c}, [3]float64{uvAB[0], u64[1], u64[2]}, [3]float64{uvAB[1], v64[1], v64[2]}),
 			newFace([3]geometry.XYZ{mab, c, mca}, [3]float64{uvAB[0], u64[2], uvCA[0]}, [3]float64{uvAB[1], v64[2], uvCA[1]}),
-		}
+		)
 	case 6:
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{c, mca, mbc}, [3]float64{u64[2], uvCA[0], uvBC[0]}, [3]float64{v64[2], uvCA[1], uvBC[1]}),
 			newFace([3]geometry.XYZ{a, b, mbc}, [3]float64{u64[0], u64[1], uvBC[0]}, [3]float64{v64[0], v64[1], uvBC[1]}),
 			newFace([3]geometry.XYZ{a, mbc, mca}, [3]float64{u64[0], uvBC[0], uvCA[0]}, [3]float64{v64[0], uvBC[1], uvCA[1]}),
-		}
+		)
 	default: // mask == 7
-		return []*Face{
+		*dst = append(*dst,
 			newFace([3]geometry.XYZ{a, mab, mca}, [3]float64{u64[0], uvAB[0], uvCA[0]}, [3]float64{v64[0], uvAB[1], uvCA[1]}),
 			newFace([3]geometry.XYZ{mab, b, mbc}, [3]float64{uvAB[0], u64[1], uvBC[0]}, [3]float64{uvAB[1], v64[1], uvBC[1]}),
 			newFace([3]geometry.XYZ{mca, mbc, c}, [3]float64{uvCA[0], uvBC[0], u64[2]}, [3]float64{uvCA[1], uvBC[1], v64[2]}),
 			newFace([3]geometry.XYZ{mab, mbc, mca}, [3]float64{uvAB[0], uvBC[0], uvCA[0]}, [3]float64{uvAB[1], uvBC[1], uvCA[1]}),
-		}
+		)
 	}
 }
 

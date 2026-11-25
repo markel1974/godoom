@@ -38,14 +38,19 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		margin:             margin,
 	}
 
-	var nodeIndex uint
-
-	for nodeIndex = 0; nodeIndex < initialSize; nodeIndex++ {
-		node := NewNode()
-		t.nodes[nodeIndex] = node
+	nodeSlab := make([]Node, initialSize)
+	aabbSlab := make([]AABB, initialSize)
+	for nodeIndex := uint(0); nodeIndex < initialSize; nodeIndex++ {
+		node := &nodeSlab[nodeIndex]
+		aabbSlab[nodeIndex] = MakeAABB()
+		node.aabb = &aabbSlab[nodeIndex]
+		node.parentNodeIndex = NullNode
+		node.leftNodeIndex = NullNode
+		node.rightNodeIndex = NullNode
 		node.nextNodeIndex = nodeIndex + 1
+		t.nodes[nodeIndex] = node
 	}
-	t.nodes[initialSize-1].nextNodeIndex = NullNode
+	nodeSlab[initialSize-1].nextNodeIndex = NullNode
 
 	return t
 }
@@ -53,6 +58,18 @@ func NewTree(initialSize uint, margin float64) *Tree {
 // Capacity returns the maximum number of nodes the tree can hold.
 func (a *Tree) Capacity() uint {
 	return a.nodeCapacity
+}
+
+// EnsureCapacity expands the internal node pool so at least minCap nodes fit without incremental reallocations.
+func (a *Tree) EnsureCapacity(minCap uint) {
+	if minCap <= a.nodeCapacity {
+		return
+	}
+	newCap := a.nodeCapacity * 2
+	if newCap < minCap {
+		newCap = minCap
+	}
+	a.growTo(newCap)
 }
 
 // GetRoot returns the root AABB of the tree along with a boolean indicating its existence.
@@ -71,6 +88,11 @@ func (a *Tree) Clear() {
 	a.nextFreeNodeIndex = 0
 	var nodeIndex uint
 	for nodeIndex = 0; nodeIndex < a.nodeCapacity; nodeIndex++ {
+		if obj := a.nodes[nodeIndex].object; obj != nil {
+			if ab := obj.GetAABB(); ab != nil {
+				ab.SetIndex(-1)
+			}
+		}
 		a.nodes[nodeIndex].object = nil
 		a.nodes[nodeIndex].parentNodeIndex = NullNode
 		a.nodes[nodeIndex].leftNodeIndex = NullNode
@@ -82,6 +104,27 @@ func (a *Tree) Clear() {
 	}
 	a.version++
 	//a.objectNodeIndexMap = make(map[IObject]uint)
+}
+
+// IsEmpty reports whether the tree currently holds zero allocated nodes.
+func (a *Tree) IsEmpty() bool {
+	return a.allocatedNodeCount == 0
+}
+
+// ContainsObject reports in O(1) whether object currently maps to an active node in this tree.
+func (a *Tree) ContainsObject(object IObject) bool {
+	if object == nil {
+		return false
+	}
+	ab := object.GetAABB()
+	if ab == nil {
+		return false
+	}
+	nodeIdx := ab.GetIndex()
+	if nodeIdx < 0 || nodeIdx >= int64(len(a.nodes)) {
+		return false
+	}
+	return a.nodes[uint(nodeIdx)].object == object
 }
 
 // InsertObject inserts a new object into the Tree, updates its AABB, and associates it with a node index.
@@ -471,20 +514,45 @@ func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float6
 	}
 }
 
+func (a *Tree) growTo(newCap uint) {
+	if newCap <= a.nodeCapacity {
+		return
+	}
+	prevCap := a.nodeCapacity
+	added := newCap - prevCap
+	nodes := make([]*Node, newCap)
+	copy(nodes, a.nodes)
+
+	nodeSlab := make([]Node, added)
+	aabbSlab := make([]AABB, added)
+	for i := uint(0); i < added; i++ {
+		nodeIdx := prevCap + i
+		node := &nodeSlab[i]
+		aabbSlab[i] = MakeAABB()
+		node.aabb = &aabbSlab[i]
+		node.parentNodeIndex = NullNode
+		node.leftNodeIndex = NullNode
+		node.rightNodeIndex = NullNode
+		node.nextNodeIndex = nodeIdx + 1
+		nodes[nodeIdx] = node
+	}
+	nodeSlab[added-1].nextNodeIndex = a.nextFreeNodeIndex
+	a.nodes = nodes
+	a.nodeCapacity = newCap
+	a.nextFreeNodeIndex = prevCap
+}
+
 // allocateNode manages the allocation of a new node in the tree, resizing the node array if capacity is exceeded.
 func (a *Tree) allocateNode() (uint, *Node) {
 	if a.nextFreeNodeIndex == NullNode {
-		a.nodeCapacity += a.growthSize
-		nodes := make([]*Node, a.nodeCapacity)
-		copy(nodes, a.nodes)
-		a.nodes = nodes
-		for nodeIndex := a.allocatedNodeCount; nodeIndex < a.nodeCapacity; nodeIndex++ {
-			node := NewNode()
-			a.nodes[nodeIndex] = node
-			node.nextNodeIndex = nodeIndex + 1
+		grow := a.nodeCapacity
+		if grow < a.growthSize {
+			grow = a.growthSize
 		}
-		a.nodes[a.nodeCapacity-1].nextNodeIndex = NullNode
-		a.nextFreeNodeIndex = a.allocatedNodeCount
+		if grow < 16 {
+			grow = 16
+		}
+		a.growTo(a.nodeCapacity + grow)
 	}
 
 	nodeIndex := a.nextFreeNodeIndex

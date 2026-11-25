@@ -360,7 +360,7 @@ func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float6
 	if !v.deformGeometry(impact, impulse, radius) {
 		return false
 	}
-	// Una sola ricostruzione al termine dell'intera deformazione.
-	v.RebuildTree()
+	// Sincronizzazione incrementale dell'albero AABB al termine della deformazione.
+	v.faces.SyncDeformedTree()
 	return true
 }

@@ -21,6 +21,16 @@ type edgeAdjacency struct {
 	count uint8
 }
 
+type adjFace struct {
+	idx int32
+	nx  float64
+	ny  float64
+	nz  float64
+	ax  float64
+	ay  float64
+	az  float64
+}
+
 type smoothVertKey struct {
 	x, y, z int64
 }
@@ -45,10 +55,14 @@ type Faces struct {
 	maxX, maxY, maxZ float64
 	w, h, d          float64
 
-	markedEdges     map[EdgeKey]struct{}
 	midpoints       map[EdgeKey]geometry.XYZ32
 	displacements   map[VertexKey]geometry.XYZ32
+	edgeAdj         map[EdgeKey]edgeAdjacency
+	smoothHead      map[smoothVertKey]int32
+	smoothNext      []int32
+	adjFaceData     []adjFace
 	nextFaces       []*Face
+	discarded       []*Face
 	hasTesselation  bool
 	allowTessellate bool
 	version         uint64
@@ -83,7 +97,6 @@ func NewFacesSized(tree *aabb.Tree, initSize int, fill bool) *Faces {
 		tree:            tree,
 		container:       make([]*Face, initSize),
 		count:           count,
-		markedEdges:     nil,
 		midpoints:       nil,
 		displacements:   nil,
 		nextFaces:       nil,
@@ -106,9 +119,10 @@ func (f *Faces) TessellateInit() {
 	if f.hasTesselation {
 		return
 	}
-	f.markedEdges = make(map[EdgeKey]struct{}, 128)
 	f.midpoints = make(map[EdgeKey]geometry.XYZ32, 128)
 	f.displacements = make(map[VertexKey]geometry.XYZ32, 128)
+	f.edgeAdj = make(map[EdgeKey]edgeAdjacency, max(f.count*2, 128))
+	f.smoothHead = make(map[smoothVertKey]int32, max(f.count*2, 128))
 	f.nextFaces = make([]*Face, 0, f.count)
 	f.hasTesselation = true
 }
@@ -208,7 +222,7 @@ func (f *Faces) RebuildGeometry() {
 	f.maxX, f.maxY, f.maxZ = -math.MaxFloat64, -math.MaxFloat64, -math.MaxFloat64
 	for x := 0; x < f.count; x++ {
 		face := f.container[x]
-		face.Rebuild()
+		face.rebuildBase()
 		f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ = face.GetMinMax(f.minX, f.minY, f.minZ, f.maxX, f.maxY, f.maxZ)
 	}
 	f.computeActiveEdges()
@@ -226,9 +240,43 @@ func (f *Faces) RebuildTree() {
 	if f.tree == nil {
 		return
 	}
+	f.discarded = f.discarded[:0]
+	if f.count > 0 {
+		f.tree.EnsureCapacity(uint(f.count * 2))
+	}
 	f.tree.Clear()
 	for x := 0; x < f.count; x++ {
 		if face := f.container[x]; face != nil {
+			f.tree.InsertObject(face)
+		}
+	}
+}
+
+// SyncDeformedTree incrementally removes replaced split faces, updates modified leaves,
+// and inserts newly subdivided faces into the owned spatial AABB tree.
+func (f *Faces) SyncDeformedTree() {
+	if f.tree == nil {
+		return
+	}
+	if f.tree.IsEmpty() {
+		f.RebuildTree()
+		return
+	}
+	if f.count > 0 {
+		f.tree.EnsureCapacity(uint(f.count * 2))
+	}
+	for _, oldFace := range f.discarded {
+		f.tree.RemoveObject(oldFace)
+	}
+	f.discarded = f.discarded[:0]
+	for x := 0; x < f.count; x++ {
+		face := f.container[x]
+		if face == nil {
+			continue
+		}
+		if f.tree.ContainsObject(face) {
+			f.tree.UpdateObject(face)
+		} else {
 			f.tree.InsertObject(face)
 		}
 	}
@@ -238,30 +286,51 @@ func (f *Faces) RebuildTree() {
 // when adjacent faces fall within the crease threshold (cosCrease = 0.5 -> ~60 deg),
 // while preserving explicit artist vertex normals when already set.
 func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
-	if f.count <= 1 {
+	if f.count <= 0 {
 		return
 	}
 	needsSmooth := false
-	for i := 0; i < f.count; i++ {
-		if fc := f.container[i]; fc != nil && !fc.hasExplicitNormals {
-			needsSmooth = true
-			break
+	if f.count > 1 {
+		for i := 0; i < f.count; i++ {
+			if fc := f.container[i]; fc != nil && !fc.hasExplicitNormals {
+				needsSmooth = true
+				break
+			}
 		}
 	}
 	if !needsSmooth {
+		for i := 0; i < f.count; i++ {
+			if fc := f.container[i]; fc != nil {
+				fc.computeTangent()
+			}
+		}
 		return
 	}
-	type adjFace struct {
-		idx int32
-		nx  float64
-		ny  float64
-		nz  float64
-		ax  float64
-		ay  float64
-		az  float64
+
+	neededLinks := f.count * 3
+	var smoothHead map[smoothVertKey]int32
+	var smoothNext []int32
+	var faceData []adjFace
+	if f.hasTesselation {
+		if f.smoothHead == nil {
+			f.smoothHead = make(map[smoothVertKey]int32, f.count*2)
+		} else {
+			clear(f.smoothHead)
+		}
+		if cap(f.smoothNext) < neededLinks {
+			f.smoothNext = make([]int32, neededLinks)
+		}
+		if cap(f.adjFaceData) < f.count {
+			f.adjFaceData = make([]adjFace, f.count)
+		}
+		smoothHead = f.smoothHead
+		smoothNext = f.smoothNext[:neededLinks]
+		faceData = f.adjFaceData[:f.count]
+	} else {
+		smoothHead = make(map[smoothVertKey]int32, f.count*2)
+		smoothNext = make([]int32, neededLinks)
+		faceData = make([]adjFace, f.count)
 	}
-	adjMap := make(map[smoothVertKey][]int32, f.count*2)
-	faceData := make([]adjFace, f.count)
 
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
@@ -283,25 +352,31 @@ func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
 		}
 		for k := 0; k < 3; k++ {
 			key := makeSmoothVertKey(fc.tri.Points[k])
-			adjMap[key] = append(adjMap[key], int32(i))
+			slot := i*3 + k
+			smoothNext[slot] = smoothHead[key]
+			smoothHead[key] = int32(slot + 1)
 		}
 	}
 
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
-		if fc == nil || fc.hasExplicitNormals {
+		if fc == nil {
+			continue
+		}
+		if fc.hasExplicitNormals {
+			fc.computeTangent()
 			continue
 		}
 		fd := faceData[i]
 		if fd.nx == 0 && fd.ny == 0 && fd.nz == 0 {
+			fc.computeTangent()
 			continue
 		}
 		for k := 0; k < 3; k++ {
 			key := makeSmoothVertKey(fc.tri.Points[k])
-			refs := adjMap[key]
 			var sx, sy, sz float64
-			for _, rIdx := range refs {
-				ofd := faceData[rIdx]
+			for cur := smoothHead[key]; cur > 0; cur = smoothNext[cur-1] {
+				ofd := faceData[(cur-1)/3]
 				if fd.nx*ofd.nx+fd.ny*ofd.ny+fd.nz*ofd.nz >= cosCrease {
 					sx += ofd.ax
 					sy += ofd.ay
@@ -376,7 +451,17 @@ func (f *Faces) computeActiveEdges() {
 	if f.count < 2 {
 		return
 	}
-	edgeAdj := make(map[EdgeKey]edgeAdjacency, f.count*2)
+	var edgeAdj map[EdgeKey]edgeAdjacency
+	if f.hasTesselation {
+		if f.edgeAdj == nil {
+			f.edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
+		} else {
+			clear(f.edgeAdj)
+		}
+		edgeAdj = f.edgeAdj
+	} else {
+		edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
+	}
 
 	canOccludeEdge := func(fc *Face) bool {
 		if fc == nil {
@@ -575,8 +660,8 @@ func (f *Faces) Clear() {
 // Deform returns true when at least one vertex is displaced.
 func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if f.allowTessellate {
-		// Quattro intervalli geometrici lungo il raggio d'impatto.
-		targetEdge := radius * 0.25
+		// Quattro intervalli geometrici lungo il diametro d'impatto.
+		targetEdge := radius * 0.45
 		if targetEdge < deformMinEdge {
 			targetEdge = deformMinEdge
 		}
@@ -587,13 +672,11 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 	f.TessellateInit()
 	radiusSq := radius * radius
 
-	for k := range f.displacements {
-		delete(f.displacements, k)
-	}
+	clear(f.displacements)
 
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
-		if fc == nil || !fc.IsDeformable() {
+		if fc == nil || !fc.IsDeformable() || !fc.NearPoint(impact, radius) {
 			continue
 		}
 		for _, p := range fc.tri.Points {
@@ -615,7 +698,9 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 	}
 
 	// Fallback per triangoli grandi i cui vertici ricadono all'esterno del raggio d'impatto
+	usedFallback := false
 	if len(f.displacements) == 0 {
+		usedFallback = true
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]
 			if fc == nil || !fc.IsDeformable() {
@@ -658,7 +743,7 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 	// Aggiorna tutte le copie locali dei vertici condivisi.
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
-		if fc == nil {
+		if fc == nil || (!usedFallback && !fc.NearPoint(impact, radius)) {
 			continue
 		}
 		for j := 0; j < geometry.Triangle3DPoints32; j++ {
@@ -702,11 +787,15 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 	initialCount := f.count
 	maxEdgeSq := maxEdge * maxEdge
 	searchRadius := radius + maxEdge
+	searchRadiusSq := searchRadius * searchRadius
+	coarseCut := searchRadius * 1.5
+	if coarseCut < maxEdge {
+		coarseCut = maxEdge
+	}
+	coarseCutSq := coarseCut * coarseCut
 
 	for pass := 0; pass < deformMaxSubdivisionPasses; pass++ {
-		for k := range f.markedEdges {
-			delete(f.markedEdges, k)
-		}
+		clear(f.midpoints)
 		// individua gli spigoli da raffinare nella regione d'impatto.
 		for i := 0; i < f.count; i++ {
 			fc := f.container[i]
@@ -717,38 +806,27 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				continue
 			}
 			p := fc.tri.Points
+			if distPointToTriangleSq(impact, p[0], p[1], p[2]) > searchRadiusSq {
+				continue
+			}
 			edges := [3][2]geometry.XYZ32{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
 			for _, edge := range edges {
 				d2 := distanceSquared(edge[0], edge[1])
 				// Non suddividere se lo spigolo è già più corto di deformMinEdge
-				if d2 > maxEdgeSq && d2 > minEdgeSq {
-					f.markedEdges[MakeEdgeKey(edge[0], edge[1])] = struct{}{}
+				if d2 <= maxEdgeSq || d2 <= minEdgeSq {
+					continue
 				}
-			}
-		}
-		if len(f.markedEdges) == 0 {
-			break
-		}
-		// ogni lato condiviso riceve un unico punto medio.
-		for k := range f.midpoints {
-			delete(f.midpoints, k)
-		}
-		for i := 0; i < f.count; i++ {
-			fc := f.container[i]
-			if fc == nil {
-				continue
-			}
-
-			p := fc.tri.Points
-			edges := [3][2]geometry.XYZ32{{p[0], p[1]}, {p[1], p[2]}, {p[2], p[0]}}
-			for _, edge := range edges {
+				if d2 <= coarseCutSq && distPointToSegmentSq(impact, edge[0], edge[1]) > searchRadiusSq {
+					continue
+				}
 				key := MakeEdgeKey(edge[0], edge[1])
-				if _, ok := f.markedEdges[key]; ok {
-					if _, exists := f.midpoints[key]; !exists {
-						f.midpoints[key] = midpoint(edge[0], edge[1])
-					}
+				if _, exists := f.midpoints[key]; !exists {
+					f.midpoints[key] = midpoint(edge[0], edge[1])
 				}
 			}
+		}
+		if len(f.midpoints) == 0 {
+			break
 		}
 		// applica le suddivisioni a tutte le facce incidenti.
 		f.nextFaces = f.nextFaces[:0]
@@ -758,23 +836,28 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 				continue
 			}
 			p := fc.tri.Points
-			keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
 			var mask uint8
 			var mab, mbc, mca geometry.XYZ32
-			if m, ok := f.midpoints[keys[0]]; ok {
+			if m, ok := f.midpoints[MakeEdgeKey(p[0], p[1])]; ok {
 				mask |= 1
 				mab = m
 			}
-			if m, ok := f.midpoints[keys[1]]; ok {
+			if m, ok := f.midpoints[MakeEdgeKey(p[1], p[2])]; ok {
 				mask |= 2
 				mbc = m
 			}
-			if m, ok := f.midpoints[keys[2]]; ok {
+			if m, ok := f.midpoints[MakeEdgeKey(p[2], p[0])]; ok {
 				mask |= 4
 				mca = m
 			}
-			children := fc.SplitFace(mask, mab, mbc, mca)
-			f.nextFaces = append(f.nextFaces, children...)
+			if mask == 0 {
+				f.nextFaces = append(f.nextFaces, fc)
+			} else {
+				if fc.GetAABB().GetIndex() >= 0 {
+					f.discarded = append(f.discarded, fc)
+				}
+				fc.appendSplitFaces(mask, mab, mbc, mca, &f.nextFaces)
+			}
 			if maxFaces > 0 && len(f.nextFaces) > maxFaces {
 				return f.count - initialCount, fmt.Errorf("tessellation face limit exceeded: %d", maxFaces)
 			}
@@ -783,4 +866,108 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		f.count = len(f.container)
 	}
 	return f.count - initialCount, nil
+}
+
+// distPointToSegmentSq returns the squared distance from p to the line segment from a to b.
+// It treats a near-zero-length segment as a single point at a.
+func distPointToSegmentSq(p geometry.XYZ, a, b geometry.XYZ32) float64 {
+	abX := float64(b.X) - float64(a.X)
+	abY := float64(b.Y) - float64(a.Y)
+	abZ := float64(b.Z) - float64(a.Z)
+	apX := p.X - float64(a.X)
+	apY := p.Y - float64(a.Y)
+	apZ := p.Z - float64(a.Z)
+	abLenSq := abX*abX + abY*abY + abZ*abZ
+	if abLenSq <= 1e-18 {
+		return apX*apX + apY*apY + apZ*apZ
+	}
+	t := (apX*abX + apY*abY + apZ*abZ) / abLenSq
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+	cx := apX - abX*t
+	cy := apY - abY*t
+	cz := apZ - abZ*t
+	return cx*cx + cy*cy + cz*cz
+}
+
+func distPointToTriangleSq(p geometry.XYZ, a32, b32, c32 geometry.XYZ32) float64 {
+	ax, ay, az := float64(a32.X), float64(a32.Y), float64(a32.Z)
+	bx, by, bz := float64(b32.X), float64(b32.Y), float64(b32.Z)
+	cx, cy, cz := float64(c32.X), float64(c32.Y), float64(c32.Z)
+
+	abX, abY, abZ := bx-ax, by-ay, bz-az
+	acX, acY, acZ := cx-ax, cy-ay, cz-az
+	apX, apY, apZ := p.X-ax, p.Y-ay, p.Z-az
+
+	d1 := abX*apX + abY*apY + abZ*apZ
+	d2 := acX*apX + acY*apY + acZ*apZ
+	if d1 <= 0 && d2 <= 0 {
+		return apX*apX + apY*apY + apZ*apZ
+	}
+
+	bpX, bpY, bpZ := p.X-bx, p.Y-by, p.Z-bz
+	d3 := abX*bpX + abY*bpY + abZ*bpZ
+	d4 := acX*bpX + acY*bpY + acZ*bpZ
+	if d3 >= 0 && d4 <= d3 {
+		return bpX*bpX + bpY*bpY + bpZ*bpZ
+	}
+
+	vc := d1*d4 - d3*d2
+	if vc <= 0 && d1 >= 0 && d3 <= 0 {
+		if denom := d1 - d3; denom > 1e-18 {
+			v := d1 / denom
+			dx, dy, dz := apX-abX*v, apY-abY*v, apZ-abZ*v
+			return dx*dx + dy*dy + dz*dz
+		}
+	}
+
+	cpX, cpY, cpZ := p.X-cx, p.Y-cy, p.Z-cz
+	d5 := abX*cpX + abY*cpY + abZ*cpZ
+	d6 := acX*cpX + acY*cpY + acZ*cpZ
+	if d6 >= 0 && d5 <= d6 {
+		return cpX*cpX + cpY*cpY + cpZ*cpZ
+	}
+
+	vb := d5*d2 - d1*d6
+	if vb <= 0 && d2 >= 0 && d6 <= 0 {
+		if denom := d2 - d6; denom > 1e-18 {
+			w := d2 / denom
+			dx, dy, dz := apX-acX*w, apY-acY*w, apZ-acZ*w
+			return dx*dx + dy*dy + dz*dz
+		}
+	}
+
+	va := d3*d6 - d5*d4
+	if va <= 0 && (d4-d3) >= 0 && (d5-d6) >= 0 {
+		if denom := (d4 - d3) + (d5 - d6); denom > 1e-18 {
+			w := (d4 - d3) / denom
+			bcX, bcY, bcZ := cx-bx, cy-by, cz-bz
+			dx, dy, dz := bpX-bcX*w, bpY-bcY*w, bpZ-bcZ*w
+			return dx*dx + dy*dy + dz*dz
+		}
+	}
+
+	denom := va + vb + vc
+	if denom <= 1e-18 {
+		dAB := distPointToSegmentSq(p, a32, b32)
+		dBC := distPointToSegmentSq(p, b32, c32)
+		dCA := distPointToSegmentSq(p, c32, a32)
+		if dBC < dAB {
+			dAB = dBC
+		}
+		if dCA < dAB {
+			dAB = dCA
+		}
+		return dAB
+	}
+	inv := 1.0 / denom
+	v := vb * inv
+	w := vc * inv
+	dx := apX - abX*v - acX*w
+	dy := apY - abY*v - acY*w
+	dz := apZ - abZ*v - acZ*w
+	return dx*dx + dy*dy + dz*dz
 }

@@ -24,65 +24,55 @@ type ShadowRigidEntry struct {
 }
 
 // Reset reinitializes the entry for the entity and frame, clearing cached mesh, transform, hash, and stream state.
-func (rEntry *ShadowRigidEntry) Reset(entID uint64, frame uint64) {
-	rEntry.entID = entID
-	rEntry.inUse = true
-	rEntry.seenFrame = 0
-	rEntry.lastSeenFrame = frame
-	rEntry.isRigidActive = false
-	rEntry.hash = 0
-	rEntry.matValid = false
-	rEntry.faces = nil
-	rEntry.rm = nil
-	if rEntry.stream != nil {
-		rEntry.stream.valid = false
-		rEntry.stream.pFaces = nil
-		rEntry.stream.pNextFaces = nil
-		rEntry.stream.compileFrame = 0
-		rEntry.stream.committedFrame = 0
-		rEntry.stream.committedBaseIdx = -1
-		rEntry.stream.fv.DeepReset()
+func (re *ShadowRigidEntry) Reset(entID uint64, frame uint64) {
+	re.entID = entID
+	re.inUse = true
+	re.seenFrame = 0
+	re.lastSeenFrame = frame
+	re.isRigidActive = false
+	re.hash = 0
+	re.matValid = false
+	re.faces = nil
+	re.rm = nil
+	if re.stream != nil {
+		re.stream.Reset()
 	}
 }
 
 // Release marks the entry unused and clears cached rigid state, mesh references, and any stream cache data.
-func (rEntry *ShadowRigidEntry) Release() {
-	rEntry.inUse = false
-	rEntry.isRigidActive = false
-	rEntry.hash = 0
-	rEntry.matValid = false
-	rEntry.faces = nil
-	rEntry.rm = nil
-	if rEntry.stream != nil {
-		rEntry.stream.inUse = false
-		rEntry.stream.valid = false
-		rEntry.stream.pFaces = nil
-		rEntry.stream.pNextFaces = nil
-		rEntry.stream.fv.DeepReset()
+func (re *ShadowRigidEntry) Release() {
+	re.inUse = false
+	re.isRigidActive = false
+	re.hash = 0
+	re.matValid = false
+	re.faces = nil
+	re.rm = nil
+	if re.stream != nil {
+		re.stream.Release()
 	}
 }
 
 // EnsureStreamCache returns the entry's render cache, creating it if needed.
 // It marks the cache in use and syncs its entity ID and last-seen frame.
-func (rEntry *ShadowRigidEntry) EnsureStreamCache() *ThingRenderCache {
-	if rEntry.stream == nil {
-		rEntry.stream = NewThingRenderCache()
+func (re *ShadowRigidEntry) EnsureStreamCache() *ThingRenderCache {
+	if re.stream == nil {
+		re.stream = NewThingRenderCache()
 	}
-	rEntry.stream.entID = rEntry.entID
-	rEntry.stream.inUse = true
-	rEntry.stream.lastSeenFrame = rEntry.lastSeenFrame
-	return rEntry.stream
+	re.stream.entID = re.entID
+	re.stream.inUse = true
+	re.stream.lastSeenFrame = re.lastSeenFrame
+	return re.stream
 }
 
 // SyncRigid updates the entry transform and cached mesh from the rigid entity and marks it active.
-func (rEntry *ShadowRigidEntry) SyncRigid(ent *rigid_body.Entity, rigidFaces *volumes.Faces, bThings *Things) {
+func (re *ShadowRigidEntry) SyncRigid(ent *rigid_body.Entity, rigidFaces *volumes.Faces, bThings *Things) {
 	tPosX, tPosY, zBot := ent.GetCenter()
 	qx, qy, qz, qw := ent.GetQRotation().Get()
-	buffers.BuildTransformMatrix(rEntry.mat[:], tPosX, tPosY, zBot, qx, qy, qz, qw)
-	rEntry.matValid = true
-	if rEntry.faces != rigidFaces || rEntry.rm == nil {
-		rEntry.rm = bThings.FindCachedMesh(rigidFaces)
-		rEntry.faces = rigidFaces
+	buffers.BuildTransformMatrix(re.mat[:], tPosX, tPosY, zBot, qx, qy, qz, qw)
+	re.matValid = true
+	if re.faces != rigidFaces || re.rm == nil {
+		re.rm = bThings.FindCachedMesh(rigidFaces)
+		re.faces = rigidFaces
 	}
-	rEntry.isRigidActive = true
+	re.isRigidActive = true
 }

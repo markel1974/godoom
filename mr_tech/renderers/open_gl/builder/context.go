@@ -37,7 +37,7 @@ type Context struct {
 	instOpaque   buffers.PtrPool[draws.DrawItemInstanced]
 	instLiquid   buffers.PtrPool[draws.DrawItemInstanced]
 	instAdditive buffers.PtrPool[draws.DrawItemInstanced]
-	instTransSrc buffers.PtrPool[RigidTransItem]
+	instTransSrc buffers.PtrPool[RigidTransparentItem]
 
 	dcRenderOpaque      *draws.DrawCommandsRender
 	dcRenderAdditive    *draws.DrawCommandsRender

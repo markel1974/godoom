@@ -12,39 +12,39 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// RigidInstance stores world-space translation and quaternion orientation for one instanced rigid entity.
+// RigidInstance represents a rigid transform instance with translation and orientation data.
 type RigidInstance struct {
 	cx, cy, cz     float64
 	qx, qy, qz, qw float64
 }
 
-// RigidInstanceGroup batches instances sharing one GPU ResidentMesh and upload offset.
+// RigidInstanceGroup manages a mesh and its associated rigid instances for batched rendering.
 type RigidInstanceGroup struct {
 	mesh           *buffers.ResidentMesh
 	instances      buffers.PtrPool[RigidInstance]
 	baseByteOffset int32
 }
 
-// RigidTransItem tracks a single translucent instanced submesh draw for back-to-front sorting.
-type RigidTransItem struct {
+// RigidTransparentItem represents a rigid transform entry associated with resident mesh data.
+type RigidTransparentItem struct {
 	mesh           *buffers.ResidentMesh
 	sub            *buffers.ResidentSubMesh
 	baseByteOffset int32
 	cx, cy, cz     float32
 }
 
-type thingMeshPtrEntry struct {
+// ThingMeshPtrEntry stores cached resident mesh state used to validate geometry updates.
+type ThingMeshPtrEntry struct {
 	rm        *buffers.ResidentMesh
 	geomHash  uint64
 	version   uint64
 	faceCount int
 }
 
-// Things manages entity render caches, GPU instancing for rigid objects,
-// and CPU vertex staging for morphing 3D models, sprites, and UI elements.
+// Things manages renderable thing meshes, instances, and per-frame draw state for dynamic world objects.
 type Things struct {
 	bc               *Context
-	thingMeshesByPtr map[*volumes.Faces]thingMeshPtrEntry
+	thingMeshesByPtr map[*volumes.Faces]ThingMeshPtrEntry
 	thingMeshes      map[uint64][]*buffers.ResidentMesh
 	thingsRender     *ThingsRender
 	instancePool     *buffers.InstancePool
@@ -53,7 +53,7 @@ type Things struct {
 	playerId         uint64
 }
 
-// NewThings initializes a Things bound to bc.
+// NewThings creates a Things builder for the supplied context and initializes its caches and instance pools.
 func NewThings(bc *Context) *Things {
 	var playerID uint64
 	if bc.player != nil && bc.player.GetEntity() != nil {
@@ -62,7 +62,7 @@ func NewThings(bc *Context) *Things {
 	bt := &Things{
 		bc:               bc,
 		playerId:         playerID,
-		thingMeshesByPtr: make(map[*volumes.Faces]thingMeshPtrEntry, 512),
+		thingMeshesByPtr: make(map[*volumes.Faces]ThingMeshPtrEntry, 512),
 		thingMeshes:      make(map[uint64][]*buffers.ResidentMesh, 256),
 		thingsRender:     NewThingsRender(),
 		instancePool:     buffers.NewInstancePool(bc.ctx, 256),
@@ -71,8 +71,9 @@ func NewThings(bc *Context) *Things {
 	return bt
 }
 
+// cacheThingMeshPtr records a resident mesh lookup by Faces pointer with geometry metadata for validation.
 func (w *Things) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers.ResidentMesh, gh, ver uint64, faceCount int) {
-	w.thingMeshesByPtr[rigidFaces] = thingMeshPtrEntry{
+	w.thingMeshesByPtr[rigidFaces] = ThingMeshPtrEntry{
 		rm:        rm,
 		geomHash:  gh,
 		version:   ver,
@@ -80,7 +81,7 @@ func (w *Things) cacheThingMeshPtr(rigidFaces *volumes.Faces, rm *buffers.Reside
 	}
 }
 
-// RetrieveMesh returns a resident mesh for rigidFaces, reusing or rebuilding cached mesh data when needed.
+// RetrieveMesh returns a cached resident mesh for rigidFaces, rebuilding or creating it when needed.
 // The returned bool reports whether the mesh was rebuilt during the current mesh frame.
 func (w *Things) RetrieveMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh, bool) {
 	if rm := w.FindCachedMesh(rigidFaces); rm != nil {
@@ -106,8 +107,7 @@ func (w *Things) RetrieveMesh(rigidFaces *volumes.Faces) (*buffers.ResidentMesh,
 	return rm, true
 }
 
-// Process stages visible things, routes rigid objects into GPU instancing,
-// and streams non-rigid geometry into FrameVertices.
+// Process prepares visible things for rendering, updates mesh and instance caches, and returns whether render data changed.
 func (w *Things) Process(things *model.Things, frustumFront *aabb.Frustum) bool {
 	if w.bc.meshFrame == 0 {
 		w.bc.meshFrame = 1
@@ -225,6 +225,7 @@ func (w *Things) Process(things *model.Things, frustumFront *aabb.Frustum) bool 
 	return thingsChanged
 }
 
+// resetInstancedPools marks all instanced draw pools as empty while retaining their allocated storage.
 func (w *Things) resetInstancedPools() {
 	w.bc.instOpaque.Reset()
 	w.bc.instLiquid.Reset()
@@ -232,6 +233,7 @@ func (w *Things) resetInstancedPools() {
 	w.bc.instTransSrc.Reset()
 }
 
+// rebuildInstancedDraws rebuilds instance transform buffers and draw lists for all non-empty instance groups.
 func (w *Things) rebuildInstancedDraws() {
 	w.resetInstancedPools()
 	w.instancePool.Reset()
@@ -260,6 +262,8 @@ func (w *Things) rebuildInstancedDraws() {
 	}
 }
 
+// appendInstancedGroup appends draw items for each drawable submesh in g using instVBO.
+// It emits per-instance transparent sources and batched instanced draws for other blend modes.
 func (w *Things) appendInstancedGroup(g *RigidInstanceGroup, instVBO uint32) {
 	cnt := int32(g.instances.Len)
 	for sIdx := 0; sIdx < g.mesh.SubMeshesLen; sIdx++ {
@@ -298,7 +302,8 @@ func (w *Things) appendInstancedGroup(g *RigidInstanceGroup, instVBO uint32) {
 	}
 }
 
-// BuildNonRigidCache rebuilds or reuses CPU-staged vertex batches in entry2 for a streaming or morphed thing.
+// BuildNonRigidCache builds or reuses the non-rigid render cache for thing.
+// It returns false when thing has no renderable UI faces.
 func (w *Things) BuildNonRigidCache(thing ithing.IThing, entry2 *ThingRenderCache) bool {
 	pFaces, pNextFaces, lp, renderMode := thing.GetUIFaces()
 	if pFaces == nil || pFaces.Len() == 0 {
@@ -430,7 +435,7 @@ func (w *Things) BuildNonRigidCache(thing ithing.IThing, entry2 *ThingRenderCach
 	return true
 }
 
-// FindCachedMesh returns a cached resident mesh matching rigidFaces in O(1) after first verification, or nil if none exists.
+// FindCachedMesh returns a cached resident mesh matching rigidFaces, or nil if no valid cached mesh is found.
 func (w *Things) FindCachedMesh(rigidFaces *volumes.Faces) *buffers.ResidentMesh {
 	gh := rigidFaces.GetGeomHash()
 	ver := rigidFaces.GetVersion()

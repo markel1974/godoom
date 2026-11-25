@@ -48,6 +48,26 @@ func NewThingRenderCache() *ThingRenderCache {
 	}
 }
 
+// Reset invalidates the render cache, clears face references and frame state, and deeply resets its frame vertices.
+func (tr *ThingRenderCache) Reset() {
+	tr.valid = false
+	tr.pFaces = nil
+	tr.pNextFaces = nil
+	tr.compileFrame = 0
+	tr.committedFrame = 0
+	tr.committedBaseIdx = -1
+	tr.fv.DeepReset()
+}
+
+// Release marks the render cache unused, invalidates it, clears face references, and resets frame vertices.
+func (tr *ThingRenderCache) Release() {
+	tr.inUse = false
+	tr.valid = false
+	tr.pFaces = nil
+	tr.pNextFaces = nil
+	tr.fv.DeepReset()
+}
+
 // GetFrameVertices returns the cached frame vertices for this render cache.
 func (tr *ThingRenderCache) GetFrameVertices() *draws.FrameVertices {
 	return tr.fv

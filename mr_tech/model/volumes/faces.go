@@ -177,16 +177,20 @@ func (f *Faces) Rebuild() {
 
 // RebuildAnimatedMaterials rebuilds the cached animated material list from non-nil faces.
 func (f *Faces) RebuildAnimatedMaterials() {
-	if f.animatedMaterials == nil {
-		f.animatedMaterials = make(map[*textures.Material]struct{}, f.count)
-	} else {
-		clear(f.animatedMaterials)
-	}
+	initialized := false
 	var h uint64
 	for i := 0; i < f.count; i++ {
 		face := f.container[i]
 		if face == nil || face.material == nil || !face.material.IsAnimated() {
 			continue
+		}
+		if !initialized {
+			if f.animatedMaterials == nil {
+				f.animatedMaterials = make(map[*textures.Material]struct{}, f.count)
+			} else {
+				clear(f.animatedMaterials)
+			}
+			initialized = true
 		}
 		if _, ok := f.animatedMaterials[face.material]; ok {
 			continue

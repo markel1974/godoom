@@ -89,6 +89,30 @@ func (e *Entity) GetShadowMarker() int {
 	return e.shadowMarker
 }
 
+/*
+// GetHash returns a nonzero stable hash derived from the entity ID, center position, rotation, and yaw.
+func (e *Entity) GetHash() uint64 {
+	tPosX, tPosY, zBot := e.GetCenter()
+	qx, qy, qz, qw := e.GetQRotation().Get()
+	ang := e.GetYaw()
+	h := uint64(0)
+	h = geometry.MixU64(h, e.GetId())
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosX)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosY)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(zBot)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qx)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qy)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qz)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qw)))
+	h = geometry.MixU64(h, geometry.F32BitsStable(float32(ang)))
+	if h == 0 {
+		h = 1
+	}
+	return h
+}
+
+*/
+
 // SetShadowMarker assigns the shadow cache slot index for this Entity.
 func (e *Entity) SetShadowMarker(marker int) {
 	e.shadowMarker = marker

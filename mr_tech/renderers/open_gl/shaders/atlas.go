@@ -2,7 +2,6 @@ package shaders
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
-	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 )
 
 /*
@@ -21,159 +20,20 @@ Y=1024 +--------+--------+------+--+--------+------------+
 */
 
 const (
-	depthDoubleBuffer = 2
-	shadowAtlasSize   = int32(2048)
+	DepthDoubleBuffer = 2
 
-	// ShadowTileRoom is the atlas slot index for the orthographic room shadow tile.
-	ShadowTileRoom = 0
-	// ShadowTileFlash is the atlas slot index for the perspective flashlight shadow tile.
-	ShadowTileFlash = 1
-	// ShadowTileLightBase is the starting atlas slot index for dynamic spotlights.
-	ShadowTileLightBase = 2
-	// ShadowTileSunBase is the starting atlas slot index for the 4 outdoor sun CSM cascades.
-	ShadowTileSunBase = 10
-	// SunCascadeCount is the number of cascades in the outdoor sun CSM quadrant.
-	SunCascadeCount = 4
-	// MaxShadowTiles is the total number of tiles managed inside the master shadow atlas.
-	MaxShadowTiles = 14
+	ShadowAtlasSize = int32(2048)
 )
-
-// ShadowsTileData carries per-light culled draw commands and cache keys for a single atlas tile.
-type ShadowsTileData struct {
-	active    bool
-	renderDC  *draws.DrawCommandsRender
-	matrix    [16]float32
-	sceneHash uint64
-	reuse     bool
-}
-
-func (d *ShadowsTileData) Assign(active bool, renderDC *draws.DrawCommandsRender, matrix [16]float32, sceneHash uint64, reuse bool) {
-	d.active = active
-	d.renderDC = renderDC
-	d.matrix = matrix
-	d.sceneHash = sceneHash
-	d.reuse = reuse
-}
-
-func (d *ShadowsTileData) SetRenderDC(renderDC *draws.DrawCommandsRender) {
-	d.renderDC = renderDC
-}
-
-func (d *ShadowsTileData) SetActive(active bool) {
-	d.active = active
-}
-
-func (d *ShadowsTileData) SetReuse(reuse bool) {
-	d.reuse = reuse
-}
-
-func (d *ShadowsTileData) IsActive() bool {
-	return d.active
-}
-
-func (d *ShadowsTileData) CanReuse() bool {
-	return d.reuse
-}
-
-func (d *ShadowsTileData) GetRenderDC() *draws.DrawCommandsRender {
-	return d.renderDC
-}
-
-// AtlasTileCache stores cached projection/scene keys for a single tile in one atlas buffer.
-type AtlasTileCache struct {
-	valid     bool
-	atlasGen  uint64
-	matrix    [16]float32
-	sceneHash uint64
-}
-
-// Matches reports whether the cached entry is valid for atlasGen, matrix, and sceneHash.
-func (c *AtlasTileCache) Matches(atlasGen uint64, matrix *[16]float32, sceneHash uint64) bool {
-	return matrix != nil && c.valid && c.atlasGen == atlasGen && c.sceneHash == sceneHash && c.matrix == *matrix
-}
-
-// AtlasData manages a backing depth framebuffer and texture for one shadow atlas buffer.
-type AtlasData struct {
-	ctx    api.IContext
-	fbo    uint32
-	tex    uint32
-	width  int32
-	height int32
-	gen    uint64
-}
-
-// NewAtlasData creates and returns a new instance of AtlasData with default uninitialized properties.
-func NewAtlasData(ctx api.IContext) *AtlasData {
-	return &AtlasData{
-		ctx: ctx,
-	}
-}
-
-// Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.
-func (d *AtlasData) Update(width, height int32) {
-	if d.ctx == nil || width <= 0 || height <= 0 {
-		return
-	}
-	if d.fbo != 0 && d.width == width && d.height == height {
-		return
-	}
-	nextGen := d.gen + 1
-	d.Shutdown()
-	d.gen = nextGen
-	d.width = width
-	d.height = height
-	var fbo, tex uint32
-	borderColor := [4]float32{1.0, 1.0, 1.0, 1.0}
-	d.ctx.GenFramebuffers(1, &fbo)
-	d.ctx.GenTextures(1, &tex)
-	d.ctx.ActiveTexture(api.TEXTURE0 + api.TexUnitShadowAtlas)
-	d.ctx.BindTexture(api.TEXTURE_2D, tex)
-	d.ctx.TexImage2D(api.TEXTURE_2D, 0, api.DEPTH_COMPONENT32F, width, height, 0, api.DEPTH_COMPONENT, api.FLOAT, nil)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MIN_FILTER, api.LINEAR)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_MAG_FILTER, api.LINEAR)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_COMPARE_MODE, api.COMPARE_REF_TO_TEXTURE)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_COMPARE_FUNC, api.LEQUAL)
-
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_S, api.CLAMP_TO_BORDER)
-	d.ctx.TexParameteri(api.TEXTURE_2D, api.TEXTURE_WRAP_T, api.CLAMP_TO_BORDER)
-	d.ctx.TexParameterfv(api.TEXTURE_2D, api.TEXTURE_BORDER_COLOR, &borderColor[0])
-
-	d.ctx.BindFramebuffer(api.FRAMEBUFFER, fbo)
-	d.ctx.FramebufferTexture2D(api.FRAMEBUFFER, api.DEPTH_ATTACHMENT, api.TEXTURE_2D, tex, 0)
-	d.ctx.DrawBuffer(api.NONE)
-	d.ctx.ReadBuffer(api.NONE)
-	d.ctx.BindFramebuffer(api.FRAMEBUFFER, 0)
-	d.ctx.BindTexture(api.TEXTURE_2D, 0)
-	d.fbo = fbo
-	d.tex = tex
-}
-
-// Shutdown releases OpenGL resources associated with the framebuffer and texture of the AtlasData.
-func (d *AtlasData) Shutdown() {
-	if d.ctx != nil {
-		if d.fbo != 0 {
-			d.ctx.DeleteFramebuffers(1, &d.fbo)
-		}
-		if d.tex != 0 {
-			d.ctx.DeleteTextures(1, &d.tex)
-		}
-	}
-	d.fbo = 0
-	d.tex = 0
-	d.width = 0
-	d.height = 0
-	d.gen = 0
-}
 
 // Atlas manages the double-buffered master shadow depth atlas and per-tile reuse cache.
 type Atlas struct {
-	ctx             api.IContext
-	frameIdx        int
-	width           int32
-	height          int32
-	shadowAtlasMaps [depthDoubleBuffer]*AtlasData
-	tileCache       [depthDoubleBuffer][MaxShadowTiles]AtlasTileCache
-	shadows         bool
+	ctx         api.IContext
+	frameIdx    int
+	width       int32
+	height      int32
+	shadowAtlas [DepthDoubleBuffer]*AtlasData
+	tileCache   [DepthDoubleBuffer][MaxShadowTiles]TileCache
+	shadows     bool
 }
 
 // NewAtlas initializes a double-buffered master shadow atlas bound to ctx.
@@ -181,12 +41,12 @@ func NewAtlas(ctx api.IContext) *Atlas {
 	a := &Atlas{
 		ctx:      ctx,
 		frameIdx: 0,
-		width:    shadowAtlasSize,
-		height:   shadowAtlasSize,
+		width:    ShadowAtlasSize,
+		height:   ShadowAtlasSize,
 		shadows:  true,
 	}
-	for i := range depthDoubleBuffer {
-		a.shadowAtlasMaps[i] = NewAtlasData(ctx)
+	for i := range DepthDoubleBuffer {
+		a.shadowAtlas[i] = NewAtlasData(ctx)
 	}
 	a.InvalidateCache()
 	return a
@@ -234,12 +94,12 @@ func (s *Atlas) GetShadowAtlasTexture() uint32 {
 
 // GetShadowAtlas returns the currently active AtlasData backing the master shadow atlas.
 func (s *Atlas) GetShadowAtlas() *AtlasData {
-	return s.shadowAtlasMaps[s.frameIdx]
+	return s.shadowAtlas[s.frameIdx]
 }
 
 // NextAtlasIndex returns the double-buffer atlas index that the next Update call will target.
 func (s *Atlas) NextAtlasIndex() int {
-	return (s.frameIdx + 1) % depthDoubleBuffer
+	return (s.frameIdx + 1) % DepthDoubleBuffer
 }
 
 // Update advances the double-buffer index, ensures backing depth textures are allocated, and returns the active slot and AtlasData.
@@ -247,22 +107,22 @@ func (s *Atlas) Update() (int, *AtlasData) {
 	idx := s.NextAtlasIndex()
 	s.frameIdx = idx
 
-	atlas := s.shadowAtlasMaps[idx]
+	atlas := s.shadowAtlas[idx]
 	atlas.Update(s.width, s.height)
 	return idx, atlas
 }
 
 // IsTileCached reports whether tile slot t in buffer idx is already up to date for tile and gen.
-func (s *Atlas) IsTileCached(idx, t int, tile *ShadowsTileData, gen uint64) bool {
-	if idx < 0 || idx >= depthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil || !s.shadows {
+func (s *Atlas) IsTileCached(idx, t int, tile *TileShadow, gen uint64) bool {
+	if idx < 0 || idx >= DepthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil || !s.shadows {
 		return false
 	}
 	return s.tileCache[idx][t].Matches(gen, &tile.matrix, tile.sceneHash)
 }
 
 // SetTile records tile's matrix, sceneHash, and atlas generation in the cache for buffer idx and slot t.
-func (s *Atlas) SetTile(idx, t int, tile *ShadowsTileData, gen uint64) {
-	if idx < 0 || idx >= depthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil {
+func (s *Atlas) SetTile(idx, t int, tile *TileShadow, gen uint64) {
+	if idx < 0 || idx >= DepthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil {
 		return
 	}
 	c := &s.tileCache[idx][t]
@@ -279,8 +139,8 @@ func (s *Atlas) Allocate(width, height int32) {
 	}
 	s.width = width
 	s.height = height
-	for i := range depthDoubleBuffer {
-		s.shadowAtlasMaps[i].Update(width, height)
+	for i := range DepthDoubleBuffer {
+		s.shadowAtlas[i].Update(width, height)
 	}
 	s.InvalidateCache()
 }
@@ -291,7 +151,7 @@ func (s *Atlas) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bo
 		return false
 	}
 	nextIdx := s.NextAtlasIndex()
-	atlas := s.shadowAtlasMaps[nextIdx]
+	atlas := s.shadowAtlas[nextIdx]
 	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
 		return false
 	}
@@ -305,7 +165,7 @@ func (s *Atlas) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, ui
 		return 0, 0, 0, false
 	}
 	nextIdx := s.NextAtlasIndex()
-	atlas := s.shadowAtlasMaps[nextIdx]
+	atlas := s.shadowAtlas[nextIdx]
 	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
 		return 0, 0, 0, false
 	}
@@ -322,7 +182,7 @@ func (s *Atlas) TargetInfo() (int, uint64, bool) {
 		return 0, 0, false
 	}
 	nextIdx := s.NextAtlasIndex()
-	atlas := s.shadowAtlasMaps[nextIdx]
+	atlas := s.shadowAtlas[nextIdx]
 	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
 		return 0, 0, false
 	}
@@ -331,14 +191,14 @@ func (s *Atlas) TargetInfo() (int, uint64, bool) {
 
 // InvalidateCache forces all cached shadow atlas tiles across both double-buffers to redraw on next use.
 func (s *Atlas) InvalidateCache() {
-	for b := range depthDoubleBuffer {
+	for b := range DepthDoubleBuffer {
 		s.InvalidateTiles(b)
 	}
 }
 
 // InvalidateTile marks a single cached tile slot in buffer idx as stale.
 func (s *Atlas) InvalidateTile(idx, t int) {
-	if idx < 0 || idx >= depthDoubleBuffer || t < 0 || t >= MaxShadowTiles {
+	if idx < 0 || idx >= DepthDoubleBuffer || t < 0 || t >= MaxShadowTiles {
 		return
 	}
 	s.tileCache[idx][t].valid = false
@@ -346,7 +206,7 @@ func (s *Atlas) InvalidateTile(idx, t int) {
 
 // InvalidateTiles marks all tile slots in buffer idx as stale.
 func (s *Atlas) InvalidateTiles(idx int) {
-	if idx < 0 || idx >= depthDoubleBuffer {
+	if idx < 0 || idx >= DepthDoubleBuffer {
 		return
 	}
 	for t := range MaxShadowTiles {
@@ -356,9 +216,9 @@ func (s *Atlas) InvalidateTiles(idx int) {
 
 // Shutdown releases OpenGL resources for all backing depth maps, resets the frame index, and clears cached tile state.
 func (s *Atlas) Shutdown() {
-	for i := range depthDoubleBuffer {
-		if s.shadowAtlasMaps[i] != nil {
-			s.shadowAtlasMaps[i].Shutdown()
+	for i := range DepthDoubleBuffer {
+		if s.shadowAtlas[i] != nil {
+			s.shadowAtlas[i].Shutdown()
 		}
 	}
 	s.frameIdx = 0

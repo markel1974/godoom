@@ -1435,7 +1435,7 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 		return dc
 	}
 
-	var tiles [MaxShadowTiles]ShadowsTileData
+	var tiles [MaxShadowTiles]TileShadow
 	fillTiles := func(hashes [4]uint64, reuse [4]bool) {
 		slots := [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1}
 		for idx, slot := range slots {
@@ -1569,7 +1569,7 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 		0, 0, 1, 0,
 		0, 0, 0, 1,
 	}
-	var tile ShadowsTileData
+	var tile TileShadow
 	tile.Assign(true, nil, mat, 4242, false)
 
 	// Cold buffers cannot be reused yet.
@@ -1578,7 +1578,7 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	}
 
 	// Warm both double-buffers.
-	for i := range depthDoubleBuffer {
+	for i := range DepthDoubleBuffer {
 		idx, dm := a.Update()
 		if dm == nil || dm.fbo == 0 || dm.tex == 0 {
 			t.Fatalf("Update iteration %d produced invalid DepthMap: %+v", i, dm)
@@ -1623,7 +1623,7 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	}
 
 	// Re-warm and verify Allocate scales TileRects and invalidates cache for new dimensions.
-	for range depthDoubleBuffer {
+	for range DepthDoubleBuffer {
 		idx, dm := a.Update()
 		a.SetTile(idx, ShadowTileRoom, &tile, dm.gen)
 	}

@@ -67,7 +67,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	dc := draws.NewDrawCommandsRender(ctx, "sun_csm", false)
 	dc.Prepare([]*draws.DrawCommand{cmd})
 
-	var tiles [MaxShadowTiles]ShadowsTileData
+	var tiles [MaxShadowTiles]TileShadow
 	fillSunTiles := func(reuse bool) {
 		for c := range SunCascadeCount {
 			slot := ShadowTileSunBase + c
@@ -82,7 +82,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	}
 
 	// Warm both double buffers -> 4 clears per buffer -> then steady frame hits 0 clears, 0 draws, 0 allocs!
-	for range depthDoubleBuffer {
+	for range DepthDoubleBuffer {
 		fillSunTiles(false)
 		ctx.clearCalls = 0
 		ctx.multiDrawPrograms = nil

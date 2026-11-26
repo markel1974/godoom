@@ -142,7 +142,7 @@ func (s *Depth) Shutdown() {
 }
 
 // GetTileConfig returns the active state, depth-clamp mode, and shadow matrix pointer for an atlas tile slot.
-func (s *Depth) GetTileConfig(slot int) (active bool, orthoDepthClamp bool, matPtr *float32) {
+func (s *Depth) GetTileConfig(slot int) (bool, bool, *float32) {
 	if !s.shadows {
 		return false, false, nil
 	}
@@ -288,7 +288,7 @@ func (s *Depth) Render(dc *draws.DrawCommandsRender) {
 
 // RenderWithTiles renders dirty shadow atlas tiles, reusing cached tiles when possible.
 // It falls back to rendering the shared atlas when tiles is nil.
-func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[MaxShadowTiles]ShadowsTileData) {
+func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[MaxShadowTiles]TileShadow) {
 	if !s.shadows {
 		return
 	}
@@ -423,7 +423,7 @@ func (s *Depth) renderSharedAtlas(dc *draws.DrawCommandsRender) {
 }
 
 // renderTilesPass renders dirty shadow atlas tiles for either solid or cutout geometry using the given program.
-func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval float32, mainVao uint32, tiles *[MaxShadowTiles]ShadowsTileData, dirty *[MaxShadowTiles]bool, cutout bool) {
+func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval float32, mainVao uint32, tiles *[MaxShadowTiles]TileShadow, dirty *[MaxShadowTiles]bool, cutout bool) {
 	s.ctx.UseProgram(prg)
 	s.ctx.Uniform1f(table[DepthLocTime], interval)
 	s.ctx.UniformMatrix4fv(table[DepthLocView], 1, false, s.viewMatrixPtr)
@@ -480,7 +480,7 @@ func (s *Depth) renderAtlasPass(prg uint32, table *[DepthLocLast]int32, interval
 	useSunCSM := s.sunCSM != nil && s.sunCSM.IsEnabled()
 	if useSunCSM {
 		s.ctx.Enable(api.DEPTH_CLAMP)
-		for c := range SunCascadeCount {
+		for c := range metrics.SunCascadeCount {
 			rx, ry, rw, rh, _, rpUnits, rpFactor := s.atlas.TileRect(ShadowTileSunBase + c)
 			s.ctx.Viewport(rx, ry, rw, rh)
 			s.ctx.Scissor(rx, ry, rw, rh)

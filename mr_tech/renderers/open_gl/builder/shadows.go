@@ -16,18 +16,19 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ShadowsCollectedVol records a volume that has contributed shadow data along with its collection mask.
+// ShadowsCollectedVol represents a volume collected for shadow processing with its associated shadow mask.
 type ShadowsCollectedVol struct {
 	vol  *volumes.Volume
 	mask uint32
 }
 
+// Assign sets the collected shadow volume and its mask.
 func (v *ShadowsCollectedVol) Assign(vol *volumes.Volume, mask uint32) {
 	v.vol = vol
 	v.mask = mask
 }
 
-// ShadowsCollectedThing records a shadow-casting thing collected for rendering and its tile coverage.
+// ShadowsCollectedThing records a thing collected for shadow processing with its cache entry and tile mask.
 type ShadowsCollectedThing struct {
 	thing   ithing.IThing
 	entry   *ShadowsRigidEntry
@@ -35,6 +36,7 @@ type ShadowsCollectedThing struct {
 	mask    uint32
 }
 
+// Assign updates the collected shadow thing with its source thing, rigid cache entry, rigidity state, and tile mask.
 func (t *ShadowsCollectedThing) Assign(thing ithing.IThing, entry *ShadowsRigidEntry, isRigid bool, mask uint32) {
 	t.thing = thing
 	t.entry = entry
@@ -42,7 +44,7 @@ func (t *ShadowsCollectedThing) Assign(thing ithing.IThing, entry *ShadowsRigidE
 	t.mask = mask
 }
 
-// ShadowTileDeps records dependency stamps used to validate cached shadow tile reuse.
+// ShadowTileDeps records dependency keys used to validate cached shadow tile data.
 type ShadowTileDeps struct {
 	valid      bool
 	atlasGen   uint64
@@ -51,6 +53,7 @@ type ShadowTileDeps struct {
 	tick       uint64
 }
 
+// Assign updates the shadow tile dependency state with the provided validity and cache identity values.
 func (std *ShadowTileDeps) Assign(valid bool, atlasGen uint64, sceneHash uint64, worldToken uint64, tick uint64) {
 	std.valid = valid
 	std.atlasGen = atlasGen
@@ -64,7 +67,7 @@ type Shadows struct {
 	bContext           *Context
 	bStatic            *Static
 	bThings            *Things
-	tiles              [shaders.MaxShadowTiles]shaders.ShadowsTileData
+	tiles              [shaders.MaxShadowTiles]shaders.TileShadow
 	tileDeps           [2][shaders.MaxShadowTiles]ShadowTileDeps
 	builders           [shaders.MaxShadowTiles]*ShadowTileBuilder
 	tileFrustums       [shaders.MaxShadowTiles]aabb.Frustum
@@ -112,7 +115,7 @@ func (w *Shadows) DisableAllTiles() {
 }
 
 // GetTiles returns the shadow tile data array used by the shadow atlas.
-func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.ShadowsTileData {
+func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.TileShadow {
 	return &w.tiles
 }
 
@@ -229,6 +232,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 			tb.Reset()
 
 			w.buildTileStaticForBit(tb, tileBit)
+
 			if w.buildTileThingsForBit(tb, tileBit, &shadowExtraSig) {
 				anyShadowInstances = true
 			}

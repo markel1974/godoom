@@ -7,7 +7,7 @@ const defaultShadowCacheCap = 128
 // ShadowRigidCache manages O(1) slot-indexed per-entity shadow entries via Entity.GetShadowMarker
 // with free-slot recycling and zero map lookups in hot paths.
 type ShadowRigidCache struct {
-	entries       []*ShadowRigidEntry
+	entries       []*ShadowsRigidEntry
 	freeSlots     []int
 	freeLen       int
 	nextSlot      int
@@ -18,15 +18,15 @@ func (c *ShadowRigidCache) initPool(initCap int) {
 	if initCap < defaultShadowCacheCap {
 		initCap = defaultShadowCacheCap
 	}
-	c.entries = make([]*ShadowRigidEntry, initCap)
+	c.entries = make([]*ShadowsRigidEntry, initCap)
 	for i := range c.entries {
-		c.entries[i] = &ShadowRigidEntry{}
+		c.entries[i] = &ShadowsRigidEntry{}
 	}
 	c.freeSlots = make([]int, initCap)
 }
 
 // Retrieve returns the preallocated shadow entry bound to ent in O(1), assigning or recycling a slot if needed.
-func (c *ShadowRigidCache) Retrieve(ent *rigid_body.Entity, frame uint64) *ShadowRigidEntry {
+func (c *ShadowRigidCache) Retrieve(ent *rigid_body.Entity, frame uint64) *ShadowsRigidEntry {
 	if c.entries == nil {
 		c.initPool(defaultShadowCacheCap)
 	}
@@ -76,10 +76,10 @@ func (c *ShadowRigidCache) Sweep(frame uint64) {
 func (c *ShadowRigidCache) grow() {
 	oldCap := len(c.entries)
 	newCap := max(oldCap*2, defaultShadowCacheCap)
-	newEntries := make([]*ShadowRigidEntry, newCap)
+	newEntries := make([]*ShadowsRigidEntry, newCap)
 	copy(newEntries, c.entries)
 	for i := oldCap; i < newCap; i++ {
-		newEntries[i] = &ShadowRigidEntry{}
+		newEntries[i] = &ShadowsRigidEntry{}
 	}
 	c.entries = newEntries
 

@@ -31,12 +31,12 @@ func (v *ShadowsCollectedVol) Assign(vol *volumes.Volume, mask uint32) {
 // ShadowsCollectedThing records a shadow-casting thing collected for rendering and its tile coverage.
 type ShadowsCollectedThing struct {
 	thing   ithing.IThing
-	entry   *ShadowRigidEntry
+	entry   *ShadowsRigidEntry
 	isRigid bool
 	mask    uint32
 }
 
-func (t *ShadowsCollectedThing) Assign(thing ithing.IThing, entry *ShadowRigidEntry, isRigid bool, mask uint32) {
+func (t *ShadowsCollectedThing) Assign(thing ithing.IThing, entry *ShadowsRigidEntry, isRigid bool, mask uint32) {
 	t.thing = thing
 	t.entry = entry
 	t.isRigid = isRigid

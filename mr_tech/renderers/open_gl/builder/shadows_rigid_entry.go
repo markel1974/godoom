@@ -7,8 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 )
 
-// ShadowRigidEntry tracks cached state for a rigid shadow-casting entity across frames.
-type ShadowRigidEntry struct {
+// ShadowsRigidEntry tracks cached state for a rigid shadow-casting entity across frames.
+type ShadowsRigidEntry struct {
 	entID         uint64
 	inUse         bool
 	seenFrame     uint64
@@ -25,7 +25,7 @@ type ShadowRigidEntry struct {
 }
 
 // Reset reinitializes the entry for the entity and frame, clearing cached mesh, transform, hash, and stream state.
-func (re *ShadowRigidEntry) Reset(entID uint64, frame uint64) {
+func (re *ShadowsRigidEntry) Reset(entID uint64, frame uint64) {
 	re.entID = entID
 	re.inUse = true
 	re.seenFrame = 0
@@ -41,7 +41,7 @@ func (re *ShadowRigidEntry) Reset(entID uint64, frame uint64) {
 }
 
 // Release marks the entry unused and clears cached rigid state, mesh references, and any stream cache data.
-func (re *ShadowRigidEntry) Release() {
+func (re *ShadowsRigidEntry) Release() {
 	re.inUse = false
 	re.isRigidActive = false
 	re.hash = 0
@@ -55,7 +55,7 @@ func (re *ShadowRigidEntry) Release() {
 
 // EnsureStreamCache returns the entry's render cache, creating it if needed.
 // It marks the cache in use and syncs its entity ID and last-seen frame.
-func (re *ShadowRigidEntry) EnsureStreamCache() *ThingRenderCache {
+func (re *ShadowsRigidEntry) EnsureStreamCache() *ThingRenderCache {
 	if re.stream == nil {
 		re.stream = NewThingRenderCache()
 	}
@@ -66,7 +66,7 @@ func (re *ShadowRigidEntry) EnsureStreamCache() *ThingRenderCache {
 }
 
 // Update refreshes the entry once per shadow frame, syncing cached rigid shadow state when the hash changes.
-func (re *ShadowRigidEntry) Update(shadowFrame uint64, thing ithing.IThing, ent *rigid_body.Entity, hash uint64, bThings *Things) {
+func (re *ShadowsRigidEntry) Update(shadowFrame uint64, thing ithing.IThing, ent *rigid_body.Entity, hash uint64, bThings *Things) {
 	if re.seenFrame != shadowFrame {
 		if re.hash != hash {
 			re.sync(thing, ent, hash, bThings)
@@ -77,7 +77,7 @@ func (re *ShadowRigidEntry) Update(shadowFrame uint64, thing ithing.IThing, ent 
 
 // sync updates the shadow cache entry with the given hash and rigid mesh state.
 // It clears rigid state when the thing has no rigid shadow faces.
-func (re *ShadowRigidEntry) sync(thing ithing.IThing, ent *rigid_body.Entity, hash uint64, bThings *Things) {
+func (re *ShadowsRigidEntry) sync(thing ithing.IThing, ent *rigid_body.Entity, hash uint64, bThings *Things) {
 	re.hash = hash
 	if rigidFaces := thing.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
 		tPosX, tPosY, zBot := ent.GetCenter()

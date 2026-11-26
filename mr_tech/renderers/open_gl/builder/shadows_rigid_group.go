@@ -5,7 +5,7 @@ import "github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 // ShadowsRigidGroup manages shadow-casting rigid mesh entries backed by a resident mesh.
 type ShadowsRigidGroup struct {
 	mesh       *buffers.ResidentMesh
-	entries    []*ShadowRigidEntry
+	entries    []*ShadowsRigidEntry
 	entriesLen int
 }
 
@@ -16,12 +16,12 @@ func (g *ShadowsRigidGroup) Assign(rm *buffers.ResidentMesh) {
 }
 
 // Add appends a rigid shadow entry to the group, growing the backing storage as needed.
-func (g *ShadowsRigidGroup) Add(v *ShadowRigidEntry) {
+func (g *ShadowsRigidGroup) Add(v *ShadowsRigidEntry) {
 	if g.entriesLen >= len(g.entries) {
 		if newLen := len(g.entries) * 2; newLen == 0 {
-			g.entries = make([]*ShadowRigidEntry, 64)
+			g.entries = make([]*ShadowsRigidEntry, 64)
 		} else {
-			z := make([]*ShadowRigidEntry, newLen)
+			z := make([]*ShadowsRigidEntry, newLen)
 			copy(z, g.entries)
 			g.entries = z
 		}

@@ -463,7 +463,7 @@ func TestShadowsRigidGroupAssignAddGrowAndAt(t *testing.T) {
 	}
 
 	const count = 70 // exceeds initial 64 capacity to exercise backing growth
-	entries := make([]ShadowRigidEntry, count)
+	entries := make([]ShadowsRigidEntry, count)
 	for i := range count {
 		entries[i].mat[12] = float32(i + 1)
 		grp.Add(&entries[i])

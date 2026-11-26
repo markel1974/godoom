@@ -262,12 +262,12 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
 }
 
-func TestShadowsNilWorldInputsAndStaticVolumeAssign(t *testing.T) {
+func TestShadowsStaticVolumeAssign(t *testing.T) {
 	rigid_body.SetFps(120)
 	textures.SetFps(120)
 	defer rigid_body.SetFps(120)
 
-	tA := textures.NewTexture("SHAD_NIL", 1, 8, 8, false)
+	tA := textures.NewTexture("SHAD_STATIC", 1, 8, 8, false)
 	for x := range 8 {
 		for y := range 8 {
 			tA.SetDiffuse(x, y, 0x7f7f7fff)
@@ -277,7 +277,7 @@ func TestShadowsNilWorldInputsAndStaticVolumeAssign(t *testing.T) {
 	calCfg := config.NewConfigCalibration()
 	calCfg.AspectRatio = 1.1
 	calCfg.OrthoSize = 640
-	matSolid := config.NewConfigMaterial("solid", []string{"SHAD_NIL"}, config.MaterialKindSolid)
+	matSolid := config.NewConfigMaterial("solid", []string{"SHAD_STATIC"}, config.MaterialKindSolid)
 	secs := []*config.Sector{
 		makeBoxSector("center", 0, 0, 60, 0, 160, matSolid),
 	}
@@ -329,11 +329,7 @@ func TestShadowsNilWorldInputsAndStaticVolumeAssign(t *testing.T) {
 	fm.UpdateWithAim(mm.GetViewPtr(), 0, 0, 0, 0, 1)
 	d.Prepare()
 
-	// Verify TryBuildStaticAtlas and Shadows.Process handle nil volumes/things with active tiles.
-	bv.bs.TryBuildStaticAtlas(nil)
-	bv.bShadow.Process(nil, nil, d)
-	bv.bShadow.Process(nil, en.GetThings(), d)
-	bv.bShadow.Process(en.GetVolumes(), nil, d)
+	bv.bShadow.Process(en.GetVolumes(), en.GetThings(), d)
 
 	// Verify static shadow volume collection populates volScratch and emits static items.
 	if bv.bShadow.volScratchLen == 0 {

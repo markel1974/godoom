@@ -136,9 +136,6 @@ func (w *Static) GetResidentMesh(faces *volumes.Faces) *buffers.ResidentMesh {
 
 // TryBuildStaticAtlas attempts to rebuild the static atlas if conditions like stream mode or volume count have changed.
 func (w *Static) TryBuildStaticAtlas(vols *model.Volumes) {
-	if vols == nil {
-		return
-	}
 	hasStreamer := vols.HasStreamer()
 	volsLen := vols.Len()
 	if !w.atlasBuilt || w.atlasStreamMode != hasStreamer || (!hasStreamer && w.atlasVolCount != volsLen) {

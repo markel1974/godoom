@@ -127,10 +127,6 @@ func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.ShadowsTileData {
 // Process updates shadow atlas tiles for the current volumes, things, and depth tile configuration.
 // It reuses cached tiles when possible and rebuilds dirty tiles, including static and instanced shadow data.
 func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.Depth) {
-	if depth == nil {
-		w.DisableAllTiles()
-		return
-	}
 	if w.bContext.meshFrame == 0 {
 		w.bContext.meshFrame = 1
 	}
@@ -144,7 +140,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 	tick := textures.GlobalTick()
 	shadowExtraSig := uint64(0)
 	anyShadowInstances := false
-	hasStreamer := vols != nil && vols.HasStreamer()
+	hasStreamer := vols.HasStreamer()
 	worldToken := w.createToken(vols, th)
 	targetBufIdx, targetGen, targetOK := depth.TargetInfo()
 	streamKeepAlive := hasStreamer && (w.shadowFrame&127 == 0)
@@ -274,32 +270,29 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 	}
 }
 
+// createToken builds a mixed world-state token used to detect shadow cache invalidation.
 func (w *Shadows) createToken(vols *model.Volumes, th *model.Things) uint64 {
-	worldToken := geometry.HashOffset64
-	worldToken = geometry.MixU64(worldToken, geometry.MixUnsafePtr(unsafe.Pointer(vols)))
-	if vols != nil {
-		worldToken = geometry.MixU64(worldToken, uint64(vols.Len()))
-		worldToken = geometry.MixU64(worldToken, vols.TreeVersion())
-	}
-	worldToken = geometry.MixU64(worldToken, volumes.GlobalDirtyEpoch())
+	tk := geometry.HashOffset64
+	tk = geometry.MixU64(tk, geometry.MixUnsafePtr(unsafe.Pointer(vols)))
+	tk = geometry.MixU64(tk, uint64(vols.Len()))
+	tk = geometry.MixU64(tk, vols.TreeVersion())
+	tk = geometry.MixU64(tk, volumes.GlobalDirtyEpoch())
 	if w.bStatic != nil {
-		worldToken = geometry.MixU64(worldToken, w.bStatic.StateVersion())
-		worldToken = geometry.MixU64(worldToken, w.bStatic.AnimTickSig())
+		tk = geometry.MixU64(tk, w.bStatic.StateVersion())
+		tk = geometry.MixU64(tk, w.bStatic.AnimTickSig())
 	}
-	worldToken = geometry.MixU64(worldToken, geometry.MixUnsafePtr(unsafe.Pointer(th)))
-	if th != nil {
-		worldToken = geometry.MixU64(worldToken, th.TreeVersion())
-	}
-	worldToken = geometry.MixU64(worldToken, aabb.GlobalBoxPoseEpoch())
-	worldToken = geometry.MixU64(worldToken, vertices.StateEpoch())
-	return worldToken
+	tk = geometry.MixU64(tk, geometry.MixUnsafePtr(unsafe.Pointer(th)))
+	tk = geometry.MixU64(tk, th.TreeVersion())
+	tk = geometry.MixU64(tk, aabb.GlobalBoxPoseEpoch())
+	tk = geometry.MixU64(tk, vertices.StateEpoch())
+	return tk
 }
 
 // collectShadowVolumes gathers hashed shadow volumes intersecting active tile frustums into scratch storage.
 // It updates per-tile accumulation, xor, and count signatures for shadow tile reuse checks.
 func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[shaders.MaxShadowTiles]uint64, volCount *[shaders.MaxShadowTiles]int) {
 	w.volScratchLen = 0
-	if vols == nil || activeMask == 0 {
+	if activeMask == 0 {
 		return
 	}
 	vols.QueryFrustumsMask(w.tileFrustums[:], activeMask, func(object aabb.IObject, leafMask uint32) bool {
@@ -354,7 +347,7 @@ func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, s
 // collectShadowThings collects visible shadow things for active tiles and updates per-tile hash summaries.
 func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int) {
 	w.thingScratchLen = 0
-	if th == nil || activeMask == 0 {
+	if activeMask == 0 {
 		return
 	}
 	th.QueryFrustumsMask(w.tileFrustums[:], activeMask, func(object aabb.IObject, leafMask uint32) bool {
@@ -467,17 +460,17 @@ func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, s
 				rEntry.rm = rm
 			}
 			if rm != nil && rm.SubMeshesLen > 0 {
-				var g *ShadowsRigidGroup
+				var srg *ShadowsRigidGroup
 				if rm.ShadowInstGroupFrame == w.groupToken {
-					g = w.instGroups.Items[rm.ShadowInstGroupIdx]
+					srg = w.instGroups.Items[rm.ShadowInstGroupIdx]
 				} else {
 					rm.ShadowInstGroupFrame = w.groupToken
 					rm.ShadowInstGroupIdx = w.instGroups.Len
-					g = w.instGroups.Acquire()
-					g.mesh = rm
-					g.entries = g.entries[:0]
+					srg = w.instGroups.Acquire()
+					srg.mesh = rm
+					srg.entries = srg.entries[:0]
 				}
-				g.entries = append(g.entries, rEntry)
+				srg.entries = append(srg.entries, rEntry)
 			}
 			continue
 		}

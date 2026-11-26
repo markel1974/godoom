@@ -228,7 +228,7 @@ func (f *Faces) RebuildGeometry() {
 	f.computeActiveEdges()
 	f.computeVertexNormalsAndTangents(0.5)
 	f.computeGeomHash()
-	f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = f.ComputeMassProperties()
+	f.computeMassProperties()
 	f.w = f.maxX - f.minX
 	f.h = f.maxY - f.minY
 	f.d = f.maxZ - f.minZ
@@ -278,259 +278,6 @@ func (f *Faces) SyncDeformedTree() {
 			f.tree.UpdateObject(face)
 		} else {
 			f.tree.InsertObject(face)
-		}
-	}
-}
-
-// computeVertexNormalsAndTangents averages area-weighted face normals at shared vertices
-// when adjacent faces fall within the crease threshold (cosCrease = 0.5 -> ~60 deg),
-// while preserving explicit artist vertex normals when already set.
-func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
-	if f.count <= 0 {
-		return
-	}
-	needsSmooth := false
-	if f.count > 1 {
-		for i := 0; i < f.count; i++ {
-			if fc := f.container[i]; fc != nil && !fc.hasExplicitNormals {
-				needsSmooth = true
-				break
-			}
-		}
-	}
-	if !needsSmooth {
-		for i := 0; i < f.count; i++ {
-			if fc := f.container[i]; fc != nil {
-				fc.computeTangent()
-			}
-		}
-		return
-	}
-
-	neededLinks := f.count * 3
-	var smoothHead map[smoothVertKey]int32
-	var smoothNext []int32
-	var faceData []adjFace
-	if f.hasTesselation {
-		if f.smoothHead == nil {
-			f.smoothHead = make(map[smoothVertKey]int32, f.count*2)
-		} else {
-			clear(f.smoothHead)
-		}
-		if cap(f.smoothNext) < neededLinks {
-			f.smoothNext = make([]int32, neededLinks)
-		}
-		if cap(f.adjFaceData) < f.count {
-			f.adjFaceData = make([]adjFace, f.count)
-		}
-		smoothHead = f.smoothHead
-		smoothNext = f.smoothNext[:neededLinks]
-		faceData = f.adjFaceData[:f.count]
-	} else {
-		smoothHead = make(map[smoothVertKey]int32, f.count*2)
-		smoothNext = make([]int32, neededLinks)
-		faceData = make([]adjFace, f.count)
-	}
-
-	for i := 0; i < f.count; i++ {
-		fc := f.container[i]
-		if fc == nil {
-			continue
-		}
-		p0x, p0y, p0z := fc.Get0()
-		p1x, p1y, p1z := fc.Get1()
-		p2x, p2y, p2z := fc.Get2()
-		e1x, e1y, e1z := p1x-p0x, p1y-p0y, p1z-p0z
-		e2x, e2y, e2z := p2x-p0x, p2y-p0y, p2z-p0z
-		ax := e1y*e2z - e1z*e2y
-		ay := e1z*e2x - e1x*e2z
-		az := e1x*e2y - e1y*e2x
-		faceData[i] = adjFace{
-			idx: int32(i),
-			nx:  float64(fc.n.X), ny: float64(fc.n.Y), nz: float64(fc.n.Z),
-			ax: ax, ay: ay, az: az,
-		}
-		for k := range 3 {
-			key := makeSmoothVertKey(fc.tri.Points[k])
-			slot := i*3 + k
-			smoothNext[slot] = smoothHead[key]
-			smoothHead[key] = int32(slot + 1)
-		}
-	}
-
-	for i := 0; i < f.count; i++ {
-		fc := f.container[i]
-		if fc == nil {
-			continue
-		}
-		if fc.hasExplicitNormals {
-			fc.computeTangent()
-			continue
-		}
-		fd := faceData[i]
-		if fd.nx == 0 && fd.ny == 0 && fd.nz == 0 {
-			fc.computeTangent()
-			continue
-		}
-		for k := range 3 {
-			key := makeSmoothVertKey(fc.tri.Points[k])
-			var sx, sy, sz float64
-			for cur := smoothHead[key]; cur > 0; cur = smoothNext[cur-1] {
-				ofd := faceData[(cur-1)/3]
-				if fd.nx*ofd.nx+fd.ny*ofd.ny+fd.nz*ofd.nz >= cosCrease {
-					sx += ofd.ax
-					sy += ofd.ay
-					sz += ofd.az
-				}
-			}
-			ptr := &fc.vertexNormals[k]
-			ptr.X, ptr.Y, ptr.Z = NormalizeXYZ64(sx, sy, sz, fc.n.X, fc.n.Y, fc.n.Z)
-		}
-		fc.computeTangent()
-	}
-}
-
-func (f *Faces) computeGeomHash() {
-	const offset64 uint64 = 14695981039346656037
-	const prime64 uint64 = 1099511628211
-	h := offset64
-	mixU32 := func(v uint32) {
-		h ^= uint64(v)
-		h *= prime64
-	}
-	mixF32 := func(v float32) {
-		mixU32(math.Float32bits(v))
-	}
-	mixStr := func(s string) {
-		for i := 0; i < len(s); i++ {
-			h ^= uint64(s[i])
-			h *= prime64
-		}
-		h ^= 0xff
-		h *= prime64
-	}
-
-	mixU32(uint32(f.count))
-	for i := 0; i < f.count; i++ {
-		fc := f.container[i]
-		if fc == nil {
-			continue
-		}
-		for k := 0; k < 3; k++ {
-			p := fc.tri.Points[k]
-			mixF32(p.X)
-			mixF32(p.Y)
-			mixF32(p.Z)
-			mixF32(fc.u[k])
-			mixF32(fc.v[k])
-			mixF32(fc.vertexNormals[k].X)
-			mixF32(fc.vertexNormals[k].Y)
-			mixF32(fc.vertexNormals[k].Z)
-		}
-		mixU32(uint32(fc.lightmapID))
-		if fc.material != nil {
-			mixStr(fc.material.GetName())
-		}
-	}
-	f.geomHash = h
-}
-
-// computeActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave)
-// using a short-lived local adjacency map so no scratch buckets remain pinned after computation.
-func (f *Faces) computeActiveEdges() {
-	const (
-		coplanarCosThreshold = 0.9995
-		coplanarSinMax       = 0.032
-		concaveSinMin        = 1e-4
-	)
-	for i := 0; i < f.count; i++ {
-		if fc := f.container[i]; fc != nil {
-			fc.activeEdges = EdgeAllActive
-		}
-	}
-	if f.count < 2 {
-		return
-	}
-	var edgeAdj map[EdgeKey]edgeAdjacency
-	if f.hasTesselation {
-		if f.edgeAdj == nil {
-			f.edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
-		} else {
-			clear(f.edgeAdj)
-		}
-		edgeAdj = f.edgeAdj
-	} else {
-		edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
-	}
-
-	canOccludeEdge := func(fc *Face) bool {
-		if fc == nil {
-			return false
-		}
-		if fc.n.X == 0 && fc.n.Y == 0 && fc.n.Z == 0 {
-			return false
-		}
-		// Keep untextured collision/test faces enabled alongside textured solid faces; ignore liquid/sky overlays.
-		return fc.material == nil || fc.IsSolid()
-	}
-
-	for i := 0; i < f.count; i++ {
-		fc := f.container[i]
-		if !canOccludeEdge(fc) {
-			continue
-		}
-		p := fc.tri.Points
-		keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
-		for eIdx := uint8(0); eIdx < 3; eIdx++ {
-			key := keys[eIdx]
-			adj := edgeAdj[key]
-			if adj.count < 2 {
-				adj.refs[adj.count] = edgeFaceRef{faceIdx: int32(i), edgeIdx: eIdx}
-			}
-			if adj.count < 255 {
-				adj.count++
-			}
-			edgeAdj[key] = adj
-		}
-	}
-
-	sinToPlane := func(opp, anchor, n geometry.XYZ32) float64 {
-		dx := float64(opp.X) - float64(anchor.X)
-		dy := float64(opp.Y) - float64(anchor.Y)
-		dz := float64(opp.Z) - float64(anchor.Z)
-		lenSq := dx*dx + dy*dy + dz*dz
-		if lenSq <= 1e-18 {
-			return 0.0
-		}
-		return (dx*float64(n.X) + dy*float64(n.Y) + dz*float64(n.Z)) / math.Sqrt(lenSq)
-	}
-
-	for _, adj := range edgeAdj {
-		if adj.count != 2 {
-			continue
-		}
-		refA := adj.refs[0]
-		refB := adj.refs[1]
-		fa := f.container[refA.faceIdx]
-		fb := f.container[refB.faceIdx]
-		if fa == fb {
-			continue
-		}
-		if (fa.material == nil) != (fb.material == nil) {
-			continue
-		}
-		pA, _, oppA := fa.GetEdgePoints(int(refA.edgeIdx))
-		_, _, oppB := fb.GetEdgePoints(int(refB.edgeIdx))
-
-		cosAngle := float64(fa.n.X)*float64(fb.n.X) + float64(fa.n.Y)*float64(fb.n.Y) + float64(fa.n.Z)*float64(fb.n.Z)
-		sinB := sinToPlane(oppB, pA, fa.n)
-		sinA := sinToPlane(oppA, pA, fb.n)
-
-		coplanar := cosAngle >= coplanarCosThreshold && math.Abs(sinB) <= coplanarSinMax && math.Abs(sinA) <= coplanarSinMax
-		concave := sinB > concaveSinMin && sinA > concaveSinMin
-		if coplanar || concave {
-			fa.SetEdgeActive(int(refA.edgeIdx), false)
-			fb.SetEdgeActive(int(refB.edgeIdx), false)
 		}
 	}
 }
@@ -589,31 +336,6 @@ func (f *Faces) Add(face *Face) {
 	f.container[f.count] = face
 	f.count++
 	f.version++
-}
-
-// ComputeMassProperties computes the centroid and unit-mass inertia tensor for the stored faces.
-// It returns zero values when there are no faces, no valid face, or the signed volume is zero.
-func (f *Faces) ComputeMassProperties() (float64, float64, float64, float64, float64, float64, float64, float64, float64) {
-	if f.count == 0 {
-		return 0, 0, 0, 0, 0, 0, 0, 0, 0
-	}
-	// Use a vertex as reference to improve numerical stability.
-	refX, refY, refZ := f.container[0].GetPoint0()
-	var volume6 float64
-	// First moments.
-	var mx, my, mz float64
-	// Second moments matrix.
-	var sxx, sxy, sxz float64
-	var syy, syz, szz float64
-	for i := 0; i < f.count; i++ {
-		face := f.container[i]
-		volume6, mx, my, mz, sxx, sxy, sxz, syy, syz, szz = rigid_body.CompileMassAccumulate(refX, refY, refZ, face, volume6, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
-	}
-	if volume6 == 0 {
-		return 0, 0, 0, 0, 0, 0, 0, 0, 0
-	}
-	cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz := rigid_body.CompileMassFinalize(volume6, refX, refY, refZ, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
-	return cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz
 }
 
 // Set assigns face to the element at idx.
@@ -724,13 +446,13 @@ func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64
 				p := fc.tri.Points[j]
 				key := MakeVertexKey(p)
 				dx, dy, dz := impulse.X*weight, impulse.Y*weight, impulse.Z*weight
-				disp := geometry.XYZ32{X: float32(dx), Y: float32(dy), Z: float32(dz)}
+				displacement := geometry.XYZ32{X: float32(dx), Y: float32(dy), Z: float32(dz)}
 				if existing, ok := f.displacements[key]; ok {
 					if dx*dx+dy*dy+dz*dz > float64(existing.X)*float64(existing.X)+float64(existing.Y)*float64(existing.Y)+float64(existing.Z)*float64(existing.Z) {
-						f.displacements[key] = disp
+						f.displacements[key] = displacement
 					}
 				} else {
-					f.displacements[key] = disp
+					f.displacements[key] = displacement
 				}
 			}
 		}
@@ -866,4 +588,265 @@ func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, max
 		f.count = len(f.container)
 	}
 	return f.count - initialCount, nil
+}
+
+// computeVertexNormalsAndTangents averages area-weighted face normals at shared vertices
+// when adjacent faces fall within the crease threshold (cosCrease = 0.5 -> ~60 deg),
+// while preserving explicit artist vertex normals when already set.
+func (f *Faces) computeVertexNormalsAndTangents(cosCrease float64) {
+	if f.count <= 0 {
+		return
+	}
+	needsSmooth := false
+	if f.count > 1 {
+		for i := 0; i < f.count; i++ {
+			if fc := f.container[i]; fc != nil && !fc.hasExplicitNormals {
+				needsSmooth = true
+				break
+			}
+		}
+	}
+	if !needsSmooth {
+		for i := 0; i < f.count; i++ {
+			if fc := f.container[i]; fc != nil {
+				fc.computeTangent()
+			}
+		}
+		return
+	}
+
+	neededLinks := f.count * 3
+	var smoothHead map[smoothVertKey]int32
+	var smoothNext []int32
+	var faceData []adjFace
+	if f.hasTesselation {
+		if f.smoothHead == nil {
+			f.smoothHead = make(map[smoothVertKey]int32, f.count*2)
+		} else {
+			clear(f.smoothHead)
+		}
+		if cap(f.smoothNext) < neededLinks {
+			f.smoothNext = make([]int32, neededLinks)
+		}
+		if cap(f.adjFaceData) < f.count {
+			f.adjFaceData = make([]adjFace, f.count)
+		}
+		smoothHead = f.smoothHead
+		smoothNext = f.smoothNext[:neededLinks]
+		faceData = f.adjFaceData[:f.count]
+	} else {
+		smoothHead = make(map[smoothVertKey]int32, f.count*2)
+		smoothNext = make([]int32, neededLinks)
+		faceData = make([]adjFace, f.count)
+	}
+
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil {
+			continue
+		}
+		p0x, p0y, p0z := fc.Get0()
+		p1x, p1y, p1z := fc.Get1()
+		p2x, p2y, p2z := fc.Get2()
+		e1x, e1y, e1z := p1x-p0x, p1y-p0y, p1z-p0z
+		e2x, e2y, e2z := p2x-p0x, p2y-p0y, p2z-p0z
+		ax := e1y*e2z - e1z*e2y
+		ay := e1z*e2x - e1x*e2z
+		az := e1x*e2y - e1y*e2x
+		faceData[i] = adjFace{
+			idx: int32(i),
+			nx:  float64(fc.n.X), ny: float64(fc.n.Y), nz: float64(fc.n.Z),
+			ax: ax, ay: ay, az: az,
+		}
+		for k := range 3 {
+			key := makeSmoothVertKey(fc.tri.Points[k])
+			slot := i*3 + k
+			smoothNext[slot] = smoothHead[key]
+			smoothHead[key] = int32(slot + 1)
+		}
+	}
+
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil {
+			continue
+		}
+		if fc.hasExplicitNormals {
+			fc.computeTangent()
+			continue
+		}
+		fd := faceData[i]
+		if fd.nx == 0 && fd.ny == 0 && fd.nz == 0 {
+			fc.computeTangent()
+			continue
+		}
+		for k := range 3 {
+			key := makeSmoothVertKey(fc.tri.Points[k])
+			var sx, sy, sz float64
+			for cur := smoothHead[key]; cur > 0; cur = smoothNext[cur-1] {
+				ofd := faceData[(cur-1)/3]
+				if fd.nx*ofd.nx+fd.ny*ofd.ny+fd.nz*ofd.nz >= cosCrease {
+					sx += ofd.ax
+					sy += ofd.ay
+					sz += ofd.az
+				}
+			}
+			ptr := &fc.vertexNormals[k]
+			ptr.X, ptr.Y, ptr.Z = NormalizeXYZ64(sx, sy, sz, fc.n.X, fc.n.Y, fc.n.Z)
+		}
+		fc.computeTangent()
+	}
+}
+
+// computeMassProperties computes the centroid and unit-mass inertia tensor for the stored faces.
+// It returns zero values when there are no faces, no valid face, or the signed volume is zero.
+func (f *Faces) computeMassProperties() {
+	if f.count == 0 {
+		f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = 0, 0, 0, 0, 0, 0, 0, 0, 0
+		return
+	}
+	// Use a vertex as reference to improve numerical stability.
+	refX, refY, refZ := f.container[0].GetPoint0()
+	var volume6 float64
+	// First moments.
+	var mx, my, mz float64
+	// Second moments matrix.
+	var sxx, sxy, sxz float64
+	var syy, syz, szz float64
+	for i := 0; i < f.count; i++ {
+		face := f.container[i]
+		volume6, mx, my, mz, sxx, sxy, sxz, syy, syz, szz = rigid_body.CompileMassAccumulate(refX, refY, refZ, face, volume6, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
+	}
+	if volume6 == 0 {
+		f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = 0, 0, 0, 0, 0, 0, 0, 0, 0
+		return
+	}
+	f.cx, f.cy, f.cz, f.ixx, f.ixy, f.ixz, f.iyy, f.iyz, f.izz = rigid_body.CompileMassFinalize(volume6, refX, refY, refZ, mx, my, mz, sxx, sxy, sxz, syy, syz, szz)
+}
+
+// computeActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave)
+// using a short-lived local adjacency map so no scratch buckets remain pinned after computation.
+func (f *Faces) computeActiveEdges() {
+	const (
+		coplanarCosThreshold = 0.9995
+		coplanarSinMax       = 0.032
+		concaveSinMin        = 1e-4
+	)
+	for i := 0; i < f.count; i++ {
+		if fc := f.container[i]; fc != nil {
+			fc.activeEdges = EdgeAllActive
+		}
+	}
+	if f.count < 2 {
+		return
+	}
+	var edgeAdj map[EdgeKey]edgeAdjacency
+	if f.hasTesselation {
+		if f.edgeAdj == nil {
+			f.edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
+		} else {
+			clear(f.edgeAdj)
+		}
+		edgeAdj = f.edgeAdj
+	} else {
+		edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
+	}
+
+	canOccludeEdge := func(fc *Face) bool {
+		if fc == nil {
+			return false
+		}
+		if fc.n.X == 0 && fc.n.Y == 0 && fc.n.Z == 0 {
+			return false
+		}
+		// Keep untextured collision/test faces enabled alongside textured solid faces; ignore liquid/sky overlays.
+		return fc.material == nil || fc.IsSolid()
+	}
+
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if !canOccludeEdge(fc) {
+			continue
+		}
+		p := fc.tri.Points
+		keys := [3]EdgeKey{MakeEdgeKey(p[0], p[1]), MakeEdgeKey(p[1], p[2]), MakeEdgeKey(p[2], p[0])}
+		for eIdx := range uint8(3) {
+			key := keys[eIdx]
+			adj := edgeAdj[key]
+			if adj.count < 2 {
+				adj.refs[adj.count] = edgeFaceRef{faceIdx: int32(i), edgeIdx: eIdx}
+			}
+			if adj.count < 255 {
+				adj.count++
+			}
+			edgeAdj[key] = adj
+		}
+	}
+
+	sinToPlane := func(opp, anchor, n geometry.XYZ32) float64 {
+		dx := float64(opp.X) - float64(anchor.X)
+		dy := float64(opp.Y) - float64(anchor.Y)
+		dz := float64(opp.Z) - float64(anchor.Z)
+		lenSq := dx*dx + dy*dy + dz*dz
+		if lenSq <= 1e-18 {
+			return 0.0
+		}
+		return (dx*float64(n.X) + dy*float64(n.Y) + dz*float64(n.Z)) / math.Sqrt(lenSq)
+	}
+
+	for _, adj := range edgeAdj {
+		if adj.count != 2 {
+			continue
+		}
+		refA := adj.refs[0]
+		refB := adj.refs[1]
+		fa := f.container[refA.faceIdx]
+		fb := f.container[refB.faceIdx]
+		if fa == fb {
+			continue
+		}
+		if (fa.material == nil) != (fb.material == nil) {
+			continue
+		}
+		pA, _, oppA := fa.GetEdgePoints(int(refA.edgeIdx))
+		_, _, oppB := fb.GetEdgePoints(int(refB.edgeIdx))
+
+		cosAngle := float64(fa.n.X)*float64(fb.n.X) + float64(fa.n.Y)*float64(fb.n.Y) + float64(fa.n.Z)*float64(fb.n.Z)
+		sinB := sinToPlane(oppB, pA, fa.n)
+		sinA := sinToPlane(oppA, pA, fb.n)
+
+		coplanar := cosAngle >= coplanarCosThreshold && math.Abs(sinB) <= coplanarSinMax && math.Abs(sinA) <= coplanarSinMax
+		concave := sinB > concaveSinMin && sinA > concaveSinMin
+		if coplanar || concave {
+			fa.SetEdgeActive(int(refA.edgeIdx), false)
+			fb.SetEdgeActive(int(refB.edgeIdx), false)
+		}
+	}
+}
+
+// computeGeomHash updates the cached geometry hash from face vertices, UVs, normals, lightmaps, and material names.
+func (f *Faces) computeGeomHash() {
+	h := HashMixU32(hashOffset64, uint32(f.count))
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil {
+			continue
+		}
+		for k := range 3 {
+			p := &fc.tri.Points[k]
+			h = HashMixF32(h, p.X)
+			h = HashMixF32(h, p.Y)
+			h = HashMixF32(h, p.Z)
+			h = HashMixF32(h, fc.u[k])
+			h = HashMixF32(h, fc.v[k])
+			h = HashMixF32(h, fc.vertexNormals[k].X)
+			h = HashMixF32(h, fc.vertexNormals[k].Y)
+			h = HashMixF32(h, fc.vertexNormals[k].Z)
+		}
+		h = HashMixU32(h, uint32(fc.lightmapID))
+		if fc.material != nil {
+			h = HashMixStr(h, fc.material.GetName())
+		}
+	}
+	f.geomHash = h
 }

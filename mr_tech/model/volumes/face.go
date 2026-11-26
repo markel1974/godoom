@@ -1013,7 +1013,7 @@ func (fc *Face) computeTangent() {
 		faceBX, faceBY, faceBZ = fny*faceTZ-fnz*faceTY, fnz*faceTX-fnx*faceTZ, fnx*faceTY-fny*faceTX
 	}
 
-	for k := 0; k < 3; k++ {
+	for k := range 3 {
 		n32 := fc.vertexNormals[k]
 		if n32.X == 0 && n32.Y == 0 && n32.Z == 0 {
 			n32 = fc.n

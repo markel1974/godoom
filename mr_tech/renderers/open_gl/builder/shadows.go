@@ -58,7 +58,9 @@ type Shadows struct {
 	instGroups         buffers.PtrPool[ShadowsRigidGroup]
 	groupToken         uint64
 	volScratch         []ShadowsCollectedVol
-	thingScratch       []ShadowsCollectedThing
+	volScratchLen      int
+	thingScratch2      []ShadowsCollectedThing
+	thingScratchLen    int
 	entityCache        ShadowRigidCache
 	prevShadowExtraSig uint64
 	shadowFrame        uint64
@@ -71,10 +73,12 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 		ctx = bContext.ctx
 	}
 	bs := &Shadows{
-		bContext: bContext,
-		bStatic:  bStatic,
-		bThings:  bThing,
-		instPool: buffers.NewInstancePool(ctx, 256),
+		bContext:      bContext,
+		bStatic:       bStatic,
+		bThings:       bThing,
+		instPool:      buffers.NewInstancePool(ctx, 256),
+		volScratch:    make([]ShadowsCollectedVol, 256),
+		thingScratch2: make([]ShadowsCollectedThing, 256),
 	}
 	bs.instGroups.Init(32)
 	for t := range shaders.MaxShadowTiles {
@@ -280,8 +284,10 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 	}
 }
 
+// collectShadowVolumes gathers shadow volumes intersecting active tile frustums into scratch storage.
+// It updates per-tile hash accumulators, XOR signatures, counts, and marks static chunks as seen.
 func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[shaders.MaxShadowTiles]uint64, volCount *[shaders.MaxShadowTiles]int) {
-	w.volScratch = w.volScratch[:0]
+	w.volScratchLen = 0
 	if vols == nil || activeMask == 0 {
 		return
 	}
@@ -294,7 +300,18 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 		if h == 0 {
 			return false
 		}
-		w.volScratch = append(w.volScratch, ShadowsCollectedVol{vol: vol, mask: leafMask})
+		if w.volScratchLen >= len(w.volScratch) {
+			newLen := len(w.volScratch) * 2
+			volS := make([]ShadowsCollectedVol, newLen)
+			copy(volS, w.volScratch)
+			w.volScratch = volS
+		}
+
+		ptr := &w.volScratch[w.volScratchLen]
+		ptr.vol = vol
+		ptr.mask = leafMask
+		w.volScratchLen++
+
 		if entry := w.bStatic.GetEntry(vol.GetFaces()); entry != nil && !entry.detached && entry.chunk != nil {
 			entry.chunk.lastSeenFrame = w.bContext.meshFrame
 		}
@@ -311,6 +328,8 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 	})
 }
 
+// syncShadowEntry updates the cached shadow entry hash and rigid mesh state for a thing.
+// syncShadowEntry clears rigid shadow state when the thing has no renderable rigid faces.
 func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, sEntry *ShadowRigidEntry, h uint64) {
 	sEntry.hash = h
 	if rs, ok := thing.(ithing.IRigidRenderSource); ok {
@@ -325,7 +344,7 @@ func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, s
 }
 
 func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int) {
-	w.thingScratch = w.thingScratch[:0]
+	w.thingScratchLen = 0
 	if th == nil || activeMask == 0 {
 		return
 	}
@@ -351,12 +370,20 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 			sEntry.seenFrame = w.shadowFrame
 		}
 
-		w.thingScratch = append(w.thingScratch, ShadowsCollectedThing{
-			thing:   thing,
-			entry:   sEntry,
-			isRigid: sEntry.isRigidActive,
-			mask:    leafMask,
-		})
+		if w.thingScratchLen >= len(w.thingScratch2) {
+			newLen := len(w.thingScratch2) * 2
+			volS := make([]ShadowsCollectedThing, newLen)
+			copy(volS, w.thingScratch2)
+			w.thingScratch2 = volS
+		}
+
+		ptr := w.thingScratch2[w.thingScratchLen]
+		ptr.thing = thing
+		ptr.entry = sEntry
+		ptr.isRigid = sEntry.isRigidActive
+		ptr.mask = leafMask
+
+		w.thingScratchLen++
 
 		xorH := bits.RotateLeft64(h, 23)
 		for rem := leafMask; rem != 0; {
@@ -384,7 +411,7 @@ func pushShadowStaticSubMeshes(tb *ShadowTileBuilder, mesh *buffers.ResidentMesh
 }
 
 func (w *Shadows) resolveDirtyVolumes(dirtyMask uint32, vols *model.Volumes) {
-	for i := range w.volScratch {
+	for i := range w.volScratchLen {
 		cv := &w.volScratch[i]
 		if (cv.mask & dirtyMask) != 0 {
 			w.bStatic.ResolveMesh(cv.vol, vols)
@@ -393,7 +420,7 @@ func (w *Shadows) resolveDirtyVolumes(dirtyMask uint32, vols *model.Volumes) {
 }
 
 func (w *Shadows) buildTileStaticForBit(tb *ShadowTileBuilder, tileBit uint32) {
-	for i := range w.volScratch {
+	for i := range w.volScratchLen {
 		cv := &w.volScratch[i]
 		if (cv.mask & tileBit) == 0 {
 			continue
@@ -410,14 +437,14 @@ func (w *Shadows) buildTileStaticForBit(tb *ShadowTileBuilder, tileBit uint32) {
 }
 
 func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, shadowExtraSig *uint64) bool {
-	if len(w.thingScratch) == 0 {
+	if w.thingScratchLen == 0 {
 		return false
 	}
 	w.groupToken++
 	w.instGroups.Reset()
 
-	for i := range w.thingScratch {
-		ct := &w.thingScratch[i]
+	for i := range w.thingScratchLen {
+		ct := &w.thingScratch2[i]
 		if (ct.mask & tileBit) == 0 {
 			continue
 		}

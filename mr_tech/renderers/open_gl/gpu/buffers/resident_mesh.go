@@ -39,12 +39,16 @@ type ResidentMesh struct {
 	InstGroupIdx         int
 	ShadowInstGroupFrame uint64
 	ShadowInstGroupIdx   int
-	VertFloats           []float32
-	vertFloatsPtr        unsafe.Pointer
-	vertFloatsLen        int
+	VertData             []uint32
+	vertDataPtr          unsafe.Pointer
+	vertWordsLen         int
+	vertCount            int
 	Indices              []uint32
 	indicesPtr           unsafe.Pointer
 	indicesLen           int
+	vertHashSlots        []uint32
+	vertHashGen          []uint32
+	dedupGen             uint32
 	AnimMats             []*textures.Material
 	AnimFrames           []*textures.Texture
 	AnimLen              int
@@ -122,6 +126,26 @@ func (rm *ResidentMesh) NeedsRebuild(faces *volumes.Faces, checkAnim bool) bool 
 	return false
 }
 
+// VertexData returns the active packed 32-bit vertex words for the current build.
+func (rm *ResidentMesh) VertexData() []uint32 {
+	return rm.VertData[:rm.vertWordsLen]
+}
+
+// VertexCount returns the number of unique deduplicated vertices in the current build.
+func (rm *ResidentMesh) VertexCount() int {
+	return rm.vertCount
+}
+
+// IndexData returns the active triangle index slice for the current build.
+func (rm *ResidentMesh) IndexData() []uint32 {
+	return rm.Indices[:rm.indicesLen]
+}
+
+// IndexCount returns the number of triangle indices in the current build.
+func (rm *ResidentMesh) IndexCount() int {
+	return rm.indicesLen
+}
+
 // resetBuildState clears transient mesh build flags and length counters before rebuilding geometry.
 func (rm *ResidentMesh) resetBuildState() {
 	for i := range rm.HasBlend {
@@ -134,8 +158,14 @@ func (rm *ResidentMesh) resetBuildState() {
 	rm.SkyMaterial = nil
 	rm.SubMeshesLen = 0
 	rm.AnimLen = 0
-	rm.vertFloatsLen = 0
+	rm.vertWordsLen = 0
+	rm.vertCount = 0
 	rm.indicesLen = 0
+	rm.dedupGen++
+	if rm.dedupGen == 0 {
+		clear(rm.vertHashGen)
+		rm.dedupGen = 1
+	}
 }
 
 // Rebuild rebuilds the resident mesh from the provided faces and uploads valid geometry to the GPU.
@@ -178,26 +208,116 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 	return rm.SubMeshesLen > 0
 }
 
-// ReserveStaticAtlas ensures mesh vertex and index storage can hold totalFaces static triangles.
+func nextPow2(v int) int {
+	if v <= 1 {
+		return 1
+	}
+	v--
+	v |= v >> 1
+	v |= v >> 2
+	v |= v >> 4
+	v |= v >> 8
+	v |= v >> 16
+	return v + 1
+}
+
+func hashVertWords(v *[StaticVertexWords]uint32) uint32 {
+	h := uint32(2166136261)
+	for i := range v {
+		h ^= v[i]
+		h *= 16777619
+	}
+	h ^= h >> 16
+	h *= 0x85ebca6b
+	h ^= h >> 13
+	h *= 0xc2b2ae35
+	h ^= h >> 16
+	return h
+}
+
+func (rm *ResidentMesh) ensureVertHashCapacity(maxVerts int) {
+	needSlots := nextPow2(max(maxVerts*2, 64))
+	if len(rm.vertHashSlots) >= needSlots {
+		if rm.dedupGen == 0 {
+			rm.dedupGen = 1
+		}
+		return
+	}
+	newSlots := make([]uint32, needSlots)
+	newGens := make([]uint32, needSlots)
+	rm.vertHashSlots = newSlots
+	rm.vertHashGen = newGens
+	rm.dedupGen = 1
+	if rm.vertCount == 0 {
+		return
+	}
+	mask := uint32(needSlots - 1)
+	for idx := 0; idx < rm.vertCount; idx++ {
+		base := idx * StaticVertexWords
+		key := (*[StaticVertexWords]uint32)(rm.VertData[base : base+StaticVertexWords])
+		pos := hashVertWords(key) & mask
+		for newGens[pos] == 1 {
+			pos = (pos + 1) & mask
+		}
+		newGens[pos] = 1
+		newSlots[pos] = uint32(idx)
+	}
+}
+
+func (rm *ResidentMesh) ensureVertexStorage(reqWords, reqIndices, reqVerts int) {
+	if len(rm.VertData) < reqWords {
+		newLen := max(len(rm.VertData)*2, reqWords)
+		grown := make([]uint32, newLen)
+		copy(grown, rm.VertData[:rm.vertWordsLen])
+		rm.VertData = grown
+		if rm.ctx != nil {
+			rm.vertDataPtr = rm.ctx.Ptr(rm.VertData)
+		}
+	}
+	if len(rm.Indices) < reqIndices {
+		newLen := max(len(rm.Indices)*2, reqIndices)
+		grown := make([]uint32, newLen)
+		copy(grown, rm.Indices[:rm.indicesLen])
+		rm.Indices = grown
+		if rm.ctx != nil {
+			rm.indicesPtr = rm.ctx.Ptr(rm.Indices)
+		}
+	}
+	rm.ensureVertHashCapacity(reqVerts)
+}
+
+func (rm *ResidentMesh) dedupAppendVertex(cand *[StaticVertexWords]uint32) uint32 {
+	slots := rm.vertHashSlots
+	gens := rm.vertHashGen
+	mask := uint32(len(slots) - 1)
+	pos := hashVertWords(cand) & mask
+	gen := rm.dedupGen
+	for gens[pos] == gen {
+		existingIdx := slots[pos]
+		base := int(existingIdx) * StaticVertexWords
+		if *(*[StaticVertexWords]uint32)(rm.VertData[base : base+StaticVertexWords]) == *cand {
+			return existingIdx
+		}
+		pos = (pos + 1) & mask
+	}
+	idx := uint32(rm.vertCount)
+	off := rm.vertWordsLen
+	copy(rm.VertData[off:off+StaticVertexWords], cand[:])
+	rm.vertWordsLen = off + StaticVertexWords
+	rm.vertCount++
+	gens[pos] = gen
+	slots[pos] = idx
+	return idx
+}
+
+// ReserveStaticAtlas ensures mesh vertex, index, and deduplication storage can hold totalFaces static triangles.
 // ReserveStaticAtlas is a no-op when totalFaces is zero or negative.
 func (rm *ResidentMesh) ReserveStaticAtlas(totalFaces int) {
 	if totalFaces <= 0 {
 		return
 	}
 	neededVerts := totalFaces * 3
-	neededFloats := neededVerts * StaticVertexFloats
-	if len(rm.VertFloats) < neededFloats {
-		rm.VertFloats = make([]float32, neededFloats)
-		if rm.ctx != nil {
-			rm.vertFloatsPtr = rm.ctx.Ptr(rm.VertFloats)
-		}
-	}
-	if len(rm.Indices) < neededVerts {
-		rm.Indices = make([]uint32, neededVerts)
-		if rm.ctx != nil {
-			rm.indicesPtr = rm.ctx.Ptr(rm.Indices)
-		}
-	}
+	rm.ensureVertexStorage(neededVerts*StaticVertexWords, neededVerts, neededVerts)
 }
 
 // BeginStaticAtlas resets the mesh for static atlas construction and clears source face tracking.
@@ -321,28 +441,8 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 		return cmp.Compare(ka.sortOrder, kb.sortOrder)
 	})
 
-	neededVerts := validCount * 3
-	neededFloats := neededVerts * StaticVertexFloats
-	reqFloats := rm.vertFloatsLen + neededFloats
-	reqVerts := rm.indicesLen + neededVerts
-	if len(rm.VertFloats) < reqFloats {
-		newLen := max(len(rm.VertFloats)*2, reqFloats)
-		grown := make([]float32, newLen)
-		copy(grown, rm.VertFloats[:rm.vertFloatsLen])
-		rm.VertFloats = grown
-		if rm.ctx != nil {
-			rm.vertFloatsPtr = rm.ctx.Ptr(rm.VertFloats)
-		}
-	}
-	if len(rm.Indices) < reqVerts {
-		newLen := max(len(rm.Indices)*2, reqVerts)
-		grown := make([]uint32, newLen)
-		copy(grown, rm.Indices[:rm.indicesLen])
-		rm.Indices = grown
-		if rm.ctx != nil {
-			rm.indicesPtr = rm.ctx.Ptr(rm.Indices)
-		}
-	}
+	maxAddedVerts := validCount * 3
+	rm.ensureVertexStorage(rm.vertWordsLen+maxAddedVerts*StaticVertexWords, rm.indicesLen+maxAddedVerts, rm.vertCount+maxAddedVerts)
 
 	subStart = rm.SubMeshesLen
 	var curSub *ResidentSubMesh
@@ -350,8 +450,8 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 	var centSumX, centSumY, centSumZ float64
 	var centCount int
 
-	vIdx := uint32(rm.indicesLen)
-	fOut := rm.vertFloatsLen
+	iOut := rm.indicesLen
+	var c0, c1, c2 [StaticVertexWords]uint32
 	for k := 0; k < validCount; k++ {
 		fi := rm.faceOrder[k]
 		face := faces.At(fi)
@@ -374,7 +474,7 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 			curSub.CentroidX = 0
 			curSub.CentroidY = 0
 			curSub.CentroidZ = 0
-			curSub.FirstIndex = int32(vIdx)
+			curSub.FirstIndex = int32(iOut)
 			curSub.IndexCount = 0
 			if fk.blendMode >= 0 && fk.blendMode < config.BlendModeLatest {
 				rm.HasBlend[fk.blendMode] = true
@@ -413,22 +513,18 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 		centSumZ += -float64(p0y+p1y+p2y) / 3.0
 		centCount++
 
-		WriteStaticVertex(rm.VertFloats[fOut:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
-		fOut += StaticVertexFloats
-		WriteStaticVertex(rm.VertFloats[fOut:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
-		fOut += StaticVertexFloats
-		WriteStaticVertex(rm.VertFloats[fOut:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
-		fOut += StaticVertexFloats
+		WriteStaticVertex(c0[:], p0x, p0y, p0z, u0, v0, texLayer, nx0, ny0, nz0, tx0, ty0, tz0, s0, lmU[0], lmV[0], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		WriteStaticVertex(c1[:], p1x, p1y, p1z, u1, v1, texLayer, nx1, ny1, nz1, tx1, ty1, tz1, s1, lmU[1], lmV[1], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
+		WriteStaticVertex(c2[:], p2x, p2y, p2z, u2, v2, texLayer, nx2, ny2, nz2, tx2, ty2, tz2, s2, lmU[2], lmV[2], lmIDFloat, packed, spec, shininess, dScale, dFactor, envStr, renderMode, envTint)
 
-		rm.Indices[vIdx] = vIdx
-		rm.Indices[vIdx+1] = vIdx + 1
-		rm.Indices[vIdx+2] = vIdx + 2
-		vIdx += 3
+		rm.Indices[iOut] = rm.dedupAppendVertex(&c0)
+		rm.Indices[iOut+1] = rm.dedupAppendVertex(&c1)
+		rm.Indices[iOut+2] = rm.dedupAppendVertex(&c2)
+		iOut += 3
 		curSub.IndexCount += 3
 	}
 	curSub.FinalizeCentroid(centSumX, centSumY, centSumZ, centCount)
-	rm.vertFloatsLen = fOut
-	rm.indicesLen = int(vIdx)
+	rm.indicesLen = iOut
 	return subStart, rm.SubMeshesLen - subStart, skyMat, false, true
 }
 
@@ -442,14 +538,14 @@ func (rm *ResidentMesh) uploadToGPU() {
 	}
 	rm.ctx.BindVertexArray(rm.VAO)
 	rm.ctx.BindBuffer(api.ARRAY_BUFFER, rm.VBO)
-	if rm.vertFloatsLen > 0 {
-		rm.ctx.BufferData(api.ARRAY_BUFFER, rm.vertFloatsLen*4, rm.vertFloatsPtr, api.STATIC_DRAW)
+	if rm.vertWordsLen > 0 {
+		rm.ctx.BufferData(api.ARRAY_BUFFER, rm.vertWordsLen*4, rm.vertDataPtr, api.STATIC_DRAW)
 	}
 	rm.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, rm.EBO)
 	if rm.indicesLen > 0 {
 		rm.ctx.BufferData(api.ELEMENT_ARRAY_BUFFER, rm.indicesLen*4, rm.indicesPtr, api.STATIC_DRAW)
 	}
-	ConfigureVertexAttribs(rm.ctx, StaticVertexFloats*4, false)
+	ConfigureVertexAttribs(rm.ctx, StaticVertexBytes, false)
 	rm.ctx.BindVertexArray(0)
 	// Invalidate instanced VAO bindings so next instanced bind refreshes cleanly.
 	rm.lastInstByteOffset = -1
@@ -468,7 +564,7 @@ func (rm *ResidentMesh) BindInstancedWithCache(instanceVBO uint32, baseByteOffse
 		rm.ctx.BindVertexArray(rm.VAOInstanced)
 		rm.ctx.BindBuffer(api.ARRAY_BUFFER, rm.VBO)
 		rm.ctx.BindBuffer(api.ELEMENT_ARRAY_BUFFER, rm.EBO)
-		ConfigureVertexAttribs(rm.ctx, StaticVertexFloats*4, false)
+		ConfigureVertexAttribs(rm.ctx, StaticVertexBytes, false)
 		rm.boundInstVBO = 0
 		rm.lastInstByteOffset = -1
 	} else if boundVAO != rm.VAOInstanced {

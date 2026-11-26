@@ -4,11 +4,11 @@ invariant gl_Position;
 
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aTexCoords;
-layout (location = 2) in vec3 aNormal;
-layout (location = 3) in vec4 aTangent;
-layout (location = 4) in vec3 aLightmap;
-layout (location = 5) in vec4 aMaterial;    // packed, specBoost, shininess, detailScale
-layout (location = 6) in vec4 aExtra;       // detailFactor, envStrength, renderMode, envTintPacked
+layout (location = 2) in vec3 aNormal;      // packed INT_2_10_10_10_REV normalized
+layout (location = 3) in vec4 aTangent;     // packed INT_2_10_10_10_REV normalized (.w = handedness)
+layout (location = 4) in vec3 aLightmap;    // HALF_FLOAT lmU, lmV, lmID
+layout (location = 5) in vec4 aMaterial;    // HALF_FLOAT specBoost, shininess, detailScale, detailFactor
+layout (location = 6) in vec4 aExtra;       // packed, envStrength, renderMode, envTintPacked
 layout (location = 7) in vec3 aOrigin;      // streaming dynamic only
 layout (location = 8) in vec3 aPosNext;     // streaming dynamic only
 layout (location = 9) in vec2 aAnimData;    // lerp, yaw (streaming dynamic only)
@@ -61,11 +61,11 @@ layout(std140) uniform PerFrameBlock {
 };
 #define u_time (u_pfScreenTime.z)
 #else
+uniform float u_time;
 uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform mat4 u_roomSpaceMatrix;
 uniform mat4 u_flashSpaceMatrix;
-uniform float u_time;
 #endif
 uniform int u_instanceMode;
 
@@ -149,12 +149,12 @@ void renderModel3D() {
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
     IsFullbright = 0.0;
     ViewNormal = mat3(u_view) * worldN;
-    ViewTangent = vec4(mat3(u_view) * worldT, aTangent.w);
+    ViewTangent = vec4(mat3(u_view) * worldT, (aTangent.w < 0.0) ? -1.0 : 1.0);
     gl_Position = u_projection * viewPos;
 }
 
 void renderLiquid() {
-    uint packedMaterial = floatBitsToUint(aMaterial.x);
+    uint packedMaterial = floatBitsToUint(aExtra.x);
     uint amplitude = (packedMaterial >> 16u) & 0x7Fu;
     float amplitudeF = float(amplitude);
 
@@ -172,7 +172,7 @@ void renderLiquid() {
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
     IsFullbright = 1.0;
     ViewNormal = mat3(u_view) * safeNorm3(aNormal, vec3(0.0, 1.0, 0.0));
-    ViewTangent = vec4(mat3(u_view) * aTangent.xyz, aTangent.w);
+    ViewTangent = vec4(mat3(u_view) * aTangent.xyz, (aTangent.w < 0.0) ? -1.0 : 1.0);
     gl_Position = u_projection * viewPos;
 }
 
@@ -189,7 +189,7 @@ void renderInstanced() {
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
     IsFullbright = 0.0;
     ViewNormal = mat3(u_view) * (instRot * safeNorm3(aNormal, vec3(0.0, 1.0, 0.0)));
-    ViewTangent = vec4(mat3(u_view) * (instRot * aTangent.xyz), aTangent.w);
+    ViewTangent = vec4(mat3(u_view) * (instRot * aTangent.xyz), (aTangent.w < 0.0) ? -1.0 : 1.0);
     gl_Position = u_projection * viewPos;
 }
 
@@ -203,24 +203,20 @@ void renderDefault() {
     FragPosLightFlash = u_flashSpaceMatrix * worldPos;
     IsFullbright = 0.0;
     ViewNormal = mat3(u_view) * safeNorm3(aNormal, vec3(0.0, 1.0, 0.0));
-    ViewTangent = vec4(mat3(u_view) * aTangent.xyz, aTangent.w);
+    ViewTangent = vec4(mat3(u_view) * aTangent.xyz, (aTangent.w < 0.0) ? -1.0 : 1.0);
     gl_Position = u_projection * viewPos;
 }
 
 void main() {
     TexCoords = aTexCoords;
-    Material = aMaterial.x;
-    SpecBoost = aMaterial.y;
-    Shininess = aMaterial.z;
-    DetailParams = vec2(aMaterial.w, aExtra.x);
+    Material = aExtra.x;
+    SpecBoost = aMaterial.x;
+    Shininess = aMaterial.y;
+    DetailParams = aMaterial.zw;
     LightmapUV = aLightmap;
 
     uint tintU = uint(max(aExtra.w, 0.0) + 0.5);
-    vec3 envTint = vec3(
-        float(tintU & 0xFFu),
-        float((tintU >> 8u) & 0xFFu),
-        float((tintU >> 16u) & 0xFFu)
-    ) / 255.0;
+    vec3 envTint = vec3(float(tintU & 0xFFu), float((tintU >> 8u) & 0xFFu), float((tintU >> 16u) & 0xFFu)) / 255.0;
     EnvParams = vec4(aExtra.y, envTint);
 
     float renderMode = aExtra.z;

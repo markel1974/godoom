@@ -40,7 +40,9 @@ const (
 	FRAMEBUFFER                 = 0x8D40
 	FRAMEBUFFER_COMPLETE        = 0x8CD5
 	FUNC_ADD                    = 0x8006
+	HALF_FLOAT                  = 0x140B
 	INFO_LOG_LENGTH             = 0x8B84
+	INT_2_10_10_10_REV          = 0x8D9F
 	INVALID_INDEX               = 0xFFFFFFFF
 	LEQUAL                      = 0x0203
 	LESS                        = 0x0201

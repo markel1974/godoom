@@ -1,6 +1,7 @@
 package draws
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
@@ -16,7 +17,7 @@ var _emptyMaterial = make([]*textures.Material, materialsMax)
 // FrameVertices represents a structure for managing vertex and index buffers for rendering geometries in frames.
 type FrameVertices struct {
 	ctx                 api.IContext
-	vertices            []float32
+	vertices            []uint32
 	indices             []uint32
 	verticesPtr         unsafe.Pointer
 	indicesPtr          unsafe.Pointer
@@ -39,10 +40,10 @@ type FrameVertices struct {
 
 // NewFrameVertices initializes a new FrameVertices instance with preallocated buffers for vertices and indices.
 func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
-	const maxStride = buffers.StreamingVertexFloats
+	const maxStride = buffers.StreamingVertexWords
 	fv := &FrameVertices{
 		ctx:          ctx,
-		vertices:     make([]float32, maxVerts),
+		vertices:     make([]uint32, maxVerts),
 		indices:      make([]uint32, maxVerts),
 		stride:       maxStride,
 		containers:   make([]*FrameVertices, 16),
@@ -59,9 +60,9 @@ func NewFrameVertices(ctx api.IContext, maxVerts int) *FrameVertices {
 
 // NewStagingFrameVertices initializes a CPU-only staging FrameVertices without registering pointers with the GPU context.
 func NewStagingFrameVertices(maxVerts int) *FrameVertices {
-	const maxStride = buffers.StreamingVertexFloats
+	const maxStride = buffers.StreamingVertexWords
 	return &FrameVertices{
-		vertices:  make([]float32, maxVerts),
+		vertices:  make([]uint32, maxVerts),
 		indices:   make([]uint32, maxVerts),
 		stride:    maxStride,
 		batches:   NewFrameBatches(4),
@@ -339,7 +340,7 @@ func (w *FrameVertices) AddVertex20(x, y, z, u, v, texLayer, ox, oy, oz, isBB, n
 	)
 }
 
-// AddVertexFull appends a complete 32-float streaming vertex with explicit normal, tangent, lightmap UV, and env reflection data.
+// AddVertexFull appends a complete compressed 24-word streaming vertex with explicit normal, tangent, lightmap UV, and env reflection data.
 func (w *FrameVertices) AddVertexFull(
 	x, y, z, u, v, texLayer,
 	nx, ny, nz, tx, ty, tz, tSign,
@@ -353,48 +354,24 @@ func (w *FrameVertices) AddVertexFull(
 	if w.verticesCount >= int32(len(w.vertices)) {
 		w.growVertices()
 	}
-	// Location 0: aPos
-	w.vertices[head] = x
-	w.vertices[head+1] = y
-	w.vertices[head+2] = z
-	// Location 1: aTexCoords
-	w.vertices[head+3] = u
-	w.vertices[head+4] = v
-	w.vertices[head+5] = texLayer
-	// Location 2: aNormal
-	w.vertices[head+6] = nx
-	w.vertices[head+7] = ny
-	w.vertices[head+8] = nz
-	// Location 3: aTangent
-	w.vertices[head+9] = tx
-	w.vertices[head+10] = ty
-	w.vertices[head+11] = tz
-	w.vertices[head+12] = tSign
-	// Location 4: aLightmap
-	w.vertices[head+13] = lmU
-	w.vertices[head+14] = lmV
-	w.vertices[head+15] = lmLayer
-	// Location 5: aMaterial
-	w.vertices[head+16] = material
-	w.vertices[head+17] = specBoost
-	w.vertices[head+18] = shininess
-	w.vertices[head+19] = detailScale
-	// Location 6: aExtra
-	w.vertices[head+20] = detailFactor
-	w.vertices[head+21] = envStrength
-	w.vertices[head+22] = renderMode
-	w.vertices[head+23] = envTint
+	buffers.EncodeVertexBaseGL(
+		w.vertices[head:],
+		x, y, z, u, v, texLayer,
+		nx, ny, nz, tx, ty, tz, tSign,
+		lmU, lmV, lmLayer,
+		material, specBoost, shininess, detailScale, detailFactor, envStrength, renderMode, envTint,
+	)
 	// Location 7: aOrigin
-	w.vertices[head+24] = ox
-	w.vertices[head+25] = oy
-	w.vertices[head+26] = oz
+	w.vertices[head+16] = math.Float32bits(ox)
+	w.vertices[head+17] = math.Float32bits(oy)
+	w.vertices[head+18] = math.Float32bits(oz)
 	// Location 8: aPosNext
-	w.vertices[head+27] = pnx
-	w.vertices[head+28] = pny
-	w.vertices[head+29] = pnz
+	w.vertices[head+19] = math.Float32bits(pnx)
+	w.vertices[head+20] = math.Float32bits(pny)
+	w.vertices[head+21] = math.Float32bits(pnz)
 	// Location 9: aAnimData
-	w.vertices[head+30] = lerp
-	w.vertices[head+31] = yaw
+	w.vertices[head+22] = math.Float32bits(lerp)
+	w.vertices[head+23] = math.Float32bits(yaw)
 
 	slot := w.verticesSlot
 	w.verticesSlot++
@@ -438,7 +415,7 @@ func (w *FrameVertices) growVertices() {
 	if newSize == 0 {
 		newSize = 128
 	}
-	newData := make([]float32, newSize)
+	newData := make([]uint32, newSize)
 	copy(newData, w.vertices)
 	w.vertices = newData
 	if w.ctx != nil {

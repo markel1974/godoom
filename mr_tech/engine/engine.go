@@ -87,13 +87,13 @@ func (e *Engine) Setup(cfg *config.Root) error {
 func (e *Engine) Compute(player *things.Player, vi *ViewMatrix) {
 	// AI & External Forces: Wake up things BEFORE physics calculation
 	pX, pY, pZ := player.GetEntity().GetCenter()
-	if e.volumes != nil {
-		e.volumes.UpdateStreaming(pX, pY, pZ)
-	}
+
+	e.volumes.UpdateStreaming(pX, pY, pZ)
+
 	// Dynamic Solver
 	e.things.Compute(pX, pY, pZ)
 	// Post-Sync ViewMatrix
-	if vi.GetSpringArm() != nil && e.volumes != nil {
+	if vi.GetSpringArm() != nil {
 		vi.UpdateThirdPerson(player, e.volumes, 1.0/60.0)
 	} else {
 		vi.Update(player)

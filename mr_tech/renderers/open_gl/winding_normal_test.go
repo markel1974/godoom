@@ -110,13 +110,14 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 		t.Fatalf("expected hard normal (-1,0,0) on fC corner, got (%v, %v, %v)", cnx2, cny2, cnz2)
 	}
 
-	// Verify GL (u, -v) tangent & handedness sign + ResidentMesh 24-float GPU vertex packing.
+	// Verify GL (u, -v) tangent & handedness sign + compressed 16-word (64-byte) deduplicated GPU vertex packing.
 	fA.SetLightmap(2, 0.25, 0.75, 0.5, 0.75, 0.25, 0.5)
 	ctx := windingTestCtx{}
 	rm := buffers.NewResidentMesh(ctx)
 	ok := rm.Rebuild(faces, func(_ *textures.Texture) (float32, bool) { return 3.0, true })
-	if !ok || len(rm.VertFloats) == 0 || len(rm.VertFloats)%buffers.StaticVertexFloats != 0 {
-		t.Fatalf("expected valid 24-float ResidentMesh vertex buffer, ok=%v floats=%d", ok, len(rm.VertFloats))
+	vdata := rm.VertexData()
+	if !ok || len(vdata) == 0 || len(vdata)%buffers.StaticVertexWords != 0 {
+		t.Fatalf("expected valid 16-word compressed ResidentMesh vertex buffer, ok=%v words=%d", ok, len(vdata))
 	}
 
 	// Vertex 2 of fA (0,10,0): u=0, v=1 -> v_gl = -1. Check UV flip & tangent handedness sign non-zero & normalized.
@@ -126,13 +127,20 @@ func TestFaceOutwardWindingAndCreaseNormalsAndTangents(t *testing.T) {
 		t.Fatalf("expected unit tangent and ±1 handedness sign on fA, got T=(%v,%v,%v) len=%.5f sign=%.2f", tx0, ty0, tz0, tLen, s0)
 	}
 
-	// Verify ResidentMesh uploaded GL normal (nx, nz, -ny) and lightmap (0.25, 0.75, 2) for fA vertex 0.
-	vf := rm.VertFloats[:buffers.StaticVertexFloats]
-	if math.Abs(float64(vf[13]-0.25)) > 1e-5 || math.Abs(float64(vf[14]-0.75)) > 1e-5 || math.Abs(float64(vf[15]-2.0)) > 1e-5 {
-		t.Fatalf("unexpected lightmap attribute in ResidentMesh vertex: (%v, %v, %v)", vf[13], vf[14], vf[15])
+	// Verify ResidentMesh uploaded packed GL normal (nx, nz, -ny) and HALF_FLOAT lightmap (0.25, 0.75, 2) for fA vertex 0.
+	vf := vdata[:buffers.StaticVertexWords]
+	lmU0, lmV0 := buffers.UnpackHalf2(vf[8])
+	lmID0, _ := buffers.UnpackHalf2(vf[9])
+	if math.Abs(float64(lmU0-0.25)) > 1e-4 || math.Abs(float64(lmV0-0.75)) > 1e-4 || math.Abs(float64(lmID0-2.0)) > 1e-4 {
+		t.Fatalf("unexpected HALF_FLOAT lightmap attribute in ResidentMesh vertex: (%v, %v, %v)", lmU0, lmV0, lmID0)
 	}
-	if math.Abs(float64(vf[6]-nx0)) > 1e-4 || math.Abs(float64(vf[7]-nz0)) > 1e-4 || math.Abs(float64(vf[8]+ny0)) > 1e-4 {
-		t.Fatalf("expected GL normal transform (nx, nz, -ny)=(%v,%v,%v), got (%v,%v,%v)", nx0, nz0, -ny0, vf[6], vf[7], vf[8])
+	gnx, gny, gnz, _ := buffers.UnpackSnorm10x3_2(vf[6])
+	if math.Abs(float64(gnx-nx0)) > 3e-3 || math.Abs(float64(gny-nz0)) > 3e-3 || math.Abs(float64(gnz+ny0)) > 3e-3 {
+		t.Fatalf("expected packed GL normal transform (nx, nz, -ny)=(%v,%v,%v), got (%v,%v,%v)", nx0, nz0, -ny0, gnx, gny, gnz)
+	}
+	gtx, gty, gtz, gtw := buffers.UnpackSnorm10x3_2(vf[7])
+	if math.Abs(float64(gtx-tx0)) > 3e-3 || math.Abs(float64(gty-tz0)) > 3e-3 || math.Abs(float64(gtz+ty0)) > 3e-3 || gtw != s0 {
+		t.Fatalf("expected packed GL tangent (%v,%v,%v,%v), got (%v,%v,%v,%v)", tx0, tz0, -ty0, s0, gtx, gty, gtz, gtw)
 	}
 }
 

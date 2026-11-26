@@ -7,6 +7,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/engine"
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/geometry"
+	"github.com/markel1974/godoom/mr_tech/model/ithing"
+	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
@@ -387,5 +389,66 @@ func TestShadowTileBuilderResetAddGrowAndPrepare(t *testing.T) {
 	zeroTB.Add(rm, 128, 3)
 	if zeroTB.instRangesLen != 1 || zeroTB.instRanges2[0].mesh != rm {
 		t.Fatalf("expected zero-value ShadowTileBuilder.Add to grow cleanly")
+	}
+}
+
+type stubRigidShadowThing struct {
+	ithing.IThing
+	faces *volumes.Faces
+}
+
+func (s *stubRigidShadowThing) GetRigidFaces() *volumes.Faces {
+	return s.faces
+}
+
+func TestShadowRigidEntryUpdateDedupAndSwitch(t *testing.T) {
+	tri := volumes.NewFace([3]geometry.XYZ{
+		{X: 0, Y: 0, Z: 0},
+		{X: 1, Y: 0, Z: 0},
+		{X: 0, Y: 1, Z: 0},
+	}, nil)
+	faces := volumes.NewFaces(nil, false)
+	faces.Add(tri)
+
+	ent := rigid_body.NewEntity(10, 0.2, 0.5, 0, 0, 9.8)
+	ent.MoveCenterTo(12, 34, 56)
+
+	var cache ShadowRigidCache
+	entry := cache.Retrieve(ent, 1)
+	bThings := &Things{thingMeshesByPtr: make(map[*volumes.Faces]ThingMeshPtrEntry)}
+	thing := &stubRigidShadowThing{faces: faces}
+
+	// Frame 1: syncs rigid transform and faces.
+	entry.Update(1, thing, ent, 100, bThings)
+	if !entry.isRigidActive || !entry.matValid || entry.faces != faces || entry.hash != 100 || entry.seenFrame != 1 {
+		t.Fatalf("expected synced rigid entry on frame 1, got active=%v matValid=%v faces=%p hash=%d seen=%d",
+			entry.isRigidActive, entry.matValid, entry.faces, entry.hash, entry.seenFrame)
+	}
+
+	// Same frame 1 with new hash must skip sync cleanly.
+	entry.Update(1, thing, ent, 200, bThings)
+	if entry.hash != 100 {
+		t.Fatalf("expected same-frame Update to skip sync, got hash=%d want 100", entry.hash)
+	}
+
+	// Frame 2 with unchanged hash must advance seenFrame without resyncing moved position.
+	ent.MoveCenterTo(99, 88, 77)
+	entry.Update(2, thing, ent, 100, bThings)
+	if entry.seenFrame != 2 || entry.mat[12] == 99 {
+		t.Fatalf("expected unchanged hash on frame 2 to advance seenFrame without resyncing transform")
+	}
+
+	// Frame 3 with new hash picks up moved position.
+	entry.Update(3, thing, ent, 200, bThings)
+	if entry.hash != 200 || entry.mat[12] != 99 {
+		t.Fatalf("expected updated hash on frame 3 to resync transform, got hash=%d tx=%v", entry.hash, entry.mat[12])
+	}
+
+	// Switching to non-rigid faces clears rigid shadow state.
+	thing.faces = nil
+	entry.Update(4, thing, ent, 300, bThings)
+	if entry.isRigidActive || entry.matValid || entry.faces != nil || entry.rm != nil || entry.hash != 300 {
+		t.Fatalf("expected switch to non-rigid faces to clear rigid state, got active=%v matValid=%v faces=%v rm=%v hash=%d",
+			entry.isRigidActive, entry.matValid, entry.faces, entry.rm, entry.hash)
 	}
 }

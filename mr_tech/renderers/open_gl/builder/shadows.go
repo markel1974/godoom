@@ -11,7 +11,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
-	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -328,19 +327,6 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 	})
 }
 
-// syncShadowEntry updates a shadow cache entry with the given hash and rigid mesh state.
-// It clears rigid state when the thing has no rigid shadow faces.
-func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, sEntry *ShadowRigidEntry, h uint64) {
-	sEntry.hash = h
-	if rigidFaces := thing.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
-		sEntry.SyncRigid(ent, rigidFaces, w.bThings)
-		return
-	}
-	sEntry.isRigidActive = false
-	sEntry.faces = nil
-	sEntry.rm = nil
-}
-
 // collectShadowThings collects visible shadow things for active tiles and updates per-tile hash summaries.
 func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int) {
 	w.thingScratchLen = 0
@@ -352,8 +338,8 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 		if !ok || thing == nil {
 			return false
 		}
-		h := thing.GetHash()
-		if h == 0 {
+		hash := thing.GetHash()
+		if hash == 0 {
 			return false
 		}
 		ent := thing.GetEntity()
@@ -362,12 +348,7 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 		}
 
 		sEntry := w.entityCache.Retrieve(ent, w.shadowFrame)
-		if sEntry.seenFrame != w.shadowFrame {
-			if sEntry.hash != h {
-				w.syncShadowEntry(thing, ent, sEntry, h)
-			}
-			sEntry.seenFrame = w.shadowFrame
-		}
+		sEntry.Update(w.shadowFrame, thing, ent, hash, w.bThings)
 
 		if w.thingScratchLen >= len(w.thingScratch) {
 			newLen := len(w.thingScratch) * 2
@@ -381,11 +362,11 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 
 		w.thingScratchLen++
 
-		xorH := bits.RotateLeft64(h, 23)
+		xorH := bits.RotateLeft64(hash, 23)
 		for rem := leafMask; rem != 0; {
 			t := bits.TrailingZeros32(rem)
 			rem &^= 1 << t
-			thingAcc[t] += h
+			thingAcc[t] += hash
 			thingXor[t] ^= xorH
 			thingCount[t]++
 		}

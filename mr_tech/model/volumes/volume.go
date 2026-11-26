@@ -108,26 +108,26 @@ func (v *Volume) Setup(object aabb.IObject) error {
 
 // Rebuild updates all faces, refreshes the face tree and bounding entity, marks the volume dirty, and returns true.
 func (v *Volume) Rebuild() bool {
-	v.RebuildGeometry()
-	v.RebuildTree()
+	v.faces.Rebuild()
+	v.Sync()
 	return true
 }
 
 // RebuildGeometry updates face geometry, cached bounds, and physics properties without modifying the spatial tree.
 func (v *Volume) RebuildGeometry() bool {
 	v.faces.RebuildGeometry()
-	v.syncSolverFromFaces()
-	v.dirty = true
-	globalVolumeDirtyEpoch.Add(1)
+	v.Sync()
 	return true
 }
 
-// RebuildTree clears and repopulates the volume's spatial tree from its current faces.
-func (v *Volume) RebuildTree() {
+// RebuildTree rebuilds the volume's face acceleration tree and reports success.
+func (v *Volume) RebuildTree() bool {
 	v.faces.RebuildTree()
+	return true
 }
 
-func (v *Volume) syncSolverFromFaces() {
+// Sync updates the collision solver from face data and marks the volume as dirty.
+func (v *Volume) Sync() {
 	if v.solver != nil {
 		minX, minY, minZ := v.faces.GetMin()
 		w, h, d := v.faces.GetSize()
@@ -135,6 +135,8 @@ func (v *Volume) syncSolverFromFaces() {
 		ixx, ixy, ixz, iyy, iyz, izz := v.faces.GetInertia()
 		v.solver.Rebuild(minX, minY, minZ, w, h, d, cx, cy, cz, ixx, ixy, ixz, iyy, iyz, izz)
 	}
+	v.dirty = true
+	globalVolumeDirtyEpoch.Add(1)
 }
 
 // IsDeformable reports whether the volume can undergo deformation.

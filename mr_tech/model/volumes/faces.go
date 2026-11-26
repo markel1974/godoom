@@ -55,22 +55,23 @@ type Faces struct {
 	maxX, maxY, maxZ float64
 	w, h, d          float64
 
-	midpoints       map[EdgeKey]geometry.XYZ32
-	displacements   map[VertexKey]geometry.XYZ32
-	edgeAdj         map[EdgeKey]edgeAdjacency
-	smoothHead      map[smoothVertKey]int32
-	smoothNext      []int32
-	adjFaceData     []adjFace
-	nextFaces       []*Face
-	discarded       []*Face
-	hasTesselation  bool
-	allowTessellate bool
-	version         uint64
-	geomHash        uint64
-	animMats        []*textures.Material
-	renderHash      uint64
-	renderHashVer   uint64
-	renderHashReady bool
+	midpoints         map[EdgeKey]geometry.XYZ32
+	displacements     map[VertexKey]geometry.XYZ32
+	edgeAdj           map[EdgeKey]edgeAdjacency
+	smoothHead        map[smoothVertKey]int32
+	smoothNext        []int32
+	adjFaceData       []adjFace
+	nextFaces         []*Face
+	discarded         []*Face
+	hasTesselation    bool
+	allowTessellate   bool
+	version           uint64
+	geomHash          uint64
+	animatedMaterials map[*textures.Material]struct{}
+	animatedHash      uint64
+	renderHash        uint64
+	renderHashVer     uint64
+	renderHashReady   bool
 }
 
 // NewFaces creates a Faces collection sized to the given tree capacity.
@@ -164,20 +165,36 @@ func (f *Faces) GetRenderHash() uint64 {
 	if !f.renderHashReady || f.renderHashVer != f.version {
 		f.computeRenderHash()
 	}
-	h := f.renderHash
-	for _, mat := range f.animMats {
-		h = geometry.MixU64(h, geometry.MixUintptr(uintptr(unsafe.Pointer(mat.GetCurrentFrame()))))
-	}
-	if h == 0 {
-		return 1
-	}
-	return h
+	return f.renderHash
 }
 
 // Rebuild recomputes cached bounds, normals, active edge masks, mass properties, and the spatial tree.
 func (f *Faces) Rebuild() {
+	f.RebuildAnimatedMaterials()
 	f.RebuildGeometry()
 	f.RebuildTree()
+}
+
+// RebuildAnimatedMaterials rebuilds the cached animated material list from non-nil faces.
+func (f *Faces) RebuildAnimatedMaterials() {
+	if f.animatedMaterials == nil {
+		f.animatedMaterials = make(map[*textures.Material]struct{}, f.count)
+	} else {
+		clear(f.animatedMaterials)
+	}
+	var h uint64
+	for i := 0; i < f.count; i++ {
+		face := f.container[i]
+		if face == nil || face.material == nil || !face.material.IsAnimated() {
+			continue
+		}
+		if _, ok := f.animatedMaterials[face.material]; ok {
+			continue
+		}
+		f.animatedMaterials[face.material] = struct{}{}
+		h = geometry.MixU64(h, geometry.MixUintptr(uintptr(unsafe.Pointer(face.material.GetCurrentFrame()))))
+	}
+	f.animatedHash = h
 }
 
 // RebuildGeometry recomputes cached bounds, normals, tangents, geometry hash, active edges, and mass properties
@@ -307,6 +324,7 @@ func (f *Faces) Add(face *Face) {
 		copy(newFaces, f.container)
 		f.container = newFaces
 	}
+
 	f.container[f.count] = face
 	f.count++
 	f.version++
@@ -345,6 +363,7 @@ func (f *Faces) SetCount(count int) {
 
 // Clear removes all faces from the collection.
 func (f *Faces) Clear() {
+	clear(f.animatedMaterials)
 	if f.tree != nil {
 		f.tree.Clear()
 	}
@@ -803,33 +822,17 @@ func (f *Faces) computeGeomHash() {
 	f.geomHash = h
 }
 
-// computeRenderHash computes and stores the render hash, then refreshes the unique animated material list.
+// computeRenderHash updates the cached render hash from face state, geometry, and animated material frames.
 func (f *Faces) computeRenderHash() {
 	h := geometry.MixUintptr(uintptr(unsafe.Pointer(f)))
 	h = geometry.MixU64(h, f.version)
 	h = geometry.MixU64(h, f.geomHash)
 	h = geometry.MixU64(h, uint64(f.count))
+	h = geometry.MixU64(h, f.animatedHash)
 	if h == 0 {
 		h = 1
 	}
 	f.renderHash = h
-	f.animMats = f.animMats[:0]
-	for i := 0; i < f.count; i++ {
-		fc := f.container[i]
-		if fc == nil || fc.material == nil || !fc.material.IsAnimated() {
-			continue
-		}
-		dup := false
-		for _, m := range f.animMats {
-			if m == fc.material {
-				dup = true
-				break
-			}
-		}
-		if !dup {
-			f.animMats = append(f.animMats, fc.material)
-		}
-	}
 	f.renderHashVer = f.version
 	f.renderHashReady = true
 }

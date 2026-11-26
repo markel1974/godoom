@@ -116,6 +116,7 @@ func (f *Faces) IsAllowTessellate() bool {
 	return f.allowTessellate
 }
 
+// TessellateInit initializes tessellation caches for faces and marks tessellation state as ready.
 func (f *Faces) TessellateInit() {
 	if f.hasTesselation {
 		return

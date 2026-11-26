@@ -8,6 +8,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/generators/common"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
@@ -337,5 +338,54 @@ func TestShadowsStaticVolumeAssign(t *testing.T) {
 	}
 	if bv.bShadow.builders[shaders.ShadowTileRoom].staticItems.Len == 0 {
 		t.Fatalf("expected Room tile to contain static shadow submeshes")
+	}
+}
+
+func TestShadowTileBuilderResetAddGrowAndPrepare(t *testing.T) {
+	tb := NewShadowTileBuilder(&shadowTestCtx{})
+	subOpaque := &buffers.ResidentSubMesh{BlendMode: config.BlendModeOpaque, IndexCount: 6}
+	subEmpty := &buffers.ResidentSubMesh{BlendMode: config.BlendModeOpaque, IndexCount: 0}
+	subAdditive := &buffers.ResidentSubMesh{BlendMode: config.BlendModeAdditive, IndexCount: 6}
+	rm := &buffers.ResidentMesh{
+		SubMeshes:    []*buffers.ResidentSubMesh{subOpaque, subEmpty, subAdditive},
+		SubMeshesLen: 3,
+	}
+
+	const count = 40 // exceeds initial capacity 32 to exercise growth
+	for i := range count {
+		tb.Add(rm, int32(i*64), int32(i+1))
+	}
+	if tb.instRangesLen != count || len(tb.instRanges2) < count {
+		t.Fatalf("expected instRangesLen=%d and backing len>=%d, got len=%d cap=%d", count, count, tb.instRangesLen, len(tb.instRanges2))
+	}
+	tb.Prepare(99)
+	if tb.instItems.Len != count {
+		t.Fatalf("expected %d opaque instanced shadow items, got %d", count, tb.instItems.Len)
+	}
+	last := tb.instItems.Items[count-1]
+	if last.Mesh != rm || last.Sub != subOpaque || last.InstanceVBO != 99 || last.BaseByteOffset != int32((count-1)*64) || last.InstanceCount != count {
+		t.Fatalf("unexpected prepared item[last]: %+v", last)
+	}
+
+	allocs := testing.AllocsPerRun(20, func() {
+		tb.Reset()
+		for i := range 10 {
+			tb.Add(rm, int32(i*64), 2)
+		}
+		tb.Prepare(99)
+	})
+	if allocs > 0 {
+		t.Fatalf("steady-state ShadowTileBuilder Reset+Add+Prepare allocated %.2f objects/op, want 0", allocs)
+	}
+
+	tb.Reset()
+	if tb.instRangesLen != 0 || tb.instItems.Len != 0 || tb.staticItems.Len != 0 {
+		t.Fatalf("expected Reset to clear counts, got ranges=%d inst=%d static=%d", tb.instRangesLen, tb.instItems.Len, tb.staticItems.Len)
+	}
+
+	var zeroTB ShadowTileBuilder
+	zeroTB.Add(rm, 128, 3)
+	if zeroTB.instRangesLen != 1 || zeroTB.instRanges2[0].mesh != rm {
+		t.Fatalf("expected zero-value ShadowTileBuilder.Add to grow cleanly")
 	}
 }

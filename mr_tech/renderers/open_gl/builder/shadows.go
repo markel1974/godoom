@@ -234,10 +234,7 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 
 			tileBit := uint32(1) << t
 			tb := w.builders[t]
-			tb.staticItems.Reset()
-			tb.instItems.Reset()
-			tb.instRanges = tb.instRanges[:0]
-			tb.streamDC.DeepReset()
+			tb.Reset()
 
 			w.buildTileStaticForBit(tb, tileBit)
 			if w.buildTileThingsForBit(tb, tileBit, &shadowExtraSig) {
@@ -440,7 +437,7 @@ func (w *Shadows) buildTileStaticForBit(tb *ShadowTileBuilder, tileBit uint32) {
 // buildTileThingsForBit builds shadow draw data for collected things intersecting tileBit.
 // It streams non-rigid opaque batches and groups rigid meshes into instance ranges.
 // It updates shadowExtraSig for streamed caches and reports whether any instances were added.
-func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, shadowExtraSig *uint64) bool {
+func (w *Shadows) buildTileThingsForBit(tileBuilder *ShadowTileBuilder, tileBit uint32, shadowExtraSig *uint64) bool {
 	if w.thingScratchLen == 0 {
 		return false
 	}
@@ -478,7 +475,7 @@ func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, s
 		thing := ct.thing
 		ent := thing.GetEntity()
 		if entry := w.bThings.thingsRender.PeekIfCurrent(ent); entry != nil && entry.committedFrame == w.bContext.meshFrame {
-			w.bContext.fv.ReplayOpaqueBatches(entry.committedBaseIdx, entry.GetFrameVertices(), tb.streamDC)
+			w.bContext.fv.ReplayOpaqueBatches(entry.committedBaseIdx, entry.GetFrameVertices(), tileBuilder.streamDC)
 			continue
 		}
 
@@ -494,7 +491,7 @@ func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, s
 			sig := mixU64(ct.entry.entID, sEntry.gen)
 			*shadowExtraSig += sig
 			*shadowExtraSig ^= bits.RotateLeft64(sig, 13)
-			w.bContext.fv.ReplayOpaqueBatches(sEntry.committedBaseIdx, sEntry.GetFrameVertices(), tb.streamDC)
+			w.bContext.fv.ReplayOpaqueBatches(sEntry.committedBaseIdx, sEntry.GetFrameVertices(), tileBuilder.streamDC)
 		}
 	}
 
@@ -510,11 +507,7 @@ func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, s
 		for k := range cnt {
 			w.instPool.WriteMatrixAt(baseFloat+k*buffers.InstanceMatrixFloats, &g.entries[k].mat)
 		}
-		tb.instRanges = append(tb.instRanges, ShadowInstRange{
-			mesh:           g.mesh,
-			baseByteOffset: baseByteOff,
-			instanceCount:  int32(cnt),
-		})
+		tileBuilder.Add(g.mesh, baseByteOff, int32(cnt))
 	}
 	return hasInstances
 }

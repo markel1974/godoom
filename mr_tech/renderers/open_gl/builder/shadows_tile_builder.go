@@ -7,35 +7,60 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 )
 
-// ShadowInstRange represents a range of shadow instances associated with a specific resident mesh and rendering properties.
+// ShadowInstRange identifies a contiguous set of shadow instances within a resident mesh buffer.
 type ShadowInstRange struct {
 	mesh           *buffers.ResidentMesh
 	baseByteOffset int32
 	instanceCount  int32
 }
 
-// ShadowTileBuilder is responsible for constructing shadow tiles used in rendering pipelines.
+// ShadowTileBuilder builds draw command data for rendering shadow tiles.
 type ShadowTileBuilder struct {
-	dcRender    *draws.DrawCommandsRender
-	streamDC    *draws.DrawCommands
-	staticItems buffers.PtrPool[draws.DrawItemStatic]
-	instItems   buffers.PtrPool[draws.DrawItemInstanced]
-	instRanges  []ShadowInstRange
+	dcRender      *draws.DrawCommandsRender
+	streamDC      *draws.DrawCommands
+	staticItems   buffers.PtrPool[draws.DrawItemStatic]
+	instItems     buffers.PtrPool[draws.DrawItemInstanced]
+	instRanges2   []ShadowInstRange
+	instRangesLen int
 }
 
-// NewShadowTileBuilder creates and initializes a ShadowTileBuilder instance with rendering and draw command setups.
+// NewShadowTileBuilder creates a builder for collecting and preparing opaque shadow tile draw commands.
 func NewShadowTileBuilder(ctx api.IContext) *ShadowTileBuilder {
 	return &ShadowTileBuilder{
-		dcRender:   draws.NewDrawCommandsRender(ctx, "shadow_tile", false),
-		streamDC:   draws.NewDrawCommands(config.BlendModeOpaque, 128),
-		instRanges: make([]ShadowInstRange, 0, 32),
+		dcRender:    draws.NewDrawCommandsRender(ctx, "shadow_tile", false),
+		streamDC:    draws.NewDrawCommands(config.BlendModeOpaque, 128),
+		instRanges2: make([]ShadowInstRange, 32),
 	}
 }
 
-// Prepare processes shadow instance ranges and initializes draw commands for rendering with given instance VBO.
+// Reset clears accumulated shadow tile draw state and returns internal pools and command buffers to empty reuse state.
+func (tb *ShadowTileBuilder) Reset() {
+	tb.staticItems.Reset()
+	tb.instItems.Reset()
+	tb.instRangesLen = 0
+	tb.streamDC.DeepReset()
+}
+
+// Add appends an instanced mesh range with its base byte offset and instance count for shadow rendering.
+func (tb *ShadowTileBuilder) Add(mesh *buffers.ResidentMesh, baseByteOffset int32, instanceCount int32) {
+	if tb.instRangesLen >= len(tb.instRanges2) {
+		newLen := max(len(tb.instRanges2)*2, 32)
+		z := make([]ShadowInstRange, newLen)
+		copy(z, tb.instRanges2)
+		tb.instRanges2 = z
+	}
+	ptr := &tb.instRanges2[tb.instRangesLen]
+	ptr.mesh = mesh
+	ptr.baseByteOffset = baseByteOffset
+	ptr.instanceCount = instanceCount
+
+	tb.instRangesLen++
+}
+
+// Prepare builds shadow draw items for opaque submeshes and submits them to the draw command renderer.
 func (tb *ShadowTileBuilder) Prepare(shadowInstVBO uint32) {
-	for rIdx := range tb.instRanges {
-		r := &tb.instRanges[rIdx]
+	for rIdx := range tb.instRangesLen {
+		r := &tb.instRanges2[rIdx]
 		for sIdx := 0; sIdx < r.mesh.SubMeshesLen; sIdx++ {
 			sub := r.mesh.SubMeshes[sIdx]
 			if sub.IndexCount == 0 || sub.BlendMode != config.BlendModeOpaque {

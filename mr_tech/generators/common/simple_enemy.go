@@ -167,7 +167,7 @@ func (e *Enemy) OnThinking(pCenterX, pCenterY, pCenterZ float64) {
 			if playerDist2d := math.Sqrt(dist2dSq); playerDist2d > stopDistance {
 				nx = dx / playerDist2d
 				ny = dy / playerDist2d
-				targetSpeed = e.self.GetSpeed() * e.self.GetImpulse()
+				targetSpeed = e.self.GetMaxSpeed() * e.self.GetImpulse()
 			}
 			e.self.MoveTowards(nx, ny, targetSpeed, e.self.GetAcceleration())
 		}

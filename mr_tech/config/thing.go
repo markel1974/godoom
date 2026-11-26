@@ -39,7 +39,7 @@ type IThingConfig interface {
 
 	GetMaxStep() float64
 
-	GetSpeed() float64
+	GetMaxSpeed() float64
 
 	GetImpulse() float64
 

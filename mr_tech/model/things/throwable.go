@@ -2,6 +2,7 @@ package things
 
 import (
 	"math"
+	"math/rand"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -25,18 +26,17 @@ func NewThingThrowable(things IThingHandler, cfg *config.Thing, volume *volumes.
 	cfg.OnBind(throwable)
 	// Sovrascriviamo il maxStep della base: i proiettili non scavalcano i gradini
 	throwable.SetMaxStep(0.0)
-	// Normalizzazione del Pitch (da [-5, 5] a radianti)
 	// Vettore Direzionale 3D normalizzato
 	dirX := math.Cos(throwable.angle) * math.Cos(cfg.Pitch)
 	dirY := math.Sin(throwable.angle) * math.Cos(cfg.Pitch)
 	dirZ := math.Sin(cfg.Pitch)
-	// 3. Muzzle Velocity (Iniezione istantanea di velocità)
+	// Muzzle Velocity (Iniezione istantanea di velocità)
 	// Essendo il frame 0, impostiamo direttamente la velocità vettoriale.
-	// Seleziona un moltiplicatore appropriato per la velocità dei tuoi proiettili (es. 50.0)
-	muzzleVelocity := throwable.speed * 5.0
+	muzzleVelocity := throwable.maxSpeed * 5.0
 	entity := throwable.GetEntity()
 	//entity.SetRotationEuler(0, cfg.Pitch, throwable.angle)
-	entity.SetRotationEuler(0, 0, 0)
+	rollX, rollY, rollZ := 0.0, cfg.Pitch+rand.Float64(), throwable.angle+rand.Float64()*4
+	entity.SetRotationEuler(rollX, rollY, rollZ)
 	entity.SetVx(dirX * muzzleVelocity)
 	entity.SetVy(dirY * muzzleVelocity)
 	entity.SetVz(dirZ * muzzleVelocity)

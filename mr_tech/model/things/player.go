@@ -232,7 +232,7 @@ func (pr *Player) Move(impulse float64, up, down, left, right bool) {
 		// Vettore direzione puro (Normalizzato)
 		dirX := fx / mag
 		dirY := fy / mag
-		pr.MoveTowards(dirX, dirY, pr.speed*impulse, pr.speed)
+		pr.MoveTowards(dirX, dirY, pr.maxSpeed*impulse, pr.maxSpeed)
 	}
 }
 
@@ -290,7 +290,7 @@ func (pr *Player) GetTilt() float64 {
 	// 4. Creiamo la maschera (Ratio)
 	// p.speed è la tua velocità massima (es. 60.0).
 	// Vogliamo che il tilt sia al 100% già quando siamo a mezza velocità
-	ratio := currentSpeed / (pr.speed * 0.5)
+	ratio := currentSpeed / (pr.maxSpeed * 0.5)
 	if ratio > 1.0 {
 		ratio = 1.0
 	} else if ratio < 0.05 {
@@ -350,7 +350,7 @@ func (pr *Player) afterApply() {
 		pr.bobbing.InjectVerticalImpulse(pr.preImpactVz)
 	}
 	dt := entity.GetDt()
-	pr.bobbing.Compute(dt, pr.speed, entity.GetVx(), entity.GetVy())
+	pr.bobbing.Compute(dt, pr.maxSpeed, entity.GetVx(), entity.GetVy())
 	if pr.weapon != nil {
 		pr.weapon.Update(dt)
 	}

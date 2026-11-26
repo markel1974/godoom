@@ -45,7 +45,7 @@ type Base struct {
 	id             string
 	kind           config.ThingType
 	angle          float64
-	speed          float64
+	maxSpeed       float64
 	impulse        float64
 	wakeupDistance float64
 	acceleration   float64
@@ -79,7 +79,7 @@ func NewBaseWithVertices(things IThingHandler, cfg *config.Thing, verts ithing.I
 		id:             cfg.Id,
 		angle:          cfg.Angle,
 		kind:           cfg.Kind,
-		speed:          cfg.Speed,
+		maxSpeed:       cfg.Speed,
 		impulse:        cfg.Impulse,
 		wakeupDistance: cfg.WakeupDistance,
 		jumpForce:      cfg.JumpForce,
@@ -174,9 +174,9 @@ func (t *Base) GetAcceleration() float64 {
 	return t.acceleration
 }
 
-// GetSpeed returns the current speed of the Base instance as a float64.
-func (t *Base) GetSpeed() float64 {
-	return t.speed
+// GetMaxSpeed returns the maximum speed.
+func (t *Base) GetMaxSpeed() float64 {
+	return t.maxSpeed
 }
 
 // GetDistSq returns the squared distance from the light's position to the given 3D point.

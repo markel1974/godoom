@@ -147,6 +147,10 @@ func (v *MultiElement3D) SetupParts(spawnPart PartSpawnFunc, onRelease PartRelea
 	v.Compile(v.compiledTick)
 }
 
+func (v *MultiElement3D) GetRigidFaces() *volumes.Faces {
+	return nil
+}
+
 // GetPartLen returns the number of part things associated with the vertices.
 func (v *MultiElement3D) GetPartLen() int {
 	return len(v.partThings)

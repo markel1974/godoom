@@ -332,11 +332,9 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 // syncShadowEntry clears rigid shadow state when the thing has no renderable rigid faces.
 func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, sEntry *ShadowRigidEntry, h uint64) {
 	sEntry.hash = h
-	if rs, ok := thing.(ithing.IRigidRenderSource); ok {
-		if rigidFaces := rs.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
-			sEntry.SyncRigid(ent, rigidFaces, w.bThings)
-			return
-		}
+	if rigidFaces := thing.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
+		sEntry.SyncRigid(ent, rigidFaces, w.bThings)
+		return
 	}
 	sEntry.isRigidActive = false
 	sEntry.faces = nil

@@ -123,6 +123,11 @@ func (v *VerticesSprite) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
+// GetRigidFaces returns the rigid-body face set for the sprite, or nil when no rigid faces are available.
+func (v *VerticesSprite) GetRigidFaces() *volumes.Faces {
+	return nil
+}
+
 // QueryOverlaps searches the sprite volume for objects whose AABB overlaps the given object's AABB.
 func (v *VerticesSprite) QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool) {
 	v.volume.QueryOverlaps(object, callback)

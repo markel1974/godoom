@@ -135,6 +135,11 @@ func (v *MultiSprite) GetSolver() *collisions.Solver {
 	return v.solver
 }
 
+// GetRigidFaces returns nil because MultiSprite does not expose separate rigid faces.
+func (v *MultiSprite) GetRigidFaces() *volumes.Faces {
+	return nil
+}
+
 // updateBounds recalculates the active volume's tight local bounds anchored to the standing base.
 func (v *MultiSprite) updateBounds() {
 	ent := v.ent

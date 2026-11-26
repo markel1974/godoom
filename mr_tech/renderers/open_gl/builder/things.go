@@ -155,22 +155,20 @@ func (w *Things) Process(things *model.Things, frustumFront *aabb.Frustum) bool 
 		thing.Compile(tick)
 		entry.compileFrame = w.bc.meshFrame
 
-		if rs, ok := thing.(ithing.IRigidRenderSource); ok {
-			if rigidFaces := rs.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
-				rm, meshRebuilt := w.RetrieveMesh(rigidFaces)
-				tPosX, tPosY, zBot := ent.GetCenter()
-				qx, qy, qz, qw := ent.GetQRotation().Get()
-				oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
-				fqx, fqy, fqz, fqw := float32(qx), float32(qy), float32(qz), float32(qw)
-				if meshRebuilt || !entry.EqualRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw) {
-					entry.AssignRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw)
-				}
-				w.thingsRender.AddRef(entry)
-				if rm.SubMeshesLen > 0 {
-					addRigidInstance(rm, tPosX, tPosY, zBot, qx, qy, qz, qw)
-				}
-				return
+		if rigidFaces := thing.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
+			rm, meshRebuilt := w.RetrieveMesh(rigidFaces)
+			tPosX, tPosY, zBot := ent.GetCenter()
+			qx, qy, qz, qw := ent.GetQRotation().Get()
+			oX, oY, oZ := float32(tPosX), float32(zBot), float32(-tPosY)
+			fqx, fqy, fqz, fqw := float32(qx), float32(qy), float32(qz), float32(qw)
+			if meshRebuilt || !entry.EqualRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw) {
+				entry.AssignRigid(rigidFaces, rigidFaces.GetVersion(), rigidFaces.Len(), oX, oY, oZ, fqx, fqy, fqz, fqw)
 			}
+			w.thingsRender.AddRef(entry)
+			if rm.SubMeshesLen > 0 {
+				addRigidInstance(rm, tPosX, tPosY, zBot, qx, qy, qz, qw)
+			}
+			return
 		}
 
 		if !w.BuildNonRigidCache(thing, entry) {

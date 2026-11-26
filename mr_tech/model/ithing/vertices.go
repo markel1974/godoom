@@ -23,12 +23,6 @@ type ISubPart interface {
 	IsPhysicsFree() bool
 }
 
-// IRigidRenderSource is implemented by 3D renderables whose geometry comes from an immutable local-space
-// Faces template positioned/rotated in world space via entity center and quaternion.
-type IRigidRenderSource interface {
-	GetRigidFaces() *volumes.Faces
-}
-
 // IVertices represents the interface for handling vertices, including retrieval, transformations, and related operations.
 type IVertices interface {
 	Setup(thing IThing) error
@@ -41,9 +35,11 @@ type IVertices interface {
 
 	GetSolver() *collisions.Solver
 
-	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
+	GetRigidFaces() *volumes.Faces
 
 	GetUIFaces() (*volumes.Faces, *volumes.Faces, float64, float64)
+
+	QueryOverlaps(object aabb.IObject, callback func(object aabb.IObject) bool)
 
 	SetAction(idx int)
 

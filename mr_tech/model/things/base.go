@@ -536,14 +536,6 @@ func (t *Base) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64)
 	return t.IVertices.Deform(localImpact, localImpulse, radius)
 }
 
-// GetRigidFaces delegates to IVertices when the underlying renderable exposes a static rigid mesh template.
-func (t *Base) GetRigidFaces() *volumes.Faces {
-	if rs, ok := t.IVertices.(ithing.IRigidRenderSource); ok {
-		return rs.GetRigidFaces()
-	}
-	return nil
-}
-
 // GetHash returns a cached deterministic hash over this thing's entity pose, orientation, angle, and geometry.
 func (t *Base) GetHash() uint64 {
 	if !t.IsVisible() || t.IVertices == nil || t.ent == nil {

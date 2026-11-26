@@ -143,10 +143,10 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	}
 }
 
-func TestTileCacheAssignAndMatches(t *testing.T) {
+func TestTileCacheAssignAndReusable(t *testing.T) {
 	tc := NewTileCache()
-	if tc.matrixPtr != &tc.matrix[0] || tc.valid {
-		t.Fatalf("unexpected initial TileCache state: ptr=%p want=%p valid=%v", tc.matrixPtr, &tc.matrix[0], tc.valid)
+	if tc.valid {
+		t.Fatalf("unexpected initial TileCache state: valid=%v", tc.valid)
 	}
 
 	mat := [16]float32{
@@ -156,20 +156,23 @@ func TestTileCacheAssignAndMatches(t *testing.T) {
 		4, 5, 6, 1,
 	}
 	tc.Assign(true, 7, &mat[0], 999)
-	if !tc.Matches(7, &mat[0], 999) {
-		t.Fatalf("expected exact match for gen=7 and sceneHash=999")
+	if !tc.Reusable(7, &mat[0], 999) || !tc.ReusablePeek(7, &mat[0]) {
+		t.Fatalf("expected exact match on Reusable and ReusablePeek for gen=7 and sceneHash=999")
 	}
-	if tc.Matches(7, nil, 999) || tc.Matches(8, &mat[0], 999) || tc.Matches(7, &mat[0], 1000) {
-		t.Fatalf("expected mismatch on nil matrix, different gen, or different sceneHash")
+	if tc.Reusable(7, nil, 999) || tc.Reusable(8, &mat[0], 999) || tc.Reusable(7, &mat[0], 1000) {
+		t.Fatalf("expected Reusable mismatch on nil matrix, different gen, or different sceneHash")
+	}
+	if tc.ReusablePeek(7, nil) || tc.ReusablePeek(8, &mat[0]) {
+		t.Fatalf("expected ReusablePeek mismatch on nil matrix or different gen")
 	}
 	otherMat := mat
 	otherMat[12] = 99
-	if tc.Matches(7, &otherMat[0], 999) {
+	if tc.Reusable(7, &otherMat[0], 999) || tc.ReusablePeek(7, &otherMat[0]) {
 		t.Fatalf("expected mismatch on modified matrix")
 	}
 
 	tc.Assign(false, 7, &mat[0], 999)
-	if tc.Matches(7, &mat[0], 999) {
+	if tc.Reusable(7, &mat[0], 999) || tc.ReusablePeek(7, &mat[0]) {
 		t.Fatalf("expected mismatch when valid=false")
 	}
 }

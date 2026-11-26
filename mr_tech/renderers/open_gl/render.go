@@ -200,8 +200,17 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	w.tex.BindBuckets()
 
-	px, _, pz := w.vi.GetView()
-	w.mapMetrics.SetCenter(float32(px), float32(pz), w.mapMetrics.GetLightCamY())
+	var roomCX, roomCZ float64
+	if w.player != nil && w.player.GetEntity() != nil {
+		roomCX, _, roomCZ = w.player.GetEntity().GetCenter()
+	} else {
+		roomCX, _, roomCZ = w.vi.GetView()
+	}
+	roomTileRes := float32(1024)
+	if atl := w.depth.GetAtlas(); atl != nil && atl.GetWidth() >= 64 {
+		roomTileRes = float32(atl.GetWidth() / 2)
+	}
+	w.mapMetrics.SetCenterSnapped(float32(roomCX), float32(roomCZ), w.mapMetrics.GetLightCamY(), roomTileRes)
 	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
 	if w.handler.IsSunEnabled() && !w.sunUserOverride {
 		if dirGL, colInt, ok := w.builder.GetSceneDirectional(); ok {

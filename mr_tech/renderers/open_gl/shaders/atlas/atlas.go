@@ -1,8 +1,6 @@
 package atlas
 
 import (
-	"unsafe"
-
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
@@ -33,7 +31,7 @@ type Atlas struct {
 	frameIdx    int
 	width       int32
 	height      int32
-	shadowAtlas [DepthDoubleBuffer]*AtlasData
+	shadowAtlas [DepthDoubleBuffer]*Element
 	tileCache   [DepthDoubleBuffer][MaxShadowTiles]*TileCache
 	shadows     bool
 }
@@ -48,7 +46,7 @@ func NewAtlas(ctx api.IContext) *Atlas {
 		shadows:  true,
 	}
 	for i := range DepthDoubleBuffer {
-		a.shadowAtlas[i] = NewAtlasData(ctx)
+		a.shadowAtlas[i] = NewElement(ctx)
 		for x := range MaxShadowTiles {
 			a.tileCache[i][x] = NewTileCache()
 		}
@@ -112,8 +110,8 @@ func (s *Atlas) GetShadowAtlasTexture() uint32 {
 	return 0
 }
 
-// GetShadowAtlas returns the currently active AtlasData backing the master shadow atlas.
-func (s *Atlas) GetShadowAtlas() *AtlasData {
+// GetShadowAtlas returns the currently active Element backing the master shadow atlas.
+func (s *Atlas) GetShadowAtlas() *Element {
 	return s.shadowAtlas[s.frameIdx]
 }
 
@@ -122,8 +120,8 @@ func (s *Atlas) NextAtlasIndex() int {
 	return (s.frameIdx + 1) % DepthDoubleBuffer
 }
 
-// Update advances the double-buffer index, ensures backing depth textures are allocated, and returns the active slot and AtlasData.
-func (s *Atlas) Update() (int, *AtlasData) {
+// Update advances the double-buffer index, ensures backing depth textures are allocated, and returns the active slot and Element.
+func (s *Atlas) Update() (int, *Element) {
 	idx := s.NextAtlasIndex()
 	s.frameIdx = idx
 
@@ -137,7 +135,7 @@ func (s *Atlas) IsTileCached(idx, t int, tile *TileShadow, gen uint64) bool {
 	if idx < 0 || idx >= DepthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil || !s.shadows {
 		return false
 	}
-	return s.tileCache[idx][t].Matches(gen, &tile.matrix[0], tile.sceneHash)
+	return s.tileCache[idx][t].Reusable(gen, &tile.matrix[0], tile.sceneHash)
 }
 
 // SetTile records tile's matrix, sceneHash, and atlas generation in the cache for buffer idx and slot t.
@@ -172,7 +170,8 @@ func (s *Atlas) CanReuseTile(slot int, matrix *float32, sceneHash uint64) bool {
 	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
 		return false
 	}
-	return s.tileCache[nextIdx][slot].Matches(atlas.gen, matrix, sceneHash)
+	c := s.tileCache[nextIdx][slot]
+	return c.Reusable(atlas.gen, matrix, sceneHash)
 }
 
 // PeekReusableTile returns the target atlas buffer index, atlas generation, and cached sceneHash
@@ -187,10 +186,13 @@ func (s *Atlas) PeekReusableTile(slot int, matrixPtr *float32) (int, uint64, uin
 		return 0, 0, 0, false
 	}
 	c := s.tileCache[nextIdx][slot]
-	matrix := *(*[16]float32)(unsafe.Pointer(matrixPtr))
-	if !c.valid || c.atlasGen != atl.gen || c.matrix != matrix {
+	if !c.ReusablePeek(atl.gen, matrixPtr) {
 		return 0, 0, 0, false
 	}
+	//matrix := *(*[16]float32)(unsafe.Pointer(matrixPtr))
+	//if !c.valid || c.atlasGen != atl.gen || c.matrix != matrix {
+	//	return 0, 0, 0, false
+	//}
 	return nextIdx, atl.gen, c.sceneHash, true
 }
 

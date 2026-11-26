@@ -30,6 +30,7 @@ type Map struct {
 	roomProjPtr  *float32
 	roomViewPtr  *float32
 	roomSpacePtr *float32
+	roomReady    bool
 }
 
 // NewMap creates and initializes a new Map instance with default settings and returns a pointer to it.
@@ -213,10 +214,31 @@ func (m *Map) SetOrthoSize(orthoSize, zNearRoom, zFarRoom float32) {
 
 // SetCenter updates the map's center coordinates (cx, cz) and light camera height (lightCamY), and refreshes the room view.
 func (m *Map) SetCenter(cx float32, cz float32, lightCamY float32) {
+	if m.roomReady && m.mapCenterX == cx && m.mapCenterZ == cz && m.lightCamY == lightCamY {
+		return
+	}
 	m.mapCenterX = cx
 	m.lightCamY = lightCamY
 	m.mapCenterZ = cz
 	m.updateRoomView(m.mapCenterX, m.lightCamY, m.mapCenterZ)
+}
+
+// SetCenterSnapped quantizes (cx, cz) to the room shadow tile texel grid and skips redundant matrix rebuilds.
+func (m *Map) SetCenterSnapped(cx float32, cz float32, lightCamY float32, tileRes float32) {
+	if tileRes < 32 {
+		tileRes = 1024
+	}
+	ortho := m.orthoSize
+	if ortho <= 0 {
+		ortho = 1.0
+	}
+	texel := (2.0 * ortho) / tileRes
+	if texel <= 1e-4 {
+		texel = 1.0
+	}
+	snapX := float32(math.Floor(float64(cx/texel)+0.5)) * texel
+	snapZ := float32(math.Floor(float64(cz/texel)+0.5)) * texel
+	m.SetCenter(snapX, snapZ, lightCamY)
 }
 
 // Update updates the room space and projection-view matrices using the provided view matrix and scaling factors.
@@ -301,6 +323,7 @@ func (m *Map) updateRoomView(lX, lY, lZ float32) {
 	m.roomView[13] = lY
 	m.roomView[14] = -lZ
 	m.roomView[15] = 1
+	m.roomReady = true
 	MatrixMultiply4x4Ptr(m.roomSpacePtr, m.roomProjPtr, m.roomViewPtr)
 }
 

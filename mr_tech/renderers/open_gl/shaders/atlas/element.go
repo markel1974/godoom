@@ -2,8 +2,8 @@ package atlas
 
 import "github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 
-// AtlasData manages a backing depth framebuffer and texture for one shadow atlas buffer.
-type AtlasData struct {
+// Element manages a backing depth framebuffer and texture for one shadow atlas buffer.
+type Element struct {
 	ctx    api.IContext
 	fbo    uint32
 	tex    uint32
@@ -12,30 +12,30 @@ type AtlasData struct {
 	gen    uint64
 }
 
-// NewAtlasData creates and returns a new instance of AtlasData with default uninitialized properties.
-func NewAtlasData(ctx api.IContext) *AtlasData {
-	return &AtlasData{
+// NewElement creates and returns a new instance of Element with default uninitialized properties.
+func NewElement(ctx api.IContext) *Element {
+	return &Element{
 		ctx: ctx,
 	}
 }
 
 // GetGen returns the generation counter for this atlas data.
-func (d *AtlasData) GetGen() uint64 {
+func (d *Element) GetGen() uint64 {
 	return d.gen
 }
 
 // GetFBO returns the framebuffer object handle for the shadow atlas depth buffer.
-func (d *AtlasData) GetFBO() uint32 {
+func (d *Element) GetFBO() uint32 {
 	return d.fbo
 }
 
 // GetTex returns the texture handle for the atlas depth texture.
-func (d *AtlasData) GetTex() uint32 {
+func (d *Element) GetTex() uint32 {
 	return d.tex
 }
 
 // Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.
-func (d *AtlasData) Update(width, height int32) {
+func (d *Element) Update(width, height int32) {
 	if d.ctx == nil || width <= 0 || height <= 0 {
 		return
 	}
@@ -73,8 +73,8 @@ func (d *AtlasData) Update(width, height int32) {
 	d.tex = tex
 }
 
-// Shutdown releases OpenGL resources associated with the framebuffer and texture of the AtlasData.
-func (d *AtlasData) Shutdown() {
+// Shutdown releases OpenGL resources associated with the framebuffer and texture of the Element.
+func (d *Element) Shutdown() {
 	if d.ctx != nil {
 		if d.fbo != 0 {
 			d.ctx.DeleteFramebuffers(1, &d.fbo)

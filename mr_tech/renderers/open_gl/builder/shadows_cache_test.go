@@ -487,3 +487,109 @@ func TestShadowsRigidGroupAssignAddGrowAndAt(t *testing.T) {
 		t.Fatalf("steady-state ShadowsRigidGroup Assign+Add+At allocated %.2f objects/op, want 0", allocs)
 	}
 }
+
+func TestShadowsRoomTileReusedAcrossIdleBobbingAndTexelSnap(t *testing.T) {
+	rigid_body.SetFps(60)
+	textures.SetFps(60)
+	defer rigid_body.SetFps(120)
+
+	tA := textures.NewTexture("ROOM_BOB", 1, 8, 8, false)
+	for x := range 8 {
+		for y := range 8 {
+			tA.SetDiffuse(x, y, 0x808080ff)
+		}
+	}
+	texH := &multiTexHandler{frames: []*textures.Texture{tA}}
+	calCfg := config.NewConfigCalibration()
+	calCfg.AspectRatio = 1.333
+	calCfg.OrthoSize = 640
+
+	matSolid := config.NewConfigMaterial("solid", []string{"ROOM_BOB"}, config.MaterialKindSolid)
+	secs := []*config.Sector{makeBoxSector("room", 0, 0, 200, 0, 160, matSolid)}
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+	p.Flash.Intensity = 0
+	p.Bobbing.IdleAmpX = 0.9
+	p.Bobbing.IdleAmpY = 0.9
+	p.Bobbing.IdleDrift = 3.0
+
+	root := config.NewConfigRoot(calCfg, secs, p, nil, geometry.XYZ{X: 1, Y: 1, Z: 1}, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+	pl := en.GetPlayer()
+	vi := engine.NewViewMatrix()
+
+	rCtx := &shadowTestCtx{}
+	glTex := vramtex.NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+	mCal := en.GetCalibration()
+	mCal.EnableShadows = true
+	mCal.MSAASamples = 0
+
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
+	h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
+	if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
+		t.Fatalf("Handler.Setup: %v", err)
+	}
+	if err := h.GetMain().Init(); err != nil {
+		t.Fatalf("Main.Init: %v", err)
+	}
+	d := h.GetDepth()
+	if err := d.Compile(testShaderAssets{}); err != nil {
+		t.Fatalf("Depth.Compile: %v", err)
+	}
+	d.SetShadowsEnabled(true)
+
+	mm := h.GetMapMetrics()
+	mm.SetOrthoSize(640, 0.1, 4096)
+
+	// Settle physics onto floor and warm both double buffers.
+	for range 30 {
+		en.Compute(pl, vi)
+		ex, _, ez := pl.GetEntity().GetCenter()
+		mm.SetCenterSnapped(float32(ex), float32(ez), mm.GetLightCamY(), 1024)
+		mm.Update(vi, 1.0, 1.0)
+		bv.Compute(640, 480, vi, en)
+		d.Prepare()
+		bv.ComputeShadows(en, d)
+		d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
+	}
+
+	// Verify idle bobbing still moves view.Z, while Room tile matrix stays identical in PeekReusableTile & CanReuseTile!
+	_, _, viewZ0 := vi.GetView()
+	viewChanged := false
+	for frame := range 6 {
+		en.Compute(pl, vi)
+		_, _, viewZ := vi.GetView()
+		if viewZ != viewZ0 {
+			viewChanged = true
+		}
+		ex, _, ez := pl.GetEntity().GetCenter()
+		mm.SetCenterSnapped(float32(ex), float32(ez), mm.GetLightCamY(), 1024)
+		mm.Update(vi, 1.0, 1.0)
+		bv.Compute(640, 480, vi, en)
+		d.Prepare()
+		_, _, roomMat := d.GetTileConfig(atlas.ShadowTileRoom)
+		if _, _, _, peekOK := d.PeekReusableTile(atlas.ShadowTileRoom, roomMat); !peekOK {
+			t.Fatalf("idle frame %d expected PeekReusableTile=true for ShadowTileRoom", frame)
+		}
+		bv.ComputeShadows(en, d)
+		if !bv.GetShadowTiles().Get(atlas.ShadowTileRoom).CanReuse() {
+			t.Fatalf("idle frame %d expected ShadowTileRoom CanReuse=true", frame)
+		}
+		rCtx.clearCalls = 0
+		rCtx.drawCalls = 0
+		d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
+		if rCtx.clearCalls != 0 || rCtx.drawCalls != 0 {
+			t.Fatalf("idle frame %d expected 0 clears/draws for cached Room tile, got clears=%d draws=%d", frame, rCtx.clearCalls, rCtx.drawCalls)
+		}
+	}
+	if !viewChanged {
+		t.Fatalf("expected IdleBobbing to continue animating visual view.Z at rest")
+	}
+}

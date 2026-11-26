@@ -243,3 +243,32 @@ func TestAtmosphereFogAutoBoundsAndShaderParams(t *testing.T) {
 		t.Fatalf("fog height params mismatch: %+v", h2)
 	}
 }
+
+func TestMapSetCenterSnappedStabilityAndZeroAllocs(t *testing.T) {
+	m := NewMap()
+	m.SetOrthoSize(512, 0.1, 4096)
+	m.SetCenterSnapped(100.0, 28.0, 400.0, 1024)
+	ref := m.roomSpace
+	texel := (2.0 * float32(512)) / float32(1024) // 1.0
+
+	// Sub-texel perturbations must keep roomSpace bit-identical.
+	for _, delta := range []float32{-0.4, -0.1, 0.0001, 0.4} {
+		m.SetCenterSnapped(100.0+delta, 28.0-delta, 400.0, 1024)
+		if m.roomSpace != ref {
+			t.Fatalf("expected bit-identical roomSpace for sub-texel delta=%v (texel=%v)", delta, texel)
+		}
+	}
+
+	// Stepping across >1 texel updates roomSpace cleanly.
+	m.SetCenterSnapped(100.0+texel*1.5, 28.0, 400.0, 1024)
+	if m.roomSpace == ref {
+		t.Fatalf("expected roomSpace to update after crossing texel boundary")
+	}
+
+	allocs := testing.AllocsPerRun(50, func() {
+		m.SetCenterSnapped(100.2, 27.9, 400.0, 1024)
+	})
+	if allocs > 0 {
+		t.Fatalf("SetCenterSnapped allocated %.2f objects/op, want 0", allocs)
+	}
+}

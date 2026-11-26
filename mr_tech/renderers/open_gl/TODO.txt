@@ -12,21 +12,18 @@ STATO ATTUALE (già implementato)
 [x] Ombre PCF morbide con Vogel disk ruotato per pixel su stanza, torcia e u_shadowLights (assets/main_opaque.frag)
 [x] Bloom piramidale su 5 livelli (Jimenez downsample con Karis average + additive tent upsample) + soft knee quadratico (assets/bloom.frag, shaders/bloom.go, assets/main_opaque.frag)
 [x] Per-light frustum culling + static tile caching per double-buffer in Depth.RenderWithTiles / BuilderVolume.ComputeShadows + chunked static atlas con HasStreamer() attivo (shaders/depth.go, builder_shadows.go, builder_volume.go, gpu/draws/frame_vertices.go)
+[x] UBO condivisi PerFrameBlock / ShadowLightsBlock double-buffered in Main (assets/main.vert, assets/main_opaque.frag, shaders/main.go)
 
 
 OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
 --------------------------------------------------
 
-1) UBO PerFrame / ShadowLights (riduzione chiamate uniform in WebGL2)
-- Main.bindForwardUniforms (shaders/main.go) invia ad ogni pass (solidPrg, cutoutPrg, RenderTransparent) matrici per-frame, parametri cluster/camera, torcia e fino a 8 struct u_shadowLights[i] (~40 chiamate Uniform* per pass).
-- Spostare matrici/camera/torcia e u_shadowLights in un UBO condiviso aggiornato 1 volta per frame.
-
-2) Vertex deduplication (vero index buffer) & compressione vertex layout
+1) Vertex deduplication (vero index buffer) & compressione vertex layout
 - ResidentMesh (gpu/buffers/resident_mesh.go) scrive ancora Indices sequenziali (vIdx, vIdx+1, vIdx+2) con StaticVertexFloats = 24 (96 byte/vertice in float32, vertex_layout.go).
 - Su mesh 3D lisce e mappe estese questo causa ~3× trasformazioni vertex shader e banda VRAM.
 - Da fare: deduplica vertici per avere una vera index buffer condivisa e compressione degli attributi (normal/tangent packed invece di vec3/vec4 float32 pieni).
 
-3) Eviction nelle cache GPU e pool Query
+2) Eviction nelle cache GPU e pool Query
 - BuilderVolume.volMeshes e thingMeshes (builder_volume.go) tracciano LastSeenFrame ma non eseguono mai sweep/Dispose() di mesh non più usate (mentre streamChunks esegue già eviction/Dispose periodica).
 - OcclusionHW (gpu/queries/occlusion_hw.go) alloca states e queryIDs monotonicamente senza eviction/riciclo (a pool esaurito GetState ritorna nil) e emette BeginQuery + DrawArrays + EndQuery per singola AABB.
 - Da fare: sweep periodico con Dispose() su mesh/stati stale e riciclo degli ID query (più batching/riduzione chiamate per occlusion).
@@ -35,13 +32,12 @@ OTTIMIZZAZIONI CPU / WEBGL2 (syscall/js) & MEMORIA
 PULIZIA CODICE LEGACY
 ---------------------
 
-4) Rimozione residui della vecchia pipeline deferred
+3) Rimozione residui della vecchia pipeline deferred
 - Handler (shaders/handler.go) e RenderOpenGL (render.go) mantengono ancora riferimenti legacy (geometry, blur, deferred, shadowLight non attivi in w.container, e flashlight/SetShadowsEnabled). Nota: ssao è stato riattivato e integrato nella pipeline forward tramite RenderDepth su Z-Prepass.
 - Rimuovere i pass deferred non più usati.
 
 
 PRIORITÀ CONSIGLIATA
 --------------------
-1. UBO PerFrame / ShadowLights in Main (riduzione chiamate uniform in WebGL2)
-2. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU / pool OcclusionHW
-3. Rimozione residui della vecchia pipeline deferred (geometry, blur, deferred, shadowLight)
+1. Vertex deduplication / layout compatto in ResidentMesh + sweep eviction cache GPU / pool OcclusionHW
+2. Rimozione residui della vecchia pipeline deferred (geometry, blur, deferred, shadowLight)

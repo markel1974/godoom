@@ -33,11 +33,40 @@ out vec4 ViewTangent;
 out vec3 LightmapUV;
 out vec4 EnvParams;
 
+#ifdef USE_PERFRAME_UBO
+layout(std140) uniform PerFrameBlock {
+    mat4 u_view;
+    mat4 u_invView;
+    mat4 u_projection;
+    mat4 u_roomSpaceMatrix;
+    mat4 u_flashSpaceMatrix;
+    mat4 u_sunSpaceMatrices[4];
+    vec4 u_pfScreenTime;
+    vec4 u_pfLightingParams;
+    vec4 u_pfFlashPosInt;
+    vec4 u_pfFlashDirFall;
+    vec4 u_pfFlashConeCluster;
+    ivec4 u_pfFlags;
+    ivec4 u_pfCounts;
+    vec4 u_pfSunDirView;
+    vec4 u_sunColorIntensity;
+    vec4 u_pfSunSkyColor;
+    vec4 u_pfSunGroundColor;
+    vec4 u_sunCascadeSplits;
+    vec4 u_sunCascadeBias;
+    vec4 u_pfFogColor;
+    vec4 u_pfFogSunColor;
+    vec4 u_fogParams;
+    vec4 u_fogHeightParams;
+};
+#define u_time (u_pfScreenTime.z)
+#else
 uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform mat4 u_roomSpaceMatrix;
 uniform mat4 u_flashSpaceMatrix;
 uniform float u_time;
+#endif
 uniform int u_instanceMode;
 
 vec3 safeNorm3(vec3 v, vec3 fallback) {

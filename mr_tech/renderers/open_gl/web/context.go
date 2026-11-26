@@ -1010,6 +1010,7 @@ func (d *Context) ShaderSource(shader uint32, count int32, xstring **uint8, leng
 		"precision highp sampler2DArray;",
 		"precision highp samplerCube;",
 		"precision highp usampler2D;",
+		"precision highp int;",
 		"precision highp float;",
 	}
 

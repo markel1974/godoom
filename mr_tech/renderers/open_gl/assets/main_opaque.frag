@@ -27,31 +27,64 @@ uniform sampler2DShadow u_shadowAtlas;
 uniform sampler2D u_ssao;
 uniform usampler2D u_clusterData;
 
-uniform mat4 u_view;
-uniform mat4 u_invView;
-uniform mat4 u_roomSpaceMatrix;
-uniform mat4 u_flashSpaceMatrix;
-
-uniform vec2 u_screenResolution;
-uniform float u_emissiveIntensity;
-uniform float u_ambient_light;
-uniform int u_enableShadows;
 uniform int u_enableSSAO;
-uniform float u_aoFactor;
-uniform float u_envMaxLod;
 
-uniform int u_debugLights;
+// PerFrame UBO (PerFrameBlock binding 1, std140 aligned)
+layout(std140) uniform PerFrameBlock {
+    mat4 u_view;
+    mat4 u_invView;
+    mat4 u_projection;
+    mat4 u_roomSpaceMatrix;
+    mat4 u_flashSpaceMatrix;
+    mat4 u_sunSpaceMatrices[4];
+    vec4 u_pfScreenTime;       // x: width, y: height, z: time, w: emissiveIntensity
+    vec4 u_pfLightingParams;   // x: ambient, y: aoFactor, z: envMaxLod, w: clusterNear
+    vec4 u_pfFlashPosInt;      // xyz: flashPosView, w: flashIntensityFactor
+    vec4 u_pfFlashDirFall;     // xyz: flashDir, w: flashFalloff
+    vec4 u_pfFlashConeCluster; // x: flashConeStart, y: flashConeEnd, z: clusterLogScale, w: 0
+    ivec4 u_pfFlags;           // x: enableShadows, y: debugLights, z: enableFlashlight, w: numShadowLights
+    ivec4 u_pfCounts;          // x: numLights, y: numGlobalLights, z: sunEnabled, w: fogEnabled
+    vec4 u_pfSunDirView;       // xyz: sunDirView
+    vec4 u_sunColorIntensity;  // rgb: sunColor, w: intensity
+    vec4 u_pfSunSkyColor;      // rgb: sunSkyColor
+    vec4 u_pfSunGroundColor;   // rgb: sunGroundColor
+    vec4 u_sunCascadeSplits;
+    vec4 u_sunCascadeBias;
+    vec4 u_pfFogColor;         // rgb: fogColor
+    vec4 u_pfFogSunColor;      // rgb: fogSunColor
+    vec4 u_fogParams;          // x: start, y: invRange, z: density, w: sunScatter
+    vec4 u_fogHeightParams;    // x: heightBase, y: heightFalloff, z: zFar
+};
 
-// Flashlight
-uniform int u_enableFlashlight;
-uniform vec3 u_flashPosView;
-uniform vec3 u_flashDir;
-uniform float u_flashIntensityFactor;
-uniform float u_flashFalloff;
-uniform float u_flashConeStart;
-uniform float u_flashConeEnd;
+#define u_screenResolution (u_pfScreenTime.xy)
+#define u_time (u_pfScreenTime.z)
+#define u_emissiveIntensity (u_pfScreenTime.w)
+#define u_ambient_light (u_pfLightingParams.x)
+#define u_aoFactor (u_pfLightingParams.y)
+#define u_envMaxLod (u_pfLightingParams.z)
+#define u_clusterNear (u_pfLightingParams.w)
+#define u_flashPosView (u_pfFlashPosInt.xyz)
+#define u_flashIntensityFactor (u_pfFlashPosInt.w)
+#define u_flashDir (u_pfFlashDirFall.xyz)
+#define u_flashFalloff (u_pfFlashDirFall.w)
+#define u_flashConeStart (u_pfFlashConeCluster.x)
+#define u_flashConeEnd (u_pfFlashConeCluster.y)
+#define u_clusterLogScale (u_pfFlashConeCluster.z)
+#define u_enableShadows (u_pfFlags.x)
+#define u_debugLights (u_pfFlags.y)
+#define u_enableFlashlight (u_pfFlags.z)
+#define u_numShadowLights (u_pfFlags.w)
+#define u_numLights (u_pfCounts.x)
+#define u_numGlobalLights (u_pfCounts.y)
+#define u_sunEnabled (u_pfCounts.z)
+#define u_fogEnabled (u_pfCounts.w)
+#define u_sunDirView (u_pfSunDirView.xyz)
+#define u_sunSkyColor (u_pfSunSkyColor.xyz)
+#define u_sunGroundColor (u_pfSunGroundColor.xyz)
+#define u_fogColor (u_pfFogColor.xyz)
+#define u_fogSunColor (u_pfFogSunColor.xyz)
 
-// Dynamic Shadow Lights (up to 8 spotlights, pre-transformed to View Space on CPU)
+// Dynamic Shadow Lights (ShadowLightsBlock binding 2, up to 8 spotlights, pre-transformed to View Space on CPU)
 struct ShadowLight {
     vec4 pos_intensity;    // xyz: view pos, w: intensity
     vec4 dir_falloff;      // xyz: normalized view dir, w: falloff
@@ -60,8 +93,9 @@ struct ShadowLight {
     mat4 lightSpace;       // projection * view matrix
 };
 
-uniform ShadowLight u_shadowLights[8];
-uniform int u_numShadowLights;
+layout(std140) uniform ShadowLightsBlock {
+    ShadowLight u_shadowLights[8];
+};
 
 // UBO Dynamic point/area lights (LightsBlock binding 0, pre-transformed to View Space on CPU)
 struct Light {
@@ -74,27 +108,6 @@ struct Light {
 layout(std140) uniform LightsBlock {
     Light u_lights[256];
 };
-uniform int u_numLights;
-uniform float u_clusterNear;
-uniform float u_clusterLogScale;
-uniform int u_numGlobalLights;
-
-// Outdoor Directional Sun & 4-Cascade CSM
-uniform int u_sunEnabled;
-uniform vec3 u_sunDirView;
-uniform vec4 u_sunColorIntensity;
-uniform vec3 u_sunSkyColor;
-uniform vec3 u_sunGroundColor;
-uniform vec4 u_sunCascadeSplits;
-uniform vec4 u_sunCascadeBias;
-uniform mat4 u_sunSpaceMatrices[4];
-
-// Atmospheric Horizon Fog
-uniform int u_fogEnabled;
-uniform vec3 u_fogColor;
-uniform vec3 u_fogSunColor;
-uniform vec4 u_fogParams;        // x: start, y: invRange, z: density, w: sunScatter
-uniform vec3 u_fogHeightParams;  // x: heightBase, y: heightFalloff, z: zFar
 
 const float PI = 3.14159265359;
 const vec2 kShadowAtlasTexel = vec2(1.0 / 2048.0);

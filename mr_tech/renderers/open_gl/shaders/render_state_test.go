@@ -28,61 +28,85 @@ type subDataCall struct {
 	vao    uint32
 }
 
+type uboSubDataCall struct {
+	buffer uint32
+	size   int
+}
+
+type uniformBlockBindCall struct {
+	prg       uint32
+	blockIdx  uint32
+	binding   uint32
+	blockName string
+}
+
 type recordingCtx struct {
 	api.IContext
 
-	nextID             uint32
-	boundVAO           uint32
-	boundProgram       uint32
-	vaoHistory         []uint32
-	eboBindVAO         []uint32
-	clearCalls         int
-	bufferDataCalls    int
-	subDataCalls       []subDataCall
-	getUniformLocCalls int
-	strCalls           int
-	uniform1ivCalls    int
-	uniform1iCalls     int
-	blitCalls          int
-	lastBlitMask       uint32
-	shaderSources      map[uint32]string
-	programShaders     map[uint32][]uint32
-	programHistory     []uint32
-	colorMaskCalls     [][4]bool
-	depthMaskCalls     []bool
-	depthFuncCalls     []uint32
-	enabledHistory     []uint32
-	disabledHistory    []uint32
-	multiDrawPrograms  []uint32
-	lastUBOData        []float32
-	scissorCalls       [][4]int32
-	viewportCalls      [][4]int32
-	polygonOffsetCalls [][2]float32
-	polyOffsetActive   bool
-	depthClampActive   bool
-	curScissor         [4]int32
-	drawPolyOffsets    []bool
-	drawDepthClamps    []bool
-	drawScissors       [][4]int32
-	activeTexUnit      uint32
-	boundTex2D         [16]uint32
-	boundDrawFBO       uint32
-	blendActive        bool
-	lastBlendMode      uint32
-	lastBlendSrc       uint32
-	lastBlendDst       uint32
-	multiDrawFBOs      []uint32
-	multiDrawSSAO      []uint32
-	drawArraysPrograms []uint32
-	drawArraysFBOs     []uint32
-	drawArraysBlend    []bool
+	nextID               uint32
+	boundVAO             uint32
+	boundProgram         uint32
+	boundUniformBuf      uint32
+	vaoHistory           []uint32
+	eboBindVAO           []uint32
+	clearCalls           int
+	bufferDataCalls      int
+	subDataCalls         []subDataCall
+	uboSubDataCalls      []uboSubDataCall
+	uboUploads           map[uint32][]uint32
+	boundUBOBindings     [8]uint32
+	uniformBlockBindings []uniformBlockBindCall
+	blockNamesByPrgKey   map[uint64]string
+	strValues            map[uintptr]string
+	getUniformLocCalls   int
+	strCalls             int
+	uniform1ivCalls      int
+	uniform1iCalls       int
+	uniformFloatCalls    int
+	uniformMatrixCalls   int
+	blitCalls            int
+	lastBlitMask         uint32
+	shaderSources        map[uint32]string
+	programShaders       map[uint32][]uint32
+	programHistory       []uint32
+	colorMaskCalls       [][4]bool
+	depthMaskCalls       []bool
+	depthFuncCalls       []uint32
+	enabledHistory       []uint32
+	disabledHistory      []uint32
+	multiDrawPrograms    []uint32
+	lastUBOData          []float32
+	scissorCalls         [][4]int32
+	viewportCalls        [][4]int32
+	polygonOffsetCalls   [][2]float32
+	polyOffsetActive     bool
+	depthClampActive     bool
+	curScissor           [4]int32
+	drawPolyOffsets      []bool
+	drawDepthClamps      []bool
+	drawScissors         [][4]int32
+	activeTexUnit        uint32
+	boundTex2D           [16]uint32
+	boundDrawFBO         uint32
+	blendActive          bool
+	lastBlendMode        uint32
+	lastBlendSrc         uint32
+	lastBlendDst         uint32
+	multiDrawFBOs        []uint32
+	multiDrawSSAO        []uint32
+	drawArraysPrograms   []uint32
+	drawArraysFBOs       []uint32
+	drawArraysBlend      []bool
 }
 
 func newRecordingCtx() *recordingCtx {
 	return &recordingCtx{
-		nextID:         1,
-		shaderSources:  make(map[uint32]string),
-		programShaders: make(map[uint32][]uint32),
+		nextID:             1,
+		shaderSources:      make(map[uint32]string),
+		programShaders:     make(map[uint32][]uint32),
+		uboUploads:         make(map[uint32][]uint32),
+		blockNamesByPrgKey: make(map[uint64]string),
+		strValues:          make(map[uintptr]string),
 	}
 }
 
@@ -90,6 +114,7 @@ func (c *recordingCtx) resetLogs() {
 	c.vaoHistory = c.vaoHistory[:0]
 	c.eboBindVAO = c.eboBindVAO[:0]
 	c.subDataCalls = c.subDataCalls[:0]
+	c.uboSubDataCalls = c.uboSubDataCalls[:0]
 	c.programHistory = c.programHistory[:0]
 	c.colorMaskCalls = c.colorMaskCalls[:0]
 	c.depthMaskCalls = c.depthMaskCalls[:0]
@@ -108,6 +133,10 @@ func (c *recordingCtx) resetLogs() {
 	c.drawArraysPrograms = c.drawArraysPrograms[:0]
 	c.drawArraysFBOs = c.drawArraysFBOs[:0]
 	c.drawArraysBlend = c.drawArraysBlend[:0]
+	c.uniform1ivCalls = 0
+	c.uniform1iCalls = 0
+	c.uniformFloatCalls = 0
+	c.uniformMatrixCalls = 0
 }
 
 func (c *recordingCtx) allocIDs(n int32, out *uint32) {
@@ -129,7 +158,11 @@ func (c *recordingCtx) ActiveTexture(tex uint32) {
 func (c *recordingCtx) AttachShader(prg, sh uint32) {
 	c.programShaders[prg] = append(c.programShaders[prg], sh)
 }
-func (c *recordingCtx) BindBufferBase(_ uint32, _ uint32, _ uint32) {}
+func (c *recordingCtx) BindBufferBase(target uint32, index uint32, buffer uint32) {
+	if target == api.UNIFORM_BUFFER && int(index) < len(c.boundUBOBindings) {
+		c.boundUBOBindings[index] = buffer
+	}
+}
 func (c *recordingCtx) BindFramebuffer(target uint32, fbo uint32) {
 	if target == api.FRAMEBUFFER || target == api.DRAW_FRAMEBUFFER {
 		c.boundDrawFBO = fbo
@@ -264,14 +297,24 @@ func (c *recordingCtx) TexImage2D(_ uint32, _ int32, _ int32, _, _, _ int32, _, 
 }
 func (c *recordingCtx) TexSubImage2D(_ uint32, _ int32, _, _, _, _ int32, _, _ uint32, _ unsafe.Pointer) {
 }
-func (c *recordingCtx) TexParameteri(_, _ uint32, _ int32)                    {}
-func (c *recordingCtx) TexParameterfv(_, _ uint32, _ *float32)                {}
-func (c *recordingCtx) Uniform1f(_ int32, _ float32)                          {}
-func (c *recordingCtx) Uniform2f(_ int32, _, _ float32)                       {}
-func (c *recordingCtx) Uniform3f(_ int32, _, _, _ float32)                    {}
-func (c *recordingCtx) Uniform4f(_ int32, _, _, _, _ float32)                 {}
-func (c *recordingCtx) UniformBlockBinding(_, _, _ uint32)                    {}
-func (c *recordingCtx) UniformMatrix4fv(_ int32, _ int32, _ bool, _ *float32) {}
+func (c *recordingCtx) TexParameteri(_, _ uint32, _ int32)     {}
+func (c *recordingCtx) TexParameterfv(_, _ uint32, _ *float32) {}
+func (c *recordingCtx) Uniform1f(_ int32, _ float32)           { c.uniformFloatCalls++ }
+func (c *recordingCtx) Uniform2f(_ int32, _, _ float32)        { c.uniformFloatCalls++ }
+func (c *recordingCtx) Uniform3f(_ int32, _, _, _ float32)     { c.uniformFloatCalls++ }
+func (c *recordingCtx) Uniform4f(_ int32, _, _, _, _ float32)  { c.uniformFloatCalls++ }
+func (c *recordingCtx) UniformBlockBinding(prg, blockIdx, binding uint32) {
+	key := (uint64(prg) << 32) | uint64(blockIdx)
+	c.uniformBlockBindings = append(c.uniformBlockBindings, uniformBlockBindCall{
+		prg:       prg,
+		blockIdx:  blockIdx,
+		binding:   binding,
+		blockName: c.blockNamesByPrgKey[key],
+	})
+}
+func (c *recordingCtx) UniformMatrix4fv(_ int32, _ int32, _ bool, _ *float32) {
+	c.uniformMatrixCalls++
+}
 func (c *recordingCtx) UseProgram(prg uint32) {
 	c.boundProgram = prg
 	c.programHistory = append(c.programHistory, prg)
@@ -288,9 +331,11 @@ func (c *recordingCtx) BindVertexArray(array uint32) {
 	c.vaoHistory = append(c.vaoHistory, array)
 }
 
-func (c *recordingCtx) BindBuffer(target uint32, _ uint32) {
+func (c *recordingCtx) BindBuffer(target uint32, buffer uint32) {
 	if target == api.ELEMENT_ARRAY_BUFFER {
 		c.eboBindVAO = append(c.eboBindVAO, c.boundVAO)
+	} else if target == api.UNIFORM_BUFFER {
+		c.boundUniformBuf = buffer
 	}
 }
 
@@ -314,12 +359,22 @@ func (c *recordingCtx) BufferSubData(target uint32, offset int, size int, data u
 	if target == api.UNIFORM_BUFFER && data != nil && size >= 4 {
 		floats := unsafe.Slice((*float32)(data), size/4)
 		c.lastUBOData = append(c.lastUBOData[:0], floats...)
+		c.uboSubDataCalls = append(c.uboSubDataCalls, uboSubDataCall{
+			buffer: c.boundUniformBuf,
+			size:   size,
+		})
+		words := unsafe.Slice((*uint32)(data), size/4)
+		dst := c.uboUploads[c.boundUniformBuf]
+		c.uboUploads[c.boundUniformBuf] = append(dst[:0], words...)
 	}
 }
 
-func (c *recordingCtx) Str(_ string) *uint8 {
+func (c *recordingCtx) Str(s string) *uint8 {
 	c.strCalls++
 	var b byte
+	if c.strValues != nil {
+		c.strValues[uintptr(unsafe.Pointer(&b))] = strings.TrimSuffix(s, "\x00")
+	}
 	return &b
 }
 
@@ -338,7 +393,25 @@ func (c *recordingCtx) GetUniformLocation(_ uint32, _ *uint8) int32 {
 	return 1
 }
 
-func (c *recordingCtx) GetUniformBlockIndex(_ uint32, _ *uint8) uint32 { return 0 }
+func (c *recordingCtx) GetUniformBlockIndex(prg uint32, namePtr *uint8) uint32 {
+	name := ""
+	if namePtr != nil && c.strValues != nil {
+		name = c.strValues[uintptr(unsafe.Pointer(namePtr))]
+	}
+	idx := uint32(0)
+	switch name {
+	case "LightsBlock":
+		idx = 0
+	case "PerFrameBlock":
+		idx = 1
+	case "ShadowLightsBlock":
+		idx = 2
+	}
+	if c.blockNamesByPrgKey != nil {
+		c.blockNamesByPrgKey[(uint64(prg)<<32)|uint64(idx)] = name
+	}
+	return idx
+}
 
 func (c *recordingCtx) Uniform1i(_ int32, _ int32) {
 	c.uniform1iCalls++
@@ -1557,5 +1630,250 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	d.SetShadowsEnabled(true)
 	if d.CanReuseTile(atlas.ShadowTileRoom, tiles.Get(atlas.ShadowTileRoom).GetMatrixPtr(), hashes[0]) {
 		t.Fatalf("expected CanReuseTile=false after SetShadowsEnabled(false->true) invalidation")
+	}
+}
+
+func TestMainPerFrameAndShadowLightsUBOOncePerFrameAndZeroAllocs(t *testing.T) {
+	ctx := newRecordingCtx()
+	calCfg := config.NewConfigCalibration()
+	calCfg.EnableSunCSM = true
+	calCfg.EnableHorizonFog = true
+	calCfg.ZNear = 1.0
+	calCfg.ZFar = 4096.0
+	cal := model.NewCalibration(calCfg, nil)
+	cal.MSAASamples = 0
+	flashCfg := config.NewFlash()
+	flashCfg.Intensity = 0.08
+	flash := things.NewFlash(flashCfg)
+
+	h := NewHandler(80, 64)
+	if err := h.Setup(ctx, cal, flash, 1280, 720); err != nil {
+		t.Fatalf("Handler.Setup failed: %v", err)
+	}
+	m := h.GetMain()
+	if err := m.Init(); err != nil {
+		t.Fatalf("Main.Init failed: %v", err)
+	}
+	if err := m.Compile(diskAssets{}); err != nil {
+		t.Fatalf("Main.Compile failed: %v", err)
+	}
+	if err := m.SetupSamplers(); err != nil {
+		t.Fatalf("Main.SetupSamplers failed: %v", err)
+	}
+	if err := h.GetLights().Init(); err != nil {
+		t.Fatalf("Lights.Init failed: %v", err)
+	}
+	if err := h.GetLiquid().Compile(diskAssets{}); err != nil {
+		t.Fatalf("Liquid.Compile failed: %v", err)
+	}
+	h.GetPost().EnsureAllocated()
+
+	// Verify GLSL declarations and uniform block bindings on compiled Main & Liquid programs.
+	solidVertSrc := ctx.shaderSources[ctx.programShaders[m.GetProgramOpaque()][0]]
+	solidFragSrc := ctx.shaderSources[ctx.programShaders[m.GetProgramOpaque()][1]]
+	liqVertSrc := ctx.shaderSources[ctx.programShaders[h.GetLiquid().GetProgram()][0]]
+	if !strings.Contains(solidVertSrc, "#define USE_PERFRAME_UBO 1") || !strings.Contains(solidVertSrc, "layout(std140) uniform PerFrameBlock") {
+		t.Fatalf("main.vert compiled for Main missing USE_PERFRAME_UBO PerFrameBlock")
+	}
+	if strings.Contains(liqVertSrc, "#define USE_PERFRAME_UBO 1") {
+		t.Fatalf("main.vert compiled for Liquid must not define USE_PERFRAME_UBO")
+	}
+	for _, token := range []string{
+		"uniform int u_enableSSAO;",
+		"layout(std140) uniform PerFrameBlock",
+		"layout(std140) uniform ShadowLightsBlock",
+		"layout(std140) uniform LightsBlock",
+	} {
+		if !strings.Contains(solidFragSrc, token) {
+			t.Fatalf("main_opaque.frag missing token %q", token)
+		}
+	}
+	for _, legacyDecl := range []string{
+		"uniform ShadowLight u_shadowLights[8];",
+		"uniform mat4 u_view;",
+		"uniform int u_numShadowLights;",
+		"uniform int u_sunEnabled;",
+		"uniform int u_fogEnabled;",
+	} {
+		if strings.Contains(solidFragSrc, legacyDecl) {
+			t.Fatalf("main_opaque.frag unexpectedly retains standalone uniform declaration %q", legacyDecl)
+		}
+	}
+
+	assertBinding := func(prg uint32, blockName string, wantBinding uint32) {
+		for _, b := range ctx.uniformBlockBindings {
+			if b.prg == prg && b.blockName == blockName && b.binding == wantBinding {
+				return
+			}
+		}
+		t.Fatalf("program %d missing binding %q -> %d (bindings=%+v)", prg, blockName, wantBinding, ctx.uniformBlockBindings)
+	}
+	for _, prg := range []uint32{m.GetProgramOpaque(), m.GetProgramCutout()} {
+		assertBinding(prg, "LightsBlock", uboBindingLights)
+		assertBinding(prg, "PerFrameBlock", uboBindingPerFrame)
+		assertBinding(prg, "ShadowLightsBlock", uboBindingShadowLights)
+	}
+	for _, prg := range []uint32{m.GetProgramZPrepassSolid(), m.GetProgramZPrepassCutout()} {
+		assertBinding(prg, "PerFrameBlock", uboBindingPerFrame)
+	}
+
+	// Setup rotated camera, flashlight, 3 dynamic shadow lights, sun CSM and fog.
+	vi := makeRotatedViewMatrix(t)
+	h.GetMapMetrics().Update(vi, 1.2, 1.5)
+	h.UpdateSunAndFog(1.2, 1.5)
+	h.GetFlashlightMetrics().UpdateWithAim(h.GetMapMetrics().GetViewPtr(), 2.5, -1.25, 2.5, -1.25, 0.5)
+
+	var shadowLights [metrics.ShadowLightsCount]*metrics.Light
+	for i := range 3 {
+		lt := metrics.NewLight()
+		lt.Assign(float32(10+i*25), float32(20+i*5), float32(-30-i*15), 0.9, 0.7, 0.4, 1.0, 2.2+float32(i), 0, -1, 0, 120, 0.85, 0.72, 1.0)
+		shadowLights[i] = lt
+	}
+	h.GetShadowLightsMetrics().Update(shadowLights, 3)
+	m.SetShadowsEnabled(true)
+	m.SetEnvMaxLod(6.5)
+
+	solidMat, cutoutMat := makeSolidAndCutoutMaterials(t)
+	cmdSolid := draws.NewDrawCommand()
+	cmdSolid.SetFirstIndex(0)
+	cmdSolid.SetIndexCount(6)
+	cmdSolid.SetMaterial(solidMat)
+	cmdCutout := draws.NewDrawCommand()
+	cmdCutout.SetFirstIndex(6)
+	cmdCutout.SetIndexCount(6)
+	cmdCutout.SetMaterial(cutoutMat)
+	dcOpaque := draws.NewDrawCommandsRender(ctx, "ubo_opaque", false)
+	dcOpaque.Prepare([]*draws.DrawCommand{cmdSolid, cmdCutout})
+
+	transItems := draws.NewDrawItemsTransparent(1)
+	transItems.Add(&draws.DrawItemTransparent{Kind: draws.TransparentStreaming, DistSq: 100.0, SortOrder: 0, CullMode: config.CullNone, FirstIndex: 12, IndexCount: 6})
+	dcTrans := draws.NewDrawCommandsRender(ctx, "ubo_trans", false)
+	dcTrans.SetTransparentDraws(transItems)
+
+	verts := make([]float32, 64)
+	idxs := make([]uint32, 18)
+	vPtr := unsafe.Pointer(&verts[0])
+	iPtr := unsafe.Pointer(&idxs[0])
+
+	m.PrepareFrame(vPtr, len(verts)*4, len(verts)*4, iPtr, len(idxs)*4, len(idxs)*4, 1, 1)
+	ctx.resetLogs()
+
+	const wantAmbient = float32(0.35)
+	m.Render(dcOpaque, wantAmbient, 2.5, -1.25, 0.5)
+	m.RenderTransparent(dcTrans, wantAmbient, 2.5, -1.25, 0.5)
+
+	// Expect 5 geometry draws (zprepass solid + zprepass cutout + solid + cutout + transparent)
+	if len(ctx.multiDrawPrograms) != 5 {
+		t.Fatalf("expected 5 draws (zprepass x2 + solid + cutout + transparent), got %d (%v)", len(ctx.multiDrawPrograms), ctx.multiDrawPrograms)
+	}
+	// Expect exactly 1 PerFrameBlock upload + 1 ShadowLightsBlock upload across all passes in the frame.
+	pfUploads, slUploads := 0, 0
+	pfBufID := m.uboPerFrame[m.frameIdx]
+	slBufID := m.uboShadowLights[m.frameIdx]
+	for _, call := range ctx.uboSubDataCalls {
+		switch call.buffer {
+		case pfBufID:
+			pfUploads++
+			if call.size != perFrameBlockBytes {
+				t.Fatalf("PerFrameBlock BufferSubData size=%d, want %d", call.size, perFrameBlockBytes)
+			}
+		case slBufID:
+			slUploads++
+			wantSLBytes := 3 * shadowLightEntryBytes
+			if call.size != wantSLBytes {
+				t.Fatalf("ShadowLightsBlock BufferSubData size=%d, want %d", call.size, wantSLBytes)
+			}
+		}
+	}
+	if pfUploads != 1 || slUploads != 1 {
+		t.Fatalf("expected 1 PerFrameBlock and 1 ShadowLightsBlock upload across Render+RenderTransparent, got perFrame=%d shadowLights=%d", pfUploads, slUploads)
+	}
+	// Zero float/matrix uniform calls across Z-prepass, solid, cutout and transparent passes.
+	if ctx.uniformFloatCalls != 0 || ctx.uniformMatrixCalls != 0 {
+		t.Fatalf("expected 0 Uniform*f/Matrix4fv calls with UBOs, got float=%d matrix=%d", ctx.uniformFloatCalls, ctx.uniformMatrixCalls)
+	}
+	if ctx.boundUBOBindings[uboBindingPerFrame] != pfBufID || ctx.boundUBOBindings[uboBindingShadowLights] != slBufID {
+		t.Fatalf("unexpected bound UBO IDs: perFrame=%d (want %d) shadowLights=%d (want %d)",
+			ctx.boundUBOBindings[uboBindingPerFrame], pfBufID, ctx.boundUBOBindings[uboBindingShadowLights], slBufID)
+	}
+
+	// Verify packed std140 values in PerFrameBlock.
+	pfWords := ctx.uboUploads[pfBufID]
+	if len(pfWords) != perFrameBlockWords {
+		t.Fatalf("uploaded PerFrameBlock words=%d, want %d", len(pfWords), perFrameBlockWords)
+	}
+	viewWant := h.GetMapMetrics().GetView()
+	for i := range 16 {
+		if got := math.Float32frombits(pfWords[pfOffView+i]); math.Abs(float64(got-viewWant[i])) > 1e-6 {
+			t.Fatalf("PerFrameBlock view[%d]=%v, want %v", i, got, viewWant[i])
+		}
+	}
+	if gotW, gotH := math.Float32frombits(pfWords[pfOffScreenTime]), math.Float32frombits(pfWords[pfOffScreenTime+1]); gotW != 1280 || gotH != 720 {
+		t.Fatalf("PerFrameBlock resolution=(%v,%v), want (1280,720)", gotW, gotH)
+	}
+	if gotAmb, gotLod := math.Float32frombits(pfWords[pfOffLightingParams]), math.Float32frombits(pfWords[pfOffLightingParams+2]); math.Abs(float64(gotAmb-wantAmbient)) > 1e-6 || math.Abs(float64(gotLod-6.5)) > 1e-6 {
+		t.Fatalf("PerFrameBlock ambient/envMaxLod=(%v,%v), want (%v,6.5)", gotAmb, gotLod, wantAmbient)
+	}
+	if gotSh := int32(pfWords[pfOffFlags]); gotSh != 1 {
+		t.Fatalf("PerFrameBlock enableShadows=%d, want 1", gotSh)
+	}
+	if gotFl := int32(pfWords[pfOffFlags+2]); gotFl != 1 {
+		t.Fatalf("PerFrameBlock enableFlashlight=%d, want 1", gotFl)
+	}
+	if gotNumSL := int32(pfWords[pfOffFlags+3]); gotNumSL != 3 {
+		t.Fatalf("PerFrameBlock numShadowLights=%d, want 3", gotNumSL)
+	}
+	if gotSun, gotFog := int32(pfWords[pfOffCounts+2]), int32(pfWords[pfOffCounts+3]); gotSun != 1 || gotFog != 1 {
+		t.Fatalf("PerFrameBlock sun/fog enabled=(%d,%d), want (1,1)", gotSun, gotFog)
+	}
+
+	// Verify packed ShadowLightsBlock entries match view-space transformation and lightSpace matrix.
+	slWords := ctx.uboUploads[slBufID]
+	if len(slWords) != 3*shadowLightEntryWords {
+		t.Fatalf("uploaded ShadowLightsBlock words=%d, want %d", len(slWords), 3*shadowLightEntryWords)
+	}
+	wantWX, wantWY, wantWZ := h.GetMapMetrics().TransformPointToView(shadowLights[1].X, shadowLights[1].Y, shadowLights[1].Z)
+	base1 := shadowLightEntryWords
+	if gotX, gotY, gotZ := math.Float32frombits(slWords[base1+0]), math.Float32frombits(slWords[base1+1]), math.Float32frombits(slWords[base1+2]); math.Abs(float64(gotX-wantWX)) > 1e-4 || math.Abs(float64(gotY-wantWY)) > 1e-4 || math.Abs(float64(gotZ-wantWZ)) > 1e-4 {
+		t.Fatalf("ShadowLightsBlock[1] pos=(%v,%v,%v), want (%v,%v,%v)", gotX, gotY, gotZ, wantWX, wantWY, wantWZ)
+	}
+	_, lMat1Ptr := h.GetShadowLightsMetrics().GetLight(1)
+	lMat1 := unsafe.Slice(lMat1Ptr, 16)
+	for i := range 16 {
+		if got := math.Float32frombits(slWords[base1+16+i]); math.Abs(float64(got-lMat1[i])) > 1e-6 {
+			t.Fatalf("ShadowLightsBlock[1] lightSpace[%d]=%v, want %v", i, got, lMat1[i])
+		}
+	}
+
+	// Zero shadow lights must skip ShadowLightsBlock BufferSubData entirely.
+	h.GetShadowLightsMetrics().Update(shadowLights, 0)
+	m.PrepareFrame(vPtr, len(verts)*4, len(verts)*4, iPtr, len(idxs)*4, len(idxs)*4, 1, 1)
+	ctx.resetLogs()
+	m.Render(dcOpaque, wantAmbient, 2.5, -1.25, 0.5)
+	for _, call := range ctx.uboSubDataCalls {
+		if call.buffer == m.uboShadowLights[m.frameIdx] {
+			t.Fatalf("expected 0 ShadowLightsBlock BufferSubData calls when count == 0")
+		}
+	}
+
+	// Empty Render followed by RenderTransparent must still upload PerFrameBlock once for transparent pass.
+	m.PrepareFrame(vPtr, len(verts)*4, len(verts)*4, iPtr, len(idxs)*4, len(idxs)*4, 1, 1)
+	ctx.resetLogs()
+	m.Render(nil, wantAmbient, 2.5, -1.25, 0.5)
+	m.RenderTransparent(dcTrans, wantAmbient, 2.5, -1.25, 0.5)
+	if len(ctx.uboSubDataCalls) != 1 || ctx.uboSubDataCalls[0].buffer != m.uboPerFrame[m.frameIdx] {
+		t.Fatalf("expected Render(nil)+RenderTransparent to upload PerFrameBlock once, got %+v", ctx.uboSubDataCalls)
+	}
+
+	// Restore 3 shadow lights and verify zero steady-state allocations across PrepareFrame+Render+RenderTransparent.
+	h.GetShadowLightsMetrics().Update(shadowLights, 3)
+	allocs := testing.AllocsPerRun(50, func() {
+		m.PrepareFrame(vPtr, len(verts)*4, len(verts)*4, iPtr, len(idxs)*4, len(idxs)*4, 1, 1)
+		ctx.resetLogs()
+		m.Render(dcOpaque, wantAmbient, 2.5, -1.25, 0.5)
+		m.RenderTransparent(dcTrans, wantAmbient, 2.5, -1.25, 0.5)
+	})
+	if allocs > 0 {
+		t.Fatalf("PrepareFrame+Render+RenderTransparent allocated %.2f objects/op, want 0", allocs)
 	}
 }

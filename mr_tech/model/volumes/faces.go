@@ -247,9 +247,9 @@ func (f *Faces) RebuildTree() {
 	}
 }
 
-// SyncDeformedTree incrementally removes replaced split faces, updates modified leaves,
+// SyncTree incrementally removes replaced split faces, updates modified leaves,
 // and inserts newly subdivided faces into the owned spatial AABB tree.
-func (f *Faces) SyncDeformedTree() {
+func (f *Faces) SyncTree() {
 	if f.tree == nil {
 		return
 	}
@@ -493,7 +493,7 @@ func (f *Faces) computeDeform(impact geometry.XYZ, impulse geometry.XYZ, radius 
 // maxEdge è la lunghezza massima desiderata degli spigoli.
 // maxFaces <= 0 disabilita il limite sul numero di facce.
 func (f *Faces) TessellateNear(impact geometry.XYZ, radius, maxEdge float64, maxFaces int) (int, error) {
-	if f == nil || radius <= 0 || maxEdge <= 0 {
+	if radius <= 0 || maxEdge <= 0 {
 		return 0, fmt.Errorf("invalid tessellation parameters")
 	}
 	if maxEdge < deformMinEdge {

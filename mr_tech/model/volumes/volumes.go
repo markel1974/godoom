@@ -9,9 +9,9 @@ import (
 
 // Volumes manages a collection of spatial volumes and cached frame center data.
 type Volumes struct {
-	vols       []*Volume
-	centers    []geometry.XYZ
-	centersLen int
+	vols          []*Volume
+	centers       []geometry.XYZ
+	recenteredLen int
 	//maxFaces   int
 	sharesTree bool
 }
@@ -19,9 +19,9 @@ type Volumes struct {
 // NewVolumes creates a Volumes collection sized to hold v volume pointers.
 func NewVolumes(v int) *Volumes {
 	return &Volumes{
-		vols:       make([]*Volume, v),
-		centers:    nil,
-		centersLen: 0,
+		vols:          make([]*Volume, v),
+		centers:       nil,
+		recenteredLen: 0,
 		//maxFaces:   0,
 		sharesTree: false,
 	}
@@ -30,9 +30,9 @@ func NewVolumes(v int) *Volumes {
 // NewVolumesFromSlice creates a Volumes collection wrapping the provided slice of volumes.
 func NewVolumesFromSlice(vols []*Volume) *Volumes {
 	return &Volumes{
-		vols:       vols,
-		centers:    nil,
-		centersLen: 0,
+		vols:          vols,
+		centers:       nil,
+		recenteredLen: 0,
 	}
 }
 
@@ -92,15 +92,15 @@ func (v *Volumes) SetAllowTessellate(t bool) {
 
 // GetCenter returns the stored centering offset for idx, or a zero vector if idx is out of range.
 func (v *Volumes) GetCenter(idx int) geometry.XYZ {
-	if idx >= 0 && idx < v.centersLen {
+	if idx >= 0 && idx < v.recenteredLen {
 		return v.centers[idx]
 	}
 	return geometry.XYZ{}
 }
 
-// HasCenters reports whether frame center data is available.
-func (v *Volumes) HasCenters() bool {
-	return v.centersLen > 0
+// IsRecentered reports whether frame center data is available.
+func (v *Volumes) IsRecentered() bool {
+	return v.recenteredLen > 0
 }
 
 // Recenter shifts each non-nil volume so its bounding-box center is at the origin and caches each offset.
@@ -110,7 +110,7 @@ func (v *Volumes) Recenter() {
 	if len(v.centers) < vLen {
 		v.centers = make([]geometry.XYZ, vLen*2)
 	}
-	v.centersLen = vLen
+	v.recenteredLen = vLen
 	for fIdx, vol := range v.vols {
 		faces := vol.GetFaces()
 		minX, minY, minZ := faces.GetMin()
@@ -145,15 +145,12 @@ func (v *Volumes) Recenter() {
 func (v *Volumes) Deform(impact, impulse geometry.XYZ, radius float64) bool {
 	deformed := false
 	for _, vol := range v.vols {
-		if vol == nil {
-			continue
-		}
 		if vol.Deform(impact, impulse, radius) {
 			deformed = true
 		}
 	}
 	if deformed && v.sharesTree {
-		v.vols[0].SyncDeformedTree()
+		v.vols[0].SyncTree()
 	}
 	return deformed
 }

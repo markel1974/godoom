@@ -474,7 +474,7 @@ func (v *Element3D) setActionState(idx int) bool {
 		v.volB = refVol
 		v.lerpT = 0.0
 		v.comp.SetVolume(v.volA)
-		if !v.vols.HasCenters() {
+		if !v.vols.IsRecentered() {
 			v.lastVolA = v.volA
 			v.lastSolverFrameA = v.frameIdxA
 		}

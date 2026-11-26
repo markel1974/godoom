@@ -352,7 +352,7 @@ func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float6
 	return true
 }
 
-// SyncDeformedTree updates the face acceleration tree after deformation changes.
-func (v *Volume) SyncDeformedTree() {
-	v.faces.SyncDeformedTree()
+// SyncTree synchronizes the volume's face spatial tree with the current face state.
+func (v *Volume) SyncTree() {
+	v.faces.SyncTree()
 }

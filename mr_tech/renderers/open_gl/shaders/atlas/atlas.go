@@ -32,7 +32,7 @@ type Atlas struct {
 	width       int32
 	height      int32
 	shadowAtlas [DepthDoubleBuffer]*AtlasData
-	tileCache   [DepthDoubleBuffer][MaxShadowTiles]TileCache
+	tileCache   [DepthDoubleBuffer][MaxShadowTiles]*TileCache
 	shadows     bool
 }
 
@@ -47,6 +47,9 @@ func NewAtlas(ctx api.IContext) *Atlas {
 	}
 	for i := range DepthDoubleBuffer {
 		a.shadowAtlas[i] = NewAtlasData(ctx)
+		for x := range MaxShadowTiles {
+			a.tileCache[i][x] = NewTileCache()
+		}
 	}
 	a.InvalidateCache()
 	return a
@@ -140,11 +143,8 @@ func (s *Atlas) SetTile(idx, t int, tile *TileShadow, gen uint64) {
 	if idx < 0 || idx >= DepthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil {
 		return
 	}
-	c := &s.tileCache[idx][t]
-	c.valid = true
-	c.atlasGen = gen
-	c.matrix = tile.matrix
-	c.sceneHash = tile.sceneHash
+	c := s.tileCache[idx][t]
+	c.Assign(true, gen, tile.matrix, tile.sceneHash)
 }
 
 // Allocate configures the unified master shadow map atlas dimensions and invalidates cached tiles.
@@ -184,8 +184,8 @@ func (s *Atlas) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, ui
 	if atl == nil || atl.fbo == 0 || atl.width != s.width || atl.height != s.height {
 		return 0, 0, 0, false
 	}
-	c := &s.tileCache[nextIdx][slot]
-	if !c.valid || c.atlasGen != atl.gen || c.matrix != *matrix {
+	c := s.tileCache[nextIdx][slot]
+	if !c.valid || c.atlasGen != atl.gen || c.matrix2 != *matrix {
 		return 0, 0, 0, false
 	}
 	return nextIdx, atl.gen, c.sceneHash, true

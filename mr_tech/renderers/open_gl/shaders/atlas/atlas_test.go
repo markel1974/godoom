@@ -139,3 +139,34 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 		t.Fatalf("expected CanReuseTile=false after Shutdown")
 	}
 }
+
+func TestTileCacheAssignAndMatches(t *testing.T) {
+	tc := NewTileCache()
+	if tc.matrixPtr != &tc.matrix2[0] || tc.valid {
+		t.Fatalf("unexpected initial TileCache state: ptr=%p want=%p valid=%v", tc.matrixPtr, &tc.matrix2[0], tc.valid)
+	}
+
+	mat := [16]float32{
+		1, 0, 0, 0,
+		0, 2, 0, 0,
+		0, 0, 3, 0,
+		4, 5, 6, 1,
+	}
+	tc.Assign(true, 7, mat, 999)
+	if !tc.Matches(7, &mat, 999) {
+		t.Fatalf("expected exact match for gen=7 and sceneHash=999")
+	}
+	if tc.Matches(7, nil, 999) || tc.Matches(8, &mat, 999) || tc.Matches(7, &mat, 1000) {
+		t.Fatalf("expected mismatch on nil matrix, different gen, or different sceneHash")
+	}
+	otherMat := mat
+	otherMat[12] = 99
+	if tc.Matches(7, &otherMat, 999) {
+		t.Fatalf("expected mismatch on modified matrix")
+	}
+
+	tc.Assign(false, 7, mat, 999)
+	if tc.Matches(7, &mat, 999) {
+		t.Fatalf("expected mismatch when valid=false")
+	}
+}

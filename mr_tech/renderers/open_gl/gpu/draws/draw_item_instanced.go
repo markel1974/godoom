@@ -10,3 +10,11 @@ type DrawItemInstanced struct {
 	BaseByteOffset int32
 	InstanceCount  int32
 }
+
+func (item *DrawItemInstanced) Assign(mesh *buffers.ResidentMesh, sub *buffers.ResidentSubMesh, instanceVBO uint32, baseByteOffset int32, instanceCount int32) {
+	item.Mesh = mesh
+	item.Sub = sub
+	item.InstanceVBO = instanceVBO
+	item.BaseByteOffset = baseByteOffset
+	item.InstanceCount = instanceCount
+}

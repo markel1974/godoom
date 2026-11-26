@@ -4,7 +4,6 @@ import (
 	"math/bits"
 	"unsafe"
 
-	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
@@ -346,9 +345,9 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 
 		if w.thingScratchLen >= len(w.thingScratch) {
 			newLen := len(w.thingScratch) * 2
-			volS := make([]ShadowsCollectedThing, newLen)
-			copy(volS, w.thingScratch)
-			w.thingScratch = volS
+			z := make([]ShadowsCollectedThing, newLen)
+			copy(z, w.thingScratch)
+			w.thingScratch = z
 		}
 
 		thingScratch := &w.thingScratch[w.thingScratchLen]
@@ -366,19 +365,6 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 		}
 		return false
 	})
-}
-
-// pushShadowStaticSubMeshes adds opaque static submeshes in the given index range to the shadow tile builder.
-func pushShadowStaticSubMeshes(tb *ShadowTileBuilder, mesh *buffers.ResidentMesh, startIdx, endIdx int) {
-	for sIdx := startIdx; sIdx < endIdx; sIdx++ {
-		sub := mesh.SubMeshes[sIdx]
-		if sub.IndexCount == 0 || sub.BlendMode != config.BlendModeOpaque {
-			continue
-		}
-		item := tb.staticItems.Acquire()
-		item.Mesh = mesh
-		item.Sub = sub
-	}
 }
 
 // resolveDirtyVolumes resolves meshes for collected volumes that intersect any dirty shadow tile.
@@ -400,11 +386,11 @@ func (w *Shadows) buildTileStaticForBit(tb *ShadowTileBuilder, tileBit uint32) {
 		}
 		rm, entry, _ := w.bStatic.LookupResolved(cv.vol)
 		if entry != nil && !entry.detached {
-			pushShadowStaticSubMeshes(tb, entry.atlas, entry.subStart, entry.subStart+entry.subCount)
+			tb.PushStaticSubMeshes(entry.atlas, entry.subStart, entry.subStart+entry.subCount)
 			continue
 		}
 		if rm != nil {
-			pushShadowStaticSubMeshes(tb, rm, 0, rm.SubMeshesLen)
+			tb.PushStaticSubMeshes(rm, 0, rm.SubMeshesLen)
 		}
 	}
 }

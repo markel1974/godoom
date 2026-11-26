@@ -43,8 +43,8 @@ func (t *ShadowsCollectedThing) Assign(thing ithing.IThing, entry *ShadowRigidEn
 	t.mask = mask
 }
 
-// shadowTileDeps records dependency stamps used to validate cached shadow tile reuse.
-type shadowTileDeps struct {
+// ShadowTileDeps records dependency stamps used to validate cached shadow tile reuse.
+type ShadowTileDeps struct {
 	valid      bool
 	atlasGen   uint64
 	sceneHash  uint64
@@ -52,7 +52,7 @@ type shadowTileDeps struct {
 	tick       uint64
 }
 
-func (std *shadowTileDeps) Assign(valid bool, atlasGen uint64, sceneHash uint64, worldToken uint64, tick uint64) {
+func (std *ShadowTileDeps) Assign(valid bool, atlasGen uint64, sceneHash uint64, worldToken uint64, tick uint64) {
 	std.valid = valid
 	std.atlasGen = atlasGen
 	std.sceneHash = sceneHash
@@ -66,7 +66,7 @@ type Shadows struct {
 	bStatic            *Static
 	bThings            *Things
 	tiles              [shaders.MaxShadowTiles]shaders.ShadowsTileData
-	tileDeps           [2][shaders.MaxShadowTiles]shadowTileDeps
+	tileDeps           [2][shaders.MaxShadowTiles]ShadowTileDeps
 	builders           [shaders.MaxShadowTiles]*ShadowTileBuilder
 	tileFrustums       [shaders.MaxShadowTiles]aabb.Frustum
 	instPool           *buffers.InstancePool

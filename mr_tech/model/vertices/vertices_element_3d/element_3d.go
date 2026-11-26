@@ -535,10 +535,10 @@ func (v *Element3D) AdvanceAnimation(tick uint64) {
 	v.lerpT = lerpT
 }
 
-// CenterFrames recenters the entry volumes and rebuilds the collision solver using the given physics parameters.
+// CenterFrames recenters all frame volumes, rebuilds collision solver state, and refreshes cached tree and pose data.
 func (v *Element3D) CenterFrames(partMass, restitution, friction, gForce float64) {
 	v.ensureMaterialized()
-	v.vols.BuildCenters()
+	v.vols.Recenter()
 
 	partSolver := collisions.NewSolver(true, partMass, restitution, friction, v.restitutionCombine, v.frictionCombine, gForce)
 	for i := 0; i < v.vols.Len(); i++ {

@@ -375,9 +375,19 @@ func (f *Faces) Clear() {
 	f.version++
 }
 
+// Deform applies an impulse around an impact point within the given radius and rebuilds geometry.
+// Deform optionally syncs shared deformed tree data and reports whether deformation occurred.
+func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+	if !f.computeDeform(impact, impulse, radius) {
+		return false
+	}
+	f.RebuildGeometry()
+	return true
+}
+
 // Deform applies impulse to deformable vertices within radius of impact.
 // Deform returns true when at least one vertex is displaced.
-func (f *Faces) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+func (f *Faces) computeDeform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if f.allowTessellate {
 		// Quattro intervalli geometrici lungo il diametro d'impatto.
 		targetEdge := radius * 0.45

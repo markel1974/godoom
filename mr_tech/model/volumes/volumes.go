@@ -12,6 +12,8 @@ type Volumes struct {
 	vols       []*Volume
 	centers    []geometry.XYZ
 	centersLen int
+	//maxFaces   int
+	sharesTree bool
 }
 
 // NewVolumes creates a Volumes collection sized to hold v volume pointers.
@@ -20,6 +22,8 @@ func NewVolumes(v int) *Volumes {
 		vols:       make([]*Volume, v),
 		centers:    nil,
 		centersLen: 0,
+		//maxFaces:   0,
+		sharesTree: false,
 	}
 }
 
@@ -46,11 +50,17 @@ func (v *Volumes) Get(idx int) *Volume {
 	return v.vols[idx]
 }
 
+func (v *Volumes) Rebuild() {
+	v.computeSharesTree()
+	//v.computeMaxFaces()
+}
+
 // Add appends a non-nil volume to the collection.
 func (v *Volumes) Add(vol *Volume) {
 	if vol != nil {
 		v.vols = append(v.vols, vol)
 	}
+	v.Rebuild()
 }
 
 // Append appends multiple volumes to the collection.
@@ -60,6 +70,7 @@ func (v *Volumes) Append(vols ...*Volume) {
 			v.vols = append(v.vols, vol)
 		}
 	}
+	v.Rebuild()
 }
 
 // Slice returns the underlying slice of Volume pointers.
@@ -68,19 +79,6 @@ func (v *Volumes) Slice() []*Volume {
 		return nil
 	}
 	return v.vols
-}
-
-// GetFaceCount returns the maximum face count among the contained volumes.
-func (v *Volumes) GetFaceCount() int {
-	maxFaces := 0
-	for _, vol := range v.vols {
-		if vol != nil {
-			if c := vol.GetFaceCount(); c > maxFaces {
-				maxFaces = c
-			}
-		}
-	}
-	return maxFaces
 }
 
 // SetAllowTessellate sets whether all non-nil volumes may tessellate.
@@ -105,38 +103,15 @@ func (v *Volumes) HasCenters() bool {
 	return v.centersLen > 0
 }
 
-// sharesTree reports whether at least two non-nil volumes in v point to the same AABB tree.
-func (v *Volumes) sharesTree() bool {
-	var first *aabb.Tree
-	for _, vol := range v.vols {
-		if vol == nil {
-			continue
-		}
-		t := vol.GetFacesTree()
-		if t == nil {
-			continue
-		}
-		if first == nil {
-			first = t
-		} else if t == first {
-			return true
-		}
-	}
-	return false
-}
-
-// BuildCenters recenter each volume around its bounding-box center and records the original centers.
-func (v *Volumes) BuildCenters() {
+// Recenter shifts each non-nil volume so its bounding-box center is at the origin and caches each offset.
+// Recenter rebuilds updated geometry, preserving shared tree synchronization for callers to complete.
+func (v *Volumes) Recenter() {
 	vLen := len(v.vols)
 	if len(v.centers) < vLen {
 		v.centers = make([]geometry.XYZ, vLen*2)
 	}
 	v.centersLen = vLen
-	shared := v.sharesTree()
 	for fIdx, vol := range v.vols {
-		if vol == nil {
-			continue
-		}
 		faces := vol.GetFaces()
 		minX, minY, minZ := faces.GetMin()
 		maxX, maxY, maxZ := faces.GetMax()
@@ -156,7 +131,7 @@ func (v *Volumes) BuildCenters() {
 				f.Set2(p2X-mcx, p2Y-mcy, p2Z-mcz)
 				f.Rebuild()
 			}
-			if shared {
+			if v.sharesTree {
 				// Callers with a shared AABB tree synchronize the tree for the active frame afterwards.
 				vol.RebuildGeometry()
 			} else {
@@ -168,21 +143,46 @@ func (v *Volumes) BuildCenters() {
 
 // Deform applies an impulse deformation around impact to all volumes and reports whether any volume changed.
 func (v *Volumes) Deform(impact, impulse geometry.XYZ, radius float64) bool {
-	shared := v.sharesTree()
 	deformed := false
 	for _, vol := range v.vols {
 		if vol == nil {
 			continue
 		}
-		var changed bool
-		if shared {
-			changed = vol.deformGeometry(impact, impulse, radius)
-		} else {
-			changed = vol.Deform(impact, impulse, radius)
-		}
-		if changed {
+		if vol.Deform(impact, impulse, radius) {
 			deformed = true
 		}
 	}
+	if deformed && v.sharesTree {
+		v.vols[0].SyncDeformedTree()
+	}
 	return deformed
 }
+
+// sharesTree reports whether at least two non-nil volumes in v point to the same AABB tree.
+func (v *Volumes) computeSharesTree() {
+	v.sharesTree = false
+	var first *aabb.Tree
+	for _, vol := range v.vols {
+		t := vol.GetFacesTree()
+		if t == nil {
+			continue
+		}
+		if first == nil {
+			first = t
+		} else if t == first {
+			v.sharesTree = true
+			return
+		}
+	}
+}
+
+// GetFaceCount returns the maximum face count among the contained volumes.
+//func (v *Volumes) computeMaxFaces() {
+//	maxFaces := 0
+//	for _, vol := range v.vols {
+//		if c := vol.GetFaceCount(); c > maxFaces {
+//			maxFaces = c
+//		}
+//	}
+//	v.maxFaces = maxFaces
+//}

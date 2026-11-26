@@ -340,29 +340,19 @@ func (v *Volume) QueryPoint(px, py, pz float64, callback func(object aabb.IObjec
 	v.faces.GetTree().QueryPoint3d(px, py, pz, callback)
 }
 
-// DeformDent creates an indentation on the volume faces along the specified normal vector.
-func (v *Volume) DeformDent(impact geometry.XYZ, normal geometry.XYZ, depth, radius float64) bool {
-	impulse := geometry.XYZ{X: -normal.X * depth, Y: -normal.Y * depth, Z: -normal.Z * depth}
-	return v.Deform(impact, impulse, radius)
-}
-
-func (v *Volume) deformGeometry(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
+// Deform applies an impulse around impact within radius, syncs the volume, and reports whether it changed.
+func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
 	if radius <= 0 {
 		return false
 	}
 	if !v.faces.Deform(impact, impulse, radius) {
 		return false
 	}
-	v.RebuildGeometry()
+	v.Sync()
 	return true
 }
 
-// Deform applies a local plastic deformation to all volume faces within radius of impact.
-func (v *Volume) Deform(impact geometry.XYZ, impulse geometry.XYZ, radius float64) bool {
-	if !v.deformGeometry(impact, impulse, radius) {
-		return false
-	}
-	// Sincronizzazione incrementale dell'albero AABB al termine della deformazione.
+// SyncDeformedTree updates the face acceleration tree after deformation changes.
+func (v *Volume) SyncDeformedTree() {
 	v.faces.SyncDeformedTree()
-	return true
 }

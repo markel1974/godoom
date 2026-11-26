@@ -546,23 +546,11 @@ func (t *Base) GetHash() uint64 {
 		return 0
 	}
 	poseGen := t.ent.GetPoseGen()
-	ang := t.angle
+	ang := t.ent.GetYaw()
 	if t.hashValid && t.hashPoseGen == poseGen && t.hashVerts == vHash && t.hashAngle == ang {
 		return t.cachedHash
 	}
-
-	tPosX, tPosY, zBot := t.ent.GetCenter()
-	qx, qy, qz, qw := t.ent.GetQRotation().Get()
-	h := geometry.MixU64(t.ent.GetId(), vHash)
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosX)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosY)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(zBot)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qx)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qy)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qz)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qw)))
-	h = geometry.MixU64(h, geometry.F32BitsStable(float32(ang)))
-
+	h := t.ent.GetHash(vHash)
 	if h == 0 {
 		h = 1
 	}

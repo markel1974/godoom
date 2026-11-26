@@ -3,6 +3,7 @@ package rigid_body
 import (
 	"sync/atomic"
 
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 )
 
@@ -89,14 +90,12 @@ func (e *Entity) GetShadowMarker() int {
 	return e.shadowMarker
 }
 
-/*
 // GetHash returns a nonzero stable hash derived from the entity ID, center position, rotation, and yaw.
-func (e *Entity) GetHash() uint64 {
+func (e *Entity) GetHash(vHash uint64) uint64 {
 	tPosX, tPosY, zBot := e.GetCenter()
 	qx, qy, qz, qw := e.GetQRotation().Get()
 	ang := e.GetYaw()
-	h := uint64(0)
-	h = geometry.MixU64(h, e.GetId())
+	h := geometry.MixU64(e.GetId(), vHash)
 	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosX)))
 	h = geometry.MixU64(h, geometry.F32BitsStable(float32(tPosY)))
 	h = geometry.MixU64(h, geometry.F32BitsStable(float32(zBot)))
@@ -105,13 +104,8 @@ func (e *Entity) GetHash() uint64 {
 	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qz)))
 	h = geometry.MixU64(h, geometry.F32BitsStable(float32(qw)))
 	h = geometry.MixU64(h, geometry.F32BitsStable(float32(ang)))
-	if h == 0 {
-		h = 1
-	}
 	return h
 }
-
-*/
 
 // SetShadowMarker assigns the shadow cache slot index for this Entity.
 func (e *Entity) SetShadowMarker(marker int) {

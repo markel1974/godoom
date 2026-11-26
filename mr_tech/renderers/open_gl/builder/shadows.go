@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
+	"github.com/markel1974/godoom/mr_tech/geometry"
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/vertices"
@@ -17,19 +18,24 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ShadowsRigidGroup represents a collection of rigid shadows sharing a resident mesh within one shadow tile.
+// ShadowsRigidGroup groups rigid shadow-casting mesh entries for batched shadow rendering.
 type ShadowsRigidGroup struct {
 	mesh    *buffers.ResidentMesh
 	entries []*ShadowRigidEntry
 }
 
-// ShadowsCollectedVol tracks a volume intersected during batched shadow culling and its matching tile bitmask.
+// ShadowsCollectedVol records a volume that has contributed shadow data along with its collection mask.
 type ShadowsCollectedVol struct {
 	vol  *volumes.Volume
 	mask uint32
 }
 
-// ShadowsCollectedThing tracks an entity intersected during batched shadow culling and its matching tile bitmask.
+func (v *ShadowsCollectedVol) Assign(vol *volumes.Volume, mask uint32) {
+	v.vol = vol
+	v.mask = mask
+}
+
+// ShadowsCollectedThing records a shadow-casting thing collected for rendering and its tile coverage.
 type ShadowsCollectedThing struct {
 	thing   ithing.IThing
 	entry   *ShadowRigidEntry
@@ -37,6 +43,14 @@ type ShadowsCollectedThing struct {
 	mask    uint32
 }
 
+func (t *ShadowsCollectedThing) Assign(thing ithing.IThing, entry *ShadowRigidEntry, isRigid bool, mask uint32) {
+	t.thing = thing
+	t.entry = entry
+	t.isRigid = isRigid
+	t.mask = mask
+}
+
+// shadowTileDeps records dependency stamps used to validate cached shadow tile reuse.
 type shadowTileDeps struct {
 	valid      bool
 	atlasGen   uint64
@@ -45,7 +59,15 @@ type shadowTileDeps struct {
 	tick       uint64
 }
 
-// Shadows manages per-light shadow tile frustum culling, O(1) entity caching, and shadow instance uploads.
+func (std *shadowTileDeps) Assign(valid bool, atlasGen uint64, sceneHash uint64, worldToken uint64, tick uint64) {
+	std.valid = valid
+	std.atlasGen = atlasGen
+	std.sceneHash = sceneHash
+	std.worldToken = worldToken
+	std.tick = tick
+}
+
+// Shadows manages shadow tile data, builders, and cached render state for generating shadow maps.
 type Shadows struct {
 	bContext           *Context
 	bStatic            *Static
@@ -59,26 +81,28 @@ type Shadows struct {
 	groupToken         uint64
 	volScratch         []ShadowsCollectedVol
 	volScratchLen      int
-	thingScratch2      []ShadowsCollectedThing
+	thingScratch       []ShadowsCollectedThing
 	thingScratchLen    int
 	entityCache        ShadowRigidCache
 	prevShadowExtraSig uint64
 	shadowFrame        uint64
 }
 
-// NewShadows initializes and returns a new Shadows instance with configured context, static resources, and things.
+// NewShadows creates a Shadows builder using the provided context, static geometry, and thing sources.
 func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 	var ctx api.IContext
 	if bContext != nil {
 		ctx = bContext.ctx
 	}
 	bs := &Shadows{
-		bContext:      bContext,
-		bStatic:       bStatic,
-		bThings:       bThing,
-		instPool:      buffers.NewInstancePool(ctx, 256),
-		volScratch:    make([]ShadowsCollectedVol, 256),
-		thingScratch2: make([]ShadowsCollectedThing, 256),
+		bContext:        bContext,
+		bStatic:         bStatic,
+		bThings:         bThing,
+		instPool:        buffers.NewInstancePool(ctx, 256),
+		volScratch:      make([]ShadowsCollectedVol, 256),
+		volScratchLen:   0,
+		thingScratch:    make([]ShadowsCollectedThing, 256),
+		thingScratchLen: 0,
 	}
 	bs.instGroups.Init(32)
 	for t := range shaders.MaxShadowTiles {
@@ -87,22 +111,23 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 	return bs
 }
 
-// DisableAllTiles deactivates all shadow tiles in the shadow atlas and resets their reuse state to false.
+// DisableAllTiles marks every shadow tile inactive and clears its reuse state.
 func (w *Shadows) DisableAllTiles() {
 	for t := range shaders.MaxShadowTiles {
-		w.tiles[t].Active = false
-		w.tiles[t].Reuse = false
+		w.tiles[t].SetActive(false)
+		w.tiles[t].SetReuse(false)
 	}
 }
 
-// GetTiles returns a pointer to the array of shadow tiles storing per-light shadow data for the shadow atlas.
+// GetTiles returns the shadow tile data array used by the shadow atlas.
 func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.ShadowsTileData {
 	return &w.tiles
 }
 
-// Process performs batched per-light frustum culling and shadow tile updates for all active shadow lights.
-func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Depth) {
-	if d2 == nil {
+// Process updates shadow atlas tiles for the current volumes, things, and depth tile configuration.
+// It reuses cached tiles when possible and rebuilds dirty tiles, including static and instanced shadow data.
+func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.Depth) {
+	if depth == nil {
 		w.DisableAllTiles()
 		return
 	}
@@ -111,42 +136,27 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 	}
 	w.shadowFrame++
 
-	w.bStatic.TryBuildStaticAtlas(vols)
+	if w.bStatic != nil {
+		w.bStatic.TryBuildStaticAtlas(vols)
+	}
 
 	w.instPool.Reset()
 	tick := textures.GlobalTick()
 	shadowExtraSig := uint64(0)
 	anyShadowInstances := false
-
-	worldToken := uint64(14695981039346656037)
-	worldToken = mixU64(worldToken, mixPtrHash(unsafe.Pointer(vols)))
-	hasStreamer := false
-	if vols != nil {
-		worldToken = mixU64(worldToken, uint64(vols.Len()))
-		worldToken = mixU64(worldToken, vols.TreeVersion())
-		hasStreamer = vols.HasStreamer()
-	}
-	worldToken = mixU64(worldToken, volumes.GlobalDirtyEpoch())
-	worldToken = mixU64(worldToken, w.bStatic.StateVersion())
-	worldToken = mixU64(worldToken, w.bStatic.AnimTickSig())
-	worldToken = mixU64(worldToken, mixPtrHash(unsafe.Pointer(th)))
-	if th != nil {
-		worldToken = mixU64(worldToken, th.TreeVersion())
-	}
-	worldToken = mixU64(worldToken, aabb.GlobalBoxPoseEpoch())
-	worldToken = mixU64(worldToken, vertices.StateEpoch())
-
-	targetBufIdx, targetGen, targetOK := d2.TargetInfo()
+	hasStreamer := vols != nil && vols.HasStreamer()
+	worldToken := w.createToken(vols, th)
+	targetBufIdx, targetGen, targetOK := depth.TargetInfo()
 	streamKeepAlive := hasStreamer && (w.shadowFrame&127 == 0)
 
 	var tileMatrices [shaders.MaxShadowTiles][16]float32
 	var activeMask uint32
 	var queryMask uint32
 	for t := range shaders.MaxShadowTiles {
-		active, orthoDepthClamp, matPtr := d2.GetTileConfig(t)
+		active, orthoDepthClamp, matPtr := depth.GetTileConfig(t)
 		if !active || matPtr == nil {
-			w.tiles[t].Active = false
-			w.tiles[t].Reuse = false
+			w.tiles[t].SetActive(false)
+			w.tiles[t].SetReuse(false)
 			continue
 		}
 		mat := *(*[16]float32)(unsafe.Pointer(matPtr))
@@ -155,14 +165,11 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 		activeMask |= tileBit
 
 		if !streamKeepAlive {
-			if bufIdx, gen, cachedHash, ok := d2.PeekReusableTile(t, &mat); ok && bufIdx >= 0 && bufIdx < len(w.tileDeps) {
+			if bufIdx, gen, cachedHash, ok := depth.PeekReusableTile(t, &mat); ok && bufIdx >= 0 && bufIdx < len(w.tileDeps) {
 				dep := &w.tileDeps[bufIdx][t]
 				if dep.valid && dep.atlasGen == gen && dep.sceneHash == cachedHash && dep.worldToken == worldToken && dep.tick == tick {
 					ptr := &w.tiles[t]
-					ptr.Active = true
-					ptr.Matrix = mat
-					ptr.SceneHash = cachedHash
-					ptr.Reuse = true
+					ptr.Assign(true, nil, mat, cachedHash, true)
 					continue
 				}
 			}
@@ -208,20 +215,12 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 		sceneHash = mixU64(sceneHash, thingAcc[t]^thingXor[t])
 		sceneHash = mixU64(sceneHash, uint64(thingCount[t]))
 
-		if d2.CanReuseTile(t, &tileMatrices[t], sceneHash) {
+		if depth.CanReuseTile(t, &tileMatrices[t], sceneHash) {
 			ptr := &w.tiles[t]
-			ptr.Active = true
-			ptr.Matrix = tileMatrices[t]
-			ptr.SceneHash = sceneHash
-			ptr.Reuse = true
+			ptr.Assign(true, nil, tileMatrices[t], sceneHash, true)
 			if targetOK && targetBufIdx >= 0 && targetBufIdx < len(w.tileDeps) {
-				w.tileDeps[targetBufIdx][t] = shadowTileDeps{
-					valid:      true,
-					atlasGen:   targetGen,
-					sceneHash:  sceneHash,
-					worldToken: worldToken,
-					tick:       tick,
-				}
+				ptrTD := &w.tileDeps[targetBufIdx][t]
+				ptrTD.Assign(true, targetGen, sceneHash, worldToken, tick)
 			}
 			continue
 		}
@@ -249,19 +248,10 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 				anyShadowInstances = true
 			}
 			ptr := &w.tiles[t]
-			ptr.Active = true
-			ptr.RenderDC = tb.dcRender
-			ptr.Matrix = tileMatrices[t]
-			ptr.SceneHash = tileHashes[t]
-			ptr.Reuse = false
+			ptr.Assign(true, tb.dcRender, tileMatrices[t], tileHashes[t], false)
 			if targetOK && targetBufIdx >= 0 && targetBufIdx < len(w.tileDeps) {
-				w.tileDeps[targetBufIdx][t] = shadowTileDeps{
-					valid:      true,
-					atlasGen:   targetGen,
-					sceneHash:  tileHashes[t],
-					worldToken: worldToken,
-					tick:       tick,
-				}
+				tdPtr := &w.tileDeps[targetBufIdx][t]
+				tdPtr.Assign(true, targetGen, tileHashes[t], worldToken, tick)
 			}
 		}
 	}
@@ -284,8 +274,29 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, d2 *shaders.Dep
 	}
 }
 
-// collectShadowVolumes gathers shadow volumes intersecting active tile frustums into scratch storage.
-// It updates per-tile hash accumulators, XOR signatures, counts, and marks static chunks as seen.
+func (w *Shadows) createToken(vols *model.Volumes, th *model.Things) uint64 {
+	worldToken := geometry.HashOffset64
+	worldToken = geometry.MixU64(worldToken, geometry.MixUnsafePtr(unsafe.Pointer(vols)))
+	if vols != nil {
+		worldToken = geometry.MixU64(worldToken, uint64(vols.Len()))
+		worldToken = geometry.MixU64(worldToken, vols.TreeVersion())
+	}
+	worldToken = geometry.MixU64(worldToken, volumes.GlobalDirtyEpoch())
+	if w.bStatic != nil {
+		worldToken = geometry.MixU64(worldToken, w.bStatic.StateVersion())
+		worldToken = geometry.MixU64(worldToken, w.bStatic.AnimTickSig())
+	}
+	worldToken = geometry.MixU64(worldToken, geometry.MixUnsafePtr(unsafe.Pointer(th)))
+	if th != nil {
+		worldToken = geometry.MixU64(worldToken, th.TreeVersion())
+	}
+	worldToken = geometry.MixU64(worldToken, aabb.GlobalBoxPoseEpoch())
+	worldToken = geometry.MixU64(worldToken, vertices.StateEpoch())
+	return worldToken
+}
+
+// collectShadowVolumes gathers hashed shadow volumes intersecting active tile frustums into scratch storage.
+// It updates per-tile accumulation, xor, and count signatures for shadow tile reuse checks.
 func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[shaders.MaxShadowTiles]uint64, volCount *[shaders.MaxShadowTiles]int) {
 	w.volScratchLen = 0
 	if vols == nil || activeMask == 0 {
@@ -308,8 +319,7 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 		}
 
 		ptr := &w.volScratch[w.volScratchLen]
-		ptr.vol = vol
-		ptr.mask = leafMask
+		ptr.Assign(vol, leafMask)
 		w.volScratchLen++
 
 		if entry := w.bStatic.GetEntry(vol.GetFaces()); entry != nil && !entry.detached && entry.chunk != nil {
@@ -328,8 +338,8 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 	})
 }
 
-// syncShadowEntry updates the cached shadow entry hash and rigid mesh state for a thing.
-// syncShadowEntry clears rigid shadow state when the thing has no renderable rigid faces.
+// syncShadowEntry updates a shadow cache entry with the given hash and rigid mesh state.
+// It clears rigid state when the thing has no rigid shadow faces.
 func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, sEntry *ShadowRigidEntry, h uint64) {
 	sEntry.hash = h
 	if rigidFaces := thing.GetRigidFaces(); rigidFaces != nil && rigidFaces.Len() > 0 {
@@ -341,6 +351,7 @@ func (w *Shadows) syncShadowEntry(thing ithing.IThing, ent *rigid_body.Entity, s
 	sEntry.rm = nil
 }
 
+// collectShadowThings collects visible shadow things for active tiles and updates per-tile hash summaries.
 func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int) {
 	w.thingScratchLen = 0
 	if th == nil || activeMask == 0 {
@@ -368,18 +379,15 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 			sEntry.seenFrame = w.shadowFrame
 		}
 
-		if w.thingScratchLen >= len(w.thingScratch2) {
-			newLen := len(w.thingScratch2) * 2
+		if w.thingScratchLen >= len(w.thingScratch) {
+			newLen := len(w.thingScratch) * 2
 			volS := make([]ShadowsCollectedThing, newLen)
-			copy(volS, w.thingScratch2)
-			w.thingScratch2 = volS
+			copy(volS, w.thingScratch)
+			w.thingScratch = volS
 		}
 
-		ptr := w.thingScratch2[w.thingScratchLen]
-		ptr.thing = thing
-		ptr.entry = sEntry
-		ptr.isRigid = sEntry.isRigidActive
-		ptr.mask = leafMask
+		thingScratch := &w.thingScratch[w.thingScratchLen]
+		thingScratch.Assign(thing, sEntry, sEntry.isRigidActive, leafMask)
 
 		w.thingScratchLen++
 
@@ -395,7 +403,7 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 	})
 }
 
-// pushShadowStaticSubMeshes adds static sub-meshes from the specified range to the shadow tile builder's static item pool.
+// pushShadowStaticSubMeshes adds opaque static submeshes in the given index range to the shadow tile builder.
 func pushShadowStaticSubMeshes(tb *ShadowTileBuilder, mesh *buffers.ResidentMesh, startIdx, endIdx int) {
 	for sIdx := startIdx; sIdx < endIdx; sIdx++ {
 		sub := mesh.SubMeshes[sIdx]
@@ -408,6 +416,7 @@ func pushShadowStaticSubMeshes(tb *ShadowTileBuilder, mesh *buffers.ResidentMesh
 	}
 }
 
+// resolveDirtyVolumes resolves meshes for collected volumes that intersect any dirty shadow tile.
 func (w *Shadows) resolveDirtyVolumes(dirtyMask uint32, vols *model.Volumes) {
 	for i := range w.volScratchLen {
 		cv := &w.volScratch[i]
@@ -417,6 +426,7 @@ func (w *Shadows) resolveDirtyVolumes(dirtyMask uint32, vols *model.Volumes) {
 	}
 }
 
+// buildTileStaticForBit adds static shadow submeshes for collected volumes whose mask includes tileBit.
 func (w *Shadows) buildTileStaticForBit(tb *ShadowTileBuilder, tileBit uint32) {
 	for i := range w.volScratchLen {
 		cv := &w.volScratch[i]
@@ -434,6 +444,9 @@ func (w *Shadows) buildTileStaticForBit(tb *ShadowTileBuilder, tileBit uint32) {
 	}
 }
 
+// buildTileThingsForBit builds shadow draw data for collected things intersecting tileBit.
+// It streams non-rigid opaque batches and groups rigid meshes into instance ranges.
+// It updates shadowExtraSig for streamed caches and reports whether any instances were added.
 func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, shadowExtraSig *uint64) bool {
 	if w.thingScratchLen == 0 {
 		return false
@@ -442,7 +455,7 @@ func (w *Shadows) buildTileThingsForBit(tb *ShadowTileBuilder, tileBit uint32, s
 	w.instGroups.Reset()
 
 	for i := range w.thingScratchLen {
-		ct := &w.thingScratch2[i]
+		ct := &w.thingScratch[i]
 		if (ct.mask & tileBit) == 0 {
 			continue
 		}

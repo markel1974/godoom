@@ -40,11 +40,43 @@ const (
 
 // ShadowsTileData carries per-light culled draw commands and cache keys for a single atlas tile.
 type ShadowsTileData struct {
-	Active    bool
-	RenderDC  *draws.DrawCommandsRender
-	Matrix    [16]float32
-	SceneHash uint64
-	Reuse     bool
+	active    bool
+	renderDC  *draws.DrawCommandsRender
+	matrix    [16]float32
+	sceneHash uint64
+	reuse     bool
+}
+
+func (d *ShadowsTileData) Assign(active bool, renderDC *draws.DrawCommandsRender, matrix [16]float32, sceneHash uint64, reuse bool) {
+	d.active = active
+	d.renderDC = renderDC
+	d.matrix = matrix
+	d.sceneHash = sceneHash
+	d.reuse = reuse
+}
+
+func (d *ShadowsTileData) SetRenderDC(renderDC *draws.DrawCommandsRender) {
+	d.renderDC = renderDC
+}
+
+func (d *ShadowsTileData) SetActive(active bool) {
+	d.active = active
+}
+
+func (d *ShadowsTileData) SetReuse(reuse bool) {
+	d.reuse = reuse
+}
+
+func (d *ShadowsTileData) IsActive() bool {
+	return d.active
+}
+
+func (d *ShadowsTileData) CanReuse() bool {
+	return d.reuse
+}
+
+func (d *ShadowsTileData) GetRenderDC() *draws.DrawCommandsRender {
+	return d.renderDC
 }
 
 // AtlasTileCache stores cached projection/scene keys for a single tile in one atlas buffer.
@@ -225,7 +257,7 @@ func (s *Atlas) IsTileCached(idx, t int, tile *ShadowsTileData, gen uint64) bool
 	if idx < 0 || idx >= depthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil || !s.shadows {
 		return false
 	}
-	return s.tileCache[idx][t].Matches(gen, &tile.Matrix, tile.SceneHash)
+	return s.tileCache[idx][t].Matches(gen, &tile.matrix, tile.sceneHash)
 }
 
 // SetTile records tile's matrix, sceneHash, and atlas generation in the cache for buffer idx and slot t.
@@ -236,8 +268,8 @@ func (s *Atlas) SetTile(idx, t int, tile *ShadowsTileData, gen uint64) {
 	c := &s.tileCache[idx][t]
 	c.valid = true
 	c.atlasGen = gen
-	c.matrix = tile.Matrix
-	c.sceneHash = tile.SceneHash
+	c.matrix = tile.matrix
+	c.sceneHash = tile.sceneHash
 }
 
 // Allocate configures the unified master shadow map atlas dimensions and invalidates cached tiles.

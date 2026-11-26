@@ -139,12 +139,12 @@ func TestShadowsBuilderUsesSunCSMTilesWhenEnabled(t *testing.T) {
 	}
 
 	tiles := bv.GetShadowTiles()
-	if tiles[shaders.ShadowTileRoom].Active {
+	if tiles[shaders.ShadowTileRoom].IsActive() {
 		t.Fatalf("expected ShadowTileRoom inactive when EnableSunCSM=true")
 	}
 	for c := range shaders.SunCascadeCount {
 		slot := shaders.ShadowTileSunBase + c
-		if !tiles[slot].Active || tiles[slot].RenderDC == nil {
+		if !tiles[slot].IsActive() || tiles[slot].GetRenderDC() == nil {
 			t.Fatalf("expected active SunCSM cascade tile %d with RenderDC", slot)
 		}
 	}
@@ -157,7 +157,7 @@ func TestShadowsBuilderUsesSunCSMTilesWhenEnabled(t *testing.T) {
 
 	for c := range shaders.SunCascadeCount {
 		slot := shaders.ShadowTileSunBase + c
-		if !tiles[slot].Active || !tiles[slot].Reuse {
+		if !tiles[slot].IsActive() || !tiles[slot].CanReuse() {
 			t.Fatalf("expected cached Reuse=true on steady SunCSM cascade %d", slot)
 		}
 	}

@@ -1,6 +1,9 @@
 package geometry
 
-import "math"
+import (
+	"math"
+	"unsafe"
+)
 
 const HashOffset64 uint64 = 14695981039346656037
 const hashPrime64 uint64 = 1099511628211
@@ -16,6 +19,10 @@ func F32BitsStable(v float32) uint64 {
 // MixUintptr hashes a pointer address into a 64-bit mixing state.
 func MixUintptr(p uintptr) uint64 {
 	return MixU64(14695981039346656037, uint64(p))
+}
+
+func MixUnsafePtr(p unsafe.Pointer) uint64 {
+	return MixUintptr(uintptr(p))
 }
 
 // MixU64 mixes x into running 64-bit hash h using a SplitMix64 finalizer.

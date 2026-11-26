@@ -176,11 +176,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 		fm.UpdateWithAim(mm.GetViewPtr(), aim, 0, aim, 0, 1)
 		d.Prepare()
 		bv.ComputeShadows(en, d)
-		if !tiles[shaders.ShadowTileRoom].Reuse || !tiles[shaders.ShadowTileLightBase].Reuse || !tiles[shaders.ShadowTileLightBase+1].Reuse {
+		if !tiles[shaders.ShadowTileRoom].CanReuse() || !tiles[shaders.ShadowTileLightBase].CanReuse() || !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
 			t.Fatalf("step %d expected Room, Spot0, Spot1 Reuse=true on FlashRotateOnly, got room=%v spot0=%v spot1=%v",
-				step, tiles[shaders.ShadowTileRoom].Reuse, tiles[shaders.ShadowTileLightBase].Reuse, tiles[shaders.ShadowTileLightBase+1].Reuse)
+				step, tiles[shaders.ShadowTileRoom].CanReuse(), tiles[shaders.ShadowTileLightBase].CanReuse(), tiles[shaders.ShadowTileLightBase+1].CanReuse())
 		}
-		if tiles[shaders.ShadowTileFlash].Reuse {
+		if tiles[shaders.ShadowTileFlash].CanReuse() {
 			t.Fatalf("step %d expected Flash dirty after aim change", step)
 		}
 		d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -199,11 +199,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	en.GetThings().GetThing("anim_behind").Compile(textures.GlobalTick())
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileRoom].Reuse || tiles[shaders.ShadowTileLightBase].Reuse {
+	if tiles[shaders.ShadowTileRoom].CanReuse() || tiles[shaders.ShadowTileLightBase].CanReuse() {
 		t.Fatalf("expected Room & Spot0 invalidated when tick advances on multi-frame anim_behind, got room=%v spot0=%v",
-			tiles[shaders.ShadowTileRoom].Reuse, tiles[shaders.ShadowTileLightBase].Reuse)
+			tiles[shaders.ShadowTileRoom].CanReuse(), tiles[shaders.ShadowTileLightBase].CanReuse())
 	}
-	if !tiles[shaders.ShadowTileLightBase+1].Reuse {
+	if !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spot1 (tick-independent) to remain Reuse=true when GlobalTick advances")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -226,7 +226,7 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	sideEnt.MoveCenterTo(4, 1245, 0)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileLightBase+1].Reuse {
+	if tiles[shaders.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spot1 Reuse=false immediately after static_side.MoveCenterTo")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -252,12 +252,94 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	}
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileRoom].Reuse || tiles[shaders.ShadowTileLightBase].Reuse {
+	if tiles[shaders.ShadowTileRoom].CanReuse() || tiles[shaders.ShadowTileLightBase].CanReuse() {
 		t.Fatalf("expected Room and Spot0 Reuse=false when behind volume marked dirty (room=%v spot0=%v)",
-			tiles[shaders.ShadowTileRoom].Reuse, tiles[shaders.ShadowTileLightBase].Reuse)
+			tiles[shaders.ShadowTileRoom].CanReuse(), tiles[shaders.ShadowTileLightBase].CanReuse())
 	}
-	if !tiles[shaders.ShadowTileLightBase+1].Reuse {
+	if !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spot1 Reuse=true when unrelated behind volume dirtied")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
+}
+
+func TestShadowsNilWorldInputsAndStaticVolumeAssign(t *testing.T) {
+	rigid_body.SetFps(120)
+	textures.SetFps(120)
+	defer rigid_body.SetFps(120)
+
+	tA := textures.NewTexture("SHAD_NIL", 1, 8, 8, false)
+	for x := range 8 {
+		for y := range 8 {
+			tA.SetDiffuse(x, y, 0x7f7f7fff)
+		}
+	}
+	texH := &multiTexHandler{frames: []*textures.Texture{tA}}
+	calCfg := config.NewConfigCalibration()
+	calCfg.AspectRatio = 1.1
+	calCfg.OrthoSize = 640
+	matSolid := config.NewConfigMaterial("solid", []string{"SHAD_NIL"}, config.MaterialKindSolid)
+	secs := []*config.Sector{
+		makeBoxSector("center", 0, 0, 60, 0, 160, matSolid),
+	}
+	p := config.NewConfigPlayer(geometry.XYZ{X: 0, Y: 0, Z: 20}, 0.0, 40, 1800, 16.0, 60.0)
+	_ = common.NewPlayer(p)
+	p.GForce = 9.8 * 50
+
+	crate := config.NewConfigItem("crate", geometry.XYZ{X: 20, Y: 0, Z: 0}, 0, 10, 0)
+	crate.Radius, crate.Height, crate.GForce = 16, 24, 9.8*50
+	crate.Element3D = makeRigidCrateModel(matSolid)
+
+	root := config.NewConfigRoot(calCfg, secs, p, []*config.Thing{crate}, geometry.XYZ{X: 1, Y: 1, Z: 1}, texH)
+	en := engine.NewEngine()
+	if err := en.Setup(root); err != nil {
+		t.Fatalf("engine setup failed: %v", err)
+	}
+	pl := en.GetPlayer()
+	vi := engine.NewViewMatrix()
+	vi.Update(pl)
+
+	rCtx := &shadowTestCtx{}
+	glTex := vramtex.NewTextures(rCtx)
+	if err := glTex.Setup(en.GetTextures()); err != nil {
+		t.Fatalf("textures setup failed: %v", err)
+	}
+	mCal := en.GetCalibration()
+	mCal.EnableShadows = true
+	mCal.MSAASamples = 0
+
+	bv := NewBuilder(rCtx, glTex, mCal, pl)
+	h := shaders.NewHandler(bv.GetVerticesStride(), bv.GetLightsStride())
+	if err := h.Setup(rCtx, mCal, pl.GetFlash(), 640, 480); err != nil {
+		t.Fatalf("Handler.Setup: %v", err)
+	}
+	if err := h.GetMain().Init(); err != nil {
+		t.Fatalf("Main.Init: %v", err)
+	}
+	d := h.GetDepth()
+	if err := d.Compile(testShaderAssets{}); err != nil {
+		t.Fatalf("Depth.Compile: %v", err)
+	}
+	d.SetShadowsEnabled(true)
+
+	mm := h.GetMapMetrics()
+	mm.SetOrthoSize(640, 0.1, 4096)
+	mm.SetCenter(0, 0, 0)
+	mm.Update(vi, 1.0, 1.0)
+	fm := h.GetFlashlightMetrics()
+	fm.UpdateWithAim(mm.GetViewPtr(), 0, 0, 0, 0, 1)
+	d.Prepare()
+
+	// Verify TryBuildStaticAtlas and Shadows.Process handle nil volumes/things with active tiles.
+	bv.bs.TryBuildStaticAtlas(nil)
+	bv.bShadow.Process(nil, nil, d)
+	bv.bShadow.Process(nil, en.GetThings(), d)
+	bv.bShadow.Process(en.GetVolumes(), nil, d)
+
+	// Verify static shadow volume collection populates volScratch and emits static items.
+	if bv.bShadow.volScratchLen == 0 {
+		t.Fatalf("expected non-empty volScratch when processing volumes")
+	}
+	if bv.bShadow.builders[shaders.ShadowTileRoom].staticItems.Len == 0 {
+		t.Fatalf("expected Room tile to contain static shadow submeshes")
+	}
 }

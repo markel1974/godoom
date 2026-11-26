@@ -77,13 +77,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 			}
 			var mat [16]float32
 			copy(mat[:], (*[16]float32)(unsafe.Pointer(matPtr))[:])
-			tiles[slot] = ShadowsTileData{
-				Active:    true,
-				RenderDC:  dc,
-				Matrix:    mat,
-				SceneHash: uint64(1000 + c),
-				Reuse:     reuse && d.CanReuseTile(slot, &mat, uint64(1000+c)),
-			}
+			tiles[slot].Assign(true, dc, mat, uint64(1000+c), reuse && d.CanReuseTile(slot, &mat, uint64(1000+c)))
 		}
 	}
 

@@ -308,20 +308,21 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[Ma
 	anyCutout := false
 	for t := range MaxShadowTiles {
 		tile := &tiles[t]
-		if !tile.Active {
+		if !tile.IsActive() {
 			s.atlas.InvalidateTile(idx, t)
 			continue
 		}
-		if tile.Reuse && s.atlas.IsTileCached(idx, t, tile, atlas.gen) {
+		if tile.CanReuse() && s.atlas.IsTileCached(idx, t, tile, atlas.gen) {
 			continue
 		}
 		dirty[t] = true
 		anyDirty = true
-		if tile.RenderDC != nil {
-			if tile.RenderDC.HasSolid() {
+		renderDC := tile.GetRenderDC()
+		if renderDC != nil {
+			if renderDC.HasSolid() {
 				anySolid = true
 			}
-			if tile.RenderDC.HasCutout() {
+			if renderDC.HasCutout() {
 				anyCutout = true
 			}
 		}
@@ -438,7 +439,7 @@ func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval
 		if !dirty[t] {
 			continue
 		}
-		dc := tiles[t].RenderDC
+		dc := tiles[t].GetRenderDC()
 		if dc == nil || (cutout && !dc.HasCutout()) || (!cutout && !dc.HasSolid()) {
 			continue
 		}
@@ -458,7 +459,7 @@ func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval
 		}
 		s.ctx.Viewport(tx, ty, tw, th)
 		s.ctx.Scissor(tx, ty, tw, th)
-		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, &tiles[t].Matrix[0])
+		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, &tiles[t].matrix[0])
 		dc.SetPassState(mainVao, locInstMode)
 		dc.RenderCutoutFiltered(cutout)
 	}

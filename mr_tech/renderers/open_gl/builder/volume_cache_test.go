@@ -1002,15 +1002,15 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	d.Prepare()
 	bv.ComputeShadows(en, d)
 	tiles := bv.GetShadowTiles()
-	if !tiles[shaders.ShadowTileRoom].Active || tiles[shaders.ShadowTileRoom].Reuse {
+	if !tiles[shaders.ShadowTileRoom].IsActive() || tiles[shaders.ShadowTileRoom].CanReuse() {
 		t.Fatalf("expected Room tile active & dirty on frame 1")
 	}
 	spot0 := tiles[shaders.ShadowTileLightBase]
 	spot1 := tiles[shaders.ShadowTileLightBase+1]
-	if !spot0.Active || !spot1.Active || spot0.RenderDC == nil || spot1.RenderDC == nil {
+	if !spot0.IsActive() || !spot1.IsActive() || spot0.GetRenderDC() == nil || spot1.GetRenderDC() == nil {
 		t.Fatalf("expected Spotlight 0 and Spotlight 1 tiles active with compiled DrawCommandsRender")
 	}
-	if !spot0.RenderDC.HasSolid() || !spot1.RenderDC.HasSolid() {
+	if !spot0.GetRenderDC().HasSolid() || !spot1.GetRenderDC().HasSolid() {
 		t.Fatalf("expected Spotlight 0 (off-camera behind) and Spotlight 1 (side) to retain solid casters")
 	}
 	if bv.bShadow.builders[shaders.ShadowTileLightBase].instItems.Len == 0 {
@@ -1047,7 +1047,7 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 		d.Prepare()
 		bv.ComputeShadows(en, d)
 		for _, slot := range []int{shaders.ShadowTileRoom, shaders.ShadowTileLightBase, shaders.ShadowTileLightBase + 1} {
-			if !tiles[slot].Reuse {
+			if !tiles[slot].CanReuse() {
 				t.Fatalf("frame %d expected tile %d cache hit (Reuse=true)", f, slot)
 			}
 		}
@@ -1072,10 +1072,10 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	bv.Compute(640, 480, vi, en)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileLightBase].Reuse {
+	if tiles[shaders.ShadowTileLightBase].CanReuse() {
 		t.Fatalf("expected Spotlight 0 dirty after off-camera crate_behind moved")
 	}
-	if !tiles[shaders.ShadowTileLightBase+1].Reuse {
+	if !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spotlight 1 to stay cached when unrelated crate_behind moved")
 	}
 	rCtx.resetCounts()
@@ -1201,7 +1201,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	fm.UpdateWithAim(mm.GetViewPtr(), 0.004, 0, 0.004, 0, 1)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if bv.GetShadowTiles()[shaders.ShadowTileFlash].Reuse {
+	if bv.GetShadowTiles()[shaders.ShadowTileFlash].CanReuse() {
 		t.Fatalf("expected Flash tile dirty after aim update")
 	}
 	if rCtx.subDataCalls != 0 {

@@ -115,14 +115,9 @@ func (s *Atlas) GetShadowAtlas() *Element {
 	return s.shadowAtlas[s.frameIdx]
 }
 
-// NextAtlasIndex returns the double-buffer atlas index that the next Update call will target.
-func (s *Atlas) NextAtlasIndex() int {
-	return (s.frameIdx + 1) % DepthDoubleBuffer
-}
-
 // Update advances the double-buffer index, ensures backing depth textures are allocated, and returns the active slot and Element.
 func (s *Atlas) Update() (int, *Element) {
-	idx := s.NextAtlasIndex()
+	idx := s.nextIndex()
 	s.frameIdx = idx
 
 	atl := s.shadowAtlas[idx]
@@ -165,7 +160,7 @@ func (s *Atlas) CanReuseTile(slot int, matrix *float32, sceneHash uint64) bool {
 	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrix == nil {
 		return false
 	}
-	nextIdx := s.NextAtlasIndex()
+	nextIdx := s.nextIndex()
 	atlas := s.shadowAtlas[nextIdx]
 	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
 		return false
@@ -180,7 +175,7 @@ func (s *Atlas) PeekReusableTile(slot int, matrixPtr *float32) (int, uint64, uin
 	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrixPtr == nil {
 		return 0, 0, 0, false
 	}
-	nextIdx := s.NextAtlasIndex()
+	nextIdx := s.nextIndex()
 	atl := s.shadowAtlas[nextIdx]
 	if atl == nil || atl.fbo == 0 || atl.width != s.width || atl.height != s.height {
 		return 0, 0, 0, false
@@ -189,10 +184,6 @@ func (s *Atlas) PeekReusableTile(slot int, matrixPtr *float32) (int, uint64, uin
 	if !c.ReusablePeek(atl.gen, matrixPtr) {
 		return 0, 0, 0, false
 	}
-	//matrix := *(*[16]float32)(unsafe.Pointer(matrixPtr))
-	//if !c.valid || c.atlasGen != atl.gen || c.matrix != matrix {
-	//	return 0, 0, 0, false
-	//}
 	return nextIdx, atl.gen, c.sceneHash, true
 }
 
@@ -201,7 +192,7 @@ func (s *Atlas) TargetInfo() (int, uint64, bool) {
 	if !s.shadows {
 		return 0, 0, false
 	}
-	nextIdx := s.NextAtlasIndex()
+	nextIdx := s.nextIndex()
 	atl := s.shadowAtlas[nextIdx]
 	if atl == nil || atl.fbo == 0 || atl.width != s.width || atl.height != s.height {
 		return 0, 0, false
@@ -243,4 +234,9 @@ func (s *Atlas) Shutdown() {
 	}
 	s.frameIdx = 0
 	s.InvalidateCache()
+}
+
+// nextIndex returns the double-buffer atlas index that the next Update call will target.
+func (s *Atlas) nextIndex() int {
+	return (s.frameIdx + 1) % DepthDoubleBuffer
 }

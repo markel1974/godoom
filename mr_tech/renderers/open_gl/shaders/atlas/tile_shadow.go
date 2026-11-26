@@ -54,6 +54,7 @@ func (d *TileShadow) Assign(active bool, renderDC *draws.DrawCommandsRender, mat
 	} else {
 		clear(d.matrix[:])
 	}
+	d.matrixPtr = &d.matrix[0]
 	d.active = active
 	d.renderDC = renderDC
 	d.sceneHash = sceneHash

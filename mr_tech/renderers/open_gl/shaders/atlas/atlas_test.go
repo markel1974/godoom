@@ -57,6 +57,11 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	if tile.GetMatrixPtr() != &tile.matrix[0] || tile.matrix != mat || tile.GetSceneHash() != 4242 {
 		t.Fatalf("unexpected TileShadow getters: hash=%d mat=%v", tile.GetSceneHash(), tile.matrix)
 	}
+	var zeroTile TileShadow
+	zeroTile.Assign(true, nil, &mat[0], 123, false)
+	if zeroTile.GetMatrixPtr() != &zeroTile.matrix[0] || zeroTile.matrix != mat {
+		t.Fatalf("expected zero-value TileShadow.Assign to bind matrixPtr and copy matrix")
+	}
 
 	// Cold buffers cannot be reused yet.
 	if a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {

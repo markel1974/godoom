@@ -17,12 +17,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ShadowsRigidGroup groups rigid shadow-casting mesh entries for batched shadow rendering.
-type ShadowsRigidGroup struct {
-	mesh    *buffers.ResidentMesh
-	entries []*ShadowRigidEntry
-}
-
 // ShadowsCollectedVol records a volume that has contributed shadow data along with its collection mask.
 type ShadowsCollectedVol struct {
 	vol  *volumes.Volume
@@ -445,10 +439,9 @@ func (w *Shadows) buildTileThingsForBit(tileBuilder *ShadowTileBuilder, tileBit 
 					rm.ShadowInstGroupFrame = w.groupToken
 					rm.ShadowInstGroupIdx = w.instGroups.Len
 					srg = w.instGroups.Acquire()
-					srg.mesh = rm
-					srg.entries = srg.entries[:0]
+					srg.Assign(rm)
 				}
-				srg.entries = append(srg.entries, rEntry)
+				srg.Add(rEntry)
 			}
 			continue
 		}
@@ -464,29 +457,31 @@ func (w *Shadows) buildTileThingsForBit(tileBuilder *ShadowTileBuilder, tileBit 
 		if !w.bThings.BuildNonRigidCache(thing, sEntry) {
 			continue
 		}
-		if sEntry.committedFrame != w.bContext.meshFrame {
-			sEntry.committedBaseIdx = w.bContext.fv.CommitVerticesOnly(sEntry.GetFrameVertices())
-			sEntry.committedFrame = w.bContext.meshFrame
+		committedFrame := sEntry.GetCommittedFrame()
+		meshFrame := w.bContext.GetMeshFrame()
+		if committedFrame != meshFrame {
+			sEntry.SetCommittedFrame(w.bContext.fv.CommitVerticesOnly(sEntry.GetFrameVertices()), meshFrame)
 		}
-		if sEntry.committedBaseIdx >= 0 {
-			sig := mixU64(ct.entry.entID, sEntry.gen)
+		committedBaseIdx := sEntry.GetCommittedBaseIdx()
+		if committedBaseIdx >= 0 {
+			sig := mixU64(ct.entry.entID, sEntry.GetGen())
 			*shadowExtraSig += sig
 			*shadowExtraSig ^= bits.RotateLeft64(sig, 13)
-			w.bContext.fv.ReplayOpaqueBatches(sEntry.committedBaseIdx, sEntry.GetFrameVertices(), tileBuilder.streamDC)
+			w.bContext.fv.ReplayOpaqueBatches(committedBaseIdx, sEntry.GetFrameVertices(), tileBuilder.GetStreamDC())
 		}
 	}
 
 	hasInstances := false
 	for gi := 0; gi < w.instGroups.Len; gi++ {
 		g := w.instGroups.Items[gi]
-		cnt := len(g.entries)
+		cnt := g.Len()
 		if cnt == 0 {
 			continue
 		}
 		hasInstances = true
 		baseByteOff, baseFloat := w.instPool.Reserve(cnt)
 		for k := range cnt {
-			w.instPool.WriteMatrixAt(baseFloat+k*buffers.InstanceMatrixFloats, &g.entries[k].mat)
+			w.instPool.WriteMatrixAt(baseFloat+k*buffers.InstanceMatrixFloats, g.At(k))
 		}
 		tileBuilder.Add(g.mesh, baseByteOff, int32(cnt))
 	}

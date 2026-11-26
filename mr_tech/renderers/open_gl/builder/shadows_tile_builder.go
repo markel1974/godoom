@@ -41,6 +41,11 @@ func (tb *ShadowTileBuilder) Reset() {
 	tb.streamDC.DeepReset()
 }
 
+// GetStreamDC returns the stream draw commands used to accumulate shadow tile rendering batches.
+func (tb *ShadowTileBuilder) GetStreamDC() *draws.DrawCommands {
+	return tb.streamDC
+}
+
 // Add appends an instanced mesh range with its base byte offset and instance count for shadow rendering.
 func (tb *ShadowTileBuilder) Add(mesh *buffers.ResidentMesh, baseByteOffset int32, instanceCount int32) {
 	if tb.instRangesLen >= len(tb.instRanges2) {

@@ -59,6 +59,16 @@ func (tr *ThingRenderCache) Release() {
 	tr.fv.DeepReset()
 }
 
+// GetCommittedFrame returns the frame in which this cache's vertices were last committed.
+func (tr *ThingRenderCache) GetCommittedFrame() uint64 {
+	return tr.committedFrame
+}
+
+// GetCommittedBaseIdx returns the base vertex index for the cache's committed frame data.
+func (tr *ThingRenderCache) GetCommittedBaseIdx() int32 {
+	return tr.committedBaseIdx
+}
+
 // GetFrameVertices returns the cached frame vertices for this render cache.
 func (tr *ThingRenderCache) GetFrameVertices() *draws.FrameVertices {
 	return tr.fv
@@ -67,6 +77,12 @@ func (tr *ThingRenderCache) GetFrameVertices() *draws.FrameVertices {
 // GetGen returns the monotonic cache revision counter for this entry.
 func (tr *ThingRenderCache) GetGen() uint64 {
 	return tr.gen
+}
+
+// SetCommittedFrame records the committed base vertex index and mesh frame for this cache entry.
+func (tr *ThingRenderCache) SetCommittedFrame(base int32, committedFrame uint64) {
+	tr.committedBaseIdx = base
+	tr.committedFrame = committedFrame
 }
 
 // Equal reports whether the cache is valid and matches the supplied render state without needing animation rebuild.

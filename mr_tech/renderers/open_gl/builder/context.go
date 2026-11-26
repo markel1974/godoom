@@ -95,6 +95,11 @@ func NewContextWithOcclusionMax(ctx api.IContext, cal *model.Calibration, tex *v
 	return bc
 }
 
+// GetMeshFrame returns the current mesh frame generation counter.
+func (w *Context) GetMeshFrame() uint64 {
+	return w.meshFrame
+}
+
 // LookupTexLayer returns the texture array layer identifier for tex, caching it on the texture on first resolve.
 func (w *Context) LookupTexLayer(tex *textures.Texture) (float32, bool) {
 	if tex == nil {

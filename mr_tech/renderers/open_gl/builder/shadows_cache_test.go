@@ -452,3 +452,37 @@ func TestShadowRigidEntryUpdateDedupAndSwitch(t *testing.T) {
 			entry.isRigidActive, entry.matValid, entry.faces, entry.rm, entry.hash)
 	}
 }
+
+func TestShadowsRigidGroupAssignAddGrowAndAt(t *testing.T) {
+	rmA := &buffers.ResidentMesh{SubMeshesLen: 1}
+	rmB := &buffers.ResidentMesh{SubMeshesLen: 2}
+	var grp ShadowsRigidGroup
+	grp.Assign(rmA)
+	if grp.mesh != rmA || grp.Len() != 0 {
+		t.Fatalf("expected Assign to bind rmA and zero length, got mesh=%p len=%d", grp.mesh, grp.Len())
+	}
+
+	const count = 70 // exceeds initial 64 capacity to exercise backing growth
+	entries := make([]ShadowRigidEntry, count)
+	for i := range count {
+		entries[i].mat[12] = float32(i + 1)
+		grp.Add(&entries[i])
+	}
+	if grp.Len() != count || len(grp.entries) < count {
+		t.Fatalf("expected len=%d cap>=%d, got len=%d cap=%d", count, count, grp.Len(), len(grp.entries))
+	}
+	if grp.At(0) != &entries[0].mat || grp.At(count-1) != &entries[count-1].mat || grp.At(count - 1)[12] != float32(count) {
+		t.Fatalf("unexpected At matrix pointer/value")
+	}
+
+	allocs := testing.AllocsPerRun(20, func() {
+		grp.Assign(rmB)
+		for i := range 16 {
+			grp.Add(&entries[i])
+		}
+		_ = grp.At(15)
+	})
+	if allocs > 0 {
+		t.Fatalf("steady-state ShadowsRigidGroup Assign+Add+At allocated %.2f objects/op, want 0", allocs)
+	}
+}

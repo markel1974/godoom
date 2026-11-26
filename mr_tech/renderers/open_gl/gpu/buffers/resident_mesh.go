@@ -11,8 +11,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
-// ResidentMesh stores GPU-resident static VBO/EBO/VAO buffers and grouped submesh slices
-// shared by static world volumes and instanced rigid 3D things.
+// ResidentMesh stores GPU-resident geometry, render grouping, and rebuild state for a mesh.
 type ResidentMesh struct {
 	ctx                  api.IContext
 	VAO                  uint32
@@ -53,7 +52,7 @@ type ResidentMesh struct {
 	faceKeys             []*faceStateKey
 }
 
-// NewResidentMesh creates an unpopulated ResidentMesh bound to ctx.
+// NewResidentMesh returns a ResidentMesh bound to ctx with its instance byte offset initialized.
 func NewResidentMesh(ctx api.IContext) *ResidentMesh {
 	return &ResidentMesh{
 		ctx:                ctx,
@@ -61,6 +60,7 @@ func NewResidentMesh(ctx api.IContext) *ResidentMesh {
 	}
 }
 
+// acquireSubMesh returns the next reusable submesh, growing the submesh pool when needed.
 func (rm *ResidentMesh) acquireSubMesh() *ResidentSubMesh {
 	if rm.SubMeshesLen >= len(rm.SubMeshes) {
 		oldLen := len(rm.SubMeshes)
@@ -77,6 +77,7 @@ func (rm *ResidentMesh) acquireSubMesh() *ResidentSubMesh {
 	return sub
 }
 
+// addAnimRef records an animated material and its current texture frame if the material is not already tracked.
 func (rm *ResidentMesh) addAnimRef(mat *textures.Material, tex *textures.Texture) {
 	for i := 0; i < rm.AnimLen; i++ {
 		if rm.AnimMats[i] == mat {
@@ -97,7 +98,7 @@ func (rm *ResidentMesh) addAnimRef(mat *textures.Material, tex *textures.Texture
 	rm.AnimLen++
 }
 
-// NeedsAnimRebuild reports whether any animated material on this resident mesh changed frame.
+// NeedsAnimRebuild reports whether any tracked animated material has advanced to a different frame.
 func (rm *ResidentMesh) NeedsAnimRebuild() bool {
 	for i := 0; i < rm.AnimLen; i++ {
 		if rm.AnimMats[i].GetCurrentFrame() != rm.AnimFrames[i] {
@@ -107,7 +108,7 @@ func (rm *ResidentMesh) NeedsAnimRebuild() bool {
 	return false
 }
 
-// NeedsRebuild reports whether the mesh needs re-uploading due to Faces mutation or animated texture frame changes.
+// NeedsRebuild reports whether the mesh is unbuilt, out of sync with faces, or has stale animation frames.
 func (rm *ResidentMesh) NeedsRebuild(faces *volumes.Faces, checkAnim bool) bool {
 	if !rm.built || faces == nil {
 		return true
@@ -121,6 +122,7 @@ func (rm *ResidentMesh) NeedsRebuild(faces *volumes.Faces, checkAnim bool) bool 
 	return false
 }
 
+// resetBuildState clears transient mesh build flags and length counters before rebuilding geometry.
 func (rm *ResidentMesh) resetBuildState() {
 	for i := range rm.HasBlend {
 		rm.HasBlend[i] = false
@@ -136,7 +138,8 @@ func (rm *ResidentMesh) resetBuildState() {
 	rm.indicesLen = 0
 }
 
-// Rebuild uploads faces into resident static VBO/EBO buffers and builds contiguous ResidentSubMesh ranges.
+// Rebuild rebuilds the resident mesh from the provided faces and uploads valid geometry to the GPU.
+// Rebuild returns true when at least one submesh is produced.
 func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool)) bool {
 	rm.SrcFaces = faces
 	prevAnimLen := rm.AnimLen
@@ -175,7 +178,8 @@ func (rm *ResidentMesh) Rebuild(faces *volumes.Faces, texLookup func(*textures.T
 	return rm.SubMeshesLen > 0
 }
 
-// ReserveStaticAtlas preallocates vertex, index, and submesh capacity for static atlas batching.
+// ReserveStaticAtlas ensures mesh vertex and index storage can hold totalFaces static triangles.
+// ReserveStaticAtlas is a no-op when totalFaces is zero or negative.
 func (rm *ResidentMesh) ReserveStaticAtlas(totalFaces int) {
 	if totalFaces <= 0 {
 		return
@@ -196,15 +200,16 @@ func (rm *ResidentMesh) ReserveStaticAtlas(totalFaces int) {
 	}
 }
 
-// BeginStaticAtlas resets accumulated static geometry ranges before packing static map volumes.
+// BeginStaticAtlas resets the mesh for static atlas construction and clears source face tracking.
+// It marks the mesh unbuilt until the atlas is finalized.
 func (rm *ResidentMesh) BeginStaticAtlas() {
 	rm.SrcFaces = nil
 	rm.resetBuildState()
 	rm.built = false
 }
 
-// AppendStaticFaces appends a non-animated Faces volume into this static atlas mesh and returns its submesh range.
-// If any valid face uses an animated material, no geometry is committed and hasAnim is returned as true.
+// AppendStaticFaces appends a non-empty face set to the current static atlas build.
+// It returns the added submesh range, any sky material, whether animation was found, and success.
 func (rm *ResidentMesh) AppendStaticFaces(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool)) (subStart int, subCount int, skyMat *textures.Material, hasAnim bool, ok bool) {
 	if faces == nil || faces.Len() == 0 {
 		return 0, 0, nil, false, false
@@ -212,15 +217,14 @@ func (rm *ResidentMesh) AppendStaticFaces(faces *volumes.Faces, texLookup func(*
 	return rm.appendFacesRange(faces, texLookup, true)
 }
 
-// EndStaticAtlas uploads accumulated static atlas vertices and indices into one shared VAO/VBO/EBO.
+// EndStaticAtlas uploads the accumulated static atlas mesh data to the GPU and marks the mesh as built.
 func (rm *ResidentMesh) EndStaticAtlas() {
 	rm.uploadToGPU()
 	rm.built = true
 }
 
 // appendFacesRange appends renderable faces to the resident mesh, grouping them into submeshes by render state.
-// It skips invalid, sky, or missing-texture faces and records the sky material when present.
-// It returns the added submesh range, sky material, animation rejection state, and success flag.
+// It skips unsupported faces, records sky material, and reports animated rejection when requested.
 func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*textures.Texture) (float32, bool), rejectAnimated bool) (subStart int, subCount int, skyMat *textures.Material, hasAnim bool, ok bool) {
 	nFaces := faces.Len()
 	if len(rm.faceOrder) < nFaces {
@@ -428,7 +432,8 @@ func (rm *ResidentMesh) appendFacesRange(faces *volumes.Faces, texLookup func(*t
 	return subStart, rm.SubMeshesLen - subStart, skyMat, false, true
 }
 
-// uploadToGPU creates GPU buffers when needed, uploads mesh vertex and index data, and resets instanced bindings.
+// uploadToGPU uploads mesh vertex and index data to GPU buffers and configures vertex attributes.
+// It creates GPU objects on first use and invalidates cached instanced VAO binding state.
 func (rm *ResidentMesh) uploadToGPU() {
 	if rm.VAO == 0 {
 		rm.ctx.GenVertexArrays(1, &rm.VAO)
@@ -450,12 +455,13 @@ func (rm *ResidentMesh) uploadToGPU() {
 	rm.lastInstByteOffset = -1
 }
 
-// BindInstanced binds rm.VAOInstanced with per-instance mat4 attributes (locations 10..13) pointing into instanceVBO.
+// BindInstanced binds the mesh for instanced rendering using instanceVBO matrix data at baseByteOffset.
 func (rm *ResidentMesh) BindInstanced(instanceVBO uint32, baseByteOffset int32) {
 	rm.BindInstancedWithCache(instanceVBO, baseByteOffset, 0)
 }
 
-// BindInstancedWithCache binds rm.VAOInstanced only when it differs from boundVAO, returning rm.VAOInstanced.
+// BindInstancedWithCache binds the instanced VAO, updating instance buffer attributes only when cached state changes.
+// It returns the VAO used for instanced rendering.
 func (rm *ResidentMesh) BindInstancedWithCache(instanceVBO uint32, baseByteOffset int32, boundVAO uint32) uint32 {
 	if rm.VAOInstanced == 0 {
 		rm.ctx.GenVertexArrays(1, &rm.VAOInstanced)
@@ -487,7 +493,7 @@ func (rm *ResidentMesh) BindInstancedWithCache(instanceVBO uint32, baseByteOffse
 	return rm.VAOInstanced
 }
 
-// Dispose releases GPU buffers owned by this ResidentMesh.
+// Dispose releases GPU vertex array and buffer resources owned by the resident mesh.
 func (rm *ResidentMesh) Dispose() {
 	if rm.VAO != 0 {
 		rm.ctx.DeleteVertexArrays(1, &rm.VAO)

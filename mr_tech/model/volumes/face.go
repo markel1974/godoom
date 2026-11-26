@@ -805,6 +805,18 @@ func (fc *Face) NearPoint(p geometry.XYZ, radius float64) bool {
 	return dx*dx+dy*dy+dz*dz <= radius*radius
 }
 
+// CanOccludeEdge reports whether the face is valid and solid enough to occlude edges.
+func (fc *Face) CanOccludeEdge() bool {
+	if fc == nil {
+		return false
+	}
+	if fc.n.X == 0 && fc.n.Y == 0 && fc.n.Z == 0 {
+		return false
+	}
+	// Keep untextured collision/test faces enabled alongside textured solid faces; ignore liquid/sky overlays.
+	return fc.material == nil || fc.IsSolid()
+}
+
 // SplitFace subdivides the face according to edge mask bits and given float32 midpoints, preserving interpolated UVs.
 func (fc *Face) SplitFace(mask uint8, mab32, mbc32, mca32 geometry.XYZ32) []*Face {
 	if mask == 0 {

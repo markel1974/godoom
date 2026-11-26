@@ -158,37 +158,11 @@ func (f *Faces) GetGeomHash() uint64 {
 
 // GetRenderHash returns a content hash covering geometry revision, face identity, and animated material frames.
 func (f *Faces) GetRenderHash() uint64 {
-	if f == nil || f.count == 0 {
+	if f.count == 0 {
 		return 0
 	}
 	if !f.renderHashReady || f.renderHashVer != f.version {
-		h := geometry.MixUintptr(uintptr(unsafe.Pointer(f)))
-		h = geometry.MixU64(h, f.version)
-		h = geometry.MixU64(h, f.geomHash)
-		h = geometry.MixU64(h, uint64(f.count))
-		if h == 0 {
-			h = 1
-		}
-		f.renderHash = h
-		f.animMats = f.animMats[:0]
-		for i := 0; i < f.count; i++ {
-			fc := f.container[i]
-			if fc == nil || fc.material == nil || !fc.material.IsAnimated() {
-				continue
-			}
-			dup := false
-			for _, m := range f.animMats {
-				if m == fc.material {
-					dup = true
-					break
-				}
-			}
-			if !dup {
-				f.animMats = append(f.animMats, fc.material)
-			}
-		}
-		f.renderHashVer = f.version
-		f.renderHashReady = true
+		f.computeRenderHash()
 	}
 	h := f.renderHash
 	for _, mat := range f.animMats {
@@ -727,16 +701,16 @@ func (f *Faces) computeMassProperties() {
 // computeActiveEdges classifies shared triangle edges within f as active (convex/boundary) or inactive (coplanar/concave)
 // using a short-lived local adjacency map so no scratch buckets remain pinned after computation.
 func (f *Faces) computeActiveEdges() {
-	const (
-		coplanarCosThreshold = 0.9995
-		coplanarSinMax       = 0.032
-		concaveSinMin        = 1e-4
-	)
+	const coplanarCosThreshold = 0.9995
+	const coplanarSinMax = 0.032
+	const concaveSinMin = 1e-4
+
 	for i := 0; i < f.count; i++ {
 		if fc := f.container[i]; fc != nil {
 			fc.activeEdges = EdgeAllActive
 		}
 	}
+
 	if f.count < 2 {
 		return
 	}
@@ -752,20 +726,9 @@ func (f *Faces) computeActiveEdges() {
 		edgeAdj = make(map[EdgeKey]edgeAdjacency, f.count*2)
 	}
 
-	canOccludeEdge := func(fc *Face) bool {
-		if fc == nil {
-			return false
-		}
-		if fc.n.X == 0 && fc.n.Y == 0 && fc.n.Z == 0 {
-			return false
-		}
-		// Keep untextured collision/test faces enabled alongside textured solid faces; ignore liquid/sky overlays.
-		return fc.material == nil || fc.IsSolid()
-	}
-
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
-		if !canOccludeEdge(fc) {
+		if !fc.CanOccludeEdge() {
 			continue
 		}
 		p := fc.tri.Points
@@ -781,17 +744,6 @@ func (f *Faces) computeActiveEdges() {
 			}
 			edgeAdj[key] = adj
 		}
-	}
-
-	sinToPlane := func(opp, anchor, n geometry.XYZ32) float64 {
-		dx := float64(opp.X) - float64(anchor.X)
-		dy := float64(opp.Y) - float64(anchor.Y)
-		dz := float64(opp.Z) - float64(anchor.Z)
-		lenSq := dx*dx + dy*dy + dz*dz
-		if lenSq <= 1e-18 {
-			return 0.0
-		}
-		return (dx*float64(n.X) + dy*float64(n.Y) + dz*float64(n.Z)) / math.Sqrt(lenSq)
 	}
 
 	for _, adj := range edgeAdj {
@@ -812,8 +764,8 @@ func (f *Faces) computeActiveEdges() {
 		_, _, oppB := fb.GetEdgePoints(int(refB.edgeIdx))
 
 		cosAngle := float64(fa.n.X)*float64(fb.n.X) + float64(fa.n.Y)*float64(fb.n.Y) + float64(fa.n.Z)*float64(fb.n.Z)
-		sinB := sinToPlane(oppB, pA, fa.n)
-		sinA := sinToPlane(oppA, pA, fb.n)
+		sinB := geometry.SinToPlane(oppB, pA, fa.n)
+		sinA := geometry.SinToPlane(oppA, pA, fb.n)
 
 		coplanar := cosAngle >= coplanarCosThreshold && math.Abs(sinB) <= coplanarSinMax && math.Abs(sinA) <= coplanarSinMax
 		concave := sinB > concaveSinMin && sinA > concaveSinMin
@@ -826,7 +778,7 @@ func (f *Faces) computeActiveEdges() {
 
 // computeGeomHash updates the cached geometry hash from face vertices, UVs, normals, lightmaps, and material names.
 func (f *Faces) computeGeomHash() {
-	h := HashMixU32(hashOffset64, uint32(f.count))
+	h := geometry.MixU32(geometry.HashOffset64, uint32(f.count))
 	for i := 0; i < f.count; i++ {
 		fc := f.container[i]
 		if fc == nil {
@@ -834,19 +786,50 @@ func (f *Faces) computeGeomHash() {
 		}
 		for k := range 3 {
 			p := &fc.tri.Points[k]
-			h = HashMixF32(h, p.X)
-			h = HashMixF32(h, p.Y)
-			h = HashMixF32(h, p.Z)
-			h = HashMixF32(h, fc.u[k])
-			h = HashMixF32(h, fc.v[k])
-			h = HashMixF32(h, fc.vertexNormals[k].X)
-			h = HashMixF32(h, fc.vertexNormals[k].Y)
-			h = HashMixF32(h, fc.vertexNormals[k].Z)
+			h = geometry.MixF32(h, p.X)
+			h = geometry.MixF32(h, p.Y)
+			h = geometry.MixF32(h, p.Z)
+			h = geometry.MixF32(h, fc.u[k])
+			h = geometry.MixF32(h, fc.v[k])
+			h = geometry.MixF32(h, fc.vertexNormals[k].X)
+			h = geometry.MixF32(h, fc.vertexNormals[k].Y)
+			h = geometry.MixF32(h, fc.vertexNormals[k].Z)
 		}
-		h = HashMixU32(h, uint32(fc.lightmapID))
+		h = geometry.MixU32(h, uint32(fc.lightmapID))
 		if fc.material != nil {
-			h = HashMixStr(h, fc.material.GetName())
+			h = geometry.MixStr(h, fc.material.GetName())
 		}
 	}
 	f.geomHash = h
+}
+
+// computeRenderHash computes and stores the render hash, then refreshes the unique animated material list.
+func (f *Faces) computeRenderHash() {
+	h := geometry.MixUintptr(uintptr(unsafe.Pointer(f)))
+	h = geometry.MixU64(h, f.version)
+	h = geometry.MixU64(h, f.geomHash)
+	h = geometry.MixU64(h, uint64(f.count))
+	if h == 0 {
+		h = 1
+	}
+	f.renderHash = h
+	f.animMats = f.animMats[:0]
+	for i := 0; i < f.count; i++ {
+		fc := f.container[i]
+		if fc == nil || fc.material == nil || !fc.material.IsAnimated() {
+			continue
+		}
+		dup := false
+		for _, m := range f.animMats {
+			if m == fc.material {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			f.animMats = append(f.animMats, fc.material)
+		}
+	}
+	f.renderHashVer = f.version
+	f.renderHashReady = true
 }

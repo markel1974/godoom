@@ -131,7 +131,7 @@ func (w *Builder) ComputeShadows(en *engine.Engine, d *shaders.Depth) {
 }
 
 // GetShadowTiles returns the per-light shadow tile descriptors prepared by ComputeShadows.
-func (w *Builder) GetShadowTiles() *[atlas.MaxShadowTiles]atlas.TileShadow {
+func (w *Builder) GetShadowTiles() *atlas.TilesHandler {
 	return w.bShadow.GetTiles()
 }
 

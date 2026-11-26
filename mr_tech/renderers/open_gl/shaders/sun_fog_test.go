@@ -3,7 +3,6 @@ package shaders
 import (
 	"strings"
 	"testing"
-	"unsafe"
 
 	"github.com/markel1974/godoom/mr_tech/config"
 	"github.com/markel1974/godoom/mr_tech/model"
@@ -69,7 +68,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	dc := draws.NewDrawCommandsRender(ctx, "sun_csm", false)
 	dc.Prepare([]*draws.DrawCommand{cmd})
 
-	var tiles [atlas.MaxShadowTiles]atlas.TileShadow
+	tiles := atlas.NewTilesHandler()
 	fillSunTiles := func(reuse bool) {
 		for c := range metrics.SunCascadeCount {
 			slot := atlas.ShadowTileSunBase + c
@@ -77,9 +76,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 			if !active || !clamp || matPtr == nil {
 				t.Fatalf("expected cascade %d active with clamp & matrix", slot)
 			}
-			var mat [16]float32
-			copy(mat[:], (*[16]float32)(unsafe.Pointer(matPtr))[:])
-			tiles[slot].Assign(true, dc, mat, uint64(1000+c), reuse && d.CanReuseTile(slot, &mat, uint64(1000+c)))
+			tiles.Get(slot).Assign(true, dc, matPtr, uint64(1000+c), reuse && d.CanReuseTile(slot, matPtr, uint64(1000+c)))
 		}
 	}
 
@@ -88,7 +85,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 		fillSunTiles(false)
 		ctx.clearCalls = 0
 		ctx.multiDrawPrograms = nil
-		d.RenderWithTiles(nil, &tiles)
+		d.RenderWithTiles(nil, tiles)
 		if ctx.clearCalls != metrics.SunCascadeCount || len(ctx.multiDrawPrograms) != metrics.SunCascadeCount {
 			t.Fatalf("cold cascade render expected %d clears/%d draws, got clears=%d draws=%d",
 				metrics.SunCascadeCount, metrics.SunCascadeCount, ctx.clearCalls, len(ctx.multiDrawPrograms))
@@ -98,7 +95,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	fillSunTiles(true)
 	ctx.clearCalls = 0
 	ctx.multiDrawPrograms = nil
-	d.RenderWithTiles(nil, &tiles)
+	d.RenderWithTiles(nil, tiles)
 	if ctx.clearCalls != 0 || len(ctx.multiDrawPrograms) != 0 {
 		t.Fatalf("expected cached CSM tiles to skip draws, got clears=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
 	}

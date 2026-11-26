@@ -68,7 +68,7 @@ type Shadows struct {
 	bContext           *Context
 	bStatic            *Static
 	bThings            *Things
-	tiles              [atlas.MaxShadowTiles]atlas.TileShadow
+	tiles              *atlas.TilesHandler
 	tileDeps           [2][atlas.MaxShadowTiles]ShadowTileDeps
 	builders           [atlas.MaxShadowTiles]*ShadowTileBuilder
 	tileFrustums       [atlas.MaxShadowTiles]aabb.Frustum
@@ -94,6 +94,7 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 		bContext:        bContext,
 		bStatic:         bStatic,
 		bThings:         bThing,
+		tiles:           atlas.NewTilesHandler(),
 		instPool:        buffers.NewInstancePool(ctx, 256),
 		volScratch:      make([]ShadowsCollectedVol, 256),
 		volScratchLen:   0,
@@ -109,15 +110,12 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 
 // DisableAllTiles marks every shadow tile inactive and clears its reuse state.
 func (w *Shadows) DisableAllTiles() {
-	for t := range atlas.MaxShadowTiles {
-		w.tiles[t].SetActive(false)
-		w.tiles[t].SetReuse(false)
-	}
+	w.tiles.DisableAllTiles()
 }
 
 // GetTiles returns the shadow tile data array used by the shadow atlas.
-func (w *Shadows) GetTiles() *[atlas.MaxShadowTiles]atlas.TileShadow {
-	return &w.tiles
+func (w *Shadows) GetTiles() *atlas.TilesHandler {
+	return w.tiles
 }
 
 // Process updates shadow atlas tiles for the current volumes, things, and depth tile configuration.
@@ -141,32 +139,33 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 	targetBufIdx, targetGen, targetOK := depth.TargetInfo()
 	streamKeepAlive := hasStreamer && (w.shadowFrame&127 == 0)
 
-	var tileMatrices [atlas.MaxShadowTiles][16]float32
+	var tileMatrices [atlas.MaxShadowTiles]*float32
 	var activeMask uint32
 	var queryMask uint32
 	for t := range atlas.MaxShadowTiles {
-		active, orthoDepthClamp, matPtr := depth.GetTileConfig(t)
-		if !active || matPtr == nil {
-			w.tiles[t].SetActive(false)
-			w.tiles[t].SetReuse(false)
+		active, orthoDepthClamp, matrixPtr := depth.GetTileConfig(t)
+		if !active || matrixPtr == nil {
+			tile := w.tiles.Get(t)
+			tile.SetActive(false)
+			tile.SetReuse(false)
 			continue
 		}
-		mat := *(*[16]float32)(unsafe.Pointer(matPtr))
-		tileMatrices[t] = mat
+		tileMatrices[t] = matrixPtr
 		tileBit := uint32(1) << t
 		activeMask |= tileBit
 
 		if !streamKeepAlive {
-			if bufIdx, gen, cachedHash, ok := depth.PeekReusableTile(t, &mat); ok && bufIdx >= 0 && bufIdx < len(w.tileDeps) {
+			if bufIdx, gen, cachedHash, ok := depth.PeekReusableTile(t, matrixPtr); ok && bufIdx >= 0 && bufIdx < len(w.tileDeps) {
 				dep := &w.tileDeps[bufIdx][t]
 				if dep.valid && dep.atlasGen == gen && dep.sceneHash == cachedHash && dep.worldToken == worldToken && dep.tick == tick {
-					ptr := &w.tiles[t]
-					ptr.Assign(true, nil, mat, cachedHash, true)
+					tile := w.tiles.Get(t)
+					tile.Assign(true, nil, matrixPtr, cachedHash, true)
 					continue
 				}
 			}
 		}
 
+		mat := *(*[16]float32)(unsafe.Pointer(matrixPtr))
 		w.tileFrustums[t].Rebuild(glToEngineVP(mat))
 		if orthoDepthClamp {
 			// Room ortho enables DEPTH_CLAMP so near overhangs above lightCamY still cast shadows.
@@ -207,9 +206,9 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 		sceneHash = mixU64(sceneHash, thingAcc[t]^thingXor[t])
 		sceneHash = mixU64(sceneHash, uint64(thingCount[t]))
 
-		if depth.CanReuseTile(t, &tileMatrices[t], sceneHash) {
-			ptr := &w.tiles[t]
-			ptr.Assign(true, nil, tileMatrices[t], sceneHash, true)
+		if depth.CanReuseTile(t, tileMatrices[t], sceneHash) {
+			tile := w.tiles.Get(t)
+			tile.Assign(true, nil, tileMatrices[t], sceneHash, true)
 			if targetOK && targetBufIdx >= 0 && targetBufIdx < len(w.tileDeps) {
 				ptrTD := &w.tileDeps[targetBufIdx][t]
 				ptrTD.Assign(true, targetGen, sceneHash, worldToken, tick)
@@ -237,8 +236,8 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 			if w.buildTileThingsForBit(tb, tileBit, &shadowExtraSig) {
 				anyShadowInstances = true
 			}
-			ptr := &w.tiles[t]
-			ptr.Assign(true, tb.dcRender, tileMatrices[t], tileHashes[t], false)
+			tile := w.tiles.Get(t)
+			tile.Assign(true, tb.dcRender, tileMatrices[t], tileHashes[t], false)
 			if targetOK && targetBufIdx >= 0 && targetBufIdx < len(w.tileDeps) {
 				tdPtr := &w.tileDeps[targetBufIdx][t]
 				tdPtr.Assign(true, targetGen, tileHashes[t], worldToken, tick)

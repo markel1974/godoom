@@ -180,11 +180,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 		fm.UpdateWithAim(mm.GetViewPtr(), aim, 0, aim, 0, 1)
 		d.Prepare()
 		bv.ComputeShadows(en, d)
-		if !tiles[atlas.ShadowTileRoom].CanReuse() || !tiles[atlas.ShadowTileLightBase].CanReuse() || !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
+		if !tiles.Get(atlas.ShadowTileRoom).CanReuse() || !tiles.Get(atlas.ShadowTileLightBase).CanReuse() || !tiles.Get(atlas.ShadowTileLightBase+1).CanReuse() {
 			t.Fatalf("step %d expected Room, Spot0, Spot1 Reuse=true on FlashRotateOnly, got room=%v spot0=%v spot1=%v",
-				step, tiles[atlas.ShadowTileRoom].CanReuse(), tiles[atlas.ShadowTileLightBase].CanReuse(), tiles[atlas.ShadowTileLightBase+1].CanReuse())
+				step, tiles.Get(atlas.ShadowTileRoom).CanReuse(), tiles.Get(atlas.ShadowTileLightBase).CanReuse(), tiles.Get(atlas.ShadowTileLightBase+1).CanReuse())
 		}
-		if tiles[atlas.ShadowTileFlash].CanReuse() {
+		if tiles.Get(atlas.ShadowTileFlash).CanReuse() {
 			t.Fatalf("step %d expected Flash dirty after aim change", step)
 		}
 		d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -203,11 +203,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	en.GetThings().GetThing("anim_behind").Compile(textures.GlobalTick())
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[atlas.ShadowTileRoom].CanReuse() || tiles[atlas.ShadowTileLightBase].CanReuse() {
+	if tiles.Get(atlas.ShadowTileRoom).CanReuse() || tiles.Get(atlas.ShadowTileLightBase).CanReuse() {
 		t.Fatalf("expected Room & Spot0 invalidated when tick advances on multi-frame anim_behind, got room=%v spot0=%v",
-			tiles[atlas.ShadowTileRoom].CanReuse(), tiles[atlas.ShadowTileLightBase].CanReuse())
+			tiles.Get(atlas.ShadowTileRoom).CanReuse(), tiles.Get(atlas.ShadowTileLightBase).CanReuse())
 	}
-	if !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
+	if !tiles.Get(atlas.ShadowTileLightBase + 1).CanReuse() {
 		t.Fatalf("expected Spot1 (tick-independent) to remain Reuse=true when GlobalTick advances")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -230,7 +230,7 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	sideEnt.MoveCenterTo(4, 1245, 0)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[atlas.ShadowTileLightBase+1].CanReuse() {
+	if tiles.Get(atlas.ShadowTileLightBase + 1).CanReuse() {
 		t.Fatalf("expected Spot1 Reuse=false immediately after static_side.MoveCenterTo")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -256,11 +256,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	}
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[atlas.ShadowTileRoom].CanReuse() || tiles[atlas.ShadowTileLightBase].CanReuse() {
+	if tiles.Get(atlas.ShadowTileRoom).CanReuse() || tiles.Get(atlas.ShadowTileLightBase).CanReuse() {
 		t.Fatalf("expected Room and Spot0 Reuse=false when behind volume marked dirty (room=%v spot0=%v)",
-			tiles[atlas.ShadowTileRoom].CanReuse(), tiles[atlas.ShadowTileLightBase].CanReuse())
+			tiles.Get(atlas.ShadowTileRoom).CanReuse(), tiles.Get(atlas.ShadowTileLightBase).CanReuse())
 	}
-	if !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
+	if !tiles.Get(atlas.ShadowTileLightBase + 1).CanReuse() {
 		t.Fatalf("expected Spot1 Reuse=true when unrelated behind volume dirtied")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)

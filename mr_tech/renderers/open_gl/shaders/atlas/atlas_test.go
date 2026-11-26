@@ -52,14 +52,14 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 		0, 0, 1, 0,
 		0, 0, 0, 1,
 	}
-	var tile TileShadow
-	tile.Assign(true, nil, mat, 4242, false)
-	if tile.GetMatrix() == nil || *tile.GetMatrix() != mat || tile.GetMatrixPtr() != &tile.matrix[0] || tile.GetSceneHash() != 4242 {
-		t.Fatalf("unexpected TileShadow getters: hash=%d mat=%v", tile.GetSceneHash(), tile.GetMatrix())
+	tile := NewTileShadow()
+	tile.Assign(true, nil, &mat[0], 4242, false)
+	if tile.GetMatrixPtr() != &tile.matrix[0] || tile.matrix != mat || tile.GetSceneHash() != 4242 {
+		t.Fatalf("unexpected TileShadow getters: hash=%d mat=%v", tile.GetSceneHash(), tile.matrix)
 	}
 
 	// Cold buffers cannot be reused yet.
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.GetSceneHash()) {
+	if a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {
 		t.Fatalf("expected cold Atlas buffer not reusable")
 	}
 
@@ -69,31 +69,34 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 		if dm == nil || dm.GetFBO() == 0 || dm.GetTex() == 0 {
 			t.Fatalf("Update iteration %d produced invalid DepthMap: %+v", i, dm)
 		}
-		a.SetTile(idx, ShadowTileRoom, &tile, dm.GetGen())
+		a.SetTile(idx, ShadowTileRoom, tile, dm.GetGen())
 	}
 	if a.GetShadowAtlasTexture() == 0 {
 		t.Fatalf("expected valid shadow atlas texture after Update")
 	}
-	if !a.CanReuseTile(ShadowTileRoom, &mat, tile.GetSceneHash()) {
+	if !a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {
 		t.Fatalf("expected warmed double-buffered Atlas tile to be reusable")
 	}
 
 	allocs := testing.AllocsPerRun(50, func() {
-		if !a.CanReuseTile(ShadowTileRoom, tile.GetMatrix(), tile.GetSceneHash()) || !a.IsTileCached(a.frameIdx, ShadowTileRoom, &tile, a.GetShadowAtlas().GetGen()) {
+		if !a.CanReuseTile(ShadowTileRoom, tile.GetMatrixPtr(), tile.GetSceneHash()) || !a.IsTileCached(a.frameIdx, ShadowTileRoom, tile, a.GetShadowAtlas().GetGen()) {
 			t.Fatalf("expected zero-alloc cached Atlas hit")
 		}
 	})
 	if allocs > 0 {
 		t.Fatalf("expected 0 allocs on Atlas tile cache query, got %.2f", allocs)
 	}
+	if _, _, _, ok := a.PeekReusableTile(ShadowTileRoom, nil); ok {
+		t.Fatalf("expected PeekReusableTile(nil) to return false")
+	}
 
 	// Re-enabling shadows after disabling must invalidate prior tile entries.
 	a.SetShadows(false)
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.GetSceneHash()) {
+	if a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {
 		t.Fatalf("expected CanReuseTile=false when Atlas shadows disabled")
 	}
 	a.SetShadows(true)
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.GetSceneHash()) {
+	if a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {
 		t.Fatalf("expected CanReuseTile=false after SetShadows(false->true) invalidation")
 	}
 
@@ -111,10 +114,10 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	// Re-warm and verify Allocate scales TileRects and invalidates cache for new dimensions.
 	for range DepthDoubleBuffer {
 		idx, dm := a.Update()
-		a.SetTile(idx, ShadowTileRoom, &tile, dm.GetGen())
+		a.SetTile(idx, ShadowTileRoom, tile, dm.GetGen())
 	}
 	a.Allocate(1024, 1024)
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.GetSceneHash()) {
+	if a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {
 		t.Fatalf("expected Allocate resize to invalidate cached tiles")
 	}
 	srx, sry, srw, srh, _, _, _ := a.TileRect(ShadowTileRoom)
@@ -135,15 +138,15 @@ func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
 	if a.GetShadowAtlasTexture() != 0 {
 		t.Fatalf("expected GetShadowAtlasTexture=0 after Shutdown")
 	}
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.GetSceneHash()) {
+	if a.CanReuseTile(ShadowTileRoom, &mat[0], tile.GetSceneHash()) {
 		t.Fatalf("expected CanReuseTile=false after Shutdown")
 	}
 }
 
 func TestTileCacheAssignAndMatches(t *testing.T) {
 	tc := NewTileCache()
-	if tc.matrixPtr != &tc.matrix2[0] || tc.valid {
-		t.Fatalf("unexpected initial TileCache state: ptr=%p want=%p valid=%v", tc.matrixPtr, &tc.matrix2[0], tc.valid)
+	if tc.matrixPtr != &tc.matrix[0] || tc.valid {
+		t.Fatalf("unexpected initial TileCache state: ptr=%p want=%p valid=%v", tc.matrixPtr, &tc.matrix[0], tc.valid)
 	}
 
 	mat := [16]float32{
@@ -152,21 +155,43 @@ func TestTileCacheAssignAndMatches(t *testing.T) {
 		0, 0, 3, 0,
 		4, 5, 6, 1,
 	}
-	tc.Assign(true, 7, mat, 999)
-	if !tc.Matches(7, &mat, 999) {
+	tc.Assign(true, 7, &mat[0], 999)
+	if !tc.Matches(7, &mat[0], 999) {
 		t.Fatalf("expected exact match for gen=7 and sceneHash=999")
 	}
-	if tc.Matches(7, nil, 999) || tc.Matches(8, &mat, 999) || tc.Matches(7, &mat, 1000) {
+	if tc.Matches(7, nil, 999) || tc.Matches(8, &mat[0], 999) || tc.Matches(7, &mat[0], 1000) {
 		t.Fatalf("expected mismatch on nil matrix, different gen, or different sceneHash")
 	}
 	otherMat := mat
 	otherMat[12] = 99
-	if tc.Matches(7, &otherMat, 999) {
+	if tc.Matches(7, &otherMat[0], 999) {
 		t.Fatalf("expected mismatch on modified matrix")
 	}
 
-	tc.Assign(false, 7, mat, 999)
-	if tc.Matches(7, &mat, 999) {
+	tc.Assign(false, 7, &mat[0], 999)
+	if tc.Matches(7, &mat[0], 999) {
 		t.Fatalf("expected mismatch when valid=false")
+	}
+}
+
+func TestTilesHandlerInitGetAndDisableAllTiles(t *testing.T) {
+	h := NewTilesHandler()
+	var mat [16]float32
+	mat[0], mat[15] = 1, 1
+
+	for i := range MaxShadowTiles {
+		tile := h.Get(i)
+		if tile == nil || tile.GetMatrixPtr() == nil {
+			t.Fatalf("expected non-nil initialized tile and matrixPtr at slot %d", i)
+		}
+		tile.Assign(true, nil, &mat[0], uint64(i+1), true)
+	}
+
+	h.DisableAllTiles()
+	for i := range MaxShadowTiles {
+		tile := h.Get(i)
+		if tile.IsActive() || tile.CanReuse() {
+			t.Fatalf("expected tile %d disabled and reuse cleared, got active=%v reuse=%v", i, tile.IsActive(), tile.CanReuse())
+		}
 	}
 }

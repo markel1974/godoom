@@ -1,6 +1,8 @@
 package atlas
 
 import (
+	"unsafe"
+
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 )
 
@@ -135,7 +137,7 @@ func (s *Atlas) IsTileCached(idx, t int, tile *TileShadow, gen uint64) bool {
 	if idx < 0 || idx >= DepthDoubleBuffer || t < 0 || t >= MaxShadowTiles || tile == nil || !s.shadows {
 		return false
 	}
-	return s.tileCache[idx][t].Matches(gen, &tile.matrix, tile.sceneHash)
+	return s.tileCache[idx][t].Matches(gen, &tile.matrix[0], tile.sceneHash)
 }
 
 // SetTile records tile's matrix, sceneHash, and atlas generation in the cache for buffer idx and slot t.
@@ -144,7 +146,7 @@ func (s *Atlas) SetTile(idx, t int, tile *TileShadow, gen uint64) {
 		return
 	}
 	c := s.tileCache[idx][t]
-	c.Assign(true, gen, tile.matrix, tile.sceneHash)
+	c.Assign(true, gen, &tile.matrix[0], tile.sceneHash)
 }
 
 // Allocate configures the unified master shadow map atlas dimensions and invalidates cached tiles.
@@ -161,7 +163,7 @@ func (s *Atlas) Allocate(width, height int32) {
 }
 
 // CanReuseTile reports whether slot in the next target atlas buffer already matches matrix and sceneHash.
-func (s *Atlas) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bool {
+func (s *Atlas) CanReuseTile(slot int, matrix *float32, sceneHash uint64) bool {
 	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrix == nil {
 		return false
 	}
@@ -175,8 +177,8 @@ func (s *Atlas) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bo
 
 // PeekReusableTile returns the target atlas buffer index, atlas generation, and cached sceneHash
 // when slot in the next target buffer already holds a valid render for matrix.
-func (s *Atlas) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, uint64, bool) {
-	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrix == nil {
+func (s *Atlas) PeekReusableTile(slot int, matrixPtr *float32) (int, uint64, uint64, bool) {
+	if slot < 0 || slot >= MaxShadowTiles || !s.shadows || matrixPtr == nil {
 		return 0, 0, 0, false
 	}
 	nextIdx := s.NextAtlasIndex()
@@ -185,7 +187,8 @@ func (s *Atlas) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, ui
 		return 0, 0, 0, false
 	}
 	c := s.tileCache[nextIdx][slot]
-	if !c.valid || c.atlasGen != atl.gen || c.matrix2 != *matrix {
+	matrix := *(*[16]float32)(unsafe.Pointer(matrixPtr))
+	if !c.valid || c.atlasGen != atl.gen || c.matrix != matrix {
 		return 0, 0, 0, false
 	}
 	return nextIdx, atl.gen, c.sceneHash, true

@@ -1003,11 +1003,11 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	d.Prepare()
 	bv.ComputeShadows(en, d)
 	tiles := bv.GetShadowTiles()
-	if !tiles[atlas.ShadowTileRoom].IsActive() || tiles[atlas.ShadowTileRoom].CanReuse() {
+	if !tiles.Get(atlas.ShadowTileRoom).IsActive() || tiles.Get(atlas.ShadowTileRoom).CanReuse() {
 		t.Fatalf("expected Room tile active & dirty on frame 1")
 	}
-	spot0 := tiles[atlas.ShadowTileLightBase]
-	spot1 := tiles[atlas.ShadowTileLightBase+1]
+	spot0 := tiles.Get(atlas.ShadowTileLightBase)
+	spot1 := tiles.Get(atlas.ShadowTileLightBase + 1)
 	if !spot0.IsActive() || !spot1.IsActive() || spot0.GetRenderDC() == nil || spot1.GetRenderDC() == nil {
 		t.Fatalf("expected Spotlight 0 and Spotlight 1 tiles active with compiled DrawCommandsRender")
 	}
@@ -1048,7 +1048,7 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 		d.Prepare()
 		bv.ComputeShadows(en, d)
 		for _, slot := range []int{atlas.ShadowTileRoom, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1} {
-			if !tiles[slot].CanReuse() {
+			if !tiles.Get(slot).CanReuse() {
 				t.Fatalf("frame %d expected tile %d cache hit (Reuse=true)", f, slot)
 			}
 		}
@@ -1073,10 +1073,10 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	bv.Compute(640, 480, vi, en)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[atlas.ShadowTileLightBase].CanReuse() {
+	if tiles.Get(atlas.ShadowTileLightBase).CanReuse() {
 		t.Fatalf("expected Spotlight 0 dirty after off-camera crate_behind moved")
 	}
-	if !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
+	if !tiles.Get(atlas.ShadowTileLightBase + 1).CanReuse() {
 		t.Fatalf("expected Spotlight 1 to stay cached when unrelated crate_behind moved")
 	}
 	rCtx.resetCounts()
@@ -1202,7 +1202,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	fm.UpdateWithAim(mm.GetViewPtr(), 0.004, 0, 0.004, 0, 1)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if bv.GetShadowTiles()[atlas.ShadowTileFlash].CanReuse() {
+	if bv.GetShadowTiles().Get(atlas.ShadowTileFlash).CanReuse() {
 		t.Fatalf("expected Flash tile dirty after aim update")
 	}
 	if rCtx.subDataCalls != 0 {

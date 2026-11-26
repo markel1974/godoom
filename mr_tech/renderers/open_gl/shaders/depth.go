@@ -100,7 +100,7 @@ func (s *Depth) SetShadowsEnabled(shadows bool) {
 
 // CanReuseTile reports whether the shadow atlas tile for slot can be reused for matrix and sceneHash.
 // It returns false when shadows are disabled or no atlas is available.
-func (s *Depth) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bool {
+func (s *Depth) CanReuseTile(slot int, matrix *float32, sceneHash uint64) bool {
 	if !s.shadows {
 		return false
 	}
@@ -109,11 +109,11 @@ func (s *Depth) CanReuseTile(slot int, matrix *[16]float32, sceneHash uint64) bo
 
 // PeekReusableTile returns the target buffer index, atlas generation, and cached sceneHash
 // if slot in the next target atlas buffer already holds a valid render matching matrix.
-func (s *Depth) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, uint64, bool) {
+func (s *Depth) PeekReusableTile(slot int, matPtr *float32) (int, uint64, uint64, bool) {
 	if !s.shadows {
 		return 0, 0, 0, false
 	}
-	return s.atlas.PeekReusableTile(slot, matrix)
+	return s.atlas.PeekReusableTile(slot, matPtr)
 }
 
 // TargetInfo returns the next writable double-buffer index, its current atlas generation, and whether its FBO is ready.
@@ -290,7 +290,7 @@ func (s *Depth) Render(dc *draws.DrawCommandsRender) {
 
 // RenderWithTiles renders dirty shadow atlas tiles, reusing cached tiles when possible.
 // It falls back to rendering the shared atlas when tiles is nil.
-func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[atlas.MaxShadowTiles]atlas.TileShadow) {
+func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *atlas.TilesHandler) {
 	if !s.shadows {
 		return
 	}
@@ -309,7 +309,7 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[at
 	anySolid := false
 	anyCutout := false
 	for t := range atlas.MaxShadowTiles {
-		tile := &tiles[t]
+		tile := tiles.Get(t)
 		if !tile.IsActive() {
 			s.atlas.InvalidateTile(idx, t)
 			continue
@@ -354,7 +354,7 @@ func (s *Depth) RenderWithTiles(fallbackDC *draws.DrawCommandsRender, tiles *[at
 		s.ctx.Viewport(tx, ty, tw, th)
 		s.ctx.Scissor(tx, ty, tw, th)
 		s.ctx.Clear(api.DEPTH_BUFFER_BIT)
-		s.atlas.SetTile(idx, t, &tiles[t], atl.GetGen())
+		s.atlas.SetTile(idx, t, tiles.Get(t), atl.GetGen())
 	}
 
 	interval := float32(textures.GlobalTick()) * 0.05
@@ -426,7 +426,7 @@ func (s *Depth) renderSharedAtlas(dc *draws.DrawCommandsRender) {
 }
 
 // renderTilesPass renders dirty shadow atlas tiles for either solid or cutout geometry using the given program.
-func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval float32, mainVao uint32, tiles *[atlas.MaxShadowTiles]atlas.TileShadow, dirty *[atlas.MaxShadowTiles]bool, cutout bool) {
+func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval float32, mainVao uint32, tiles *atlas.TilesHandler, dirty *[atlas.MaxShadowTiles]bool, cutout bool) {
 	s.ctx.UseProgram(prg)
 	s.ctx.Uniform1f(table[DepthLocTime], interval)
 	s.ctx.UniformMatrix4fv(table[DepthLocView], 1, false, s.viewMatrixPtr)
@@ -442,8 +442,8 @@ func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval
 		if !dirty[tileIdx] {
 			continue
 		}
-		ptr := &tiles[tileIdx]
-		dc := ptr.GetRenderDC()
+		tile := tiles.Get(tileIdx)
+		dc := tile.GetRenderDC()
 		if dc == nil || (cutout && !dc.HasCutout()) || (!cutout && !dc.HasSolid()) {
 			continue
 		}
@@ -463,7 +463,7 @@ func (s *Depth) renderTilesPass(prg uint32, table *[DepthLocLast]int32, interval
 		}
 		s.ctx.Viewport(tx, ty, tw, th)
 		s.ctx.Scissor(tx, ty, tw, th)
-		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, ptr.GetMatrixPtr())
+		s.ctx.UniformMatrix4fv(locLightSpace, 1, false, tile.GetMatrixPtr())
 		dc.SetPassState(mainVao, locInstMode)
 		dc.RenderCutoutFiltered(cutout)
 	}

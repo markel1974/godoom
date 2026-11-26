@@ -1436,7 +1436,7 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 		return dc
 	}
 
-	var tiles [atlas.MaxShadowTiles]atlas.TileShadow
+	tiles := atlas.NewTilesHandler()
 	fillTiles := func(hashes [4]uint64, reuse [4]bool) {
 		slots := [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1}
 		for idx, slot := range slots {
@@ -1444,9 +1444,7 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 			if !active || matPtr == nil {
 				t.Fatalf("expected active tile slot %d", slot)
 			}
-			var mat [16]float32
-			copy(mat[:], (*[16]float32)(unsafe.Pointer(matPtr))[:])
-			tiles[slot].Assign(true, mkTileDC(int32(idx*6)), mat, hashes[idx], reuse[idx])
+			tiles.Get(slot).Assign(true, mkTileDC(int32(idx*6)), matPtr, hashes[idx], reuse[idx])
 		}
 	}
 
@@ -1455,21 +1453,21 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	fillTiles(hashes, [4]bool{})
 	ctx.resetLogs()
 	ctx.clearCalls = 0
-	d.RenderWithTiles(nil, &tiles)
+	d.RenderWithTiles(nil, tiles)
 	if ctx.clearCalls != 4 || len(ctx.multiDrawPrograms) != 4 {
 		t.Fatalf("frame 1 expected 4 clears and 4 draws, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
 	}
 
 	// Frame 2 (targets buf 0): second buffer is still cold -> 4 clears, 4 draws.
 	fillTiles(hashes, [4]bool{
-		d.CanReuseTile(atlas.ShadowTileRoom, tiles[atlas.ShadowTileRoom].GetMatrix(), hashes[0]),
-		d.CanReuseTile(atlas.ShadowTileFlash, tiles[atlas.ShadowTileFlash].GetMatrix(), hashes[1]),
-		d.CanReuseTile(atlas.ShadowTileLightBase, tiles[atlas.ShadowTileLightBase].GetMatrix(), hashes[2]),
-		d.CanReuseTile(atlas.ShadowTileLightBase+1, tiles[atlas.ShadowTileLightBase+1].GetMatrix(), hashes[3]),
+		d.CanReuseTile(atlas.ShadowTileRoom, tiles.Get(atlas.ShadowTileRoom).GetMatrixPtr(), hashes[0]),
+		d.CanReuseTile(atlas.ShadowTileFlash, tiles.Get(atlas.ShadowTileFlash).GetMatrixPtr(), hashes[1]),
+		d.CanReuseTile(atlas.ShadowTileLightBase, tiles.Get(atlas.ShadowTileLightBase).GetMatrixPtr(), hashes[2]),
+		d.CanReuseTile(atlas.ShadowTileLightBase+1, tiles.Get(atlas.ShadowTileLightBase+1).GetMatrixPtr(), hashes[3]),
 	})
 	ctx.resetLogs()
 	ctx.clearCalls = 0
-	d.RenderWithTiles(nil, &tiles)
+	d.RenderWithTiles(nil, tiles)
 	if ctx.clearCalls != 4 || len(ctx.multiDrawPrograms) != 4 {
 		t.Fatalf("frame 2 (cold double-buffer) expected 4 clears and 4 draws, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
 	}
@@ -1477,14 +1475,15 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	// Frames 3 & 4: both double buffers now cached -> 0 clears, 0 draws, 0 allocs!
 	for frame := 3; frame <= 4; frame++ {
 		for idx, slot := range [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1} {
-			if !d.CanReuseTile(slot, tiles[slot].GetMatrix(), hashes[idx]) {
+			tile := tiles.Get(slot)
+			if !d.CanReuseTile(slot, tile.GetMatrixPtr(), hashes[idx]) {
 				t.Fatalf("frame %d expected CanReuseTile=true for slot %d", frame, slot)
 			}
-			tiles[slot].SetReuse(true)
+			tile.SetReuse(true)
 		}
 		ctx.resetLogs()
 		ctx.clearCalls = 0
-		d.RenderWithTiles(nil, &tiles)
+		d.RenderWithTiles(nil, tiles)
 		if ctx.clearCalls != 0 || len(ctx.multiDrawPrograms) != 0 {
 			t.Fatalf("frame %d expected 0 clears and 0 draws on cached tiles, got clear=%d draws=%d", frame, ctx.clearCalls, len(ctx.multiDrawPrograms))
 		}
@@ -1492,9 +1491,10 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 
 	allocs := testing.AllocsPerRun(50, func() {
 		for _, slot := range [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1} {
-			tiles[slot].SetReuse(d.CanReuseTile(slot, tiles[slot].GetMatrix(), tiles[slot].GetSceneHash()))
+			tile := tiles.Get(slot)
+			tile.SetReuse(d.CanReuseTile(slot, tile.GetMatrixPtr(), tile.GetSceneHash()))
 		}
-		d.RenderWithTiles(nil, &tiles)
+		d.RenderWithTiles(nil, tiles)
 	})
 	if allocs > 0 {
 		t.Fatalf("cached RenderWithTiles allocated %.2f objects/op, want 0", allocs)
@@ -1504,25 +1504,25 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	hashes[2] = 9999
 	updateReuse := func() {
 		dcs := [4]*draws.DrawCommandsRender{
-			tiles[atlas.ShadowTileRoom].GetRenderDC(),
-			tiles[atlas.ShadowTileFlash].GetRenderDC(),
-			tiles[atlas.ShadowTileLightBase].GetRenderDC(),
-			tiles[atlas.ShadowTileLightBase+1].GetRenderDC(),
+			tiles.Get(atlas.ShadowTileRoom).GetRenderDC(),
+			tiles.Get(atlas.ShadowTileFlash).GetRenderDC(),
+			tiles.Get(atlas.ShadowTileLightBase).GetRenderDC(),
+			tiles.Get(atlas.ShadowTileLightBase + 1).GetRenderDC(),
 		}
 		var reuse [4]bool
 		slots := [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1}
 		for idx, slot := range slots {
-			reuse[idx] = d.CanReuseTile(slot, tiles[slot].GetMatrix(), hashes[idx])
+			reuse[idx] = d.CanReuseTile(slot, tiles.Get(slot).GetMatrixPtr(), hashes[idx])
 		}
 		fillTiles(hashes, reuse)
 		for idx, slot := range slots {
-			tiles[slot].SetRenderDC(dcs[idx])
+			tiles.Get(slot).SetRenderDC(dcs[idx])
 		}
 	}
 	updateReuse()
 	ctx.resetLogs()
 	ctx.clearCalls = 0
-	d.RenderWithTiles(nil, &tiles)
+	d.RenderWithTiles(nil, tiles)
 	if ctx.clearCalls != 1 || len(ctx.multiDrawPrograms) != 1 {
 		t.Fatalf("single dirty spotlight (buf 1) expected 1 clear and 1 draw, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
 	}
@@ -1533,18 +1533,18 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	updateReuse()
 	ctx.resetLogs()
 	ctx.clearCalls = 0
-	d.RenderWithTiles(nil, &tiles)
+	d.RenderWithTiles(nil, tiles)
 	if ctx.clearCalls != 1 || len(ctx.multiDrawPrograms) != 1 {
 		t.Fatalf("single dirty spotlight (buf 0) expected 1 clear and 1 draw, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
 	}
 
 	// Dirty tile with no geometry still clears its scissor rect to 1.0 without draws.
 	hashes[3] = 8888
-	tiles[atlas.ShadowTileLightBase+1].SetRenderDC(nil)
+	tiles.Get(atlas.ShadowTileLightBase + 1).SetRenderDC(nil)
 	updateReuse()
 	ctx.resetLogs()
 	ctx.clearCalls = 0
-	d.RenderWithTiles(nil, &tiles)
+	d.RenderWithTiles(nil, tiles)
 	if ctx.clearCalls != 1 || len(ctx.multiDrawPrograms) != 0 {
 		t.Fatalf("dirty empty tile expected 1 clear and 0 draws, got clear=%d draws=%d", ctx.clearCalls, len(ctx.multiDrawPrograms))
 	}
@@ -1555,7 +1555,7 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	// Toggling shadows off/on invalidates cache cleanly.
 	d.SetShadowsEnabled(false)
 	d.SetShadowsEnabled(true)
-	if d.CanReuseTile(atlas.ShadowTileRoom, tiles[atlas.ShadowTileRoom].GetMatrix(), hashes[0]) {
+	if d.CanReuseTile(atlas.ShadowTileRoom, tiles.Get(atlas.ShadowTileRoom).GetMatrixPtr(), hashes[0]) {
 		t.Fatalf("expected CanReuseTile=false after SetShadowsEnabled(false->true) invalidation")
 	}
 }

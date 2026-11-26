@@ -1,4 +1,4 @@
-package shaders
+package atlas
 
 import "github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 
@@ -23,6 +23,21 @@ type TileShadow struct {
 	matrix    [16]float32
 	sceneHash uint64
 	reuse     bool
+}
+
+// GetMatrixPtr returns a pointer to the first value of the cached transform matrix.
+func (d *TileShadow) GetMatrixPtr() *float32 {
+	return &d.matrix[0]
+}
+
+// GetMatrix returns a pointer to the cached 4x4 transform matrix.
+func (d *TileShadow) GetMatrix() *[16]float32 {
+	return &d.matrix
+}
+
+// GetSceneHash returns the cached scene hash key associated with this shadow tile.
+func (d *TileShadow) GetSceneHash() uint64 {
+	return d.sceneHash
 }
 
 // Assign updates the shadow tile state with render commands, transform matrix, scene hash, and reuse flag.

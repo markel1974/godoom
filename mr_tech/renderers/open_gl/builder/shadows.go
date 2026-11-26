@@ -13,6 +13,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/buffers"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -67,10 +68,10 @@ type Shadows struct {
 	bContext           *Context
 	bStatic            *Static
 	bThings            *Things
-	tiles              [shaders.MaxShadowTiles]shaders.TileShadow
-	tileDeps           [2][shaders.MaxShadowTiles]ShadowTileDeps
-	builders           [shaders.MaxShadowTiles]*ShadowTileBuilder
-	tileFrustums       [shaders.MaxShadowTiles]aabb.Frustum
+	tiles              [atlas.MaxShadowTiles]atlas.TileShadow
+	tileDeps           [2][atlas.MaxShadowTiles]ShadowTileDeps
+	builders           [atlas.MaxShadowTiles]*ShadowTileBuilder
+	tileFrustums       [atlas.MaxShadowTiles]aabb.Frustum
 	instPool           *buffers.InstancePool
 	instGroups         buffers.PtrPool[ShadowsRigidGroup]
 	groupToken         uint64
@@ -100,7 +101,7 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 		thingScratchLen: 0,
 	}
 	bs.instGroups.Init(32)
-	for t := range shaders.MaxShadowTiles {
+	for t := range atlas.MaxShadowTiles {
 		bs.builders[t] = NewShadowTileBuilder(ctx)
 	}
 	return bs
@@ -108,14 +109,14 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 
 // DisableAllTiles marks every shadow tile inactive and clears its reuse state.
 func (w *Shadows) DisableAllTiles() {
-	for t := range shaders.MaxShadowTiles {
+	for t := range atlas.MaxShadowTiles {
 		w.tiles[t].SetActive(false)
 		w.tiles[t].SetReuse(false)
 	}
 }
 
 // GetTiles returns the shadow tile data array used by the shadow atlas.
-func (w *Shadows) GetTiles() *[shaders.MaxShadowTiles]shaders.TileShadow {
+func (w *Shadows) GetTiles() *[atlas.MaxShadowTiles]atlas.TileShadow {
 	return &w.tiles
 }
 
@@ -140,10 +141,10 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 	targetBufIdx, targetGen, targetOK := depth.TargetInfo()
 	streamKeepAlive := hasStreamer && (w.shadowFrame&127 == 0)
 
-	var tileMatrices [shaders.MaxShadowTiles][16]float32
+	var tileMatrices [atlas.MaxShadowTiles][16]float32
 	var activeMask uint32
 	var queryMask uint32
-	for t := range shaders.MaxShadowTiles {
+	for t := range atlas.MaxShadowTiles {
 		active, orthoDepthClamp, matPtr := depth.GetTileConfig(t)
 		if !active || matPtr == nil {
 			w.tiles[t].SetActive(false)
@@ -188,15 +189,15 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 		w.entityCache.Sweep(w.shadowFrame)
 	}
 
-	var volAcc, volXor [shaders.MaxShadowTiles]uint64
-	var volCount [shaders.MaxShadowTiles]int
-	var thingAcc, thingXor [shaders.MaxShadowTiles]uint64
-	var thingCount [shaders.MaxShadowTiles]int
+	var volAcc, volXor [atlas.MaxShadowTiles]uint64
+	var volCount [atlas.MaxShadowTiles]int
+	var thingAcc, thingXor [atlas.MaxShadowTiles]uint64
+	var thingCount [atlas.MaxShadowTiles]int
 
 	w.collectShadowVolumes(vols, queryMask, &volAcc, &volXor, &volCount)
 	w.collectShadowThings(th, queryMask, &thingAcc, &thingXor, &thingCount)
 
-	var tileHashes [shaders.MaxShadowTiles]uint64
+	var tileHashes [atlas.MaxShadowTiles]uint64
 	var dirtyMask uint32
 	for rem := queryMask; rem != 0; {
 		t := bits.TrailingZeros32(rem)
@@ -283,7 +284,7 @@ func (w *Shadows) createToken(vols *model.Volumes, th *model.Things) uint64 {
 
 // collectShadowVolumes gathers hashed shadow volumes intersecting active tile frustums into scratch storage.
 // It updates per-tile accumulation, xor, and count signatures for shadow tile reuse checks.
-func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[shaders.MaxShadowTiles]uint64, volCount *[shaders.MaxShadowTiles]int) {
+func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, volAcc, volXor *[atlas.MaxShadowTiles]uint64, volCount *[atlas.MaxShadowTiles]int) {
 	w.volScratchLen = 0
 	if activeMask == 0 {
 		return
@@ -325,7 +326,7 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 }
 
 // collectShadowThings collects visible shadow things for active tiles and updates per-tile hash summaries.
-func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[shaders.MaxShadowTiles]uint64, thingCount *[shaders.MaxShadowTiles]int) {
+func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thingAcc, thingXor *[atlas.MaxShadowTiles]uint64, thingCount *[atlas.MaxShadowTiles]int) {
 	w.thingScratchLen = 0
 	if activeMask == 0 {
 		return

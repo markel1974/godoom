@@ -12,7 +12,9 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/lights"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -139,11 +141,11 @@ func TestShadowsBuilderUsesSunCSMTilesWhenEnabled(t *testing.T) {
 	}
 
 	tiles := bv.GetShadowTiles()
-	if tiles[shaders.ShadowTileRoom].IsActive() {
+	if tiles[atlas.ShadowTileRoom].IsActive() {
 		t.Fatalf("expected ShadowTileRoom inactive when EnableSunCSM=true")
 	}
-	for c := range shaders.SunCascadeCount {
-		slot := shaders.ShadowTileSunBase + c
+	for c := range metrics.SunCascadeCount {
+		slot := atlas.ShadowTileSunBase + c
 		if !tiles[slot].IsActive() || tiles[slot].GetRenderDC() == nil {
 			t.Fatalf("expected active SunCSM cascade tile %d with RenderDC", slot)
 		}
@@ -155,8 +157,8 @@ func TestShadowsBuilderUsesSunCSMTilesWhenEnabled(t *testing.T) {
 	bv.ComputeShadows(en, d)
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), bv.GetShadowTiles())
 
-	for c := range shaders.SunCascadeCount {
-		slot := shaders.ShadowTileSunBase + c
+	for c := range metrics.SunCascadeCount {
+		slot := atlas.ShadowTileSunBase + c
 		if !tiles[slot].IsActive() || !tiles[slot].CanReuse() {
 			t.Fatalf("expected cached Reuse=true on steady SunCSM cascade %d", slot)
 		}

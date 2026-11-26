@@ -1,4 +1,4 @@
-package shaders
+package atlas
 
 // TileCache stores cached projection/scene keys for a single tile in one atlas buffer.
 type TileCache struct {

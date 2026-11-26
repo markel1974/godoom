@@ -9,6 +9,8 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model"
 	"github.com/markel1974/godoom/mr_tech/model/things"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 )
 
 func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
@@ -36,14 +38,14 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	d.SetShadowsEnabled(true)
 
 	a := d.GetAtlas()
-	wantRects := [SunCascadeCount][4]int32{
+	wantRects := [metrics.SunCascadeCount][4]int32{
 		{0, 1024, 512, 512},
 		{512, 1024, 512, 512},
 		{0, 1536, 512, 512},
 		{512, 1536, 512, 512},
 	}
-	for c := range SunCascadeCount {
-		x, y, w, hh, clamp, _, _ := a.TileRect(ShadowTileSunBase + c)
+	for c := range metrics.SunCascadeCount {
+		x, y, w, hh, clamp, _, _ := a.TileRect(atlas.ShadowTileSunBase + c)
 		got := [4]int32{x, y, w, hh}
 		if got != wantRects[c] || !clamp {
 			t.Fatalf("Sun cascade %d TileRect = %v clamp=%v, want %v true", c, got, clamp, wantRects[c])
@@ -55,7 +57,7 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	d.Prepare()
 
 	// Sun CSM active: ShadowTileRoom must be inactive, cascades 0..3 must be active with depthClamp.
-	if active, _, _ := d.GetTileConfig(ShadowTileRoom); active {
+	if active, _, _ := d.GetTileConfig(atlas.ShadowTileRoom); active {
 		t.Fatalf("expected ShadowTileRoom inactive when SunCSM is enabled")
 	}
 
@@ -67,10 +69,10 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	dc := draws.NewDrawCommandsRender(ctx, "sun_csm", false)
 	dc.Prepare([]*draws.DrawCommand{cmd})
 
-	var tiles [MaxShadowTiles]TileShadow
+	var tiles [atlas.MaxShadowTiles]atlas.TileShadow
 	fillSunTiles := func(reuse bool) {
-		for c := range SunCascadeCount {
-			slot := ShadowTileSunBase + c
+		for c := range metrics.SunCascadeCount {
+			slot := atlas.ShadowTileSunBase + c
 			active, clamp, matPtr := d.GetTileConfig(slot)
 			if !active || !clamp || matPtr == nil {
 				t.Fatalf("expected cascade %d active with clamp & matrix", slot)
@@ -82,14 +84,14 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	}
 
 	// Warm both double buffers -> 4 clears per buffer -> then steady frame hits 0 clears, 0 draws, 0 allocs!
-	for range DepthDoubleBuffer {
+	for range atlas.DepthDoubleBuffer {
 		fillSunTiles(false)
 		ctx.clearCalls = 0
 		ctx.multiDrawPrograms = nil
 		d.RenderWithTiles(nil, &tiles)
-		if ctx.clearCalls != SunCascadeCount || len(ctx.multiDrawPrograms) != SunCascadeCount {
+		if ctx.clearCalls != metrics.SunCascadeCount || len(ctx.multiDrawPrograms) != metrics.SunCascadeCount {
 			t.Fatalf("cold cascade render expected %d clears/%d draws, got clears=%d draws=%d",
-				SunCascadeCount, SunCascadeCount, ctx.clearCalls, len(ctx.multiDrawPrograms))
+				metrics.SunCascadeCount, metrics.SunCascadeCount, ctx.clearCalls, len(ctx.multiDrawPrograms))
 		}
 	}
 
@@ -104,10 +106,10 @@ func TestAtlasSunCSMTileRectsAndDepthConfig(t *testing.T) {
 	// Disabling SunCSM switches back cleanly to ShadowTileRoom and disables cascades.
 	h.SetSunEnabled(false)
 	d.Prepare()
-	if active, _, _ := d.GetTileConfig(ShadowTileRoom); !active {
+	if active, _, _ := d.GetTileConfig(atlas.ShadowTileRoom); !active {
 		t.Fatalf("expected ShadowTileRoom re-activated when SunCSM disabled")
 	}
-	if active, _, _ := d.GetTileConfig(ShadowTileSunBase); active {
+	if active, _, _ := d.GetTileConfig(atlas.ShadowTileSunBase); active {
 		t.Fatalf("expected SunCSM cascade inactive when disabled")
 	}
 }

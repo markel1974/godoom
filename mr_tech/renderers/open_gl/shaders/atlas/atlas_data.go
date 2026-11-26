@@ -1,4 +1,4 @@
-package shaders
+package atlas
 
 import "github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 
@@ -17,6 +17,21 @@ func NewAtlasData(ctx api.IContext) *AtlasData {
 	return &AtlasData{
 		ctx: ctx,
 	}
+}
+
+// GetGen returns the generation counter for this atlas data.
+func (d *AtlasData) GetGen() uint64 {
+	return d.gen
+}
+
+// GetFBO returns the framebuffer object handle for the shadow atlas depth buffer.
+func (d *AtlasData) GetFBO() uint32 {
+	return d.fbo
+}
+
+// GetTex returns the texture handle for the atlas depth texture.
+func (d *AtlasData) GetTex() uint32 {
+	return d.tex
 }
 
 // Update initializes and configures the framebuffer and texture for depth rendering with the given dimensions.

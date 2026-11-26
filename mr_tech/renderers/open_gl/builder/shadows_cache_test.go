@@ -14,6 +14,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -179,11 +180,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 		fm.UpdateWithAim(mm.GetViewPtr(), aim, 0, aim, 0, 1)
 		d.Prepare()
 		bv.ComputeShadows(en, d)
-		if !tiles[shaders.ShadowTileRoom].CanReuse() || !tiles[shaders.ShadowTileLightBase].CanReuse() || !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
+		if !tiles[atlas.ShadowTileRoom].CanReuse() || !tiles[atlas.ShadowTileLightBase].CanReuse() || !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
 			t.Fatalf("step %d expected Room, Spot0, Spot1 Reuse=true on FlashRotateOnly, got room=%v spot0=%v spot1=%v",
-				step, tiles[shaders.ShadowTileRoom].CanReuse(), tiles[shaders.ShadowTileLightBase].CanReuse(), tiles[shaders.ShadowTileLightBase+1].CanReuse())
+				step, tiles[atlas.ShadowTileRoom].CanReuse(), tiles[atlas.ShadowTileLightBase].CanReuse(), tiles[atlas.ShadowTileLightBase+1].CanReuse())
 		}
-		if tiles[shaders.ShadowTileFlash].CanReuse() {
+		if tiles[atlas.ShadowTileFlash].CanReuse() {
 			t.Fatalf("step %d expected Flash dirty after aim change", step)
 		}
 		d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -202,11 +203,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	en.GetThings().GetThing("anim_behind").Compile(textures.GlobalTick())
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileRoom].CanReuse() || tiles[shaders.ShadowTileLightBase].CanReuse() {
+	if tiles[atlas.ShadowTileRoom].CanReuse() || tiles[atlas.ShadowTileLightBase].CanReuse() {
 		t.Fatalf("expected Room & Spot0 invalidated when tick advances on multi-frame anim_behind, got room=%v spot0=%v",
-			tiles[shaders.ShadowTileRoom].CanReuse(), tiles[shaders.ShadowTileLightBase].CanReuse())
+			tiles[atlas.ShadowTileRoom].CanReuse(), tiles[atlas.ShadowTileLightBase].CanReuse())
 	}
-	if !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
+	if !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spot1 (tick-independent) to remain Reuse=true when GlobalTick advances")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -229,7 +230,7 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	sideEnt.MoveCenterTo(4, 1245, 0)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileLightBase+1].CanReuse() {
+	if tiles[atlas.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spot1 Reuse=false immediately after static_side.MoveCenterTo")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -255,11 +256,11 @@ func TestShadowsEarlyReuseInvalidatesOnMoveDeformAndAnimatedTick(t *testing.T) {
 	}
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileRoom].CanReuse() || tiles[shaders.ShadowTileLightBase].CanReuse() {
+	if tiles[atlas.ShadowTileRoom].CanReuse() || tiles[atlas.ShadowTileLightBase].CanReuse() {
 		t.Fatalf("expected Room and Spot0 Reuse=false when behind volume marked dirty (room=%v spot0=%v)",
-			tiles[shaders.ShadowTileRoom].CanReuse(), tiles[shaders.ShadowTileLightBase].CanReuse())
+			tiles[atlas.ShadowTileRoom].CanReuse(), tiles[atlas.ShadowTileLightBase].CanReuse())
 	}
-	if !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
+	if !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spot1 Reuse=true when unrelated behind volume dirtied")
 	}
 	d.RenderWithTiles(bv.GetDrawCommandsOpaque(), tiles)
@@ -338,7 +339,7 @@ func TestShadowsStaticVolumeAssign(t *testing.T) {
 	if bv.bShadow.volScratchLen == 0 {
 		t.Fatalf("expected non-empty volScratch when processing volumes")
 	}
-	if bv.bShadow.builders[shaders.ShadowTileRoom].staticItems.Len == 0 {
+	if bv.bShadow.builders[atlas.ShadowTileRoom].staticItems.Len == 0 {
 		t.Fatalf("expected Room tile to contain static shadow submeshes")
 	}
 }
@@ -357,8 +358,8 @@ func TestShadowTileBuilderResetAddGrowAndPrepare(t *testing.T) {
 	for i := range count {
 		tb.Add(rm, int32(i*64), int32(i+1))
 	}
-	if tb.instRangesLen != count || len(tb.instRanges2) < count {
-		t.Fatalf("expected instRangesLen=%d and backing len>=%d, got len=%d cap=%d", count, count, tb.instRangesLen, len(tb.instRanges2))
+	if tb.instRangesLen != count || len(tb.instRanges) < count {
+		t.Fatalf("expected instRangesLen=%d and backing len>=%d, got len=%d cap=%d", count, count, tb.instRangesLen, len(tb.instRanges))
 	}
 	tb.Prepare(99)
 	if tb.instItems.Len != count {
@@ -387,7 +388,7 @@ func TestShadowTileBuilderResetAddGrowAndPrepare(t *testing.T) {
 
 	var zeroTB ShadowTileBuilder
 	zeroTB.Add(rm, 128, 3)
-	if zeroTB.instRangesLen != 1 || zeroTB.instRanges2[0].mesh != rm {
+	if zeroTB.instRangesLen != 1 || zeroTB.instRanges[0].GetMesh() != rm {
 		t.Fatalf("expected zero-value ShadowTileBuilder.Add to grow cleanly")
 	}
 }

@@ -1,4 +1,4 @@
-package shaders
+package atlas
 
 import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
@@ -50,6 +50,21 @@ func NewAtlas(ctx api.IContext) *Atlas {
 	}
 	a.InvalidateCache()
 	return a
+}
+
+// GetWidth returns the configured width of the shadow atlas in pixels.
+func (s *Atlas) GetWidth() int32 {
+	return s.width
+}
+
+// GetHeight returns the configured height of the shadow atlas in pixels.
+func (s *Atlas) GetHeight() int32 {
+	return s.height
+}
+
+// GetSize returns the configured width and height of the shadow atlas in pixels.
+func (s *Atlas) GetSize() (int32, int32) {
+	return s.width, s.height
 }
 
 // TileRect returns the pixel viewport/scissor rectangle and depth-raster state for tile slot at the active atlas size.
@@ -107,9 +122,9 @@ func (s *Atlas) Update() (int, *AtlasData) {
 	idx := s.NextAtlasIndex()
 	s.frameIdx = idx
 
-	atlas := s.shadowAtlas[idx]
-	atlas.Update(s.width, s.height)
-	return idx, atlas
+	atl := s.shadowAtlas[idx]
+	atl.Update(s.width, s.height)
+	return idx, atl
 }
 
 // IsTileCached reports whether tile slot t in buffer idx is already up to date for tile and gen.
@@ -165,15 +180,15 @@ func (s *Atlas) PeekReusableTile(slot int, matrix *[16]float32) (int, uint64, ui
 		return 0, 0, 0, false
 	}
 	nextIdx := s.NextAtlasIndex()
-	atlas := s.shadowAtlas[nextIdx]
-	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
+	atl := s.shadowAtlas[nextIdx]
+	if atl == nil || atl.fbo == 0 || atl.width != s.width || atl.height != s.height {
 		return 0, 0, 0, false
 	}
 	c := &s.tileCache[nextIdx][slot]
-	if !c.valid || c.atlasGen != atlas.gen || c.matrix != *matrix {
+	if !c.valid || c.atlasGen != atl.gen || c.matrix != *matrix {
 		return 0, 0, 0, false
 	}
-	return nextIdx, atlas.gen, c.sceneHash, true
+	return nextIdx, atl.gen, c.sceneHash, true
 }
 
 // TargetInfo returns the next writable double-buffer index, its current atlas generation, and whether its FBO is ready.
@@ -182,11 +197,11 @@ func (s *Atlas) TargetInfo() (int, uint64, bool) {
 		return 0, 0, false
 	}
 	nextIdx := s.NextAtlasIndex()
-	atlas := s.shadowAtlas[nextIdx]
-	if atlas == nil || atlas.fbo == 0 || atlas.width != s.width || atlas.height != s.height {
+	atl := s.shadowAtlas[nextIdx]
+	if atl == nil || atl.fbo == 0 || atl.width != s.width || atl.height != s.height {
 		return 0, 0, false
 	}
-	return nextIdx, atlas.gen, true
+	return nextIdx, atl.gen, true
 }
 
 // InvalidateCache forces all cached shadow atlas tiles across both double-buffers to redraw on next use.

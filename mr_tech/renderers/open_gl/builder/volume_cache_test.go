@@ -20,6 +20,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -1002,26 +1003,26 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	d.Prepare()
 	bv.ComputeShadows(en, d)
 	tiles := bv.GetShadowTiles()
-	if !tiles[shaders.ShadowTileRoom].IsActive() || tiles[shaders.ShadowTileRoom].CanReuse() {
+	if !tiles[atlas.ShadowTileRoom].IsActive() || tiles[atlas.ShadowTileRoom].CanReuse() {
 		t.Fatalf("expected Room tile active & dirty on frame 1")
 	}
-	spot0 := tiles[shaders.ShadowTileLightBase]
-	spot1 := tiles[shaders.ShadowTileLightBase+1]
+	spot0 := tiles[atlas.ShadowTileLightBase]
+	spot1 := tiles[atlas.ShadowTileLightBase+1]
 	if !spot0.IsActive() || !spot1.IsActive() || spot0.GetRenderDC() == nil || spot1.GetRenderDC() == nil {
 		t.Fatalf("expected Spotlight 0 and Spotlight 1 tiles active with compiled DrawCommandsRender")
 	}
 	if !spot0.GetRenderDC().HasSolid() || !spot1.GetRenderDC().HasSolid() {
 		t.Fatalf("expected Spotlight 0 (off-camera behind) and Spotlight 1 (side) to retain solid casters")
 	}
-	if bv.bShadow.builders[shaders.ShadowTileLightBase].instItems.Len == 0 {
+	if bv.bShadow.builders[atlas.ShadowTileLightBase].instItems.Len == 0 {
 		t.Fatalf("expected Spotlight 0 to include off-camera crate_behind instanced caster")
 	}
-	if bv.bShadow.builders[shaders.ShadowTileLightBase+1].instItems.Len == 0 {
+	if bv.bShadow.builders[atlas.ShadowTileLightBase+1].instItems.Len == 0 {
 		t.Fatalf("expected Spotlight 1 to include off-camera crate_side instanced caster")
 	}
 	// Spotlight 1 only overlaps side sector (not front/behind/roof), so it must cull strictly fewer submeshes than Room.
-	roomStaticCount := bv.bShadow.builders[shaders.ShadowTileRoom].staticItems.Len
-	spot1StaticCount := bv.bShadow.builders[shaders.ShadowTileLightBase+1].staticItems.Len
+	roomStaticCount := bv.bShadow.builders[atlas.ShadowTileRoom].staticItems.Len
+	spot1StaticCount := bv.bShadow.builders[atlas.ShadowTileLightBase+1].staticItems.Len
 	if spot1StaticCount == 0 || spot1StaticCount >= roomStaticCount {
 		t.Fatalf("expected per-light culling on Spotlight 1 (%d) < Room (%d) and > 0", spot1StaticCount, roomStaticCount)
 	}
@@ -1046,7 +1047,7 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 		bv.Compute(640, 480, vi, en)
 		d.Prepare()
 		bv.ComputeShadows(en, d)
-		for _, slot := range []int{shaders.ShadowTileRoom, shaders.ShadowTileLightBase, shaders.ShadowTileLightBase + 1} {
+		for _, slot := range []int{atlas.ShadowTileRoom, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1} {
 			if !tiles[slot].CanReuse() {
 				t.Fatalf("frame %d expected tile %d cache hit (Reuse=true)", f, slot)
 			}
@@ -1072,10 +1073,10 @@ func TestPerLightShadowFrustumCullingIncludesOffCameraCastersAndCachesTiles(t *t
 	bv.Compute(640, 480, vi, en)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if tiles[shaders.ShadowTileLightBase].CanReuse() {
+	if tiles[atlas.ShadowTileLightBase].CanReuse() {
 		t.Fatalf("expected Spotlight 0 dirty after off-camera crate_behind moved")
 	}
-	if !tiles[shaders.ShadowTileLightBase+1].CanReuse() {
+	if !tiles[atlas.ShadowTileLightBase+1].CanReuse() {
 		t.Fatalf("expected Spotlight 1 to stay cached when unrelated crate_behind moved")
 	}
 	rCtx.resetCounts()
@@ -1201,7 +1202,7 @@ func TestComputeShadowsSkipsRedundantInstUploadAndOrphansOnMove(t *testing.T) {
 	fm.UpdateWithAim(mm.GetViewPtr(), 0.004, 0, 0.004, 0, 1)
 	d.Prepare()
 	bv.ComputeShadows(en, d)
-	if bv.GetShadowTiles()[shaders.ShadowTileFlash].CanReuse() {
+	if bv.GetShadowTiles()[atlas.ShadowTileFlash].CanReuse() {
 		t.Fatalf("expected Flash tile dirty after aim update")
 	}
 	if rCtx.subDataCalls != 0 {

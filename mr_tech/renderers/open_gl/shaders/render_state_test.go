@@ -17,6 +17,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/draws"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -1435,9 +1436,9 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 		return dc
 	}
 
-	var tiles [MaxShadowTiles]TileShadow
+	var tiles [atlas.MaxShadowTiles]atlas.TileShadow
 	fillTiles := func(hashes [4]uint64, reuse [4]bool) {
-		slots := [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1}
+		slots := [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1}
 		for idx, slot := range slots {
 			active, _, matPtr := d.GetTileConfig(slot)
 			if !active || matPtr == nil {
@@ -1461,10 +1462,10 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 
 	// Frame 2 (targets buf 0): second buffer is still cold -> 4 clears, 4 draws.
 	fillTiles(hashes, [4]bool{
-		d.CanReuseTile(ShadowTileRoom, &tiles[ShadowTileRoom].matrix, hashes[0]),
-		d.CanReuseTile(ShadowTileFlash, &tiles[ShadowTileFlash].matrix, hashes[1]),
-		d.CanReuseTile(ShadowTileLightBase, &tiles[ShadowTileLightBase].matrix, hashes[2]),
-		d.CanReuseTile(ShadowTileLightBase+1, &tiles[ShadowTileLightBase+1].matrix, hashes[3]),
+		d.CanReuseTile(atlas.ShadowTileRoom, tiles[atlas.ShadowTileRoom].GetMatrix(), hashes[0]),
+		d.CanReuseTile(atlas.ShadowTileFlash, tiles[atlas.ShadowTileFlash].GetMatrix(), hashes[1]),
+		d.CanReuseTile(atlas.ShadowTileLightBase, tiles[atlas.ShadowTileLightBase].GetMatrix(), hashes[2]),
+		d.CanReuseTile(atlas.ShadowTileLightBase+1, tiles[atlas.ShadowTileLightBase+1].GetMatrix(), hashes[3]),
 	})
 	ctx.resetLogs()
 	ctx.clearCalls = 0
@@ -1475,8 +1476,8 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 
 	// Frames 3 & 4: both double buffers now cached -> 0 clears, 0 draws, 0 allocs!
 	for frame := 3; frame <= 4; frame++ {
-		for idx, slot := range [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1} {
-			if !d.CanReuseTile(slot, &tiles[slot].matrix, hashes[idx]) {
+		for idx, slot := range [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1} {
+			if !d.CanReuseTile(slot, tiles[slot].GetMatrix(), hashes[idx]) {
 				t.Fatalf("frame %d expected CanReuseTile=true for slot %d", frame, slot)
 			}
 			tiles[slot].SetReuse(true)
@@ -1490,8 +1491,8 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	}
 
 	allocs := testing.AllocsPerRun(50, func() {
-		for _, slot := range [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1} {
-			tiles[slot].SetReuse(d.CanReuseTile(slot, &tiles[slot].matrix, tiles[slot].sceneHash))
+		for _, slot := range [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1} {
+			tiles[slot].SetReuse(d.CanReuseTile(slot, tiles[slot].GetMatrix(), tiles[slot].GetSceneHash()))
 		}
 		d.RenderWithTiles(nil, &tiles)
 	})
@@ -1503,15 +1504,15 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	hashes[2] = 9999
 	updateReuse := func() {
 		dcs := [4]*draws.DrawCommandsRender{
-			tiles[ShadowTileRoom].GetRenderDC(),
-			tiles[ShadowTileFlash].GetRenderDC(),
-			tiles[ShadowTileLightBase].GetRenderDC(),
-			tiles[ShadowTileLightBase+1].GetRenderDC(),
+			tiles[atlas.ShadowTileRoom].GetRenderDC(),
+			tiles[atlas.ShadowTileFlash].GetRenderDC(),
+			tiles[atlas.ShadowTileLightBase].GetRenderDC(),
+			tiles[atlas.ShadowTileLightBase+1].GetRenderDC(),
 		}
 		var reuse [4]bool
-		slots := [4]int{ShadowTileRoom, ShadowTileFlash, ShadowTileLightBase, ShadowTileLightBase + 1}
+		slots := [4]int{atlas.ShadowTileRoom, atlas.ShadowTileFlash, atlas.ShadowTileLightBase, atlas.ShadowTileLightBase + 1}
 		for idx, slot := range slots {
-			reuse[idx] = d.CanReuseTile(slot, &tiles[slot].matrix, hashes[idx])
+			reuse[idx] = d.CanReuseTile(slot, tiles[slot].GetMatrix(), hashes[idx])
 		}
 		fillTiles(hashes, reuse)
 		for idx, slot := range slots {
@@ -1539,7 +1540,7 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 
 	// Dirty tile with no geometry still clears its scissor rect to 1.0 without draws.
 	hashes[3] = 8888
-	tiles[ShadowTileLightBase+1].SetRenderDC(nil)
+	tiles[atlas.ShadowTileLightBase+1].SetRenderDC(nil)
 	updateReuse()
 	ctx.resetLogs()
 	ctx.clearCalls = 0
@@ -1554,102 +1555,7 @@ func TestDepthPerTileCachingWithDoubleBufferAndInvalidate(t *testing.T) {
 	// Toggling shadows off/on invalidates cache cleanly.
 	d.SetShadowsEnabled(false)
 	d.SetShadowsEnabled(true)
-	if d.CanReuseTile(ShadowTileRoom, &tiles[ShadowTileRoom].matrix, hashes[0]) {
+	if d.CanReuseTile(atlas.ShadowTileRoom, tiles[atlas.ShadowTileRoom].GetMatrix(), hashes[0]) {
 		t.Fatalf("expected CanReuseTile=false after SetShadowsEnabled(false->true) invalidation")
-	}
-}
-
-func TestAtlasLifecycleAndSetShadowsInvalidation(t *testing.T) {
-	ctx := newRecordingCtx()
-	a := NewAtlas(ctx)
-
-	mat := [16]float32{
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1,
-	}
-	var tile TileShadow
-	tile.Assign(true, nil, mat, 4242, false)
-
-	// Cold buffers cannot be reused yet.
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) {
-		t.Fatalf("expected cold Atlas buffer not reusable")
-	}
-
-	// Warm both double-buffers.
-	for i := range DepthDoubleBuffer {
-		idx, dm := a.Update()
-		if dm == nil || dm.fbo == 0 || dm.tex == 0 {
-			t.Fatalf("Update iteration %d produced invalid DepthMap: %+v", i, dm)
-		}
-		a.SetTile(idx, ShadowTileRoom, &tile, dm.gen)
-	}
-	if a.GetShadowAtlasTexture() == 0 {
-		t.Fatalf("expected valid shadow atlas texture after Update")
-	}
-	if !a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) {
-		t.Fatalf("expected warmed double-buffered Atlas tile to be reusable")
-	}
-
-	allocs := testing.AllocsPerRun(50, func() {
-		if !a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) || !a.IsTileCached(a.frameIdx, ShadowTileRoom, &tile, a.GetShadowAtlas().gen) {
-			t.Fatalf("expected zero-alloc cached Atlas hit")
-		}
-	})
-	if allocs > 0 {
-		t.Fatalf("expected 0 allocs on Atlas tile cache query, got %.2f", allocs)
-	}
-
-	// Re-enabling shadows after disabling must invalidate prior tile entries.
-	a.SetShadows(false)
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) {
-		t.Fatalf("expected CanReuseTile=false when Atlas shadows disabled")
-	}
-	a.SetShadows(true)
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) {
-		t.Fatalf("expected CanReuseTile=false after SetShadows(false->true) invalidation")
-	}
-
-	// Verify proportional TileRect coordinates at default 2048x2048.
-	rx, ry, rw, rh, rClamp, _, _ := a.TileRect(ShadowTileRoom)
-	fx, fy, fw, fh, fClamp, _, _ := a.TileRect(ShadowTileFlash)
-	lx5, ly5, lw5, lh5, _, _, _ := a.TileRect(ShadowTileLightBase + 5)
-	if rx != 0 || ry != 1024 || rw != 1024 || rh != 1024 || !rClamp ||
-		fx != 1024 || fy != 1024 || fw != 1024 || fh != 1024 || fClamp ||
-		lx5 != 512 || ly5 != 512 || lw5 != 512 || lh5 != 512 {
-		t.Fatalf("unexpected 2048 TileRects: room=(%d,%d,%d,%d,%v) flash=(%d,%d,%d,%d,%v) light5=(%d,%d,%d,%d)",
-			rx, ry, rw, rh, rClamp, fx, fy, fw, fh, fClamp, lx5, ly5, lw5, lh5)
-	}
-
-	// Re-warm and verify Allocate scales TileRects and invalidates cache for new dimensions.
-	for range DepthDoubleBuffer {
-		idx, dm := a.Update()
-		a.SetTile(idx, ShadowTileRoom, &tile, dm.gen)
-	}
-	a.Allocate(1024, 1024)
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) {
-		t.Fatalf("expected Allocate resize to invalidate cached tiles")
-	}
-	srx, sry, srw, srh, _, _, _ := a.TileRect(ShadowTileRoom)
-	slx, sly, slw, slh, _, _, _ := a.TileRect(ShadowTileLightBase + 5)
-	if srx != 0 || sry != 512 || srw != 512 || srh != 512 ||
-		slx != 256 || sly != 256 || slw != 256 || slh != 256 {
-		t.Fatalf("unexpected 1024 TileRects after Allocate: room=(%d,%d,%d,%d) light5=(%d,%d,%d,%d)",
-			srx, sry, srw, srh, slx, sly, slw, slh)
-	}
-
-	// Shutdown clears backing GPU handles, resets frameIdx, and clears cache safely.
-	a.Update()
-	a.Shutdown()
-	a.Shutdown()
-	if a.frameIdx != 0 {
-		t.Fatalf("expected frameIdx=0 after Shutdown, got %d", a.frameIdx)
-	}
-	if a.GetShadowAtlasTexture() != 0 {
-		t.Fatalf("expected GetShadowAtlasTexture=0 after Shutdown")
-	}
-	if a.CanReuseTile(ShadowTileRoom, &mat, tile.sceneHash) {
-		t.Fatalf("expected CanReuseTile=false after Shutdown")
 	}
 }

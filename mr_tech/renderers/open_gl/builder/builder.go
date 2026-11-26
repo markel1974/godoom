@@ -13,6 +13,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders/atlas"
 	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
@@ -130,7 +131,7 @@ func (w *Builder) ComputeShadows(en *engine.Engine, d *shaders.Depth) {
 }
 
 // GetShadowTiles returns the per-light shadow tile descriptors prepared by ComputeShadows.
-func (w *Builder) GetShadowTiles() *[shaders.MaxShadowTiles]shaders.TileShadow {
+func (w *Builder) GetShadowTiles() *[atlas.MaxShadowTiles]atlas.TileShadow {
 	return w.bShadow.GetTiles()
 }
 

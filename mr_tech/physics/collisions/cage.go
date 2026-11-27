@@ -203,6 +203,11 @@ func (s *Cage) GetObject() aabb.IObject {
 	return s.object
 }
 
+// GetSlots returns the cage's active collision slot collection.
+func (s *Cage) GetSlots() *Slots {
+	return s.slots
+}
+
 // Rebuild recalculates the collision cage dimensions, position, and broad-phase swept volume using the given maxStep value.[cite: 6]
 func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.session = session

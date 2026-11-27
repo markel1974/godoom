@@ -154,7 +154,7 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 		if fc.bucket.IsWall() {
 			if iMode == ImpactStep {
 				if fc.HasCoplanarFlatWall() ||
-					fc.hasCoplanarInelasticSlot(s.slots2) {
+					fc.hasCoplanarInelasticSlot(s.GetSlots()) {
 					continue
 				}
 			} else {
@@ -243,7 +243,7 @@ func (fc *StaticFaceContact) hasCoplanarInelasticSlot(s *Slots) bool {
 // pruneCoplanarStepSlots removes wall step slots whose original plane matches the given normal and anchor.
 func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
 	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
-	slots := s.slots2
+	slots := s.GetSlots()
 	for i := 0; i < slots.Len(); {
 		slot := slots.At(i)
 		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
@@ -259,7 +259,7 @@ func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
 // pruneCoplanarCornerHits removes corner-hit slots whose original plane matches the contact plane.
 func (fc *StaticFaceContact) pruneCoplanarCornerHits(s *Cage) {
 	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
-	slots := s.slots2
+	slots := s.GetSlots()
 	for i := 0; i < slots.Len(); {
 		slot := slots.At(i)
 		if slot.isCorner && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {

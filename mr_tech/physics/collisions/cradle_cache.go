@@ -81,14 +81,19 @@ type cradleBumperSector struct {
 
 // CradleCache detects multi-contact cradle support directly over cage.slots without copying contact entries.
 type CradleCache struct {
-	slopeSec  [cradleSectors]cradleSlopeSector
-	bumperSec [cradleSectors]cradleBumperSector
+	slopeSec  [cradleSectors]*cradleSlopeSector
+	bumperSec [cradleSectors]*cradleBumperSector
 	nextIdx   []int32
 }
 
 // NewCradleCache creates and returns an empty zero-copy cradle support cache.
 func NewCradleCache() *CradleCache {
-	return &CradleCache{}
+	cc := &CradleCache{}
+	for x := range cradleSectors {
+		cc.slopeSec[x] = &cradleSlopeSector{}
+		cc.bumperSec[x] = &cradleBumperSector{}
+	}
+	return cc
 }
 
 // HasSupportSmall reports whether the cage slots contain a small paired-normal cradle support.
@@ -193,7 +198,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 		bit := uint64(1) << sec
 
 		if nz <= cradleMinSlopeNZ {
-			bs := &c.bumperSec[sec]
+			bs := c.bumperSec[sec]
 			if (bumperMask & bit) == 0 {
 				bumperMask |= bit
 				bs.maxR = r
@@ -205,7 +210,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 			continue
 		}
 
-		ss := &c.slopeSec[sec]
+		ss := c.slopeSec[sec]
 		if (slopeMask & bit) == 0 {
 			slopeMask |= bit
 			ss.maxR = r
@@ -238,7 +243,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 	for m1 := slopeMask; m1 != 0; {
 		s1 := bits.TrailingZeros64(m1)
 		m1 &^= 1 << s1
-		a := &c.slopeSec[s1]
+		a := c.slopeSec[s1]
 		aRepR := slots.At(int(a.repR))
 		aRepZ := slots.At(int(a.repZ))
 		for m2 := m1; m2 != 0; {
@@ -248,7 +253,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 			if minCos >= 0 {
 				continue
 			}
-			b := &c.slopeSec[s2]
+			b := c.slopeSec[s2]
 			bRepZ := slots.At(int(b.repZ))
 			if aRepZ.nZ+bRepZ.nZ < floorNormalThreshold || a.maxR*b.maxR*minCos >= cradleMinPairDotXY {
 				continue
@@ -270,7 +275,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 		for m1 := steepMask; m1 != 0; {
 			s1 := bits.TrailingZeros64(m1)
 			m1 &^= 1 << s1
-			a := &c.slopeSec[s1]
+			a := c.slopeSec[s1]
 			aSteep := slots.At(int(a.steepRep))
 			for m2 := bumperMask; m2 != 0; {
 				s2 := bits.TrailingZeros64(m2)
@@ -279,7 +284,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 				if minCos >= 0 {
 					continue
 				}
-				b := &c.bumperSec[s2]
+				b := c.bumperSec[s2]
 				if a.steepMaxR*b.maxR*minCos >= cradleMinWallDotXY {
 					continue
 				}
@@ -358,7 +363,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 			if (needBumper & bit) == 0 {
 				continue
 			}
-			bs := &c.bumperSec[sec]
+			bs := c.bumperSec[sec]
 			dup := false
 			cur := bs.head
 			for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
@@ -379,7 +384,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 		if (needSlope&bit) == 0 && (nz < cradleSteepSupportNZ || (needSteep&bit) == 0) {
 			continue
 		}
-		ss := &c.slopeSec[sec]
+		ss := c.slopeSec[sec]
 		dup := false
 		cur := ss.head
 		for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
@@ -399,12 +404,12 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 	for m1 := ambigSlopeS1; m1 != 0; {
 		s1 := bits.TrailingZeros64(m1)
 		m1 &^= 1 << s1
-		aSec := &c.slopeSec[s1]
+		aSec := c.slopeSec[s1]
 		for m2 := ambigSlope[s1]; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
 			minCos := _cradleSectorMinCos[cradleSectorDiff(s1, s2)]
-			bSec := &c.slopeSec[s2]
+			bSec := c.slopeSec[s2]
 			bMaxNZ := slots.At(int(bSec.repZ)).nZ
 			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
 				na := slots.At(int(ni))
@@ -424,12 +429,12 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 	for m1 := ambigWallS1; m1 != 0; {
 		s1 := bits.TrailingZeros64(m1)
 		m1 &^= 1 << s1
-		aSec := &c.slopeSec[s1]
+		aSec := c.slopeSec[s1]
 		for m2 := ambigWall[s1]; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
 			minCos := _cradleSectorMinCos[cradleSectorDiff(s1, s2)]
-			bSec := &c.bumperSec[s2]
+			bSec := c.bumperSec[s2]
 			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
 				na := slots.At(int(ni))
 				if na.nZ < cradleSteepSupportNZ {

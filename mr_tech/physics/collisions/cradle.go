@@ -92,15 +92,15 @@ func NewCradleCache() *CradleCache {
 }
 
 // HasSupportSmall reports whether the cage slots contain a small paired-normal cradle support.
-func (c *CradleCache) HasSupportSmall(cage *Cage) bool {
-	n := cage.slotsLen
+func (c *CradleCache) HasSupportSmall(slots *Slots) bool {
+	n := slots.Len()
 	for i := range n {
-		a := cage.slots[i]
+		a := slots.At(i)
 		if a.iMode == ImpactStep || a.nZ < cradleMinWallBumperNZ {
 			continue
 		}
 		for j := i + 1; j < n; j++ {
-			b := cage.slots[j]
+			b := slots.At(j)
 			if b.iMode == ImpactStep || b.nZ < cradleMinWallBumperNZ {
 				continue
 			}
@@ -126,13 +126,13 @@ func (c *CradleCache) HasSupportSmall(cage *Cage) bool {
 
 // HasSupport reports whether cage.slots contain opposing slope or steep-slope bumper contacts
 // that cradle a free 6-DoF body, reading cage.slots in-place without copying entry normals.
-func (c *CradleCache) HasSupport(cage *Cage) bool {
-	n := cage.slotsLen
+func (c *CradleCache) HasSupport(slots *Slots) bool {
+	n := slots.Len()
 
 	hasSlope := false
 	hasSteep := false
 	for idx := range n {
-		e := cage.slots[idx]
+		e := slots.At(idx)
 		if e.iMode == ImpactStep {
 			continue
 		}
@@ -155,7 +155,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 	var prevSec int
 
 	for idx := range n {
-		e := cage.slots[idx]
+		e := slots.At(idx)
 		if e.iMode == ImpactStep || e.nZ < cradleMinWallBumperNZ {
 			continue
 		}
@@ -211,7 +211,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 			ss.steepMaxR = -1
 			ss.steepRep = -1
 		} else {
-			if nz > cage.slots[ss.repZ].nZ {
+			if nz > slots.At(int(ss.repZ)).nZ {
 				ss.repZ = int32(idx)
 			}
 			if r > ss.maxR {
@@ -236,8 +236,8 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 		s1 := bits.TrailingZeros64(m1)
 		m1 &^= 1 << s1
 		a := &c.slopeSec[s1]
-		aRepR := cage.slots[a.repR]
-		aRepZ := cage.slots[a.repZ]
+		aRepR := slots.At(int(a.repR))
+		aRepZ := slots.At(int(a.repZ))
 		for m2 := m1; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
@@ -246,11 +246,11 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 				continue
 			}
 			b := &c.slopeSec[s2]
-			bRepZ := cage.slots[b.repZ]
+			bRepZ := slots.At(int(b.repZ))
 			if aRepZ.nZ+bRepZ.nZ < floorNormalThreshold || a.maxR*b.maxR*minCos >= cradleMinPairDotXY {
 				continue
 			}
-			bRepR := cage.slots[b.repR]
+			bRepR := slots.At(int(b.repR))
 			if cradleSlopePairValid(aRepR, bRepR) ||
 				cradleSlopePairValid(aRepZ, bRepZ) ||
 				cradleSlopePairValid(aRepR, bRepZ) ||
@@ -268,7 +268,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 			s1 := bits.TrailingZeros64(m1)
 			m1 &^= 1 << s1
 			a := &c.slopeSec[s1]
-			aSteep := cage.slots[a.steepRep]
+			aSteep := slots.At(int(a.steepRep))
 			for m2 := bumperMask; m2 != 0; {
 				s2 := bits.TrailingZeros64(m2)
 				m2 &^= 1 << s2
@@ -280,7 +280,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 				if a.steepMaxR*b.maxR*minCos >= cradleMinWallDotXY {
 					continue
 				}
-				bRep := cage.slots[b.rep]
+				bRep := slots.At(int(b.rep))
 				if aSteep.nX*bRep.nX+aSteep.nY*bRep.nY < cradleMinWallDotXY {
 					return true
 				}
@@ -317,7 +317,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 	allSlopeMask := needSlope | needSteep
 	prevValid = false
 	for idx := range n {
-		e := cage.slots[idx]
+		e := slots.At(idx)
 		if e.iMode == ImpactStep || e.nZ < cradleMinWallBumperNZ {
 			continue
 		}
@@ -359,7 +359,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 			dup := false
 			cur := bs.head
 			for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
-				node := cage.slots[cur]
+				node := slots.At(int(cur))
 				if node.nX == nx && node.nY == ny {
 					dup = true
 					break
@@ -380,7 +380,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 		dup := false
 		cur := ss.head
 		for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
-			node := cage.slots[cur]
+			node := slots.At(int(cur))
 			if node.nX == nx && node.nY == ny && node.nZ == nz {
 				dup = true
 				break
@@ -402,15 +402,15 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 			m2 &^= 1 << s2
 			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
 			bSec := &c.slopeSec[s2]
-			bMaxNZ := cage.slots[bSec.repZ].nZ
+			bMaxNZ := slots.At(int(bSec.repZ)).nZ
 			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
-				na := cage.slots[ni]
+				na := slots.At(int(ni))
 				rA := math.Sqrt(na.nX*na.nX+na.nY*na.nY) * (1.0 + 1e-12)
 				if na.nZ+bMaxNZ < floorNormalThreshold || rA*bSec.maxR*minCos >= cradleMinPairDotXY {
 					continue
 				}
 				for nj := bSec.head; nj >= 0; nj = c.nextIdx[nj] {
-					if cradleSlopePairValid(na, cage.slots[nj]) {
+					if cradleSlopePairValid(na, slots.At(int(nj))) {
 						return true
 					}
 				}
@@ -428,7 +428,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
 			bSec := &c.bumperSec[s2]
 			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
-				na := cage.slots[ni]
+				na := slots.At(int(ni))
 				if na.nZ < cradleSteepSupportNZ {
 					continue
 				}
@@ -437,7 +437,7 @@ func (c *CradleCache) HasSupport(cage *Cage) bool {
 					continue
 				}
 				for nj := bSec.head; nj >= 0; nj = c.nextIdx[nj] {
-					nb := cage.slots[nj]
+					nb := slots.At(int(nj))
 					if na.nX*nb.nX+na.nY*nb.nY < cradleMinWallDotXY {
 						return true
 					}

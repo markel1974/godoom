@@ -108,33 +108,32 @@ type Cage struct {
 	eRadX, eRadY, eRadZ float64
 	volumeObj           aabb.IObject
 	distance            float64
-	slots               []*Entry
-	slotsLen            int
-	cradleDirty         bool
-	cradleCached        bool
-	cradle              *CradleCache
-	maxStep             float64
-	faces               []*Faces
-	facesIdx            int
-	manifold            *aabb.OBBManifold
-	staticContact       *StaticFaceContact
-	hasFloor            bool
-	applied             bool
-	appliedX            float64
-	appliedY            float64
-	appliedZ            float64
-	clampX              float64
-	clampY              float64
-	clampZ              float64
-	prevRadX            float64
-	prevRadY            float64
-	prevRadZ            float64
-	prevQX              float64
-	prevQY              float64
-	prevQZ              float64
-	prevQW              float64
-	prevKeepUpright     bool
-	forceStaticClamp    bool
+
+	cradleDirty      bool
+	cradleCached     bool
+	cradle           *CradleCache
+	maxStep          float64
+	faces            []*Faces
+	facesIdx         int
+	manifold         *aabb.OBBManifold
+	staticContact    *StaticFaceContact
+	hasFloor         bool
+	applied          bool
+	appliedX         float64
+	appliedY         float64
+	appliedZ         float64
+	clampX           float64
+	clampY           float64
+	clampZ           float64
+	prevRadX         float64
+	prevRadY         float64
+	prevRadZ         float64
+	prevQX           float64
+	prevQY           float64
+	prevQZ           float64
+	prevQW           float64
+	prevKeepUpright  bool
+	forceStaticClamp bool
 
 	passDX         float64
 	passDY         float64
@@ -150,6 +149,7 @@ type Cage struct {
 	collisionGroup uint64
 	solverIdx      int
 	solver         *Solver
+	slots2         *Slots
 }
 
 var _counter atomic.Uint64
@@ -168,8 +168,7 @@ func NewCage(id uint64) *Cage {
 		solver:        nil,
 		ellipsoid:     rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
 		volumeObj:     nil,
-		slots:         make([]*Entry, totalSlots),
-		slotsLen:      0,
+		slots2:        NewSlots(),
 		cradleDirty:   true,
 		faces:         make([]*Faces, 8),
 		facesIdx:      0,
@@ -260,7 +259,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.volumeObj = nil
 	s.distance = math.MaxFloat64
 
-	s.slotsLen = 0
+	s.slots2.Reset()
 	s.cradleDirty = true
 	s.cradleCached = false
 	s.hasFloor = false
@@ -552,23 +551,13 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pe
 	return s.addToBucketEntry(bucket, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode) != nil
 }
 
-func (s *Cage) growSlots() {
-	n := make([]*Entry, nextGrowCap(len(s.slots), int(totalSlots)))
-	copy(n, s.slots)
-	s.slots = n
-}
-
 // addToBucketEntry adds a collision entry to the selected bucket and tracks it in the cage slots.
 // It returns the created entry, or nil if no entry was added.
 func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
 	s.cradleDirty = true
 	entry := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if entry != nil {
-		if s.slotsLen >= len(s.slots) {
-			s.growSlots()
-		}
-		s.slots[s.slotsLen] = entry
-		s.slotsLen++
+		s.slots2.Add(entry)
 		return entry
 	}
 	return nil
@@ -914,19 +903,14 @@ func (s *Cage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
 
 // HasBucket reports whether the collision cage contains a bucket of the specified type.[cite: 6]
 func (s *Cage) HasBucket(t BucketType) bool {
-	for z := 0; z < s.slotsLen; z++ {
-		if s.slots[z].bucket == t {
-			return true
-		}
-	}
-	return false
+	return s.slots2.HasBucket(t)
 }
 
 // GetSlotsLen returns the current number of active slots in the Cage.[cite: 6]
-func (s *Cage) GetSlotsLen() int { return s.slotsLen }
+func (s *Cage) GetSlotsLen() int { return s.slots2.Len() }
 
 // GetSlot returns the Entry at the specified index in the slots slice.[cite: 6]
-func (s *Cage) GetSlot(i int) *Entry { return s.slots[i] }
+func (s *Cage) GetSlot(i int) *Entry { return s.slots2.At(i) }
 
 // GetVolumeObject returns the cage volume object, or nil if no volume object is set.
 func (s *Cage) GetVolumeObject() aabb.IObject { return s.volumeObj }
@@ -996,15 +980,7 @@ func (s *Cage) IsBlockedAlong(dirX, dirY, dirZ float64) bool {
 	if s.staticContact.IsBlockedAlong(dirX, dirY, dirZ, wallBlockDotThreshold) {
 		return true
 	}
-	for i := 0; i < s.slotsLen; i++ {
-		slot := s.slots[i]
-		if slot.iMode == ImpactInelastic {
-			if dirX*slot.nX+dirY*slot.nY+dirZ*slot.nZ < wallBlockDotThreshold {
-				return true
-			}
-		}
-	}
-	return false
+	return s.slots2.HasImpactInelastic(dirX, dirY, dirZ, wallBlockDotThreshold)
 }
 
 // sweptHalfExtents returns the broad-phase half-extents for s without inflating yaw-invariant KeepUpright entities.
@@ -1081,7 +1057,7 @@ func (s *Cage) HasFloor() bool {
 	if s.hasFloor {
 		return true
 	}
-	if s.entity.KeepUpright() || s.slotsLen < 2 {
+	if s.entity.KeepUpright() || s.slots2.Len() < 2 {
 		return false
 	}
 	if !s.cradleDirty {
@@ -1095,10 +1071,10 @@ func (s *Cage) HasFloor() bool {
 // hasCradleSupport reports whether two opposing contacts (two gentle upward slopes, or a steep support slope
 // blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
 func (s *Cage) hasCradleSupport() bool {
-	if s.slotsLen <= cradleSmallThreshold {
-		return s.cradle.HasSupportSmall(s)
+	if s.slots2.Len() <= cradleSmallThreshold {
+		return s.cradle.HasSupportSmall(s.slots2)
 	}
-	return s.cradle.HasSupport(s)
+	return s.cradle.HasSupport(s.slots2)
 }
 
 // SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).

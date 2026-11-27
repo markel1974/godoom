@@ -154,7 +154,7 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 		if fc.bucket.IsWall() {
 			if iMode == ImpactStep {
 				if fc.HasCoplanarFlatWall() ||
-					fc.hasCoplanarInelasticSlot(s) {
+					fc.hasCoplanarInelasticSlot(s.slots2) {
 					continue
 				}
 			} else {
@@ -229,10 +229,10 @@ func (fc *StaticFaceContact) AddClampNormal(nX, nY, nZ float64) {
 
 // hasCoplanarInelasticSlot reports whether the cage has an inelastic wall slot
 // on the original plane defined by the given normal and anchor.
-func (fc *StaticFaceContact) hasCoplanarInelasticSlot(s *Cage) bool {
+func (fc *StaticFaceContact) hasCoplanarInelasticSlot(s *Slots) bool {
 	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
-	for i := 0; i < s.slotsLen; i++ {
-		slot := s.slots[i]
+	for i := 0; i < s.Len(); i++ {
+		slot := s.At(i)
 		if slot.iMode == ImpactInelastic && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			return true
 		}
@@ -243,12 +243,12 @@ func (fc *StaticFaceContact) hasCoplanarInelasticSlot(s *Cage) bool {
 // pruneCoplanarStepSlots removes wall step slots whose original plane matches the given normal and anchor.
 func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
 	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
-	for i := 0; i < s.slotsLen; {
-		slot := s.slots[i]
+	slots := s.slots2
+	for i := 0; i < slots.Len(); {
+		slot := slots.At(i)
 		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
-			s.slotsLen--
-			s.slots[i] = s.slots[s.slotsLen]
+			slots.Decrease(i)
 			s.cradleDirty = true
 			continue
 		}
@@ -259,12 +259,12 @@ func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
 // pruneCoplanarCornerHits removes corner-hit slots whose original plane matches the contact plane.
 func (fc *StaticFaceContact) pruneCoplanarCornerHits(s *Cage) {
 	nX, nY, nZ, ax, ay, az := fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ
-	for i := 0; i < s.slotsLen; {
-		slot := s.slots[i]
+	slots := s.slots2
+	for i := 0; i < slots.Len(); {
+		slot := slots.At(i)
 		if slot.isCorner && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
-			s.slotsLen--
-			s.slots[i] = s.slots[s.slotsLen]
+			slots.Decrease(i)
 			s.cradleDirty = true
 			continue
 		}
@@ -340,6 +340,7 @@ func (fc *StaticFaceContact) HasStaticFaceCache(lAABB *aabb.AABB) bool {
 		minZ >= fc.cacheMinZ && maxZ <= fc.cacheMaxZ
 }
 
+// nextGrowCap returns the next buffer capacity, doubling cur while honoring initialCap as a minimum.
 func nextGrowCap(cur, initialCap int) int {
 	newCap := max(cur*2, initialCap)
 	return newCap

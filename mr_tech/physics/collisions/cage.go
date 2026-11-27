@@ -1017,7 +1017,7 @@ func (s *Cage) sweptHalfExtents(ent *rigid_body.Entity) (float64, float64, float
 	return sx, sy, sz
 }
 
-// BeginStaticClamp prepares a temporary swept broadphase cage from the last valid clamped center to the current entity center,
+// BeginStaticClamp prepares a temporary swept broad-phase cage from the last valid clamped center to the current entity center,
 // returning saved frame center, displacement, and target values for restoration in EndStaticClamp.
 func (s *Cage) BeginStaticClamp() (origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ float64, lAABB *aabb.AABB) {
 	origCX, origCY, origCZ = s.cX, s.cY, s.cZ
@@ -1081,14 +1081,18 @@ func (s *Cage) HasFloor() bool {
 
 // hasCradleSupport reports whether two opposing contacts (two gentle upward slopes, or a steep support slope
 // blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
+// TODO BUG DOPO LA TESSELLAZIONE MULTIPLA DIVENTA INUSABILE
 func (s *Cage) hasCradleSupport() bool {
-	const (
-		minSlopeNZ        = 0.25
-		steepSupportNZ    = 0.45
-		minWallBumperNZ   = -0.05
-		minPairOpposingXY = -0.10
-		minWallOpposingXY = -0.35
-	)
+	const minSlopeNZ = 0.25
+	const steepSupportNZ = 0.45
+	const minWallBumperNZ = -0.05
+	const minPairOpposingXY = -0.10
+	const minWallOpposingXY = -0.35
+
+	//if s.slotsLen > 124 {
+	//	fmt.Println("slotsLen > 124", s.slotsLen)
+	//}
+
 	for i := 0; i < s.slotsLen; i++ {
 		a := s.slots[i]
 		if a.iMode == ImpactStep || a.nZ < minWallBumperNZ {

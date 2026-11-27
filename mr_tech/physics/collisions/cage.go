@@ -1096,9 +1096,9 @@ func (s *Cage) HasFloor() bool {
 // blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
 func (s *Cage) hasCradleSupport() bool {
 	if s.slotsLen <= cradleSmallThreshold {
-		return s.cradle.HasSupportSmall(s.slots[:s.slotsLen])
+		return s.cradle.HasSupportSmall(s)
 	}
-	return s.cradle.HasSupport(s.slots[:s.slotsLen])
+	return s.cradle.HasSupport(s)
 }
 
 // SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).

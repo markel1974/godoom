@@ -57,68 +57,44 @@ func cradleSectorDiff(s1, s2 int) int {
 	return d
 }
 
-// cradleSlopePairValid reports whether two slope normals can jointly provide valid cradle ground support.
-func cradleSlopePairValid(ax, ay, az, bx, by, bz float64) bool {
-	return az+bz >= floorNormalThreshold && ax*bx+ay*by < cradleMinPairDotXY
+// cradleSlopePairValid reports whether two slope entries can jointly provide valid cradle ground support.
+func cradleSlopePairValid(a, b *Entry) bool {
+	return a.nZ+b.nZ >= floorNormalThreshold && a.nX*b.nX+a.nY*b.nY < cradleMinPairDotXY
 }
 
-// cradleNode stores a deduplicated contact normal sample used in sector-linked support checks.
-type cradleNode struct {
-	nX, nY, nZ float64
-	r          float64
-	next       int32
-}
-
-// cradleSlopeSector summarizes slope contacts in one angular sector for support pruning.
-// It keeps representative extremes and a node-list head for exact fallback checks.
+// cradleSlopeSector summarizes slope contacts in one angular sector using indices into cage.slots.
 type cradleSlopeSector struct {
-	head      int32
-	maxNZ     float64
 	maxR      float64
-	repRX     float64
-	repRY     float64
-	repRZ     float64
-	repZX     float64
-	repZY     float64
-	repZZ     float64
 	steepMaxR float64
-	steepRepX float64
-	steepRepY float64
+	repR      int32
+	repZ      int32
+	steepRep  int32
+	head      int32
 }
 
-// cradleBumperSector stores summary data for wall-bumper contacts within one angular cradle sector.
-// It tracks representative extremes used to prune support checks before exact node comparisons.
+// cradleBumperSector summarizes wall-bumper contacts in one angular sector using an index into cage.slots.
 type cradleBumperSector struct {
-	head int32
 	maxR float64
-	repX float64
-	repY float64
+	rep  int32
+	head int32
 }
 
-// CradleCache stores reusable sectorized contact data for efficient cradle support detection.
+// CradleCache detects multi-contact cradle support directly over cage.slots without copying contact entries.
 type CradleCache struct {
-	slopeSec    [cradleSectors]cradleSlopeSector
-	bumperSec   [cradleSectors]cradleBumperSector
-	slopeNodes  []cradleNode
-	bumperNodes []cradleNode
-	ambigSlopes []uint16
-	ambigWalls  []uint16
+	slopeSec  [cradleSectors]cradleSlopeSector
+	bumperSec [cradleSectors]cradleBumperSector
+	nextIdx   []int32
 }
 
-// NewCradleCache creates and returns an initialized cradle support cache.
+// NewCradleCache creates and returns an empty zero-copy cradle support cache.
 func NewCradleCache() *CradleCache {
-	c := &CradleCache{
-		slopeNodes:  make([]cradleNode, 0, 128),
-		bumperNodes: make([]cradleNode, 0, 128),
-		ambigSlopes: make([]uint16, 0, 64),
-		ambigWalls:  make([]uint16, 0, 64),
-	}
-	return c
+	return &CradleCache{}
 }
 
-// HasSupportSmall reports whether the given contact slots contain a small paired-normal cradle support.
-func (c *CradleCache) HasSupportSmall(slots []*Entry) bool {
-	n := len(slots)
+// HasSupportSmall reports whether the cage slots contain a small paired-normal cradle support.
+func (c *CradleCache) HasSupportSmall(cage *Cage) bool {
+	n := cage.slotsLen
+	slots := cage.slots[:n]
 	for i := range n {
 		a := slots[i]
 		if a.iMode == ImpactStep || a.nZ < cradleMinWallBumperNZ {
@@ -149,12 +125,15 @@ func (c *CradleCache) HasSupportSmall(slots []*Entry) bool {
 	return false
 }
 
-// HasSupport reports whether slots contain opposing slope or steep-slope bumper contacts that can support a cradle.
-func (c *CradleCache) HasSupport(slots []*Entry) bool {
+// HasSupport reports whether cage.slots contain opposing slope or steep-slope bumper contacts
+// that cradle a free 6-DoF body, reading cage.slots in-place without copying entry normals.
+func (c *CradleCache) HasSupport(cage *Cage) bool {
+	n := cage.slotsLen
+
 	hasSlope := false
 	hasSteep := false
-	for i := range slots {
-		e := slots[i]
+	for idx := range n {
+		e := cage.slots[idx]
 		if e.iMode == ImpactStep {
 			continue
 		}
@@ -170,15 +149,14 @@ func (c *CradleCache) HasSupport(slots []*Entry) bool {
 		return false
 	}
 
-	c.slopeNodes = c.slopeNodes[:0]
-	c.bumperNodes = c.bumperNodes[:0]
-	c.ambigSlopes = c.ambigSlopes[:0]
-	c.ambigWalls = c.ambigWalls[:0]
-
 	var slopeMask, steepMask, bumperMask uint64
+	var prevValid bool
+	var prevBX, prevBY uint64
+	var prevNZ, prevR float64
+	var prevSec int
 
-	for i := range slots {
-		e := slots[i]
+	for idx := range n {
+		e := cage.slots[idx]
 		if e.iMode == ImpactStep || e.nZ < cradleMinWallBumperNZ {
 			continue
 		}
@@ -187,40 +165,40 @@ func (c *CradleCache) HasSupport(slots []*Entry) bool {
 			continue
 		}
 		nx, ny := e.nX, e.nY
-		rSq := nx*nx + ny*ny
-		if rSq == 0 {
-			continue
+		bx, by := math.Float64bits(nx), math.Float64bits(ny)
+		var r float64
+		var sec int
+		if prevValid && bx == prevBX && by == prevBY {
+			if nz == prevNZ {
+				continue
+			}
+			r = prevR
+			sec = prevSec
+		} else {
+			rSq := nx*nx + ny*ny
+			if rSq == 0 {
+				continue
+			}
+			// Pad upper-bound radius by 1 ULP margin so sector pruning never drops exact boundary contacts.
+			r = math.Sqrt(rSq) * (1.0 + 1e-12)
+			sec = cradleSectorForXY(nx, ny)
+			prevBX, prevBY = bx, by
+			prevR = r
+			prevSec = sec
+			prevValid = true
 		}
-		// Pad upper-bound radius by 1 ULP margin so sector pruning never drops exact boundary contacts.
-		r := math.Sqrt(rSq) * (1.0 + 1e-12)
-		sec := cradleSectorForXY(nx, ny)
+		prevNZ = nz
 		bit := uint64(1) << sec
 
 		if nz <= cradleMinSlopeNZ {
 			bs := &c.bumperSec[sec]
 			if (bumperMask & bit) == 0 {
 				bumperMask |= bit
-				bs.head = -1
 				bs.maxR = r
-				bs.repX, bs.repY = nx, ny
+				bs.rep = int32(idx)
 			} else if r > bs.maxR {
 				bs.maxR = r
-				bs.repX, bs.repY = nx, ny
-			}
-			dup := false
-			cur := bs.head
-			for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
-				node := &c.bumperNodes[cur]
-				if node.nX == nx && node.nY == ny {
-					dup = true
-					break
-				}
-				cur = node.next
-			}
-			if !dup {
-				idx := int32(len(c.bumperNodes))
-				c.bumperNodes = append(c.bumperNodes, cradleNode{nX: nx, nY: ny, nZ: nz, r: r, next: bs.head})
-				bs.head = idx
+				bs.rep = int32(idx)
 			}
 			continue
 		}
@@ -228,49 +206,39 @@ func (c *CradleCache) HasSupport(slots []*Entry) bool {
 		ss := &c.slopeSec[sec]
 		if (slopeMask & bit) == 0 {
 			slopeMask |= bit
-			ss.head = -1
-			ss.maxNZ = nz
 			ss.maxR = r
-			ss.repRX, ss.repRY, ss.repRZ = nx, ny, nz
-			ss.repZX, ss.repZY, ss.repZZ = nx, ny, nz
+			ss.repR = int32(idx)
+			ss.repZ = int32(idx)
 			ss.steepMaxR = -1
+			ss.steepRep = -1
 		} else {
-			if nz > ss.maxNZ {
-				ss.maxNZ = nz
-				ss.repZX, ss.repZY, ss.repZZ = nx, ny, nz
+			if nz > cage.slots[ss.repZ].nZ {
+				ss.repZ = int32(idx)
 			}
 			if r > ss.maxR {
 				ss.maxR = r
-				ss.repRX, ss.repRY, ss.repRZ = nx, ny, nz
+				ss.repR = int32(idx)
 			}
 		}
 		if nz >= cradleSteepSupportNZ && ((steepMask&bit) == 0 || r > ss.steepMaxR) {
 			steepMask |= bit
 			ss.steepMaxR = r
-			ss.steepRepX, ss.steepRepY = nx, ny
-		}
-		dup := false
-		cur := ss.head
-		for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
-			node := &c.slopeNodes[cur]
-			if node.nX == nx && node.nY == ny && node.nZ == nz {
-				dup = true
-				break
-			}
-			cur = node.next
-		}
-		if !dup {
-			idx := int32(len(c.slopeNodes))
-			c.slopeNodes = append(c.slopeNodes, cradleNode{nX: nx, nY: ny, nZ: nz, r: r, next: ss.head})
-			ss.head = idx
+			ss.steepRep = int32(idx)
 		}
 	}
 
-	// Phase A: Check extreme sector representatives first for O(1) sector-pair hits or bounds pruning.
+	var ambigSlope [cradleSectors]uint64
+	var ambigWall [cradleSectors]uint64
+	var ambigSlopeS1, needSlope uint64
+	var ambigWallS1, needSteep, needBumper uint64
+
+	// Phase A: Check extreme sector representatives directly via slots indices for O(1) hits or pruning.
 	for m1 := slopeMask; m1 != 0; {
 		s1 := bits.TrailingZeros64(m1)
 		m1 &^= 1 << s1
 		a := &c.slopeSec[s1]
+		aRepR := cage.slots[a.repR]
+		aRepZ := cage.slots[a.repZ]
 		for m2 := m1; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
@@ -279,16 +247,20 @@ func (c *CradleCache) HasSupport(slots []*Entry) bool {
 				continue
 			}
 			b := &c.slopeSec[s2]
-			if a.maxNZ+b.maxNZ < floorNormalThreshold || a.maxR*b.maxR*minCos >= cradleMinPairDotXY {
+			bRepZ := cage.slots[b.repZ]
+			if aRepZ.nZ+bRepZ.nZ < floorNormalThreshold || a.maxR*b.maxR*minCos >= cradleMinPairDotXY {
 				continue
 			}
-			if cradleSlopePairValid(a.repRX, a.repRY, a.repRZ, b.repRX, b.repRY, b.repRZ) ||
-				cradleSlopePairValid(a.repZX, a.repZY, a.repZZ, b.repZX, b.repZY, b.repZZ) ||
-				cradleSlopePairValid(a.repRX, a.repRY, a.repRZ, b.repZX, b.repZY, b.repZZ) ||
-				cradleSlopePairValid(a.repZX, a.repZY, a.repZZ, b.repRX, b.repRY, b.repRZ) {
+			bRepR := cage.slots[b.repR]
+			if cradleSlopePairValid(aRepR, bRepR) ||
+				cradleSlopePairValid(aRepZ, bRepZ) ||
+				cradleSlopePairValid(aRepR, bRepZ) ||
+				cradleSlopePairValid(aRepZ, bRepR) {
 				return true
 			}
-			c.ambigSlopes = append(c.ambigSlopes, uint16((s1<<8)|s2))
+			ambigSlope[s1] |= uint64(1) << s2
+			ambigSlopeS1 |= uint64(1) << s1
+			needSlope |= (uint64(1) << s1) | (uint64(1) << s2)
 		}
 	}
 
@@ -297,6 +269,7 @@ func (c *CradleCache) HasSupport(slots []*Entry) bool {
 			s1 := bits.TrailingZeros64(m1)
 			m1 &^= 1 << s1
 			a := &c.slopeSec[s1]
+			aSteep := cage.slots[a.steepRep]
 			for m2 := bumperMask; m2 != 0; {
 				s2 := bits.TrailingZeros64(m2)
 				m2 &^= 1 << s2
@@ -308,50 +281,167 @@ func (c *CradleCache) HasSupport(slots []*Entry) bool {
 				if a.steepMaxR*b.maxR*minCos >= cradleMinWallDotXY {
 					continue
 				}
-				if a.steepRepX*b.repX+a.steepRepY*b.repY < cradleMinWallDotXY {
+				bRep := cage.slots[b.rep]
+				if aSteep.nX*bRep.nX+aSteep.nY*bRep.nY < cradleMinWallDotXY {
 					return true
 				}
-				c.ambigWalls = append(c.ambigWalls, uint16((s1<<8)|s2))
+				ambigWall[s1] |= uint64(1) << s2
+				ambigWallS1 |= uint64(1) << s1
+				needSteep |= uint64(1) << s1
+				needBumper |= uint64(1) << s2
 			}
 		}
 	}
 
-	// Phase B: Exact fallback only across deduplicated nodes inside surviving hairline sector pairs.
-	for _, packed := range c.ambigSlopes {
-		s1, s2 := int(packed>>8), int(packed&0xFF)
-		minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
-		bSec := &c.slopeSec[s2]
-		for ni := c.slopeSec[s1].head; ni >= 0; {
-			na := &c.slopeNodes[ni]
-			ni = na.next
-			if na.nZ+bSec.maxNZ < floorNormalThreshold || na.r*bSec.maxR*minCos >= cradleMinPairDotXY {
+	if (ambigSlopeS1 | ambigWallS1) == 0 {
+		return false
+	}
+
+	// Phase B: Index surviving hairline sectors lazily in-place using only nextIdx slot indices (zero Entry copies).
+	for m := needSlope | needSteep; m != 0; {
+		s := bits.TrailingZeros64(m)
+		m &^= 1 << s
+		c.slopeSec[s].head = -1
+	}
+	for m := needBumper; m != 0; {
+		s := bits.TrailingZeros64(m)
+		m &^= 1 << s
+		c.bumperSec[s].head = -1
+	}
+
+	if cap(c.nextIdx) < n {
+		c.nextIdx = make([]int32, n)
+	} else {
+		c.nextIdx = c.nextIdx[:n]
+	}
+
+	allSlopeMask := needSlope | needSteep
+	prevValid = false
+	for idx := range n {
+		e := cage.slots[idx]
+		if e.iMode == ImpactStep || e.nZ < cradleMinWallBumperNZ {
+			continue
+		}
+		nz := e.nZ
+		isSlope := nz > cradleMinSlopeNZ
+		if isSlope {
+			if (nz < cradleSteepSupportNZ && needSlope == 0) || allSlopeMask == 0 {
 				continue
 			}
-			for nj := bSec.head; nj >= 0; {
-				nb := &c.slopeNodes[nj]
-				nj = nb.next
-				if na.nZ+nb.nZ >= floorNormalThreshold && na.nX*nb.nX+na.nY*nb.nY < cradleMinPairDotXY {
-					return true
+		} else if needBumper == 0 {
+			continue
+		}
+
+		nx, ny := e.nX, e.nY
+		bx, by := math.Float64bits(nx), math.Float64bits(ny)
+		var sec int
+		if prevValid && bx == prevBX && by == prevBY {
+			if nz == prevNZ {
+				continue
+			}
+			sec = prevSec
+		} else {
+			if nx*nx+ny*ny == 0 {
+				continue
+			}
+			sec = cradleSectorForXY(nx, ny)
+			prevBX, prevBY = bx, by
+			prevSec = sec
+			prevValid = true
+		}
+		prevNZ = nz
+		bit := uint64(1) << sec
+
+		if !isSlope {
+			if (needBumper & bit) == 0 {
+				continue
+			}
+			bs := &c.bumperSec[sec]
+			dup := false
+			cur := bs.head
+			for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
+				node := cage.slots[cur]
+				if node.nX == nx && node.nY == ny {
+					dup = true
+					break
+				}
+				cur = c.nextIdx[cur]
+			}
+			if !dup {
+				c.nextIdx[idx] = bs.head
+				bs.head = int32(idx)
+			}
+			continue
+		}
+
+		if (needSlope&bit) == 0 && (nz < cradleSteepSupportNZ || (needSteep&bit) == 0) {
+			continue
+		}
+		ss := &c.slopeSec[sec]
+		dup := false
+		cur := ss.head
+		for k := 0; cur >= 0 && k < cradleDedupWindow; k++ {
+			node := cage.slots[cur]
+			if node.nX == nx && node.nY == ny && node.nZ == nz {
+				dup = true
+				break
+			}
+			cur = c.nextIdx[cur]
+		}
+		if !dup {
+			c.nextIdx[idx] = ss.head
+			ss.head = int32(idx)
+		}
+	}
+
+	for m1 := ambigSlopeS1; m1 != 0; {
+		s1 := bits.TrailingZeros64(m1)
+		m1 &^= 1 << s1
+		aSec := &c.slopeSec[s1]
+		for m2 := ambigSlope[s1]; m2 != 0; {
+			s2 := bits.TrailingZeros64(m2)
+			m2 &^= 1 << s2
+			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
+			bSec := &c.slopeSec[s2]
+			bMaxNZ := cage.slots[bSec.repZ].nZ
+			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
+				na := cage.slots[ni]
+				rA := math.Sqrt(na.nX*na.nX+na.nY*na.nY) * (1.0 + 1e-12)
+				if na.nZ+bMaxNZ < floorNormalThreshold || rA*bSec.maxR*minCos >= cradleMinPairDotXY {
+					continue
+				}
+				for nj := bSec.head; nj >= 0; nj = c.nextIdx[nj] {
+					if cradleSlopePairValid(na, cage.slots[nj]) {
+						return true
+					}
 				}
 			}
 		}
 	}
 
-	for _, packed := range c.ambigWalls {
-		s1, s2 := int(packed>>8), int(packed&0xFF)
-		minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
-		bSec := &c.bumperSec[s2]
-		for ni := c.slopeSec[s1].head; ni >= 0; {
-			na := &c.slopeNodes[ni]
-			ni = na.next
-			if na.nZ < cradleSteepSupportNZ || na.r*bSec.maxR*minCos >= cradleMinWallDotXY {
-				continue
-			}
-			for nj := bSec.head; nj >= 0; {
-				nb := &c.bumperNodes[nj]
-				nj = nb.next
-				if na.nX*nb.nX+na.nY*nb.nY < cradleMinWallDotXY {
-					return true
+	for m1 := ambigWallS1; m1 != 0; {
+		s1 := bits.TrailingZeros64(m1)
+		m1 &^= 1 << s1
+		aSec := &c.slopeSec[s1]
+		for m2 := ambigWall[s1]; m2 != 0; {
+			s2 := bits.TrailingZeros64(m2)
+			m2 &^= 1 << s2
+			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
+			bSec := &c.bumperSec[s2]
+			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
+				na := cage.slots[ni]
+				if na.nZ < cradleSteepSupportNZ {
+					continue
+				}
+				rA := math.Sqrt(na.nX*na.nX+na.nY*na.nY) * (1.0 + 1e-12)
+				if rA*bSec.maxR*minCos >= cradleMinWallDotXY {
+					continue
+				}
+				for nj := bSec.head; nj >= 0; nj = c.nextIdx[nj] {
+					nb := cage.slots[nj]
+					if na.nX*nb.nX+na.nY*nb.nY < cradleMinWallDotXY {
+						return true
+					}
 				}
 			}
 		}

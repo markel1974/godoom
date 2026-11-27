@@ -60,6 +60,11 @@ func (w *Builder) GetShadowLights() ([8]*metrics.Light, int32) {
 	return w.bl.GetFrameLights().GetShadowLights()
 }
 
+// GetFrameLights returns the lighting data collected for the current frame.
+func (w *Builder) GetFrameLights() *FrameLights {
+	return w.bl.GetFrameLights()
+}
+
 // GetSceneDirectional returns the active global directional light collected this frame, if present.
 func (w *Builder) GetSceneDirectional() ([3]float32, [4]float32, bool) {
 	return w.bl.GetFrameLights().GetSceneDirectional()
@@ -123,10 +128,6 @@ func (w *Builder) GetUploadHints() (staticVertBytes, staticIdxBytes int, staticG
 
 // ComputeShadows updates per-light shadow tile draw lists and instance transforms for the active depth state.
 func (w *Builder) ComputeShadows(en *engine.Engine, d *shaders.Depth) {
-	if en == nil || d == nil {
-		w.bShadow.DisableAllTiles()
-		return
-	}
 	w.bShadow.Process(en.GetVolumes(), en.GetThings(), d)
 }
 

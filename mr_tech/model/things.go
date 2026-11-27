@@ -197,8 +197,8 @@ func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IO
 	th.tree.QueryFrustum(front, callback)
 }
 
-// QueryFrustumsMask performs a batched query? Wait — QueryFrustumsMask traverses the things tree once across all frustums enabled in activeMask.
-func (th *Things) QueryFrustumsMask(frustums []aabb.Frustum, activeMask uint32, callback func(object aabb.IObject, leafMask uint32) bool) {
+// QueryFrustumsMask queries objects against the active frustums and calls callback with each object and leaf mask.
+func (th *Things) QueryFrustumsMask(frustums *aabb.Frustums, activeMask uint32, callback func(object aabb.IObject, leafMask uint32) bool) {
 	th.tree.QueryFrustumsMask(frustums, activeMask, callback)
 }
 

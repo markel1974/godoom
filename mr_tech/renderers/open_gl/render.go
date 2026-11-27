@@ -30,7 +30,6 @@ type RenderOpenGL struct {
 	container              []IShader
 	enableShadows          bool
 	enableBoundingBoxDebug bool
-	sunUserOverride        bool
 
 	mapMetrics          *metrics.Map
 	flashlightMetrics   *metrics.Flashlight
@@ -183,9 +182,6 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
-	lights, lightSize, lightsCount := w.builder.GetLights()
-	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
-
 	if w.handler.SetSize(fbW, fbH) {
 		w.scaleX, w.scaleY = w.mapMetrics.GetScale3d(fbW, fbH, float32(w.cal.AspectRatio), float32(w.cal.FovVerticalDegrees))
 		w.flashlightMetrics.Rebuild(fbW, fbH)
@@ -196,22 +192,11 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	roomCX, _, roomCZ := w.player.GetEntity().GetCenter()
 
-	atl := w.depth.GetAtlas()
-	roomTileRes := float32(1024)
-	if atl.GetWidth() >= 64 {
-		roomTileRes = float32(atl.GetWidth() / 2)
-	}
-	w.mapMetrics.SetCenterSnapped(float32(roomCX), float32(roomCZ), w.mapMetrics.GetLightCamY(), roomTileRes)
+	w.mapMetrics.SetCenterSnapped(float32(roomCX), float32(roomCZ), w.mapMetrics.GetLightCamY(), w.depth.GetRoomTileRes())
+
 	w.mapMetrics.Update(w.vi, w.scaleX, w.scaleY)
-	if w.handler.IsSunEnabled() && !w.sunUserOverride {
-		if dirGL, colInt, ok := w.builder.GetSceneDirectional(); ok {
-			if sunCSM := w.handler.GetSunCSM(); sunCSM != nil {
-				sunCSM.SetDirectionGL(dirGL[0], dirGL[1], dirGL[2])
-				sunCSM.SetColor(colInt[0], colInt[1], colInt[2], colInt[3])
-			}
-		}
-	}
-	w.handler.UpdateSunAndFog(w.scaleX, w.scaleY)
+
+	w.handler.UpdateSunAndFog(w.scaleX, w.scaleY, w.builder.GetFrameLights())
 
 	swayX, swayY, swaySensitivity := w.vi.GetSway()
 	rawFlashX, rawFlashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
@@ -219,6 +204,7 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	w.flashlightMetrics.UpdateWithAim(w.mapMetrics.GetViewPtr(), flashX, flashY, rawFlashX, rawFlashY, flashSensitivity)
 
+	shadowLights, shadowLightsCount := w.builder.GetShadowLights()
 	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
 
 	// RENDER START HERE
@@ -233,6 +219,7 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	// MAIN PREPARE (VBO and EBO)
 	w.main.PrepareFrame(vert, vertSize, staticVertBytes, indices, indexSize, staticIdxBytes, staticGen, frameGen)
 	// LIGHTS PREPARE (UBO)
+	lights, lightSize, lightsCount := w.builder.GetLights()
 	w.lights.Prepare(lights, lightSize, lightsCount)
 	// OMBRE
 	w.depth.RenderWithTiles(w.dcOpaque, w.builder.GetShadowTiles())
@@ -277,6 +264,7 @@ func (w *RenderOpenGL) RenderToggleShadows() {
 	w.SetShadowsEnabled(!w.enableShadows)
 }
 
+// RenderToggleBoundingBoxDebug toggles bounding box debug rendering on or off.
 func (w *RenderOpenGL) RenderToggleBoundingBoxDebug() {
 	w.SetBoundingBoxDebug(!w.enableBoundingBoxDebug)
 }
@@ -358,40 +346,23 @@ func (w *RenderOpenGL) SetBoundingBoxDebug(debug bool) {
 
 // SetSunEnabled enables or disables outdoor directional sunlight and 4-cascade CSM shadows.
 func (w *RenderOpenGL) SetSunEnabled(enabled bool) {
-	if w.handler != nil {
-		w.handler.SetSunEnabled(enabled)
-	}
-	if w.builder != nil {
-		w.builder.SetSuppressDirectionalForCSM(enabled)
-	}
+	w.handler.SetSunEnabled(enabled)
+	w.builder.SetSuppressDirectionalForCSM(enabled)
 }
 
 // SetSunDirection sets the outdoor directional sun travel ray in engine Z-up coordinates.
 func (w *RenderOpenGL) SetSunDirection(ex, ey, ez float32) {
-	w.sunUserOverride = true
-	if w.handler != nil {
-		if sun := w.handler.GetSunCSM(); sun != nil {
-			sun.SetDirectionEngine(ex, ey, ez)
-		}
-	}
+	w.handler.SetSunDirection(ex, ey, ez)
 }
 
 // SetSunColor updates outdoor sun linear RGB radiance, intensity multiplier, and sky/ground fill ambient.
 func (w *RenderOpenGL) SetSunColor(r, g, b, intensity, skyR, skyG, skyB, groundR, groundG, groundB float32) {
-	w.sunUserOverride = true
-	if w.handler != nil {
-		if sun := w.handler.GetSunCSM(); sun != nil {
-			sun.SetColor(r, g, b, intensity)
-			sun.SetSkyAmbient(skyR, skyG, skyB, groundR, groundG, groundB)
-		}
-	}
+	w.handler.SetSunColor(r, g, b, intensity, skyR, skyG, skyB, groundR, groundG, groundB)
 }
 
 // SetHorizonFogEnabled enables or disables global atmospheric distance/horizon fog.
 func (w *RenderOpenGL) SetHorizonFogEnabled(enabled bool) {
-	if w.handler != nil {
-		w.handler.SetHorizonFogEnabled(enabled)
-	}
+	w.handler.SetHorizonFogEnabled(enabled)
 }
 
 // SetHorizonFog configures horizon fog colors, distance bounds, density, and sun in-scattering at runtime.

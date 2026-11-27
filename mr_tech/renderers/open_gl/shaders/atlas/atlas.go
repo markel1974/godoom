@@ -55,6 +55,14 @@ func NewAtlas(ctx api.IContext) *Atlas {
 	return a
 }
 
+// GetTileRes returns the shadow tile resolution derived from the atlas width, defaulting to 1024.
+func (s *Atlas) GetTileRes() float32 {
+	if w := s.width; w > 64 {
+		return float32(w / 2)
+	}
+	return 1024
+}
+
 // GetWidth returns the configured width of the shadow atlas in pixels.
 func (s *Atlas) GetWidth() int32 {
 	return s.width

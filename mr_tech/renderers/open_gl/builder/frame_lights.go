@@ -102,6 +102,23 @@ func (f *FrameLights) GetSceneDirectional() (dirGL [3]float32, colorInt [4]float
 	return f.sceneDirGL, f.sceneColorInt, f.hasSceneDir
 }
 
+// HasSceneDir reports whether a scene directional light has been collected for the current frame.
+func (f *FrameLights) HasSceneDir() bool {
+	return f.hasSceneDir
+}
+
+// GetSceneDir returns the current scene directional light direction as x, y, and z components.
+func (f *FrameLights) GetSceneDir() (float32, float32, float32) {
+	ptr := &f.sceneDirGL
+	return ptr[0], ptr[1], ptr[2]
+}
+
+// GetSceneColorInt returns the scene directional light color components and intensity.
+func (f *FrameLights) GetSceneColorInt() (float32, float32, float32, float32) {
+	ptr := &f.sceneColorInt
+	return ptr[0], ptr[1], ptr[2], ptr[3]
+}
+
 // Prepare initializes camera position for lighting calculations and resets the shadow lights index to zero.
 func (f *FrameLights) Prepare() {
 	//TODO VERIFICA

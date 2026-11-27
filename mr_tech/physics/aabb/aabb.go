@@ -305,8 +305,8 @@ func intersectFrustumBounds(minX, minY, minZ, maxX, maxY, maxZ float64, f *Frust
 	if f.hasBounds && (maxX < f.bMinX || minX > f.bMaxX || maxY < f.bMinY || minY > f.bMaxY || maxZ < f.bMinZ || minZ > f.bMaxZ) {
 		return false
 	}
-	for i := 0; i < 6; i++ {
-		p := &f.Planes[i]
+	for i := range 6 {
+		p := f.Planes[i]
 		pX := minX
 		if p.NormalX > 0 {
 			pX = maxX

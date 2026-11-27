@@ -163,7 +163,7 @@ func (s *Volumes) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.
 }
 
 // QueryFrustumsMask traverses the volumes tree once across all frustums enabled in activeMask.
-func (s *Volumes) QueryFrustumsMask(frustums []aabb.Frustum, activeMask uint32, callback func(object aabb.IObject, leafMask uint32) bool) {
+func (s *Volumes) QueryFrustumsMask(frustums *aabb.Frustums, activeMask uint32, callback func(object aabb.IObject, leafMask uint32) bool) {
 	s.tree.QueryFrustumsMask(frustums, activeMask, callback)
 }
 

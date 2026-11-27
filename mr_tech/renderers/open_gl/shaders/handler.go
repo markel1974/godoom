@@ -10,6 +10,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
+type IFrameLights interface {
+	GetSceneDir() (float32, float32, float32)
+
+	GetSceneColorInt() (float32, float32, float32, float32)
+
+	HasSceneDir() bool
+}
+
 // Handler manages rendering components, graphical settings, metrics, and the overall rendering pipeline configuration.
 type Handler struct {
 	ctx api.IContext
@@ -56,6 +64,8 @@ type Handler struct {
 	bias              float32
 	hvPassages        int32
 	internalPassages  int32
+
+	sunUserOverride bool
 }
 
 // NewHandler initializes and returns a new instance of Handler with the specified vertex and light stride values.
@@ -210,33 +220,41 @@ func (h *Handler) GetAtmosphereFog() *metrics.AtmosphereFog {
 }
 
 // UpdateSunAndFog updates sun cascade matrices and far-plane-derived fog bounds for the active view.
-func (h *Handler) UpdateSunAndFog(scaleX, scaleY float32) {
-	if h.mapMetrics == nil {
-		return
+func (h *Handler) UpdateSunAndFog(scaleX, scaleY float32, fs IFrameLights) {
+	if h.sunCSM.IsEnabled() && !h.sunUserOverride {
+		if fs.HasSceneDir() {
+			h.sunCSM.SetDirectionGL(fs.GetSceneDir())
+			h.sunCSM.SetColor(fs.GetSceneColorInt())
+		}
 	}
 	zNear := h.mapMetrics.GetRoomZNear()
 	zFar := h.mapMetrics.GetRoomZFar()
-	if h.sunCSM != nil {
-		h.sunCSM.Update(h.mapMetrics, scaleX, scaleY, zNear, zFar)
-	}
-	if h.atmosphereFog != nil {
-		h.atmosphereFog.UpdateZFar(zFar)
-	}
+	h.sunCSM.Update(h.mapMetrics, scaleX, scaleY, zNear, zFar)
+	h.atmosphereFog.UpdateZFar(zFar)
 }
 
 // SetSunEnabled toggles outdoor Sun + CSM shadow rendering and invalidates stale shadow atlas tiles.
 func (h *Handler) SetSunEnabled(enabled bool) {
-	if h.sunCSM != nil {
-		h.sunCSM.SetEnabled(enabled)
-	}
-	if h.depth != nil {
-		h.depth.InvalidateCache()
-	}
+	h.sunCSM.SetEnabled(enabled)
+	h.depth.InvalidateCache()
+}
+
+// SetSunDirection sets the outdoor directional sun travel ray in engine Z-up coordinates.
+func (h *Handler) SetSunDirection(ex, ey, ez float32) {
+	h.sunUserOverride = true
+	h.sunCSM.SetDirectionEngine(ex, ey, ez)
+}
+
+// SetSunColor updates outdoor sun linear RGB radiance, intensity multiplier, and sky/ground fill ambient.
+func (h *Handler) SetSunColor(r, g, b, intensity, skyR, skyG, skyB, groundR, groundG, groundB float32) {
+	h.sunUserOverride = true
+	h.sunCSM.SetColor(r, g, b, intensity)
+	h.sunCSM.SetSkyAmbient(skyR, skyG, skyB, groundR, groundG, groundB)
 }
 
 // IsSunEnabled reports whether outdoor directional Sun + CSM shadows are enabled.
 func (h *Handler) IsSunEnabled() bool {
-	return h.sunCSM != nil && h.sunCSM.IsEnabled()
+	return h.sunCSM.IsEnabled()
 }
 
 // SetHorizonFogEnabled toggles atmospheric horizon fog.

@@ -129,6 +129,11 @@ func (s *Depth) InvalidateCache() {
 	s.atlas.InvalidateCache()
 }
 
+// GetRoomTileRes returns the room shadow tile resolution based on the atlas width, defaulting to 1024.
+func (s *Depth) GetRoomTileRes() float32 {
+	return s.atlas.GetTileRes()
+}
+
 // GetAtlas returns the depth shadow atlas managed by this Depth instance.
 func (s *Depth) GetAtlas() *atlas.Atlas {
 	return s.atlas
@@ -147,9 +152,10 @@ func (s *Depth) GetTileConfig(slot int) (bool, bool, *float32) {
 	if !s.shadows {
 		return false, false, nil
 	}
-	useSunCSM := s.sunCSM != nil && s.sunCSM.IsEnabled()
+
 	switch {
 	case slot == atlas.ShadowTileRoom:
+		useSunCSM := s.sunCSM.IsEnabled()
 		if useSunCSM {
 			return false, false, nil
 		}
@@ -170,6 +176,7 @@ func (s *Depth) GetTileConfig(slot int) (bool, bool, *float32) {
 		}
 		return true, false, lMatrix
 	case slot >= atlas.ShadowTileSunBase && slot < atlas.MaxShadowTiles:
+		useSunCSM := s.sunCSM.IsEnabled()
 		if !useSunCSM {
 			return false, false, nil
 		}

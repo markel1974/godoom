@@ -71,7 +71,7 @@ type Shadows struct {
 	tiles              *atlas.TilesHandler
 	tileDeps           [2][atlas.MaxShadowTiles]ShadowTileDeps
 	builders           [atlas.MaxShadowTiles]*ShadowTileBuilder
-	tileFrustums       [atlas.MaxShadowTiles]aabb.Frustum
+	tileFrustums       *aabb.Frustums
 	instPool           *buffers.InstancePool
 	instGroups         buffers.PtrPool[ShadowsRigidGroup]
 	groupToken         uint64
@@ -100,7 +100,9 @@ func NewShadows(bContext *Context, bStatic *Static, bThing *Things) *Shadows {
 		volScratchLen:   0,
 		thingScratch:    make([]ShadowsCollectedThing, 256),
 		thingScratchLen: 0,
+		tileFrustums:    aabb.NewFrustums(atlas.MaxShadowTiles),
 	}
+
 	bs.instGroups.Init(32)
 	for t := range atlas.MaxShadowTiles {
 		bs.builders[t] = NewShadowTileBuilder(ctx)
@@ -166,10 +168,10 @@ func (w *Shadows) Process(vols *model.Volumes, th *model.Things, depth *shaders.
 		}
 
 		mat := *(*[16]float32)(unsafe.Pointer(matrixPtr))
-		w.tileFrustums[t].Rebuild(glToEngineVP(mat))
+		w.tileFrustums.Container[t].Rebuild(glToEngineVP(mat))
 		if orthoDepthClamp {
 			// Room ortho enables DEPTH_CLAMP so near overhangs above lightCamY still cast shadows.
-			w.tileFrustums[t].DisableNearPlane()
+			w.tileFrustums.Container[t].DisableNearPlane()
 		}
 		queryMask |= tileBit
 	}
@@ -288,7 +290,7 @@ func (w *Shadows) collectShadowVolumes(vols *model.Volumes, activeMask uint32, v
 	if activeMask == 0 {
 		return
 	}
-	vols.QueryFrustumsMask(w.tileFrustums[:], activeMask, func(object aabb.IObject, leafMask uint32) bool {
+	vols.QueryFrustumsMask(w.tileFrustums, activeMask, func(object aabb.IObject, leafMask uint32) bool {
 		vol, ok := object.(*volumes.Volume)
 		if !ok || vol == nil {
 			return false
@@ -330,7 +332,7 @@ func (w *Shadows) collectShadowThings(th *model.Things, activeMask uint32, thing
 	if activeMask == 0 {
 		return
 	}
-	th.QueryFrustumsMask(w.tileFrustums[:], activeMask, func(object aabb.IObject, leafMask uint32) bool {
+	th.QueryFrustumsMask(w.tileFrustums, activeMask, func(object aabb.IObject, leafMask uint32) bool {
 		thing, ok := object.(ithing.IThing)
 		if !ok || thing == nil {
 			return false

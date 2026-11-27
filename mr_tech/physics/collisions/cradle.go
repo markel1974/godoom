@@ -94,14 +94,13 @@ func NewCradleCache() *CradleCache {
 // HasSupportSmall reports whether the cage slots contain a small paired-normal cradle support.
 func (c *CradleCache) HasSupportSmall(cage *Cage) bool {
 	n := cage.slotsLen
-	slots := cage.slots[:n]
 	for i := range n {
-		a := slots[i]
+		a := cage.slots[i]
 		if a.iMode == ImpactStep || a.nZ < cradleMinWallBumperNZ {
 			continue
 		}
 		for j := i + 1; j < n; j++ {
-			b := slots[j]
+			b := cage.slots[j]
 			if b.iMode == ImpactStep || b.nZ < cradleMinWallBumperNZ {
 				continue
 			}

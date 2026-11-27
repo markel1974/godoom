@@ -20,7 +20,7 @@ const (
 
 // IRaycaster defines the interface for testing line-of-sight rays against solid triangle soup faces.
 type IRaycaster interface {
-	RaycastSolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool)
+	QueryRaySolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool)
 }
 
 // ShortestAngleDelta computes the shortest angular difference from angle 'from' to angle 'to' in [-pi, pi].

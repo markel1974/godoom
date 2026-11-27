@@ -144,7 +144,7 @@ func (sa *SpringLimb) Update(dt float64, targetX, targetY, targetZ float64, targ
 	sa.hitWall = false
 
 	if raycaster != nil && desiredArm > 0.0 {
-		hitDist, _, _, _, hit := raycaster.RaycastSolid(startX, startY, startZ, backDirX, backDirY, backDirZ, desiredArm)
+		hitDist, _, _, _, hit := raycaster.QueryRaySolid(startX, startY, startZ, backDirX, backDirY, backDirZ, desiredArm)
 		if hit {
 			safeDist := hitDist - sa.cfg.ProbeMargin
 			if safeDist < sa.cfg.MinArmLength {

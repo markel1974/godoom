@@ -183,9 +183,8 @@ func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance flo
 	s.tree.QueryRay(oX, oY, oZ, dirX, dirY, dirZ, maxDistance, callback)
 }
 
-// RaycastSolid tests a 3D ray against all solid triangle faces in the active spatial tree up to maxDistance.
-// It returns the closest intersection distance, the face normal (nx, ny, nz), and true if a solid face was struck.
-func (s *Volumes) RaycastSolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool) {
+// QueryRaySolid casts a ray against solid volume faces and returns the nearest hit distance, normal, and hit status.
+func (s *Volumes) QueryRaySolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool) {
 	closest := maxDist + 1.0
 
 	s.tree.QueryRay(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist, func(obj aabb.IObject, d float64) (float64, bool) {

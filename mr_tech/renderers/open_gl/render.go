@@ -13,7 +13,6 @@ import (
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/shaders"
-	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // RenderOpenGL encapsulates rendering logic using the OpenGL API.
@@ -116,7 +115,7 @@ func (w *RenderOpenGL) RenderPrepare() error {
 	w.ctx.Enable(api.MULTISAMPLE)
 	//w.ctx.Enable(gl_api.SAMPLE_ALPHA_TO_COVERAGE)
 	w.handler = shaders.NewHandler(vStride, lStride)
-	if err := w.handler.Setup(w.ctx, cal, w.flash, 0, 0); err != nil {
+	if err := w.handler.Setup(w.ctx, w.tex, cal, w.flash, 0, 0); err != nil {
 		return err
 	}
 	w.gpuProfiler = w.handler.GetProfiler()
@@ -181,12 +180,7 @@ func (w *RenderOpenGL) RenderAdvance() {
 func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	fbW := int32(float64(fbInW) * w.renderScale)
 	fbH := int32(float64(fbInH) * w.renderScale)
-	if fbW < 1 {
-		fbW = 1
-	}
-	if fbH < 1 {
-		fbH = 1
-	}
+
 	w.builder.Compute(fbW, fbH, w.vi, w.engine)
 
 	lights, lightSize, lightsCount := w.builder.GetLights()
@@ -200,14 +194,11 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	w.tex.BindBuckets()
 
-	var roomCX, roomCZ float64
-	if w.player != nil && w.player.GetEntity() != nil {
-		roomCX, _, roomCZ = w.player.GetEntity().GetCenter()
-	} else {
-		roomCX, _, roomCZ = w.vi.GetView()
-	}
+	roomCX, _, roomCZ := w.player.GetEntity().GetCenter()
+
+	atl := w.depth.GetAtlas()
 	roomTileRes := float32(1024)
-	if atl := w.depth.GetAtlas(); atl != nil && atl.GetWidth() >= 64 {
+	if atl.GetWidth() >= 64 {
 		roomTileRes = float32(atl.GetWidth() / 2)
 	}
 	w.mapMetrics.SetCenterSnapped(float32(roomCX), float32(roomCZ), w.mapMetrics.GetLightCamY(), roomTileRes)
@@ -224,10 +215,8 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 
 	swayX, swayY, swaySensitivity := w.vi.GetSway()
 	rawFlashX, rawFlashY, flashSensitivity := float32(swayX), float32(swayY), float32(swaySensitivity)
-	flashX, flashY := rawFlashX, rawFlashY
-	if w.engine != nil {
-		flashX, flashY = resolveFlashOrigin(w.engine.GetVolumes(), w.mapMetrics.GetInvViewMatrix(), rawFlashX, rawFlashY)
-	}
+	flashX, flashY := resolveFlashOrigin(w.engine.GetVolumes(), w.mapMetrics.GetInvViewMatrix(), rawFlashX, rawFlashY)
+
 	w.flashlightMetrics.UpdateWithAim(w.mapMetrics.GetViewPtr(), flashX, flashY, rawFlashX, rawFlashY, flashSensitivity)
 
 	w.shadowLightsMetrics.Update(shadowLights, uint32(shadowLightsCount))
@@ -253,23 +242,9 @@ func (w *RenderOpenGL) RenderStart(fbInW int, fbInH int, winW int, winH int) {
 	if w.hwOcc.HasDrawTests() {
 		w.occlusion.Render(w.hwOcc.Render)
 	}
-	// SKYBOX
-	if skyMat := w.builder.GetSkyMaterial(); skyMat != nil {
-		if skyTex := skyMat.GetCurrentFrame(); skyTex != nil {
-			skyTexId := skyTex.GetIdentifier()
-			if skyTexId < 0 {
-				skyTexId, _ = w.tex.Get(skyTex)
-				skyTex.SetIdentifier(skyTexId)
-			}
-			u, v := float32(skyMat.GetU()), float32(skyMat.GetV())
-			tick := float32(textures.TickF())
-			w.sky.Render(skyTexId, u*tick, v*tick)
-		} else if w.handler.IsSunEnabled() || w.handler.IsHorizonFogEnabled() {
-			w.sky.RenderProcedural()
-		}
-	} else if w.handler.IsSunEnabled() || w.handler.IsHorizonFogEnabled() {
-		w.sky.RenderProcedural()
-	}
+
+	w.sky.Render(w.builder.GetSkyMaterial())
+
 	// MAIN LIQUID (Refraction & Depth Fog)
 	if w.dcLiquid.HasCommands() {
 		// Ensure diffuse texture buckets 0..3 are bound before rendering liquid
@@ -429,16 +404,9 @@ func (w *RenderOpenGL) SetHorizonFog(r, g, b, sunR, sunG, sunB, start, end, dens
 	}
 }
 
-type solidRaycaster interface {
-	RaycastSolid(fromX, fromY, fromZ, dirX, dirY, dirZ, maxDist float64) (hitDist float64, nx, ny, nz float64, hit bool)
-}
-
 // resolveFlashOrigin preserves the configured view-space shoulder offset (flashX, flashY)
 // unless solid world geometry physically blocks the line between the camera eye and that offset.
-func resolveFlashOrigin(raycaster solidRaycaster, invView *[16]float32, flashX, flashY float32) (float32, float32) {
-	if raycaster == nil {
-		return flashX, flashY
-	}
+func resolveFlashOrigin(raycaster *model.Volumes, invView *[16]float32, flashX, flashY float32) (float32, float32) {
 	offGLX := flashX*invView[0] + flashY*invView[4]
 	offGLY := flashX*invView[1] + flashY*invView[5]
 	offGLZ := flashX*invView[2] + flashY*invView[6]
@@ -453,7 +421,7 @@ func resolveFlashOrigin(raycaster solidRaycaster, invView *[16]float32, flashX, 
 	eyeY := -float64(invView[14])
 	eyeZ := float64(invView[13])
 	const wallClearance = 4.0
-	hitDist, _, _, _, hit := raycaster.RaycastSolid(eyeX, eyeY, eyeZ, dirEngX/offLen, dirEngY/offLen, dirEngZ/offLen, offLen+wallClearance)
+	hitDist, _, _, _, hit := raycaster.QueryRaySolid(eyeX, eyeY, eyeZ, dirEngX/offLen, dirEngY/offLen, dirEngZ/offLen, offLen+wallClearance)
 	if !hit {
 		return flashX, flashY
 	}

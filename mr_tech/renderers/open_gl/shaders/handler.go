@@ -6,12 +6,14 @@ import (
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/queries"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
 )
 
 // Handler manages rendering components, graphical settings, metrics, and the overall rendering pipeline configuration.
 type Handler struct {
 	ctx api.IContext
+	tex *vramtex.Textures
 	cal *model.Calibration
 
 	fbW int32
@@ -95,8 +97,9 @@ func NewHandler(vStride, lStride int32) *Handler {
 }
 
 // Setup initializes the Handler by configuring context, calibration, flash, and various metrics and components.
-func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *things.Flash, fbW, fbH int32) error {
+func (h *Handler) Setup(ctx api.IContext, tex *vramtex.Textures, cal *model.Calibration, flash *things.Flash, fbW, fbH int32) error {
 	h.ctx = ctx
+	h.tex = tex
 	h.cal = cal
 	h.flash = flash
 	h.fbW = fbW
@@ -164,6 +167,11 @@ func (h *Handler) Setup(ctx api.IContext, cal *model.Calibration, flash *things.
 // GetContext retrieves the IContext instance associated with the Handler.
 func (h *Handler) GetContext() api.IContext {
 	return h.ctx
+}
+
+// GetTextures returns the texture collection managed by the handler.
+func (h *Handler) GetTextures() *vramtex.Textures {
+	return h.tex
 }
 
 // GetProfiler retrieves the GpuProfiler instance associated with the Handler.

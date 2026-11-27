@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/api"
+	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/gpu/vramtex"
 	"github.com/markel1974/godoom/mr_tech/renderers/open_gl/metrics"
+	"github.com/markel1974/godoom/mr_tech/textures"
 )
 
 // ShaderSkyLoc represents the location index of shader uniforms specific to the Sky renderer.
@@ -36,6 +38,8 @@ const (
 // Sky manages rendering resources and shader state for drawing the sky and related atmospheric effects.
 type Sky struct {
 	ctx           api.IContext
+	handler       *Handler
+	tex           *vramtex.Textures
 	prg           uint32
 	table         [ShaderSkyLocLast]int32
 	skyVAO        uint32
@@ -58,6 +62,8 @@ func NewSky() *Sky {
 
 // Setup initializes the Sky instance by assigning the rendering context from the provided Handler.
 func (s *Sky) Setup(h *Handler) error {
+	s.handler = h
+	s.tex = h.GetTextures()
 	s.ctx = h.GetContext()
 	s.mapMetrics = h.GetMapMetrics()
 	s.sunCSM = h.GetSunCSM()
@@ -151,6 +157,27 @@ func (s *Sky) Compile(a IAssets) error {
 	return nil
 }
 
+func (s *Sky) Render(skyMat *textures.Material) {
+	if skyMat != nil {
+		if skyTex := skyMat.GetCurrentFrame(); skyTex != nil {
+			skyTexId := skyTex.GetIdentifier()
+			if skyTexId < 0 {
+				skyTexId, _ = s.tex.Get(skyTex)
+				skyTex.SetIdentifier(skyTexId)
+			}
+			u, v := float32(skyMat.GetU()), float32(skyMat.GetV())
+			tick := float32(textures.TickF())
+			//s.Render(skyTexId, u*tick, v*tick)
+			s.renderInternal(true, skyTexId, u*tick, v*tick)
+		} else if s.handler.IsSunEnabled() || s.handler.IsHorizonFogEnabled() {
+			s.renderInternal(false, 0, 0, 0)
+		}
+	} else if s.handler.IsSunEnabled() || s.handler.IsHorizonFogEnabled() {
+		s.renderInternal(false, 0, 0, 0)
+	}
+}
+
+/*
 // Render handles the rendering of the textured skybox with optional horizon fog and sun aureole blending.
 func (s *Sky) Render(skyLayer float32, u, v float32) {
 	s.renderInternal(true, skyLayer, u, v)
@@ -160,6 +187,8 @@ func (s *Sky) Render(skyLayer float32, u, v float32) {
 func (s *Sky) RenderProcedural() {
 	s.renderInternal(false, 0, 0, 0)
 }
+
+*/
 
 func (s *Sky) renderInternal(hasTex bool, skyLayer float32, u, v float32) {
 	viewPtr := s.mapMetrics.GetViewPtr()

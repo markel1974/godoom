@@ -5,7 +5,7 @@ import (
 	"math/bits"
 )
 
-// Constants tune cradle support thresholds and angular sector quantization for cradle detection.
+// Cradle tuning constants define slope, dot-product, angular sector, and deduplication thresholds.
 const (
 	cradleMinSlopeNZ      = 0.25
 	cradleSteepSupportNZ  = 0.45
@@ -20,10 +20,10 @@ const (
 	cradleDedupWindow    = 4
 )
 
-// cradleSectorMinCos stores conservative minimum cosines for half-circle sector separations.
+// cradleSectorMinCos stores lower-bound cosines for angular differences between cradle sectors.
 var cradleSectorMinCos [cradleSectors/2 + 1]float64
 
-// init populates cradleSectorMinCos with conservative minimum cosine values for sector offsets.
+// init precomputes minimum cosine bounds for cradle sector separations.
 func init() {
 	for d := range cradleSectorMinCos {
 		if d >= cradleSectors/2-1 {
@@ -35,15 +35,42 @@ func init() {
 	}
 }
 
-// cradleNode stores a deduplicated contact normal sample and links it into a sector-local chain.
+// cradleSectorForXY returns the angular cradle sector index for the horizontal vector nx, ny.
+func cradleSectorForXY(nx, ny float64) int {
+	ang := math.Atan2(ny, nx) + math.Pi
+	sec := int(ang * cradleSectorScale)
+	if sec < 0 || sec >= cradleSectors {
+		return 0
+	}
+	return sec
+}
+
+// cradleSectorDiff returns the shortest circular distance between two cradle sector indices.
+func cradleSectorDiff(s1, s2 int) int {
+	d := s2 - s1
+	if d < 0 {
+		d = -d
+	}
+	if d > cradleSectors/2 {
+		d = cradleSectors - d
+	}
+	return d
+}
+
+// cradleSlopePairValid reports whether two slope normals can jointly provide valid cradle ground support.
+func cradleSlopePairValid(ax, ay, az, bx, by, bz float64) bool {
+	return az+bz >= floorNormalThreshold && ax*bx+ay*by < cradleMinPairDotXY
+}
+
+// cradleNode stores a deduplicated contact normal sample used in sector-linked support checks.
 type cradleNode struct {
 	nX, nY, nZ float64
 	r          float64
 	next       int32
 }
 
-// cradleSlopeSector caches aggregate support data for slope contacts within one angular sector.
-// It supports fast sector-pair pruning before exact checks on deduplicated contact nodes.
+// cradleSlopeSector summarizes slope contacts in one angular sector for support pruning.
+// It keeps representative extremes and a node-list head for exact fallback checks.
 type cradleSlopeSector struct {
 	head      int32
 	maxNZ     float64
@@ -59,7 +86,8 @@ type cradleSlopeSector struct {
 	steepRepY float64
 }
 
-// cradleBumperSector summarizes wall-bumper contacts within one angular sector for support checks.
+// cradleBumperSector stores summary data for wall-bumper contacts within one angular cradle sector.
+// It tracks representative extremes used to prune support checks before exact node comparisons.
 type cradleBumperSector struct {
 	head int32
 	maxR float64
@@ -67,8 +95,8 @@ type cradleBumperSector struct {
 	repY float64
 }
 
-// cradleCache stores reusable sector indexes and scratch buffers for cradle support detection.
-type cradleCache struct {
+// CradleCache stores reusable sectorized contact data for efficient cradle support detection.
+type CradleCache struct {
 	slopeSec    [cradleSectors]cradleSlopeSector
 	bumperSec   [cradleSectors]cradleBumperSector
 	slopeNodes  []cradleNode
@@ -77,43 +105,19 @@ type cradleCache struct {
 	ambigWalls  []uint16
 }
 
-// init initializes reusable cache slices for cradle support checks.
-func (c *cradleCache) init() {
-	c.slopeNodes = make([]cradleNode, 0, 128)
-	c.bumperNodes = make([]cradleNode, 0, 128)
-	c.ambigSlopes = make([]uint16, 0, 64)
-	c.ambigWalls = make([]uint16, 0, 64)
-}
-
-// cradleSectorForXY returns the angular cradle sector containing the vector defined by nx and ny.
-func cradleSectorForXY(nx, ny float64) int {
-	ang := math.Atan2(ny, nx) + math.Pi
-	sec := int(ang * cradleSectorScale)
-	if sec < 0 || sec >= cradleSectors {
-		return 0
+// NewCradleCache creates and returns an initialized cradle support cache.
+func NewCradleCache() *CradleCache {
+	c := &CradleCache{
+		slopeNodes:  make([]cradleNode, 0, 128),
+		bumperNodes: make([]cradleNode, 0, 128),
+		ambigSlopes: make([]uint16, 0, 64),
+		ambigWalls:  make([]uint16, 0, 64),
 	}
-	return sec
+	return c
 }
 
-// cradleSectorDiff returns the shortest distance between two sector indexes on the circular sector ring.
-func cradleSectorDiff(s1, s2 int) int {
-	d := s2 - s1
-	if d < 0 {
-		d = -d
-	}
-	if d > cradleSectors/2 {
-		d = cradleSectors - d
-	}
-	return d
-}
-
-// cradleSlopePairValid reports whether two slope normals provide enough upward support and opposing XY directions.
-func cradleSlopePairValid(ax, ay, az, bx, by, bz float64) bool {
-	return az+bz >= floorNormalThreshold && ax*bx+ay*by < cradleMinPairDotXY
-}
-
-// hasCradleSupportSmall reports whether non-step contact normals provide opposing small-cradle support.
-func hasCradleSupportSmall(slots []*Entry) bool {
+// HasSupportSmall reports whether the given contact slots contain a small paired-normal cradle support.
+func (c *CradleCache) HasSupportSmall(slots []*Entry) bool {
 	n := len(slots)
 	for i := range n {
 		a := slots[i]
@@ -145,8 +149,8 @@ func hasCradleSupportSmall(slots []*Entry) bool {
 	return false
 }
 
-// hasSupport reports whether the given contact slots provide cradle support from opposing slopes or steep wall bumpers.
-func (c *cradleCache) hasSupport(slots []*Entry) bool {
+// HasSupport reports whether slots contain opposing slope or steep-slope bumper contacts that can support a cradle.
+func (c *CradleCache) HasSupport(slots []*Entry) bool {
 	hasSlope := false
 	hasSteep := false
 	for i := range slots {

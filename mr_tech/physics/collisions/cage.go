@@ -112,7 +112,7 @@ type Cage struct {
 	slotsLen            int
 	cradleDirty         bool
 	cradleCached        bool
-	cradle              cradleCache
+	cradle              *CradleCache
 	maxStep             float64
 	faces               []*Faces
 	facesIdx            int
@@ -177,6 +177,7 @@ func NewCage(id uint64) *Cage {
 		manifold:      aabb.NewOBBManifold(),
 		solverIdx:     -1,
 		staticContact: NewStaticFaceContact(),
+		cradle:        NewCradleCache(),
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
@@ -187,7 +188,6 @@ func NewCage(id uint64) *Cage {
 	for i := range len(c.ellipsoidLocal) {
 		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
 	}
-	c.cradle.init()
 	return c
 }
 
@@ -1096,9 +1096,9 @@ func (s *Cage) HasFloor() bool {
 // blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
 func (s *Cage) hasCradleSupport() bool {
 	if s.slotsLen <= cradleSmallThreshold {
-		return hasCradleSupportSmall(s.slots[:s.slotsLen])
+		return s.cradle.HasSupportSmall(s.slots[:s.slotsLen])
 	}
-	return s.cradle.hasSupport(s.slots[:s.slotsLen])
+	return s.cradle.HasSupport(s.slots[:s.slotsLen])
 }
 
 // SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).

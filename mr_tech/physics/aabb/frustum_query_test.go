@@ -69,19 +69,25 @@ func TestFrustumBoundsAndQueryFrustumsMaskEquivalence(t *testing.T) {
 		}
 	}
 
-	var frustums [4]Frustum
-	frustums[0].Rebuild(makeOrthoVP(-95, 35, -35, 95, -95, 95))
-	frustums[1].Rebuild(makePerspVP(math.Pi/3, 1.0, 10, 140, 0, 0, -50))
-	frustums[2].Rebuild(makeOrthoVP(25, 110, 25, 110, -50, 50))
-	frustums[3].Rebuild(makeOrthoVP(-100, 100, -100, 100, -20, 20))
-	frustums[3].DisableNearPlane()
+	frustums := NewFrustums(4)
+	frustums.Container[0].Rebuild(makeOrthoVP(-95, 35, -35, 95, -95, 95))
+	frustums.Container[1].Rebuild(makePerspVP(math.Pi/3, 1.0, 10, 140, 0, 0, -50))
+	frustums.Container[2].Rebuild(makeOrthoVP(25, 110, 25, 110, -50, 50))
+	frustums.Container[3].Rebuild(makeOrthoVP(-100, 100, -100, 100, -20, 20))
+	frustums.Container[3].DisableNearPlane()
 
-	if !frustums[0].hasBounds || !frustums[1].hasBounds || !frustums[2].hasBounds {
-		t.Fatalf("expected valid world bounds for ortho and perspective frustums: %v %v %v", frustums[0].hasBounds, frustums[1].hasBounds, frustums[2].hasBounds)
+	if !frustums.Container[0].hasBounds || !frustums.Container[1].hasBounds || !frustums.Container[2].hasBounds {
+		t.Fatalf("expected valid world bounds for ortho and perspective frustums: %v %v %v", frustums.Container[0].hasBounds, frustums.Container[1].hasBounds, frustums.Container[2].hasBounds)
 	}
-	if frustums[3].hasBounds {
+	if frustums.Container[3].hasBounds {
 		t.Fatalf("expected DisableNearPlane to clear finite frustum bounds")
 	}
+
+	// Nil Frustums / nil slot safety check.
+	tree.QueryFrustumsMask(nil, 0b1111, func(object IObject, leafMask uint32) bool {
+		t.Fatalf("unexpected callback on nil Frustums")
+		return false
+	})
 
 	for _, mask := range []uint32{0b0001, 0b0010, 0b1000, 0b1111, 0b0101} {
 		expected := make(map[int]uint32)
@@ -89,13 +95,13 @@ func TestFrustumBoundsAndQueryFrustumsMaskEquivalence(t *testing.T) {
 			if (mask & (uint32(1) << bit)) == 0 {
 				continue
 			}
-			tree.QueryFrustum(&frustums[bit], func(object IObject) bool {
+			tree.QueryFrustum(frustums.Container[bit], func(object IObject) bool {
 				expected[object.(*testTreeObj).id] |= uint32(1) << bit
 				return false
 			})
 		}
 		got := make(map[int]uint32)
-		tree.QueryFrustumsMask(frustums[:], mask, func(object IObject, leafMask uint32) bool {
+		tree.QueryFrustumsMask(frustums, mask, func(object IObject, leafMask uint32) bool {
 			obj := object.(*testTreeObj)
 			if _, dup := got[obj.id]; dup {
 				t.Fatalf("duplicate callback invocation for object %d under mask %b", obj.id, mask)
@@ -111,6 +117,15 @@ func TestFrustumBoundsAndQueryFrustumsMaskEquivalence(t *testing.T) {
 				t.Fatalf("mask %b object %d leafMask=%b want %b", mask, objID, got[objID], wantMask)
 			}
 		}
+	}
+
+	allocs := testing.AllocsPerRun(50, func() {
+		tree.QueryFrustumsMask(frustums, 0b1111, func(object IObject, leafMask uint32) bool {
+			return false
+		})
+	})
+	if allocs > 0 {
+		t.Fatalf("expected 0 allocs on QueryFrustumsMask, got %.2f", allocs)
 	}
 }
 

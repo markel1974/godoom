@@ -302,6 +302,9 @@ func slabAxis(o, minB, maxB, invDir float64) (float64, float64) {
 }
 
 func intersectFrustumBounds(minX, minY, minZ, maxX, maxY, maxZ float64, f *Frustum) bool {
+	if f == nil || f.Planes[0] == nil {
+		return false
+	}
 	if f.hasBounds && (maxX < f.bMinX || minX > f.bMaxX || maxY < f.bMinY || minY > f.bMaxY || maxZ < f.bMinZ || minZ > f.bMaxZ) {
 		return false
 	}

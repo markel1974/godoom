@@ -335,8 +335,11 @@ func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool
 // QueryFrustumsMask traverses the tree once against all frustums enabled in activeMask,
 // pruning subtrees per frustum bit and invoking callback once per leaf with its matching bitmask.
 func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback func(object IObject, leafMask uint32) bool) {
+	if a.rootNodeIndex == NullNode || activeMask == 0 {
+		return
+	}
 	fLen := len(frustums.Container)
-	if a.rootNodeIndex == NullNode || activeMask == 0 || fLen == 0 {
+	if fLen == 0 {
 		return
 	}
 	if fLen < 32 {
@@ -403,7 +406,7 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 		for rem != 0 {
 			bit := bits.TrailingZeros32(rem)
 			rem &^= 1 << bit
-			if intersectFrustumBounds(minX, minY, minZ, maxX, maxY, maxZ, frustums.Container[bit]) {
+			if f := frustums.Container[bit]; f != nil && intersectFrustumBounds(minX, minY, minZ, maxX, maxY, maxZ, f) {
 				hitMask |= 1 << bit
 			}
 		}

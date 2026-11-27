@@ -53,6 +53,8 @@ func (f *Frustum) Rebuild(vp [16]float32) *Frustum {
 	return f
 }
 
+// computeBounds computes a padded axis-aligned bounding box from valid frustum plane intersections.
+// It leaves bounds disabled if any required intersection is invalid or outside the frustum.
 func (f *Frustum) computeBounds() {
 	f.hasBounds = false
 	minX, minY, minZ := math.MaxFloat64, math.MaxFloat64, math.MaxFloat64
@@ -136,6 +138,9 @@ type Frustums struct {
 
 // NewFrustums creates a Frustums collection containing count initialized Frustum instances.
 func NewFrustums(count int) *Frustums {
+	if count < 0 {
+		count = 0
+	}
 	f := &Frustums{
 		Container: make([]*Frustum, count),
 	}

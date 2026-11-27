@@ -110,6 +110,9 @@ type Cage struct {
 	distance            float64
 	slots               []*Entry
 	slotsLen            int
+	cradleDirty         bool
+	cradleCached        bool
+	cradle              cradleCache
 	maxStep             float64
 	faces               []*Faces
 	facesIdx            int
@@ -167,6 +170,7 @@ func NewCage(id uint64) *Cage {
 		volumeObj:     nil,
 		slots:         make([]*Entry, totalSlots),
 		slotsLen:      0,
+		cradleDirty:   true,
 		faces:         make([]*Faces, 8),
 		facesIdx:      0,
 		hasFloor:      false,
@@ -183,6 +187,7 @@ func NewCage(id uint64) *Cage {
 	for i := range len(c.ellipsoidLocal) {
 		c.ellipsoidLocal[i] = rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0)
 	}
+	c.cradle.init()
 	return c
 }
 
@@ -256,6 +261,8 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.distance = math.MaxFloat64
 
 	s.slotsLen = 0
+	s.cradleDirty = true
+	s.cradleCached = false
 	s.hasFloor = false
 	s.applied = false
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
@@ -554,6 +561,7 @@ func (s *Cage) growSlots() {
 // addToBucketEntry adds a collision entry to the selected bucket and tracks it in the cage slots.
 // It returns the created entry, or nil if no entry was added.
 func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
+	s.cradleDirty = true
 	entry := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if entry != nil {
 		if s.slotsLen >= len(s.slots) {
@@ -1076,51 +1084,21 @@ func (s *Cage) HasFloor() bool {
 	if s.entity.KeepUpright() || s.slotsLen < 2 {
 		return false
 	}
-	return s.hasCradleSupport()
+	if !s.cradleDirty {
+		return s.cradleCached
+	}
+	s.cradleCached = s.hasCradleSupport()
+	s.cradleDirty = false
+	return s.cradleCached
 }
 
 // hasCradleSupport reports whether two opposing contacts (two gentle upward slopes, or a steep support slope
 // blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
-// TODO BUG DOPO LA TESSELLAZIONE MULTIPLA DIVENTA INUSABILE
 func (s *Cage) hasCradleSupport() bool {
-	const minSlopeNZ = 0.25
-	const steepSupportNZ = 0.45
-	const minWallBumperNZ = -0.05
-	const minPairOpposingXY = -0.10
-	const minWallOpposingXY = -0.35
-
-	//if s.slotsLen > 124 {
-	//	fmt.Println("slotsLen > 124", s.slotsLen)
-	//}
-
-	for i := 0; i < s.slotsLen; i++ {
-		a := s.slots[i]
-		if a.iMode == ImpactStep || a.nZ < minWallBumperNZ {
-			continue
-		}
-		for j := i + 1; j < s.slotsLen; j++ {
-			b := s.slots[j]
-			if b.iMode == ImpactStep || b.nZ < minWallBumperNZ {
-				continue
-			}
-			hi, lo := a, b
-			if lo.nZ > hi.nZ {
-				hi, lo = b, a
-			}
-			if hi.nZ <= minSlopeNZ {
-				continue
-			}
-			horizDot := hi.nX*lo.nX + hi.nY*lo.nY
-			if lo.nZ > minSlopeNZ {
-				if hi.nZ+lo.nZ >= floorNormalThreshold && horizDot < minPairOpposingXY {
-					return true
-				}
-			} else if hi.nZ >= steepSupportNZ && horizDot < minWallOpposingXY {
-				return true
-			}
-		}
+	if s.slotsLen <= cradleSmallThreshold {
+		return hasCradleSupportSmall(s.slots[:s.slotsLen])
 	}
-	return false
+	return s.cradle.hasSupport(s.slots[:s.slotsLen])
 }
 
 // SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).

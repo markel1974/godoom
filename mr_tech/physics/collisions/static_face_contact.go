@@ -249,6 +249,7 @@ func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			s.slotsLen--
 			s.slots[i] = s.slots[s.slotsLen]
+			s.cradleDirty = true
 			continue
 		}
 		i++
@@ -264,6 +265,7 @@ func (fc *StaticFaceContact) pruneCoplanarCornerHits(s *Cage) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			s.slotsLen--
 			s.slots[i] = s.slots[s.slotsLen]
+			s.cradleDirty = true
 			continue
 		}
 		i++

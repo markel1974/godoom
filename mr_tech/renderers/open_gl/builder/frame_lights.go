@@ -15,6 +15,28 @@ import (
 // ShadowLightNumber defines the maximum number of shadow-casting lights supported in the frame lighting system.
 const ShadowLightNumber = 8
 
+type spotLightCandidate struct {
+	id          uint64
+	prevSlot    int
+	distSq      float32
+	stabScore   float32
+	rawScore    float32
+	posX        float32
+	posY        float32
+	posZ        float32
+	lightType   float32
+	colR        float32
+	colG        float32
+	colB        float32
+	intensity   float32
+	dirX        float32
+	dirY        float32
+	dirZ        float32
+	falloff     float32
+	cutOff      float32
+	outerCutOff float32
+}
+
 // FrameLights represents a container for managing lights and their properties in a frame-based rendering system.
 type FrameLights struct {
 	ctx               api.IContext
@@ -25,6 +47,10 @@ type FrameLights struct {
 	stride            int32
 	shadowLights      [ShadowLightNumber]*metrics.Light
 	shadowLightsIndex int32
+	prevShadowIDs     [ShadowLightNumber]uint64
+	prevShadowCount   int
+	spotCandidates    []spotLightCandidate
+	shadowFinalized   bool
 	//glCamX            float32
 	//glCamY            float32
 	//glCamZ            float32
@@ -45,6 +71,7 @@ func NewFrameLights(ctx api.IContext, maxLights int, useShadowLight bool) *Frame
 		index:             0,
 		freezeIndex:       0,
 		shadowLightsIndex: 0,
+		spotCandidates:    make([]spotLightCandidate, 0, 64),
 		stride:            stride,
 		useShadowLight:    useShadowLight,
 	}
@@ -61,6 +88,8 @@ func NewFrameLights(ctx api.IContext, maxLights int, useShadowLight bool) *Frame
 func (f *FrameLights) DeepReset() {
 	f.freezeIndex = 0
 	f.shadowLightsIndex = 0
+	f.shadowFinalized = false
+	f.spotCandidates = f.spotCandidates[:0]
 	f.Reset()
 }
 
@@ -81,6 +110,9 @@ func (f *FrameLights) LightsStride() int32 {
 
 // GetLights retrieves the current light data as a slice of float32 and the count of lights as an int32.
 func (f *FrameLights) GetLights() (unsafe.Pointer, int32, int32) {
+	if !f.shadowFinalized {
+		f.Finalize()
+	}
 	size := int32(f.index * 4)
 	count := int32(f.index) / f.stride
 	return f.dataPtr, size, count
@@ -88,6 +120,9 @@ func (f *FrameLights) GetLights() (unsafe.Pointer, int32, int32) {
 
 // GetShadowLights retrieves the shadow-casting lights and their count from the current frame's lighting configuration.
 func (f *FrameLights) GetShadowLights() ([ShadowLightNumber]*metrics.Light, int32) {
+	if !f.shadowFinalized {
+		f.Finalize()
+	}
 	return f.shadowLights, f.shadowLightsIndex
 }
 
@@ -125,6 +160,8 @@ func (f *FrameLights) Prepare() {
 	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pY), float32(pZ)
 	//f.glCamX, f.glCamY, f.glCamZ = float32(pX), float32(pZ), float32(-pY)
 	f.shadowLightsIndex = 0
+	f.shadowFinalized = false
+	f.spotCandidates = f.spotCandidates[:0]
 	f.hasSceneDir = false
 }
 
@@ -165,17 +202,19 @@ func (f *FrameLights) Create(light *lights.Light, distSq float64, isFront bool) 
 		lType = 2
 	case config.LightKindSpot:
 		lType = 1
-		if isFront && f.useShadowLight {
-			added := f.addShadowLight(
+		if f.useShadowLight {
+			if f.queueShadowLight(
+				light.GetId(),
 				float32(distSq),
+				isFront,
 				glPosX, glPosY, glPosZ,
 				lType,
 				float32(r), float32(g), float32(b), intensity,
 				glDirX, glDirY, glDirZ, falloff,
 				cutOff, outerCutOff,
 				float32(light.GetRadius()),
-			)
-			if added {
+				float32(light.GetIntensity()),
+			) {
 				return
 			}
 		}
@@ -224,59 +263,196 @@ func (f *FrameLights) add(
 	f.data2[idx+15] = pad2
 }
 
-// addShadowLight adds a shadow-casting light to the list of frame lights based on its attributes and distance to the camera.
-// Returns true if the light was successfully added, or false if it didn't qualify or was replaced in the min-heap.
-func (f *FrameLights) addShadowLight(
+func (f *FrameLights) prevSlotOf(id uint64) int {
+	for i := 0; i < f.prevShadowCount; i++ {
+		if f.prevShadowIDs[i] == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// queueShadowLight evaluates eligibility with near-camera invariance and range hysteresis,
+// queuing qualifying spotlights for top-N selection at the end of the frame.
+func (f *FrameLights) queueShadowLight(
+	id uint64,
 	distSq float32,
+	isFront bool,
 	posX, posY, posZ float32,
 	lightType float32,
 	colR, colG, colB, intensity float32,
 	dirX, dirY, dirZ, falloff float32,
 	cutOff, outerCutOff float32,
 	radius float32,
+	unStyledIntensity float32,
 ) bool {
-	//TODO VERIFICA LE ombre generati non sono coerenti
-	//return false
+	prevSlot := f.prevSlotOf(id)
 
-	//dx, dy, dz := posX-camX, posY-camY, posZ-camZ
-	//distSq := dx*dx + dy*dy + dz*dz
+	attInt := unStyledIntensity
+	if intensity > attInt {
+		attInt = intensity
+	}
+	if attInt < 0.1 {
+		attInt = 0.1
+	}
+	attFall := falloff
+	if attFall < 1.0 {
+		attFall = 1.0
+	}
+	effRadius := float32(4.605) * attFall * attInt
 
-	//target := radius
-	target := radius * radius * 4
-	if distSq > target {
+	enterRange := effRadius * 3.0
+	if radius*3.0 > enterRange {
+		enterRange = radius * 3.0
+	}
+	if enterRange < 2048.0 {
+		enterRange = 2048.0
+	}
+	if prevSlot >= 0 {
+		enterRange *= 1.25
+	}
+	maxDistSq := enterRange * enterRange
+
+	nearRadius := effRadius + 300.0
+	if prevSlot >= 0 {
+		nearRadius = effRadius + 420.0
+	}
+	nearDistSq := nearRadius * nearRadius
+
+	if distSq > maxDistSq || (!isFront && distSq > nearDistSq) {
 		return false
 	}
 
-	score := intensity / (distSq + 1.0)
+	kneeSq := effRadius*effRadius*0.25 + 1.0
+	rawScore := (attInt * effRadius) / (distSq + kneeSq)
+	stabScore := rawScore
+	if prevSlot >= 0 {
+		// Strong incumbent hysteresis (~4x score / ~2x distance) keeps active shadowed spotlights
+		// anchored in their atlas slots as the player moves and turns.
+		stabScore *= 4.0
+	} else if !isFront {
+		stabScore *= 0.5
+	}
 
-	// Fase 1: Riempimento iniziale (0-7)
-	if f.shadowLightsIndex < ShadowLightNumber {
-		light := f.shadowLights[f.shadowLightsIndex]
-		//fmt.Println("VERIFY HOTSPOT", distSq, target)
-		light.Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
-		f.shadowLightsIndex++
-		// Quando arriviamo a 8, costruiamo l'heap iniziale (una tantum per frame)
-		if f.shadowLightsIndex == ShadowLightNumber {
-			f.buildMinHeap()
-		}
-		return true
-	}
-	// La luce peggiore è SEMPRE all'indice 0. Ricerca O(1).
-	if score <= f.shadowLights[0].Score {
-		return false
-	}
-	// Sostituzione: declassiamo la radice (la peggiore) e inseriamo la nuova
-	worst := f.shadowLights[0]
-	f.add(
-		worst.X, worst.Y, worst.Z, worst.Kind,
-		worst.R, worst.G, worst.B, worst.Intensity,
-		worst.DirX, worst.DirY, worst.DirZ, worst.Falloff,
-		worst.CutOff, worst.OuterCutOff, 0.0, 0.0,
-	)
-	worst.Assign(posX, posY, posZ, lightType, colR, colG, colB, intensity, dirX, dirY, dirZ, falloff, cutOff, outerCutOff, score)
-	// Ripristiniamo l'ordine dell'heap in O(log N)
-	f.minHeapFixDown(0, ShadowLightNumber)
+	f.spotCandidates = append(f.spotCandidates, spotLightCandidate{
+		id:          id,
+		prevSlot:    prevSlot,
+		distSq:      distSq,
+		stabScore:   stabScore,
+		rawScore:    rawScore,
+		posX:        posX,
+		posY:        posY,
+		posZ:        posZ,
+		lightType:   lightType,
+		colR:        colR,
+		colG:        colG,
+		colB:        colB,
+		intensity:   intensity,
+		dirX:        dirX,
+		dirY:        dirY,
+		dirZ:        dirZ,
+		falloff:     falloff,
+		cutOff:      cutOff,
+		outerCutOff: outerCutOff,
+	})
 	return true
+}
+
+// Finalize resolves top-N spotlight shadow candidates with hysteresis, preserves previous
+// shadow slot indices where possible, and routes non-winning spotlights to the unshadowed buffer.
+func (f *FrameLights) Finalize() {
+	if f.shadowFinalized {
+		return
+	}
+	f.shadowFinalized = true
+
+	n := len(f.spotCandidates)
+	if n == 0 {
+		f.shadowLightsIndex = 0
+		f.prevShadowCount = 0
+		clear(f.prevShadowIDs[:])
+		return
+	}
+
+	winnerCount := n
+	if winnerCount > ShadowLightNumber {
+		winnerCount = ShadowLightNumber
+	}
+
+	for i := 0; i < winnerCount; i++ {
+		best := i
+		for j := i + 1; j < n; j++ {
+			if candidateBetter(f.spotCandidates[j], f.spotCandidates[best]) {
+				best = j
+			}
+		}
+		if best != i {
+			f.spotCandidates[i], f.spotCandidates[best] = f.spotCandidates[best], f.spotCandidates[i]
+		}
+	}
+
+	for i := winnerCount; i < n; i++ {
+		c := f.spotCandidates[i]
+		f.add(
+			c.posX, c.posY, c.posZ, c.lightType,
+			c.colR, c.colG, c.colB, c.intensity,
+			c.dirX, c.dirY, c.dirZ, c.falloff,
+			c.cutOff, c.outerCutOff, 0.0, 0.0,
+		)
+	}
+
+	var slotUsed [ShadowLightNumber]bool
+	var assigned [ShadowLightNumber]int
+	for i := 0; i < winnerCount; i++ {
+		assigned[i] = -1
+		slot := f.spotCandidates[i].prevSlot
+		if slot >= 0 && slot < winnerCount && !slotUsed[slot] {
+			slotUsed[slot] = true
+			assigned[i] = slot
+		}
+	}
+
+	nextFree := 0
+	for i := 0; i < winnerCount; i++ {
+		if assigned[i] >= 0 {
+			continue
+		}
+		for slotUsed[nextFree] {
+			nextFree++
+		}
+		slotUsed[nextFree] = true
+		assigned[i] = nextFree
+	}
+
+	f.shadowLightsIndex = int32(winnerCount)
+	f.prevShadowCount = winnerCount
+	clear(f.prevShadowIDs[:])
+	for i := 0; i < winnerCount; i++ {
+		c := f.spotCandidates[i]
+		slot := assigned[i]
+		f.shadowLights[slot].Assign(
+			c.posX, c.posY, c.posZ, c.lightType,
+			c.colR, c.colG, c.colB, c.intensity,
+			c.dirX, c.dirY, c.dirZ, c.falloff,
+			c.cutOff, c.outerCutOff, c.rawScore,
+		)
+		f.prevShadowIDs[slot] = c.id
+	}
+}
+
+func candidateBetter(a, b spotLightCandidate) bool {
+	if a.stabScore != b.stabScore {
+		return a.stabScore > b.stabScore
+	}
+	aPrev := a.prevSlot >= 0
+	bPrev := b.prevSlot >= 0
+	if aPrev != bPrev {
+		return aPrev
+	}
+	if aPrev && bPrev && a.prevSlot != b.prevSlot {
+		return a.prevSlot < b.prevSlot
+	}
+	return a.id < b.id
 }
 
 // grow dynamically expands the size of the underlying data slice when more capacity is needed.
@@ -290,32 +466,5 @@ func (f *FrameLights) grow() {
 	f.data2 = newData
 	if f.ctx != nil {
 		f.dataPtr = f.ctx.Ptr(f.data2)
-	}
-}
-
-// buildMinHeap constructs a min-heap for the shadowLights array based on their scores in O(n) time complexity.
-func (f *FrameLights) buildMinHeap() {
-	for i := (ShadowLightNumber / 2) - 1; i >= 0; i-- {
-		f.minHeapFixDown(i, ShadowLightNumber)
-	}
-}
-
-// minHeapFixDown restores the min-heap property for a subtree rooted at index i within a heap of size n.
-func (f *FrameLights) minHeapFixDown(i, n int) {
-	for {
-		left := 2*i + 1
-		if left >= n || left < 0 {
-			break
-		}
-		smallest := left
-		if right := left + 1; right < n && f.shadowLights[right].Score < f.shadowLights[left].Score {
-			smallest = right
-		}
-		if f.shadowLights[smallest].Score >= f.shadowLights[i].Score {
-			break
-		}
-		// Swap pointers
-		f.shadowLights[i], f.shadowLights[smallest] = f.shadowLights[smallest], f.shadowLights[i]
-		i = smallest
 	}
 }

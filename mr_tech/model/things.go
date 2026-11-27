@@ -187,11 +187,6 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 	})
 }
 
-// QueryMultiFrustum queries objects against rear and front frustums, invoking callback with membership flags.
-func (th *Things) QueryMultiFrustum(rear *aabb.Frustum, front *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
-	th.tree.QueryMultiFrustum(rear, front, callback)
-}
-
 // QueryFrustum calls callback for each object intersecting the frustum, stopping if callback returns false.
 func (th *Things) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	th.tree.QueryFrustum(front, callback)

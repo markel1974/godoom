@@ -67,8 +67,3 @@ func (l *Lights) QueryOverlaps(front aabb.IObject, callback func(object aabb.IOb
 func (l *Lights) QueryFrustum(front *aabb.Frustum, callback func(object aabb.IObject) bool) {
 	l.tree.QueryFrustum(front, callback)
 }
-
-// QueryMultiFrustum performs a query on the spatial tree using two frustums and invokes a callback for each intersected object.
-func (l *Lights) QueryMultiFrustum(front *aabb.Frustum, rear *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
-	l.tree.QueryMultiFrustum(front, rear, callback)
-}

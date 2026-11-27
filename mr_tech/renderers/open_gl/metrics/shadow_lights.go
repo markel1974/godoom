@@ -1,5 +1,7 @@
 package metrics
 
+import "math"
+
 const ShadowLightsCount = 8
 
 // ShadowLights is a structure for managing shadow mapping metrics and transformation matrices for multiple lights.
@@ -35,15 +37,35 @@ func (s *ShadowLights) Update(shadowLights [ShadowLightsCount]*Light, count uint
 		s.lights[lx] = light
 		pX, pY, pZ := light.X, light.Y, light.Z
 		dX, dY, dZ := light.DirX, light.DirY, light.DirZ
-		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto
-		// Se il faretto ha un outer cutoff di 40°, il FOV deve essere circa 80-90°
-		//TODO FROM CONFIG
+		// Il FOV dell'ombra deve abbracciare interamente il CutOff del faretto.
+		// OuterCutOff e' cos(halfAngle): allarga il FOV solo oltre 45 gradi (cos < 0.7071).
 		fovDeg := float32(90.0)
+		if light.OuterCutOff < 0.70710678 {
+			cosVal := float64(light.OuterCutOff)
+			if cosVal < -0.9659258 {
+				cosVal = -0.9659258
+			}
+			coneFov := float32(2.0*math.Acos(cosVal)*180.0/math.Pi) + 12.0
+			if coneFov > 165.0 {
+				coneFov = 165.0
+			}
+			if coneFov > fovDeg {
+				fovDeg = coneFov
+			}
+		}
 		near := float32(0.1)
 		factor := light.Intensity
+		if factor < 0.1 {
+			factor = 0.1
+		}
 		falloff := light.Falloff
-		//TODO FROM CONFIG
+		if falloff < 1.0 {
+			falloff = 1.0
+		}
 		effectiveRadius := float32(4.605) * falloff * factor
+		if effectiveRadius < near+1.0 {
+			effectiveRadius = near + 1.0
+		}
 		shadowLightMetric := s.metrics[lx]
 		shadowLightMetric.CreateSpace(pX, pY, pZ, dX, dY, dZ, fovDeg, near, effectiveRadius)
 		s.matrices[lx] = shadowLightMetric.GetSpacePtr()

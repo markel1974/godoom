@@ -41,6 +41,7 @@ func (bl *Lights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, 
 	bl.fl.DeepReset()
 	bl.fl.Prepare()
 	if ls == nil {
+		bl.fl.Finalize()
 		return
 	}
 	for _, light := range ls.Globals() {
@@ -53,6 +54,7 @@ func (bl *Lights) Process(ls *model.Lights, frustumFront *aabb.Frustum, pX, pY, 
 	bl.pX, bl.pY, bl.pZ = pX, pY, pZ
 	bl.lightBB.RebuildCenter(pX, pY, pZ, w, h, d)
 	ls.QueryOverlaps(bl.lightBB, bl.doQuery)
+	bl.fl.Finalize()
 }
 
 // doQuery processes an object to determine if it is a valid light and classifies it based on distance and frustum intersection.

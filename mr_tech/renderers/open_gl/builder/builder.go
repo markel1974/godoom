@@ -20,6 +20,8 @@ import (
 // Builder coordinates static world volumes, things, lights, occlusion queries, and shadow tiles for OpenGL rendering.
 type Builder struct {
 	frustumFront *metrics.Frustum
+	lastFBW      int32
+	lastFBH      int32
 
 	bc      *Context
 	bl      *Lights
@@ -136,11 +138,22 @@ func (w *Builder) GetShadowTiles() *atlas.TilesHandler {
 	return w.bShadow.GetTiles()
 }
 
+func (w *Builder) setupFrustumFront(fbw, fbh int32) {
+	if fbw > 0 && fbh > 0 && (fbw != w.lastFBW || fbh != w.lastFBH) {
+		w.lastFBW = fbw
+		w.lastFBH = fbh
+		cal := w.bc.cal
+		aspect := float32(fbw) / float32(fbh)
+		w.frustumFront.Setup(aspect, float32(cal.ZFar), float32(cal.ZNear), cal.PrjScale, cal.PrjScale*cal.AspectRatio)
+	}
+}
+
 // Compute processes volumes, lights, and things within the camera frustum and compiles rendering draw commands.
 func (w *Builder) Compute(fbw, fbh int32, vi *engine.ViewMatrix, en *engine.Engine) {
 	if en == nil || vi == nil {
 		return
 	}
+	w.setupFrustumFront(fbw, fbh)
 	w.bc.meshFrame++
 	px, py, pz := vi.GetView()
 	angle, pitch, roll := vi.GetAngle(), -vi.GetPitch(), vi.GetRoll()

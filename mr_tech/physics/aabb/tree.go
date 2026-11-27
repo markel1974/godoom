@@ -433,40 +433,6 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 	}
 }
 
-// QueryMultiFrustum traverses the AABB tree to find objects intersecting any of the two given frustums, invoking the callback per match.
-func (a *Tree) QueryMultiFrustum(fFront, fRear *Frustum, callback func(object IObject, isFront bool, isBack bool) bool) {
-	stackIndex := 0
-	a.stack[stackIndex] = a.rootNodeIndex
-	stackIndex++
-
-	for stackIndex > 0 {
-		stackIndex--
-		nodeIndex := a.stack[stackIndex]
-		if nodeIndex == NullNode {
-			continue
-		}
-		node := a.nodes[nodeIndex]
-		intersectFront := node.aabb.IntersectFrustum(fFront)
-		intersectRear := node.aabb.IntersectFrustum(fRear)
-		// Short-circuit evaluation: previene test doppi e invocazioni duplicate del callback
-		if intersectFront || intersectRear {
-			if node.IsLeaf() {
-				if callback(node.object, intersectFront, intersectRear) {
-					break
-				}
-			} else {
-				if (stackIndex + 2) > len(a.stack) {
-					a.stackGrow()
-				}
-				a.stack[stackIndex] = node.leftNodeIndex
-				stackIndex++
-				a.stack[stackIndex] = node.rightNodeIndex
-				stackIndex++
-			}
-		}
-	}
-}
-
 // QueryRay performs a raycast query against the AABB tree, calling the callback for each intersected object within range.
 // oX, oY, oZ represent the origin of the ray.
 // dirX, dirY, dirZ represent the direction vector of the ray.

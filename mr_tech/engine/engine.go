@@ -60,11 +60,6 @@ func (e *Engine) QueryFrustum(frustum *aabb.Frustum, callback func(object aabb.I
 	e.volumes.QueryFrustum(frustum, callback)
 }
 
-// QueryMultiFrustum checks which objects intersect both the front and rear frustums and invokes the callback for each intersecting object.
-func (e *Engine) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
-	e.volumes.QueryMultiFrustum(front, rear, callback)
-}
-
 // Setup initializes the Engine using the provided configuration, creating volumes, player, things, things, and the portal.
 func (e *Engine) Setup(cfg *config.Root) error {
 	compiler := model.NewCompiler()

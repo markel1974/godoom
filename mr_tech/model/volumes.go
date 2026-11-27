@@ -172,11 +172,6 @@ func (s *Volumes) TreeVersion() uint64 {
 	return s.tree.Version()
 }
 
-// QueryMultiFrustum performs a spatial query using two frustums, invoking the callback for each overlapping object.
-func (s *Volumes) QueryMultiFrustum(front, rear *aabb.Frustum, callback func(object aabb.IObject, isFront bool, isBack bool) bool) {
-	s.tree.QueryMultiFrustum(front, rear, callback)
-}
-
 // QueryRay performs a raycasting query starting from origin (oX, oY, oZ) in direction (dirX, dirY, dirZ) up to maxDistance.
 // It invokes the callback for each intersected object, passing the object and intersection distance as arguments.
 func (s *Volumes) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object aabb.IObject, distance float64) (float64, bool)) {

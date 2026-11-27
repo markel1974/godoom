@@ -20,17 +20,17 @@ const (
 	cradleDedupWindow    = 4
 )
 
-// cradleSectorMinCos stores lower-bound cosines for angular differences between cradle sectors.
-var cradleSectorMinCos [cradleSectors/2 + 1]float64
+// _cradleSectorMinCos stores lower-bound cosines for angular differences between cradle sectors.
+var _cradleSectorMinCos [cradleSectors/2 + 1]float64
 
 // init precomputes minimum cosine bounds for cradle sector separations.
 func init() {
-	for d := range cradleSectorMinCos {
+	for d := range _cradleSectorMinCos {
 		if d >= cradleSectors/2-1 {
-			cradleSectorMinCos[d] = -1.0
+			_cradleSectorMinCos[d] = -1.0
 		} else {
 			// Widen by 1e-9 rad so boundary quantization rounding never overestimates min cosine.
-			cradleSectorMinCos[d] = math.Cos(float64(d+1)*cradleSectorWidth + 1e-9)
+			_cradleSectorMinCos[d] = math.Cos(float64(d+1)*cradleSectorWidth + 1e-9)
 		}
 	}
 }
@@ -128,6 +128,9 @@ func (c *CradleCache) HasSupportSmall(slots *Slots) bool {
 // that cradle a free 6-DoF body, reading cage.slots in-place without copying entry normals.
 func (c *CradleCache) HasSupport(slots *Slots) bool {
 	n := slots.Len()
+	if n <= cradleSmallThreshold {
+		return c.HasSupportSmall(slots)
+	}
 
 	hasSlope := false
 	hasSteep := false
@@ -241,7 +244,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 		for m2 := m1; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
-			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
+			minCos := _cradleSectorMinCos[cradleSectorDiff(s1, s2)]
 			if minCos >= 0 {
 				continue
 			}
@@ -272,7 +275,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 			for m2 := bumperMask; m2 != 0; {
 				s2 := bits.TrailingZeros64(m2)
 				m2 &^= 1 << s2
-				minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
+				minCos := _cradleSectorMinCos[cradleSectorDiff(s1, s2)]
 				if minCos >= 0 {
 					continue
 				}
@@ -400,7 +403,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 		for m2 := ambigSlope[s1]; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
-			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
+			minCos := _cradleSectorMinCos[cradleSectorDiff(s1, s2)]
 			bSec := &c.slopeSec[s2]
 			bMaxNZ := slots.At(int(bSec.repZ)).nZ
 			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
@@ -425,7 +428,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 		for m2 := ambigWall[s1]; m2 != 0; {
 			s2 := bits.TrailingZeros64(m2)
 			m2 &^= 1 << s2
-			minCos := cradleSectorMinCos[cradleSectorDiff(s1, s2)]
+			minCos := _cradleSectorMinCos[cradleSectorDiff(s1, s2)]
 			bSec := &c.bumperSec[s2]
 			for ni := aSec.head; ni >= 0; ni = c.nextIdx[ni] {
 				na := slots.At(int(ni))

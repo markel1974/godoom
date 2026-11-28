@@ -264,7 +264,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	// Canonical mapping for Rect/AABB
 	s.ellipsoid.Rebuild(minX, minY, minZ, maxX-minX, maxY-minY, maxZ-minZ)
 
-	for i := 0; i < len(s.buckets); i++ {
+	for i := range len(s.buckets) {
 		s.buckets[i].Rebuild()
 	}
 
@@ -350,7 +350,7 @@ func (s *Cage) FlushPendingDynamic() {
 		rSleeping := rCage.entity.IsSleeping()
 		if !rSleeping {
 			rCage.Seen(s)
-			if pd.wasSleeping && pd.rFace != nil {
+			if pd.wasSleeping {
 				// Partner transitioned sleeping -> awake in mergeWaveWakes and ran StagePrepare:
 				// re-evaluate narrow-phase manifold using its updated post-prepare displacement.
 				s.AddFace(pd.rFace, pd.recipFace)
@@ -379,8 +379,8 @@ func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 		s.faces = n
 	}
 	f := s.faces[s.facesIdx]
-	f.rFace = rFace
-	f.lFace = lFace
+	f.rFace.SetIFace(rFace)
+	f.lFace.SetIFace(lFace)
 	s.facesIdx++
 }
 
@@ -410,6 +410,17 @@ func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
 	if !rFace.IsSolid() {
 		return false
 	}
+	evalFace := s.staticContact.evalFace
+	evalFace.SetIFace(rFace)
+	return s.staticFaceClamp(lAABB, evalFace)
+}
+
+// staticFaceClamp evaluates a solid face against the local AABB and applies a static clamp when penetration requires it.
+// It updates floor and wall contact state and reports whether a clamp was applied.
+func (s *Cage) staticFaceClamp(lAABB *aabb.AABB, rFace *Face) bool {
+	if !rFace.IsSolid() {
+		return false
+	}
 	fc := s.staticContact
 	if !s.evalStaticFace(lAABB, rFace, fc) {
 		return false
@@ -433,7 +444,7 @@ func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
 			if fc.HasCoplanarFlatWall() {
 				return false
 			}
-			if fc.AddClampCorner(rFace) {
+			if fc.AddClampCorner(rFace.IFace) {
 				return false
 			}
 		} else {
@@ -506,7 +517,7 @@ func (s *Cage) CachePendingStaticFaces(lAABB *aabb.AABB) {
 	fc := s.staticContact
 	fc.BeginStaticFaceCache(lAABB)
 	for i := 0; i < s.facesIdx; i++ {
-		fc.AddCachedFace(s.faces[i].rFace)
+		fc.AddCachedFace(s.faces[i].rFace.IFace)
 	}
 	fc.CommitStaticFaceCache()
 }
@@ -516,7 +527,7 @@ func (s *Cage) ClampCachedStaticFaces(lAABB *aabb.AABB) bool {
 	moved := false
 	fc := s.staticContact
 	for i := 0; i < fc.cachedFacesLen; i++ {
-		if s.StaticFaceClamp(lAABB, fc.cachedFaces[i]) {
+		if s.staticFaceClamp(lAABB, fc.cachedFaces[i]) {
 			moved = true
 		}
 	}
@@ -558,13 +569,14 @@ func (s *Cage) clampApplyContact(fc *StaticFaceContact) bool {
 
 // addStaticTriangleManifold emits either the single closest contact for KeepUpright entities or a clipped OBB
 // multi-point manifold against static triangle rFace, falling back to a stabilized contact when clipping misses.
-func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *StaticFaceContact, iMode ImpactMode) {
+func (s *Cage) addStaticTriangleManifold(rFace *Face, fc *StaticFaceContact, iMode ImpactMode) {
+	rIFace := rFace.IFace
 	if s.entity.KeepUpright() {
 		px, py, pz := fc.contactX, fc.contactY, fc.contactZ
 		if !fc.hasContact {
 			px, py, pz = s.projectStabilizedStaticContact(fc)
 		}
-		entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode)
+		entry := s.addToBucketEntry(fc.bucket, nil, rIFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode)
 		if entry != nil && fc.bucket.IsWall() {
 			entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 		}
@@ -608,7 +620,7 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *StaticFaceContact, iMo
 			ptX = math.Max(s.tX-s.eRadX, math.Min(s.tX+s.eRadX, ptX+shiftToTX))
 			ptY = math.Max(s.tY-s.eRadY, math.Min(s.tY+s.eRadY, ptY+shiftToTY))
 			ptZ = math.Max(s.tZ-s.eRadZ, math.Min(s.tZ+s.eRadZ, ptZ+shiftToTZ))
-			entry := s.addToBucketEntry(fc.bucket, nil, rFace, -ptPen, ptPen, fc.nX, fc.nY, fc.nZ, ptX, ptY, ptZ, fc.maxZ, iMode)
+			entry := s.addToBucketEntry(fc.bucket, nil, rIFace, -ptPen, ptPen, fc.nX, fc.nY, fc.nZ, ptX, ptY, ptZ, fc.maxZ, iMode)
 			if entry != nil && fc.bucket.IsWall() {
 				entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 			}
@@ -621,14 +633,14 @@ func (s *Cage) addStaticTriangleManifold(rFace IFace, fc *StaticFaceContact, iMo
 	if !fc.cornerHit {
 		if activeMask := rFace.ActiveEdgeMask(); activeMask != EdgeAllActive && s.eRadX > 0 && s.eRadY > 0 && s.eRadZ > 0 {
 			invRX, invRY, invRZ := 1.0/s.eRadX, 1.0/s.eRadY, 1.0/s.eRadZ
-			_, _, _, feat := closestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
-			if isInactiveTriangleFeature(feat, activeMask) {
+			_, _, _, feat := ClosestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
+			if IsInactiveTriangleFeature(feat, activeMask) {
 				return
 			}
 		}
 	}
 	px, py, pz := s.projectStabilizedStaticContact(fc)
-	entry := s.addToBucketEntry(fc.bucket, nil, rFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode)
+	entry := s.addToBucketEntry(fc.bucket, nil, rIFace, fc.dist, fc.pen, fc.nX, fc.nY, fc.nZ, px, py, pz, fc.maxZ, iMode)
 	if entry != nil && fc.bucket.IsWall() {
 		entry.SetCornerOrigin(fc.cornerHit, fc.origNX, fc.origNY, fc.origNZ, fc.origAX, fc.origAY, fc.origAZ)
 	}
@@ -674,22 +686,14 @@ func (s *Cage) DiscardPendingFaces() {
 }
 
 // firstSolidDynamicFaces returns the first dynamic face pair queued on the cage where either face is solid.
-func (s *Cage) firstSolidDynamicFaces() (IFace, IFace) {
+func (s *Cage) firstSolidDynamicFaces() (IFace, IFace, bool) {
 	for i := 0; i < s.facesIdx; i++ {
 		f := s.faces[i]
-		if (f.rFace != nil && f.rFace.IsSolid()) || (f.lFace != nil && f.lFace.IsSolid()) {
-			rFace := f.rFace
-			if rFace == nil {
-				rFace = f.lFace
-			}
-			recipFace := f.lFace
-			if recipFace == nil {
-				recipFace = f.rFace
-			}
-			return rFace, recipFace
+		if f.rFace.IsSolid() || f.lFace.IsSolid() {
+			return f.rFace.IFace, f.lFace.IFace, true
 		}
 	}
-	return nil, nil
+	return nil, nil, false
 }
 
 // evalDynamicManifold populates s.manifold for a dynamic pair and returns the partner's target geometry.
@@ -735,7 +739,7 @@ func (s *Cage) evalDynamicManifold(rCage *Cage) (lUpright, rUpright bool, rTx, r
 
 // WillHitDynamic reports whether the queued solid faces against rCage produce a real narrow-phase hit.
 func (s *Cage) WillHitDynamic(rCage *Cage) bool {
-	if rFace, _ := s.firstSolidDynamicFaces(); rFace == nil {
+	if _, _, ok := s.firstSolidDynamicFaces(); !ok {
 		return false
 	}
 	s.evalDynamicManifold(rCage)
@@ -773,15 +777,6 @@ func (s *Cage) ShouldWakeDynamic(rCage *Cage) bool {
 	return maxPtPen > penThresh && nz > -0.70
 }
 
-func hasDynamicRestFloorGap(ent *rigid_body.Entity, selfDZ, gap, partnerDZ float64) bool {
-	const sixDofFloorGapSlop = 0.025
-	dt := ent.GetDt()
-	gravVel := ent.GetGForce() * dt
-	maxDZ := gravVel*dt*1.5 + 0.01
-	maxVZ := gravVel*1.35 + 0.5
-	return selfDZ >= -maxDZ && ent.GetVz() >= -maxVZ && gap <= sixDofFloorGapSlop+math.Max(0.0, -partnerDZ)
-}
-
 // acquireDynamicManifold evaluates a dynamic collision pair into s.pendingDyn without mutating rCage.
 func (s *Cage) acquireDynamicManifold(rCage *Cage) {
 	if s.pendingDynLen >= len(s.pendingDyn) {
@@ -805,8 +800,8 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 
 // buildPendingDynamic populates out with read-only narrow-phase dynamic pair results without mutating rCage.
 func (s *Cage) buildPendingDynamic(rCage *Cage, out *pendingDynamicContact) bool {
-	rFace, recipFace := s.firstSolidDynamicFaces()
-	if rFace == nil {
+	rFace, recipFace, ok := s.firstSolidDynamicFaces()
+	if !ok {
 		return false
 	}
 
@@ -829,9 +824,9 @@ func (s *Cage) buildPendingDynamic(rCage *Cage, out *pendingDynamicContact) bool
 		var selfFloor, partnerFloor bool
 		if gap <= floorGroundTolerance && xyOverlap {
 			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
-				selfFloor = lUpright || hasDynamicRestFloorGap(lEnt, s.dZ, gap, rDZ)
+				selfFloor = lUpright || lEnt.HasDynamicRestFloorGap(s.dZ, gap, rDZ)
 			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {
-				partnerFloor = rUpright || hasDynamicRestFloorGap(rEnt, rDZ, gap, s.dZ)
+				partnerFloor = rUpright || lEnt.HasDynamicRestFloorGap(rDZ, gap, s.dZ)
 			}
 		}
 		if !selfFloor && !partnerFloor {
@@ -1377,7 +1372,7 @@ func (s *Cage) GetPushOffset() (float64, float64, float64) {
 // evalStaticFace evaluates a static world triangle against the cage sweep (bucket, plane normal,
 // signed separation distance, anti-phantom-plane filtered penetration, and world face bounds) into out
 // without heap allocation or large value copies in the hot path.
-func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceContact) bool {
+func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace *Face, out *StaticFaceContact) bool {
 	nX, nY, nZ := rFace.GetNormal()
 	nAbsX, nAbsY, nAbsZ := rFace.GetNormalAbs()
 	if nAbsX == 0 && nAbsY == 0 && nAbsZ == 0 {
@@ -1402,7 +1397,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 				if !s.entity.KeepUpright() {
 					impDotOrig := s.passDX*nX + s.passDY*nY + s.passDZ*nZ
 					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-					if distStart <= -0.5*rayEff || impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT, false) {
+					if distStart <= -0.5*rayEff || impDotOrig >= -satFilterEpsilon || !rFace.IntersectsFiniteTriangle3D(s.eRadX, s.eRadY, s.eRadZ, s.cX, s.cY, s.cZ, s.dX, s.dY, s.dZ, s.tX, s.tY, s.tZ, distStart, distT, false) {
 						return false
 					}
 				}
@@ -1414,7 +1409,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 					flipped = true
 				} else if !s.entity.KeepUpright() {
 					distT := (s.tX-p0x)*nX + (s.tY-p0y)*nY + (s.tZ-p0z)*nZ
-					if impDotOrig >= -satFilterEpsilon || !s.intersectsFiniteTriangle3D(rFace, distStart, distT, false) {
+					if impDotOrig >= -satFilterEpsilon || !rFace.IntersectsFiniteTriangle3D(s.eRadX, s.eRadY, s.eRadZ, s.cX, s.cY, s.cZ, s.dX, s.dY, s.dZ, s.tX, s.tY, s.tZ, distStart, distT, false) {
 						return false
 					}
 				}
@@ -1504,7 +1499,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 	}
 
 	if s.entity.KeepUpright() {
-		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW, hasPt := s.evalKeepUprightFace(rFace, bucket, solidWE, solidNS, nX, nY, nZ, distStart, distTarget, penetration)
+		valid, adjusted, cornerHit, cxN, cyN, czN, cPen, qxW, qyW, qzW, hasPt := rFace.EvalKeepUprightFace(s.entity, bucket, solidWE, solidNS, s.eRadX, s.eRadY, s.eRadZ, s.cX, s.cY, s.cZ, s.dX, s.dY, s.dZ, s.tX, s.tY, s.tZ, nX, nY, nZ, distStart, distTarget, penetration)
 		if !valid || ((solidWE || solidNS) && !cornerHit && !flipped && distStart < -satFilterEpsilon) {
 			return false
 		}
@@ -1539,13 +1534,13 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 	rRadY := (rMaxY - rMinY) * 0.5
 	rRadZ := (rMaxZ - rMinZ) * 0.5
 
-	tEnter, tExit, _, _, _, ok := computeTOI(s.cX-rCx, s.cY-rCy, s.cZ-rCz, s.eRadX+rRadX, s.eRadY+rRadY, s.eRadZ+rRadZ, s.dX, s.dY, s.dZ)
+	tEnter, tExit, _, _, _, ok := ComputeTOI(s.cX-rCx, s.cY-rCy, s.cZ-rCz, s.eRadX+rRadX, s.eRadY+rRadY, s.eRadZ+rRadZ, s.dX, s.dY, s.dZ)
 	if !ok {
 		return false
 	}
 
 	impDot := s.dX*nX + s.dY*nY + s.dZ*nZ
-	tPlaneEnter, tPlaneExit, okPlane := sweptAxisInterval(distStart, rayEff, impDot)
+	tPlaneEnter, tPlaneExit, okPlane := SweptAxisInterval(distStart, rayEff, impDot)
 	if !okPlane {
 		return false
 	}
@@ -1615,7 +1610,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 	minOverlap := axisOverlap + deltaPen
 
 	if !s.entity.KeepUpright() {
-		if !s.intersectsFiniteTriangleOBB(rFace, distStart, distTarget) {
+		if !rFace.IntersectsFiniteTriangleOBB(s.entity, s.cX, s.cY, s.cZ, s.dX, s.dY, s.dZ, s.tX, s.tY, s.tZ, distStart, distTarget) {
 			return false
 		}
 		if distTarget >= -satFilterEpsilon {
@@ -1646,350 +1641,6 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 
 	out.pen = penetration
 	return true
-}
-
-// overlapsTriangleLocalOBB performs a zero-allocation 13-axis SAT check between rFace
-// and the entity's oriented bounding box positioned at (cx, cy, cz).
-func (s *Cage) overlapsTriangleLocalOBB(rFace IFace, cx, cy, cz float64) bool {
-	hx, hy, hz := s.entity.GetSizeCenter()
-	if hx <= 0.0 || hy <= 0.0 || hz <= 0.0 {
-		return true
-	}
-	ax0, ay0, az0, ax1, ay1, az1, ax2, ay2, az2 := s.entity.GetAxes()
-	v0x, v0y, v0z := rFace.Get0()
-	v1x, v1y, v1z := rFace.Get1()
-	v2x, v2y, v2z := rFace.Get2()
-
-	d0x, d0y, d0z := v0x-cx, v0y-cy, v0z-cz
-	d1x, d1y, d1z := v1x-cx, v1y-cy, v1z-cz
-	d2x, d2y, d2z := v2x-cx, v2y-cy, v2z-cz
-
-	p0x := d0x*ax0 + d0y*ay0 + d0z*az0
-	p0y := d0x*ax1 + d0y*ay1 + d0z*az1
-	p0z := d0x*ax2 + d0y*ay2 + d0z*az2
-
-	p1x := d1x*ax0 + d1y*ay0 + d1z*az0
-	p1y := d1x*ax1 + d1y*ay1 + d1z*az1
-	p1z := d1x*ax2 + d1y*ay2 + d1z*az2
-
-	p2x := d2x*ax0 + d2y*ay0 + d2z*az0
-	p2y := d2x*ax1 + d2y*ay1 + d2z*az1
-	p2z := d2x*ax2 + d2y*ay2 + d2z*az2
-
-	if math.Min(p0x, math.Min(p1x, p2x)) > hx || math.Max(p0x, math.Max(p1x, p2x)) < -hx {
-		return false
-	}
-	if math.Min(p0y, math.Min(p1y, p2y)) > hy || math.Max(p0y, math.Max(p1y, p2y)) < -hy {
-		return false
-	}
-	if math.Min(p0z, math.Min(p1z, p2z)) > hz || math.Max(p0z, math.Max(p1z, p2z)) < -hz {
-		return false
-	}
-
-	e0x, e0y, e0z := p1x-p0x, p1y-p0y, p1z-p0z
-	e1x, e1y, e1z := p2x-p1x, p2y-p1y, p2z-p1z
-	e2x, e2y, e2z := p0x-p2x, p0y-p2y, p0z-p2z
-
-	tnx := e0y*e1z - e0z*e1y
-	tny := e0z*e1x - e0x*e1z
-	tnz := e0x*e1y - e0y*e1x
-	if math.Abs(p0x*tnx+p0y*tny+p0z*tnz) > hx*math.Abs(tnx)+hy*math.Abs(tny)+hz*math.Abs(tnz) {
-		return false
-	}
-
-	return overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e0x, e0y, e0z) &&
-		overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e1x, e1y, e1z) &&
-		overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e2x, e2y, e2z)
-}
-
-func overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, ex, ey, ez float64) bool {
-	absX, absY, absZ := math.Abs(ex), math.Abs(ey), math.Abs(ez)
-
-	if rad := hy*absZ + hz*absY; rad > 1e-12 {
-		a0 := -p0y*ez + p0z*ey
-		a1 := -p1y*ez + p1z*ey
-		a2 := -p2y*ez + p2z*ey
-		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
-			return false
-		}
-	}
-	if rad := hx*absZ + hz*absX; rad > 1e-12 {
-		a0 := p0x*ez - p0z*ex
-		a1 := p1x*ez - p1z*ex
-		a2 := p2x*ez - p2z*ex
-		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
-			return false
-		}
-	}
-	if rad := hx*absY + hy*absX; rad > 1e-12 {
-		a0 := -p0x*ey + p0y*ex
-		a1 := -p1x*ey + p1y*ex
-		a2 := -p2x*ey + p2y*ex
-		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
-			return false
-		}
-	}
-	return true
-}
-
-// intersectsFiniteTriangleOBB validates finite 3D triangle intersection for a 6-DoF OBB at target t
-// or plane crossing point tauPlane when sweeping across the face plane.
-func (s *Cage) intersectsFiniteTriangleOBB(rFace IFace, distStart, distTarget float64) bool {
-	if s.overlapsTriangleLocalOBB(rFace, s.tX, s.tY, s.tZ) {
-		return true
-	}
-	if distStart >= -satFilterEpsilon && distTarget < 0.0 {
-		tauPlane := 0.5
-		if denom := distStart - distTarget; denom > 1e-12 {
-			tauPlane = math.Max(0.0, math.Min(1.0, distStart/denom))
-		}
-		if s.overlapsTriangleLocalOBB(rFace, s.cX+tauPlane*s.dX, s.cY+tauPlane*s.dY, s.cZ+tauPlane*s.dZ) {
-			return true
-		}
-	}
-	return false
-}
-
-// intersectsFiniteTriangle3D reports whether the cage's scaled ellipsoid at target t, plane-crossing point,
-// or swept segment [c -> t] intersects the finite 3D triangle rFace. When allowInactiveEdge is false,
-// grazes falling exclusively on inactive coplanar/concave seam edges without piercing are ignored.
-func (s *Cage) intersectsFiniteTriangle3D(rFace IFace, distStart, distTarget float64, allowInactiveEdge bool) bool {
-	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
-		return true
-	}
-	activeMask := rFace.ActiveEdgeMask()
-	v0x, v0y, v0z := rFace.Get0()
-	v1x, v1y, v1z := rFace.Get1()
-	v2x, v2y, v2z := rFace.Get2()
-	invRX := 1.0 / s.eRadX
-	invRY := 1.0 / s.eRadY
-	invRZ := 1.0 / s.eRadZ
-
-	qx, qy, qz, featT := closestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
-	if qx*qx+qy*qy+qz*qz < 1.0-1e-9 {
-		if allowInactiveEdge || !isInactiveTriangleFeature(featT, activeMask) {
-			return true
-		}
-	}
-
-	if distStart >= -satFilterEpsilon && distTarget < 0.0 {
-		tauPlane := 0.5
-		if denom := distStart - distTarget; denom > 1e-12 {
-			tauPlane = math.Max(0.0, math.Min(1.0, distStart/denom))
-		}
-		px := s.cX + tauPlane*s.dX
-		py := s.cY + tauPlane*s.dY
-		pz := s.cZ + tauPlane*s.dZ
-		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
-		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 {
-			if allowInactiveEdge || !isInactiveTriangleFeature(featPlane, activeMask) {
-				return true
-			}
-		}
-	}
-
-	_, _, _, _, _, _, segSq, _, pierced, segFeat := closestSegmentToTriangleFeature(s.dX*invRX, s.dY*invRY, s.dZ*invRZ, (v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ, (v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ, (v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ)
-	if segSq >= 1.0-1e-9 {
-		return false
-	}
-	return allowInactiveEdge || pierced || !isInactiveTriangleFeature(segFeat, activeMask)
-}
-
-// evalKeepUprightFace resolves static triangle contacts for KeepUpright entities using exact
-// 3D ellipsoid-triangle proximity and sweep checks while suppressing corner deflection on inactive seam edges.
-func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, solidNS bool, nX, nY, nZ, distStart, distTarget, penetration float64) (valid, adjusted, cornerHit bool, cNX, cNY, cNZ, cPen, qxW, qyW, qzW float64, hasPt bool) {
-	if s.eRadX <= 0.0 || s.eRadY <= 0.0 || s.eRadZ <= 0.0 {
-		return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-	}
-	invRX := 1.0 / s.eRadX
-	invRY := 1.0 / s.eRadY
-	invRZ := 1.0 / s.eRadZ
-	activeMask := rFace.ActiveEdgeMask()
-
-	v0x, v0y, v0z := rFace.Get0()
-	v1x, v1y, v1z := rFace.Get1()
-	v2x, v2y, v2z := rFace.Get2()
-
-	qx, qy, qz, feat := closestPointOnTriangleFeature((v0x-s.tX)*invRX, (v0y-s.tY)*invRY, (v0z-s.tZ)*invRZ, (v1x-s.tX)*invRX, (v1y-s.tY)*invRY, (v1z-s.tZ)*invRZ, (v2x-s.tX)*invRX, (v2y-s.tY)*invRY, (v2z-s.tZ)*invRZ)
-	bestSq := qx*qx + qy*qy + qz*qz
-	inactiveFeat := isInactiveTriangleFeature(feat, activeMask)
-	crossedPlane := distStart >= -satFilterEpsilon && distTarget < 0.0
-	tunneledWall := (solidWE || solidNS) && distStart >= effectiveRadius(s.entity, s.eRadX, s.eRadY, s.eRadZ, nX, nY, nZ)-satFilterEpsilon && distTarget < 0.0
-
-	if bestSq >= 1.0-1e-9 {
-		var rx, ry, rz float64
-		var checkGraze, resolvedPlane bool
-		if crossedPlane {
-			tauPlane := 0.5
-			if denom := distStart - distTarget; denom > 1e-12 {
-				tauPlane = math.Max(0.0, math.Min(1.0, distStart/denom))
-			}
-			px := s.cX + tauPlane*s.dX
-			py := s.cY + tauPlane*s.dY
-			pz := s.cZ + tauPlane*s.dZ
-			qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
-			if planeSq := qpx*qpx + qpy*qpy + qpz*qpz; planeSq < 1.0-1e-9 {
-				resolvedPlane = true
-				qxW, qyW, qzW, hasPt = px+qpx*s.eRadX, py+qpy*s.eRadY, pz+qpz*s.eRadZ, true
-				if planeSq > 1e-12 && !isInactiveTriangleFeature(featPlane, activeMask) {
-					rx, ry, rz = qpx, qpy, qpz
-					checkGraze = true
-				}
-			} else if tunneledWall {
-				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-			}
-		}
-		if !resolvedPlane {
-			if !crossedPlane && s.dX*s.dX+s.dY*s.dY+s.dZ*s.dZ <= 1e-12 {
-				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-			}
-			sx, sy, sz, sqx, sqy, sqz, segSq, startSq, pierced, segFeat := closestSegmentToTriangleFeature(s.dX*invRX, s.dY*invRY, s.dZ*invRZ, (v0x-s.cX)*invRX, (v0y-s.cY)*invRY, (v0z-s.cZ)*invRZ, (v1x-s.cX)*invRX, (v1y-s.cY)*invRY, (v1z-s.cZ)*invRZ, (v2x-s.cX)*invRX, (v2y-s.cY)*invRY, (v2z-s.cZ)*invRZ)
-			if segSq >= 1.0-1e-9 || (startSq < 1.0-1e-9 && !(crossedPlane && pierced)) {
-				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-			}
-			qxW, qyW, qzW, hasPt = s.cX+sqx*s.eRadX, s.cY+sqy*s.eRadY, s.cZ+sqz*s.eRadZ, true
-			if !pierced {
-				if isInactiveTriangleFeature(segFeat, activeMask) {
-					if !crossedPlane {
-						return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-					}
-				} else if segSq > 1e-12 {
-					rx, ry, rz = sqx-sx, sqy-sy, sqz-sz
-					checkGraze = true
-				}
-			}
-		}
-		if checkGraze {
-			if rXY := math.Hypot(rx, ry); rXY > 1e-6 {
-				if rZ := math.Sqrt(math.Max(0.0, 1.0-rz*rz)); rZ > rXY {
-					scaleH := rZ/rXY - 1.0
-					dxH := -rx * scaleH * s.eRadX
-					dyH := -ry * scaleH * s.eRadY
-					if horizPen := math.Hypot(dxH, dyH); horizPen > 1e-12 && horizPen <= satFilterEpsilon {
-						hx, hy := dxH/horizPen, dyH/horizPen
-						nXY := math.Hypot(nX, nY)
-						if nXY <= 1e-9 || (hx*(nX/nXY)+hy*(nY/nXY)) < 0.1 {
-							return true, true, true, hx, hy, 0.0, horizPen, qxW, qyW, qzW, true
-						}
-					}
-				}
-			}
-		}
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, hasPt
-	}
-
-	qxW, qyW, qzW, hasPt = s.tX+qx*s.eRadX, s.tY+qy*s.eRadY, s.tZ+qz*s.eRadZ, true
-	if bestSq <= 1e-12 || inactiveFeat {
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-	}
-
-	qLen := math.Sqrt(bestSq)
-	scale := 1.0/qLen - 1.0
-	dx := -qx * scale * s.eRadX
-	dy := -qy * scale * s.eRadY
-	dz := -qz * scale * s.eRadZ
-	pen3D := math.Sqrt(dx*dx + dy*dy + dz*dz)
-	if pen3D <= 1e-12 {
-		return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-	}
-
-	// If the sweep crossed the triangle interior at tauPlane and merely drifted to an active edge at t, keep face normal.
-	if crossedPlane && feat != 0 {
-		tauPlane := 0.5
-		if denom := distStart - distTarget; denom > 1e-12 {
-			tauPlane = math.Max(0.0, math.Min(1.0, distStart/denom))
-		}
-		px := s.cX + tauPlane*s.dX
-		py := s.cY + tauPlane*s.dY
-		pz := s.cZ + tauPlane*s.dZ
-		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
-		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 && featPlane == 0 {
-			return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-		}
-	}
-
-	onBoundary := feat != 0
-	if !solidWE && !solidNS {
-		// Floor/ceiling: separate horizontally when grazing mid-body ledge or wrong-side overhang edge,
-		// and use exact 3D separation on active sloped edges to avoid infinite-plane vertical catapults.
-		if qXY := math.Hypot(qx, qy); !crossedPlane && qXY > 1e-6 && math.Abs(qz) < 1.0-1e-9 {
-			if rZ := math.Sqrt(math.Max(0.0, 1.0-qz*qz)); rZ > qXY {
-				scaleH := rZ/qXY - 1.0
-				dxH := -qx * scaleH * s.eRadX
-				dyH := -qy * scaleH * s.eRadY
-				if penHoriz := math.Hypot(dxH, dyH); penHoriz > 1e-12 {
-					wrongSideOfPlane := (bucket == BucketCeiling && qz < 0.0) || (bucket == BucketFloor && qz > 0.0)
-					midBodyEdge := onBoundary && math.Abs(qz) < 0.707 && penHoriz < penetration*0.85
-					if (wrongSideOfPlane && penHoriz <= pen3D*2.0) || midBodyEdge {
-						return true, true, onBoundary, dxH / penHoriz, dyH / penHoriz, 0.0, penHoriz, qxW, qyW, qzW, true
-					}
-				}
-			}
-		}
-		if math.Abs(nZ) < 0.999 && (onBoundary || pen3D < penetration*0.75) {
-			nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
-			if pen3D < penetration-satFilterEpsilon || (nx3*nX+ny3*nY+nz3*nZ) > 0.0 {
-				return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW, true
-			}
-		} else if onBoundary && !crossedPlane {
-			// On flat/near-flat floor/ceiling boundary edges, use curved ellipsoid rim separation
-			// instead of infinite-plane depth so balanced upright bodies settle smoothly without catapulting.
-			nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
-			sameVerticalBucket := (bucket == BucketFloor && nz3 >= floorNormalThreshold) || (bucket == BucketCeiling && nz3 <= -floorNormalThreshold)
-			if sameVerticalBucket && pen3D < penetration {
-				return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW, true
-			}
-			if qXY := math.Hypot(qx, qy); qXY > 1e-6 && qXY < 1.0-1e-9 {
-				var rimPen float64
-				if bucket == BucketFloor && qz < 0.0 {
-					rimPen = (qz + math.Sqrt(math.Max(0.0, 1.0-qXY*qXY))) * s.eRadZ
-				} else if bucket == BucketCeiling && qz > 0.0 {
-					rimPen = (math.Sqrt(math.Max(0.0, 1.0-qXY*qXY)) - qz) * s.eRadZ
-				}
-				if rimPen > 0.0 && rimPen < penetration {
-					return true, true, onBoundary, nX, nY, nZ, rimPen, qxW, qyW, qzW, true
-				}
-			}
-		}
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-	}
-
-	// Wall: separate horizontally around active vertical/bevel corners and cap ends unless already flat-aligned.
-	qXY := math.Hypot(qx, qy)
-	rZ := math.Sqrt(math.Max(0.0, 1.0-qz*qz))
-	if qXY <= 1e-6 || rZ <= qXY {
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-	}
-	scaleH := rZ/qXY - 1.0
-	dxH := -qx * scaleH * s.eRadX
-	dyH := -qy * scaleH * s.eRadY
-	horizPen := math.Hypot(dxH, dyH)
-	if horizPen <= 1e-12 {
-		return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
-	}
-	hx, hy := dxH/horizPen, dyH/horizPen
-	dot := 1.0
-	if nXY := math.Hypot(nX, nY); nXY > 1e-9 {
-		dot = hx*(nX/nXY) + hy*(nY/nXY)
-	}
-	if dot < -0.5 {
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-	}
-	if horizPen >= penetration-1e-4 && dot > 0.999 {
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-	}
-	rMinZ := math.Min(v0z, math.Min(v1z, v2z))
-	rMaxZ := math.Max(v0z, math.Max(v1z, v2z))
-	if rMaxZ < s.tZ && qz < -floorNormalThreshold {
-		nx3, ny3, nz3 := dx/pen3D, dy/pen3D, dz/pen3D
-		if nz3 >= floorNormalThreshold && horizPen > pen3D {
-			return true, true, onBoundary, nx3, ny3, nz3, pen3D, qxW, qyW, qzW, true
-		}
-	}
-	if (rMinZ > s.tZ || rMaxZ < s.tZ || math.Abs(nZ) > 1e-3) && horizPen >= penetration*1.5 && dot > 0.7 {
-		return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
-	}
-	return true, true, onBoundary, hx, hy, 0.0, horizPen, qxW, qyW, qzW, true
 }
 
 // growSeen expands the seen-session tracking slice to accommodate idx while preserving existing marks.

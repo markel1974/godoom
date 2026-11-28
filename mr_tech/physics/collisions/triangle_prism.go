@@ -81,7 +81,7 @@ func (pr *TrianglePrism) updateRaySlabRange(origin, dir, halfExtent, tMin, tMax 
 
 // Penetration computes the deepest overlap of a cage with a triangular face prism.
 // It returns penetration depth, lowest contact world Z, and whether a contact was found.
-func (pr *TrianglePrism) Penetration(s *Cage, rFace IFace, cx, cy, cz, nx, ny, nz float64) (float64, float64, bool) {
+func (pr *TrianglePrism) Penetration(s *Cage, rFace *Face, cx, cy, cz, nx, ny, nz float64) (float64, float64, bool) {
 	hx, hy, hz := s.entity.GetSizeCenter()
 	if hx <= 0.0 || hy <= 0.0 || hz <= 0.0 {
 		return 0.0, 0.0, false

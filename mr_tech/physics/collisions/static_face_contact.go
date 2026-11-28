@@ -39,11 +39,12 @@ type StaticFaceContact struct {
 	clampNormals    [][3]float64
 	clampNormalsLen int
 
-	clampCorners    []IFace
+	clampCorners    []*Face
 	clampCornersLen int
 
-	cachedFaces    []IFace
+	cachedFaces    []*Face
 	cachedFacesLen int
+	evalFace       *Face
 	cachedValid    bool
 	cacheMinX      float64
 	cacheMinY      float64
@@ -56,11 +57,20 @@ type StaticFaceContact struct {
 
 // NewStaticFaceContact creates a new StaticFaceContact with zeroed contact state.
 func NewStaticFaceContact() *StaticFaceContact {
+	clampCorners := make([]*Face, staticFaceClampMax)
+	for i := range clampCorners {
+		clampCorners[i] = NewFace()
+	}
+	cachedFaces := make([]*Face, staticFaceCacheInitCap)
+	for i := range cachedFaces {
+		cachedFaces[i] = NewFace()
+	}
 	return &StaticFaceContact{
 		flatWalls:    make([]FlatWallPlane, staticFaceFlatWallInitCap),
 		clampNormals: make([][3]float64, staticFaceClampMax),
-		clampCorners: make([]IFace, staticFaceClampMax),
-		cachedFaces:  make([]IFace, staticFaceCacheInitCap),
+		clampCorners: clampCorners,
+		cachedFaces:  cachedFaces,
+		evalFace:     NewFace(),
 	}
 }
 
@@ -110,7 +120,7 @@ func (fc *StaticFaceContact) Commit(s *Cage, lAABB *aabb.AABB) {
 	stepZ := baseZ + s.maxStep
 	for x := 0; x < s.facesIdx; x++ {
 		rFace := s.faces[x].rFace
-		if rFace == nil || !rFace.IsSolid() {
+		if !rFace.IsSolid() {
 			continue // Skybox or non-solid surface: ignore collision and volume tracking[cite: 6]
 		}
 
@@ -201,11 +211,11 @@ func (fc *StaticFaceContact) RecordFlatWall() {
 }
 
 // AddClampCorner queues a face for corner clamping, expanding the reusable buffer if needed.
-func (fc *StaticFaceContact) AddClampCorner(f IFace) bool {
+func (fc *StaticFaceContact) AddClampCorner(rFace IFace) bool {
 	if fc.clampCornersLen >= len(fc.clampCorners) {
 		fc.growClampCorners()
 	}
-	fc.clampCorners[fc.clampCornersLen] = f
+	fc.clampCorners[fc.clampCornersLen].SetIFace(rFace)
 	fc.clampCornersLen++
 	return true
 }
@@ -281,8 +291,12 @@ func (fc *StaticFaceContact) growFlatWalls() {
 
 // growClampCorners expands the reusable clampCorners buffer while preserving queued faces.
 func (fc *StaticFaceContact) growClampCorners() {
-	n := make([]IFace, nextGrowCap(len(fc.clampCorners), staticFaceClampMax))
+	oldLen := len(fc.clampCorners)
+	n := make([]*Face, nextGrowCap(oldLen, staticFaceClampMax))
 	copy(n, fc.clampCorners)
+	for i := oldLen; i < len(n); i++ {
+		n[i] = NewFace()
+	}
 	fc.clampCorners = n
 }
 
@@ -295,32 +309,31 @@ func (fc *StaticFaceContact) growClampNormals() {
 
 // growCachedFaces expands the reusable cachedFaces buffer while preserving collected static faces.
 func (fc *StaticFaceContact) growCachedFaces() {
-	n := make([]IFace, nextGrowCap(len(fc.cachedFaces), staticFaceCacheInitCap))
+	oldLen := len(fc.cachedFaces)
+	n := make([]*Face, nextGrowCap(oldLen, staticFaceCacheInitCap))
 	copy(n, fc.cachedFaces)
+	for i := oldLen; i < len(n); i++ {
+		n[i] = NewFace()
+	}
 	fc.cachedFaces = n
 }
 
 // BeginStaticFaceCache initializes the per-frame static broadphase cache for the given AABB bounds.
 func (fc *StaticFaceContact) BeginStaticFaceCache(lAABB *aabb.AABB) {
-	if lAABB != nil {
-		fc.cacheMinX, fc.cacheMinY, fc.cacheMinZ, fc.cacheMaxX, fc.cacheMaxY, fc.cacheMaxZ = lAABB.GetMinMax()
-	} else {
-		fc.cacheMinX, fc.cacheMinY, fc.cacheMinZ = 0, 0, 0
-		fc.cacheMaxX, fc.cacheMaxY, fc.cacheMaxZ = 0, 0, 0
-	}
+	fc.cacheMinX, fc.cacheMinY, fc.cacheMinZ, fc.cacheMaxX, fc.cacheMaxY, fc.cacheMaxZ = lAABB.GetMinMax()
 	fc.cachedFacesLen = 0
 	fc.cachedValid = false
 }
 
 // AddCachedFace stores a solid static candidate face in the per-frame broadphase cache.
 func (fc *StaticFaceContact) AddCachedFace(rFace IFace) {
-	if rFace == nil || !rFace.IsSolid() {
+	if !rFace.IsSolid() {
 		return
 	}
 	if fc.cachedFacesLen >= len(fc.cachedFaces) {
 		fc.growCachedFaces()
 	}
-	fc.cachedFaces[fc.cachedFacesLen] = rFace
+	fc.cachedFaces[fc.cachedFacesLen].SetIFace(rFace)
 	fc.cachedFacesLen++
 }
 
@@ -331,7 +344,7 @@ func (fc *StaticFaceContact) CommitStaticFaceCache() {
 
 // HasStaticFaceCache reports whether the cached static face set completely covers lAABB.
 func (fc *StaticFaceContact) HasStaticFaceCache(lAABB *aabb.AABB) bool {
-	if !fc.cachedValid || lAABB == nil {
+	if !fc.cachedValid {
 		return false
 	}
 	minX, minY, minZ, maxX, maxY, maxZ := lAABB.GetMinMax()

@@ -1,6 +1,7 @@
 package rigid_body
 
 import (
+	"math"
 	"sync/atomic"
 
 	"github.com/markel1974/godoom/mr_tech/geometry"
@@ -73,6 +74,16 @@ func NewEntity(mass, restitution, groundFriction float64, restCombine, frictionC
 // GetId returns the unique identifier of the Entity as a uint64.
 func (e *Entity) GetId() uint64 {
 	return e.id
+}
+
+// HasDynamicRestFloorGap reports whether the entity is within a dynamic rest floor gap threshold.
+func (e *Entity) HasDynamicRestFloorGap(selfDZ, gap, partnerDZ float64) bool {
+	const sixDofFloorGapSlop = 0.025
+	dt := e.GetDt()
+	gravVel := e.GetGForce() * dt
+	maxDZ := gravVel*dt*1.5 + 0.01
+	maxVZ := gravVel*1.35 + 0.5
+	return selfDZ >= -maxDZ && e.GetVz() >= -maxVZ && gap <= sixDofFloorGapSlop+math.Max(0.0, -partnerDZ)
 }
 
 // GetRenderMarker returns the renderer cache slot index assigned to this Entity, or -1 if unassigned.

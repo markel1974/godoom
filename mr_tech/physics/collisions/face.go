@@ -69,43 +69,10 @@ func (s *Face) OverlapsTriangleLocalOBB(ent *rigid_body.Entity, cx, cy, cz float
 		return false
 	}
 
-	return overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e0x, e0y, e0z) &&
-		overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e1x, e1y, e1z) &&
-		overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e2x, e2y, e2z)
+	return OverlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e0x, e0y, e0z) &&
+		OverlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e1x, e1y, e1z) &&
+		OverlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, e2x, e2y, e2z)
 }
-
-/*
-func overlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z, ex, ey, ez float64) bool {
-	absX, absY, absZ := math.Abs(ex), math.Abs(ey), math.Abs(ez)
-
-	if rad := hy*absZ + hz*absY; rad > 1e-12 {
-		a0 := -p0y*ez + p0z*ey
-		a1 := -p1y*ez + p1z*ey
-		a2 := -p2y*ez + p2z*ey
-		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
-			return false
-		}
-	}
-	if rad := hx*absZ + hz*absX; rad > 1e-12 {
-		a0 := p0x*ez - p0z*ex
-		a1 := p1x*ez - p1z*ex
-		a2 := p2x*ez - p2z*ex
-		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
-			return false
-		}
-	}
-	if rad := hx*absY + hy*absX; rad > 1e-12 {
-		a0 := -p0x*ey + p0y*ex
-		a1 := -p1x*ey + p1y*ex
-		a2 := -p2x*ey + p2y*ex
-		if math.Min(a0, math.Min(a1, a2)) > rad || math.Max(a0, math.Max(a1, a2)) < -rad {
-			return false
-		}
-	}
-	return true
-}
-
-*/
 
 // IntersectsFiniteTriangleOBB reports whether the swept finite triangle intersects the entity's oriented bounding box.
 // It tests the target pose and the interpolated plane-crossing pose when the sweep crosses the face plane.
@@ -141,9 +108,9 @@ func (s *Face) IntersectsFiniteTriangle3D(eRadX, eRadY, eRadZ, cX, cY, cZ, dX, d
 	invRY := 1.0 / eRadY
 	invRZ := 1.0 / eRadZ
 
-	qx, qy, qz, featT := closestPointOnTriangleFeature((v0x-tX)*invRX, (v0y-tY)*invRY, (v0z-tZ)*invRZ, (v1x-tX)*invRX, (v1y-tY)*invRY, (v1z-tZ)*invRZ, (v2x-tX)*invRX, (v2y-tY)*invRY, (v2z-tZ)*invRZ)
+	qx, qy, qz, featT := ClosestPointOnTriangleFeature((v0x-tX)*invRX, (v0y-tY)*invRY, (v0z-tZ)*invRZ, (v1x-tX)*invRX, (v1y-tY)*invRY, (v1z-tZ)*invRZ, (v2x-tX)*invRX, (v2y-tY)*invRY, (v2z-tZ)*invRZ)
 	if qx*qx+qy*qy+qz*qz < 1.0-1e-9 {
-		if allowInactiveEdge || !isInactiveTriangleFeature(featT, activeMask) {
+		if allowInactiveEdge || !IsInactiveTriangleFeature(featT, activeMask) {
 			return true
 		}
 	}
@@ -156,19 +123,19 @@ func (s *Face) IntersectsFiniteTriangle3D(eRadX, eRadY, eRadZ, cX, cY, cZ, dX, d
 		px := cX + tauPlane*dX
 		py := cY + tauPlane*dY
 		pz := cZ + tauPlane*dZ
-		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
+		qpx, qpy, qpz, featPlane := ClosestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
 		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 {
-			if allowInactiveEdge || !isInactiveTriangleFeature(featPlane, activeMask) {
+			if allowInactiveEdge || !IsInactiveTriangleFeature(featPlane, activeMask) {
 				return true
 			}
 		}
 	}
 
-	_, _, _, _, _, _, segSq, _, pierced, segFeat := closestSegmentToTriangleFeature(dX*invRX, dY*invRY, dZ*invRZ, (v0x-cX)*invRX, (v0y-cY)*invRY, (v0z-cZ)*invRZ, (v1x-cX)*invRX, (v1y-cY)*invRY, (v1z-cZ)*invRZ, (v2x-cX)*invRX, (v2y-cY)*invRY, (v2z-cZ)*invRZ)
+	_, _, _, _, _, _, segSq, _, pierced, segFeat := ClosestSegmentToTriangleFeature(dX*invRX, dY*invRY, dZ*invRZ, (v0x-cX)*invRX, (v0y-cY)*invRY, (v0z-cZ)*invRZ, (v1x-cX)*invRX, (v1y-cY)*invRY, (v1z-cZ)*invRZ, (v2x-cX)*invRX, (v2y-cY)*invRY, (v2z-cZ)*invRZ)
 	if segSq >= 1.0-1e-9 {
 		return false
 	}
-	return allowInactiveEdge || pierced || !isInactiveTriangleFeature(segFeat, activeMask)
+	return allowInactiveEdge || pierced || !IsInactiveTriangleFeature(segFeat, activeMask)
 }
 
 // EvalKeepUprightFace evaluates an upright ellipsoid face contact and optional edge or corner adjustment.
@@ -187,9 +154,9 @@ func (s *Face) EvalKeepUprightFace(ent *rigid_body.Entity, bucket BucketType, so
 	v1x, v1y, v1z := rFace.Get1()
 	v2x, v2y, v2z := rFace.Get2()
 
-	qx, qy, qz, feat := closestPointOnTriangleFeature((v0x-tX)*invRX, (v0y-tY)*invRY, (v0z-tZ)*invRZ, (v1x-tX)*invRX, (v1y-tY)*invRY, (v1z-tZ)*invRZ, (v2x-tX)*invRX, (v2y-tY)*invRY, (v2z-tZ)*invRZ)
+	qx, qy, qz, feat := ClosestPointOnTriangleFeature((v0x-tX)*invRX, (v0y-tY)*invRY, (v0z-tZ)*invRZ, (v1x-tX)*invRX, (v1y-tY)*invRY, (v1z-tZ)*invRZ, (v2x-tX)*invRX, (v2y-tY)*invRY, (v2z-tZ)*invRZ)
 	bestSq := qx*qx + qy*qy + qz*qz
-	inactiveFeat := isInactiveTriangleFeature(feat, activeMask)
+	inactiveFeat := IsInactiveTriangleFeature(feat, activeMask)
 	crossedPlane := distStart >= -satFilterEpsilon && distTarget < 0.0
 	tunneledWall := (solidWE || solidNS) && distStart >= effectiveRadius(ent, eRadX, eRadY, eRadZ, nX, nY, nZ)-satFilterEpsilon && distTarget < 0.0
 
@@ -204,11 +171,11 @@ func (s *Face) EvalKeepUprightFace(ent *rigid_body.Entity, bucket BucketType, so
 			px := cX + tauPlane*dX
 			py := cY + tauPlane*dY
 			pz := cZ + tauPlane*dZ
-			qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
+			qpx, qpy, qpz, featPlane := ClosestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
 			if planeSq := qpx*qpx + qpy*qpy + qpz*qpz; planeSq < 1.0-1e-9 {
 				resolvedPlane = true
 				qxW, qyW, qzW, hasPt = px+qpx*eRadX, py+qpy*eRadY, pz+qpz*eRadZ, true
-				if planeSq > 1e-12 && !isInactiveTriangleFeature(featPlane, activeMask) {
+				if planeSq > 1e-12 && !IsInactiveTriangleFeature(featPlane, activeMask) {
 					rx, ry, rz = qpx, qpy, qpz
 					checkGraze = true
 				}
@@ -220,13 +187,13 @@ func (s *Face) EvalKeepUprightFace(ent *rigid_body.Entity, bucket BucketType, so
 			if !crossedPlane && dX*dX+dY*dY+dZ*dZ <= 1e-12 {
 				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
 			}
-			sx, sy, sz, sqx, sqy, sqz, segSq, startSq, pierced, segFeat := closestSegmentToTriangleFeature(dX*invRX, dY*invRY, dZ*invRZ, (v0x-cX)*invRX, (v0y-cY)*invRY, (v0z-cZ)*invRZ, (v1x-cX)*invRX, (v1y-cY)*invRY, (v1z-cZ)*invRZ, (v2x-cX)*invRX, (v2y-cY)*invRY, (v2z-cZ)*invRZ)
+			sx, sy, sz, sqx, sqy, sqz, segSq, startSq, pierced, segFeat := ClosestSegmentToTriangleFeature(dX*invRX, dY*invRY, dZ*invRZ, (v0x-cX)*invRX, (v0y-cY)*invRY, (v0z-cZ)*invRZ, (v1x-cX)*invRX, (v1y-cY)*invRY, (v1z-cZ)*invRZ, (v2x-cX)*invRX, (v2y-cY)*invRY, (v2z-cZ)*invRZ)
 			if segSq >= 1.0-1e-9 || (startSq < 1.0-1e-9 && !(crossedPlane && pierced)) {
 				return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
 			}
 			qxW, qyW, qzW, hasPt = cX+sqx*eRadX, cY+sqy*eRadY, cZ+sqz*eRadZ, true
 			if !pierced {
-				if isInactiveTriangleFeature(segFeat, activeMask) {
+				if IsInactiveTriangleFeature(segFeat, activeMask) {
 					if !crossedPlane {
 						return false, false, false, 0, 0, 0, 0, 0, 0, 0, false
 					}
@@ -279,7 +246,7 @@ func (s *Face) EvalKeepUprightFace(ent *rigid_body.Entity, bucket BucketType, so
 		px := cX + tauPlane*dX
 		py := cY + tauPlane*dY
 		pz := cZ + tauPlane*dZ
-		qpx, qpy, qpz, featPlane := closestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
+		qpx, qpy, qpz, featPlane := ClosestPointOnTriangleFeature((v0x-px)*invRX, (v0y-py)*invRY, (v0z-pz)*invRZ, (v1x-px)*invRX, (v1y-py)*invRY, (v1z-pz)*invRZ, (v2x-px)*invRX, (v2y-py)*invRY, (v2z-pz)*invRZ)
 		if qpx*qpx+qpy*qpy+qpz*qpz < 1.0-1e-9 && featPlane == 0 {
 			return true, false, false, 0, 0, 0, 0, qxW, qyW, qzW, true
 		}

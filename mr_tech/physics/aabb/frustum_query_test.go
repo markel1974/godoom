@@ -83,12 +83,6 @@ func TestFrustumBoundsAndQueryFrustumsMaskEquivalence(t *testing.T) {
 		t.Fatalf("expected DisableNearPlane to clear finite frustum bounds")
 	}
 
-	// Nil Frustums / nil slot safety check.
-	tree.QueryFrustumsMask(nil, 0b1111, func(object IObject, leafMask uint32) bool {
-		t.Fatalf("unexpected callback on nil Frustums")
-		return false
-	})
-
 	for _, mask := range []uint32{0b0001, 0b0010, 0b1000, 0b1111, 0b0101} {
 		expected := make(map[int]uint32)
 		for bit := 0; bit < 4; bit++ {

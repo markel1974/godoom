@@ -1,12 +1,15 @@
 package collisions
 
-// Faces stores a pair of related volume faces, typically representing left and right sides.
+// Faces stores a reusable pair of Face wrappers, typically representing left and right sides.
 type Faces struct {
-	lFace IFace
-	rFace IFace
+	lFace *Face
+	rFace *Face
 }
 
-// NewFaces creates and returns an empty Faces instance.
+// NewFaces creates and returns an initialized Faces pair.
 func NewFaces() *Faces {
-	return &Faces{}
+	return &Faces{
+		lFace: NewFace(),
+		rFace: NewFace(),
+	}
 }

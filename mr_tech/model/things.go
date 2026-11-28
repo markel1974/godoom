@@ -145,12 +145,18 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 		if lGroup := lCage.GetCollisionGroup(); lGroup != 0 && lGroup == rCage.GetCollisionGroup() {
 			return false
 		}
-		if lCage.HasSeen(rCage) {
-			return false
+		if lCage.IsAcquiring() {
+			if !lCage.CanAcquireDynamic(rCage) {
+				return false
+			}
+		} else {
+			if lCage.HasSeen(rCage) {
+				return false
+			}
+			lCage.Seen(rCage)
 		}
 		wasSleeping := rThing.IsSleeping()
-		lCage.Seen(rCage)
-		if !wasSleeping {
+		if !wasSleeping && !lCage.IsAcquiring() {
 			rCage.Seen(lCage)
 		}
 		pairCounter := 0
@@ -161,6 +167,9 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 			// Query sul BVH del Self: basta il primo lFace sovrapposto per validare il contatto con rFace
 			lThing.QueryOverlaps(z, func(lEnt aabb.IObject) bool {
 				lFace := lEnt.(*volumes.Face)
+				if !rFace.IsSolid() && !lFace.IsSolid() {
+					return false
+				}
 				lCage.AddFace(rFace, lFace)
 				pairCounter++
 				return true
@@ -179,7 +188,9 @@ func (th *Things) queryCollisionCage(lCage *collisions.Cage, maxOverlaps int, wa
 						wake(rSolver)
 					}
 				}
-				rCage.Seen(lCage)
+				if !lCage.IsAcquiring() {
+					rCage.Seen(lCage)
+				}
 			}
 		}
 		lCage.Commit(rCage)

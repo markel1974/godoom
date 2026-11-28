@@ -3,6 +3,7 @@ package collisions
 import (
 	"fmt"
 	"math"
+	"sync/atomic"
 	"testing"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
@@ -53,28 +54,18 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 		if cage == cBot {
 			cage.AddFace(floor, nil)
 			cage.Commit(nil)
-			if !cage.HasSeen(cTop) {
-				cage.Seen(cTop)
-				if !sTop.IsSleeping() {
-					cTop.Seen(cage)
-				}
+			if cage.CanAcquireDynamic(cTop) {
 				cage.AddFace(topBotFace, botTopFace)
 				if sTop.IsSleeping() {
 					wake(sTop)
-					cTop.Seen(cage)
 				}
 				cage.Commit(cTop)
 			}
 		} else if cage == cTop {
-			if !cage.HasSeen(cBot) {
-				cage.Seen(cBot)
-				if !sBot.IsSleeping() {
-					cBot.Seen(cage)
-				}
+			if cage.CanAcquireDynamic(cBot) {
 				cage.AddFace(botTopFace, topBotFace)
 				if sBot.IsSleeping() {
 					wake(sBot)
-					cBot.Seen(cage)
 				}
 				cage.Commit(cBot)
 			}
@@ -191,19 +182,17 @@ func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
 	botTopFace := newTestFace([3]float64{10, -10, -10}, [3]float64{10, 10, -10}, [3]float64{10, 10, 10}, 1, 0, 0)
 	topBotFace := newTestFace([3]float64{-10, -10, -10}, [3]float64{-10, 10, -10}, [3]float64{-10, 10, 10}, -1, 0, 0)
 
-	broadphaseQueries := 0
+	var broadphaseQueries atomic.Int32
 	clampStaticQueriesA := 0
 	clampStaticQueriesB := 0
 
 	queryFn := func(cage *Cage, _ WakeRunningFn) {
-		broadphaseQueries++
+		broadphaseQueries.Add(1)
 		cage.AddFace(floor, nil)
 		cage.AddFace(wall, nil)
 		cage.CachePendingStaticFaces(cage.GetAABB())
 		cage.Commit(nil)
-		if cage == cA && !cage.HasSeen(cB) {
-			cage.Seen(cB)
-			cB.Seen(cage)
+		if cage == cA && cage.CanAcquireDynamic(cB) {
 			cage.AddFace(topBotFace, botTopFace)
 			cage.Commit(cB)
 		}
@@ -241,15 +230,15 @@ func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
 
 	// Subcase 1: Body pushed incrementally beyond zero-displacement Rebuild bounds triggers at most 1 padded ClampStatic refresh per cage across 8 iterations.
 	sB.GetEntity().SetV(-100, 0, 0)
-	broadphaseQueries = 0
+	broadphaseQueries.Store(0)
 	clampStaticQueriesA = 0
 	clampStaticQueriesB = 0
 	coord.Reset()
 	coord.Stage(sA)
 	coord.Stage(sB)
 	coord.Step()
-	if broadphaseQueries != 2 {
-		t.Fatalf("expected 1 initial broadphase query per running cage (total 2), got %d", broadphaseQueries)
+	if got := broadphaseQueries.Load(); got != 2 {
+		t.Fatalf("expected 1 initial broadphase query per running cage (total 2), got %d", got)
 	}
 	if clampStaticQueriesA > 1 || clampStaticQueriesB > 1 || (clampStaticQueriesA+clampStaticQueriesB) == 0 {
 		t.Fatalf("expected at most 1 padded ClampStatic refresh per cage across 8 iterations, got A=%d B=%d", clampStaticQueriesA, clampStaticQueriesB)
@@ -499,26 +488,16 @@ func TestPrecariousBalanceSettling(t *testing.T) {
 
 		dynQuery := func(cage *Cage, wake WakeRunningFn) {
 			queryFn(cage, wake)
-			if cage == cBot && !cage.HasSeen(cTop) {
-				cage.Seen(cTop)
-				if !sTop.IsSleeping() {
-					cTop.Seen(cage)
-				}
+			if cage == cBot && cage.CanAcquireDynamic(cTop) {
 				cage.AddFace(topFace, botFace)
 				if sTop.IsSleeping() {
 					wake(sTop)
-					cTop.Seen(cage)
 				}
 				cage.Commit(cTop)
-			} else if cage == cTop && !cage.HasSeen(cBot) {
-				cage.Seen(cBot)
-				if !sBot.IsSleeping() {
-					cBot.Seen(cage)
-				}
+			} else if cage == cTop && cage.CanAcquireDynamic(cBot) {
 				cage.AddFace(botFace, topFace)
 				if sBot.IsSleeping() {
 					wake(sBot)
-					cBot.Seen(cage)
 				}
 				cage.Commit(cBot)
 			}
@@ -595,26 +574,16 @@ func TestPrecariousBalanceSettling(t *testing.T) {
 
 		qDyn := func(cage *Cage, wake WakeRunningFn) {
 			queryFn(cage, wake)
-			if cage == cCrate && !cage.HasSeen(cCyl) {
-				cage.Seen(cCyl)
-				if !sCyl.IsSleeping() {
-					cCyl.Seen(cage)
-				}
+			if cage == cCrate && cage.CanAcquireDynamic(cCyl) {
 				cage.AddFace(cylFace, crateFace)
 				if sCyl.IsSleeping() {
 					wake(sCyl)
-					cCyl.Seen(cage)
 				}
 				cage.Commit(cCyl)
-			} else if cage == cCyl && !cage.HasSeen(cCrate) {
-				cage.Seen(cCrate)
-				if !sCrate.IsSleeping() {
-					cCrate.Seen(cage)
-				}
+			} else if cage == cCyl && cage.CanAcquireDynamic(cCrate) {
 				cage.AddFace(crateFace, cylFace)
 				if sCrate.IsSleeping() {
 					wake(sCrate)
-					cCrate.Seen(cage)
 				}
 				cage.Commit(cCrate)
 			}

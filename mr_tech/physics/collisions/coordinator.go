@@ -1,5 +1,13 @@
 package collisions
 
+import (
+	"runtime"
+	"sync"
+	"sync/atomic"
+)
+
+const parallelAcquireMinBodies = 8
+
 type WakeRunningFn func(neighbor *Solver)
 
 type QueryContactsFn func(cage *Cage, wake WakeRunningFn)
@@ -8,24 +16,32 @@ type ClampStaticFn func(cage *Cage)
 
 // Coordinator manages solver lifecycles, wake queues, islands, and joint constraints during simulation.
 type Coordinator struct {
-	solverIterations int
-	session          uint64
-	staged           []*Solver
-	stagedLen        int
-	running          []*Solver
-	runningLen       int
-	removables       []*Solver
-	removablesLen    int
-	wakeQueue        []*Solver
-	islandParent     []int
-	islandSleep      []bool
-	jointSupported   []bool
-	joints           []*JointConstraint
-	jointsLen        int
-	wakeRunningFn    WakeRunningFn
-	queryContactsFn  QueryContactsFn
-	clampStaticFn    ClampStaticFn
-	commonCap        int
+	solverIterations  int
+	session           uint64
+	staged            []*Solver
+	stagedLen         int
+	running           []*Solver
+	runningLen        int
+	removables        []*Solver
+	removablesLen     int
+	wakeQueue         []*Solver
+	islandParent      []int
+	islandSleep       []bool
+	jointSupported    []bool
+	joints            []*JointConstraint
+	jointsLen         int
+	wakeRunningFn     WakeRunningFn
+	queryContactsFn   QueryContactsFn
+	clampStaticFn     ClampStaticFn
+	commonCap         int
+	parallelAcquire   bool
+	parallelMinBodies int
+	workerWakes       [][]*Solver
+	workerWakeFns     []WakeRunningFn
+	wakeBatch         []*Solver
+	mergeOrder        []int
+	acquireWG         sync.WaitGroup
+	acquireCursor     atomic.Int64
 }
 
 // NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
@@ -38,21 +54,52 @@ func NewCoordinator(solverIterations, initialCap int, queryContactsFn QueryConta
 		commonCap = 1024
 	}
 	c := &Coordinator{
-		commonCap:        commonCap,
-		solverIterations: solverIterations,
-		staged:           make([]*Solver, commonCap),
-		running:          make([]*Solver, commonCap),
-		removables:       make([]*Solver, commonCap),
-		wakeQueue:        make([]*Solver, commonCap),
-		islandParent:     make([]int, commonCap),
-		islandSleep:      make([]bool, commonCap),
-		jointSupported:   make([]bool, commonCap),
-		joints:           make([]*JointConstraint, 0, commonCap),
-		queryContactsFn:  queryContactsFn,
-		clampStaticFn:    clampStaticFn,
+		commonCap:         commonCap,
+		solverIterations:  solverIterations,
+		staged:            make([]*Solver, commonCap),
+		running:           make([]*Solver, commonCap),
+		removables:        make([]*Solver, commonCap),
+		wakeQueue:         make([]*Solver, commonCap),
+		islandParent:      make([]int, commonCap),
+		islandSleep:       make([]bool, commonCap),
+		jointSupported:    make([]bool, commonCap),
+		joints:            make([]*JointConstraint, 0, commonCap),
+		queryContactsFn:   queryContactsFn,
+		clampStaticFn:     clampStaticFn,
+		parallelAcquire:   true,
+		parallelMinBodies: parallelAcquireMinBodies,
+		wakeBatch:         make([]*Solver, 0, commonCap),
+		mergeOrder:        make([]int, 0, commonCap),
 	}
 	c.wakeRunningFn = c.wakeRunningIsland
+	c.ensureWorkers(max(1, runtime.GOMAXPROCS(0)))
 	return c
+}
+
+// SetParallelAcquire enables or disables multi-goroutine wavefront contact acquisition.
+func (c *Coordinator) SetParallelAcquire(enabled bool) {
+	c.parallelAcquire = enabled
+}
+
+// ensureWorkers initializes reusable per-worker wake queues and callbacks without per-step allocations.
+func (c *Coordinator) ensureWorkers(workers int) {
+	if workers <= len(c.workerWakeFns) {
+		return
+	}
+	oldLen := len(c.workerWakeFns)
+	wakes := make([][]*Solver, workers)
+	copy(wakes, c.workerWakes)
+	fns := make([]WakeRunningFn, workers)
+	copy(fns, c.workerWakeFns)
+	for w := oldLen; w < workers; w++ {
+		workerID := w
+		wakes[workerID] = make([]*Solver, 0, 16)
+		fns[workerID] = func(neighbor *Solver) {
+			c.workerWakes[workerID] = append(c.workerWakes[workerID], neighbor)
+		}
+	}
+	c.workerWakes = wakes
+	c.workerWakeFns = fns
 }
 
 // AddJoint registers a joint constraint with the coordinator, ignoring nil constraints.
@@ -163,7 +210,7 @@ func (c *Coordinator) wakeIsland(root *Solver, addToRunning bool) {
 		dispSq := dx*dx + dy*dy + dz*dz
 		currMoveWake := curr.entity.KeepUpright() || curr.entity.HasWakeMotion(dispSq, false)
 		currSupportWake := curr.entity.HasSupportMotion(dispSq, false)
-		for i := 0; i < slotsLen; i++ {
+		for i := range slotsLen {
 			slot := cage.GetSlot(i)
 			rCage := slot.GetRCage()
 			if rCage == nil {
@@ -271,9 +318,7 @@ func (c *Coordinator) Step() {
 		return
 	}
 
-	for cursor := 0; cursor < c.runningLen; cursor++ {
-		c.queryContactsFn(c.running[cursor].cage, c.wakeRunningFn)
-	}
+	c.acquireContactsParallel()
 
 	// Compact broken or inactive joints once per step before solving.
 	writeJ := 0
@@ -432,7 +477,7 @@ func (c *Coordinator) updateIslandSleep() {
 		hasMotion := sx.entity.KeepUpright() || sx.entity.HasWakeMotion(dx*dx+dy*dy+dz*dz, false)
 		cage := sx.cage
 		slotsLen := cage.GetSlotsLen()
-		for i := 0; i < slotsLen; i++ {
+		for i := range slotsLen {
 			slot := cage.GetSlot(i)
 			rCage := slot.GetRCage()
 			if rCage == nil {
@@ -460,7 +505,7 @@ func (c *Coordinator) updateIslandSleep() {
 			}
 			cage := c.running[x].cage
 			slotsLen := cage.GetSlotsLen()
-			for i := 0; i < slotsLen; i++ {
+			for i := range slotsLen {
 				slot := cage.GetSlot(i)
 				rCage := slot.GetRCage()
 				if rCage == nil {
@@ -505,5 +550,156 @@ func (c *Coordinator) updateIslandSleep() {
 			s.EnterSleep()
 		}
 		s.SetSolverIndex(-1)
+	}
+}
+
+// acquireContactsParallel executes read-only broadphase/manifold acquisition in parallel waves across active cages,
+// then deterministically merges wake requests and buffered dynamic contacts by partner ID before solving.
+func (c *Coordinator) acquireContactsParallel() {
+	wave := uint64(1)
+	waveStart := 0
+	for waveStart < c.runningLen {
+		waveEnd := c.runningLen
+		for x := waveStart; x < waveEnd; x++ {
+			c.running[x].cage.BeginAcquire(wave)
+		}
+
+		waveCount := waveEnd - waveStart
+		workers := 1
+		if c.parallelAcquire && waveCount >= c.parallelMinBodies {
+			if procs := runtime.GOMAXPROCS(0); procs > 1 {
+				workers = min(procs, waveCount)
+			}
+		}
+		c.ensureWorkers(workers)
+		for w := 0; w < workers; w++ {
+			c.workerWakes[w] = c.workerWakes[w][:0]
+		}
+
+		if workers == 1 {
+			wakeFn := c.workerWakeFns[0]
+			for idx := waveStart; idx < waveEnd; idx++ {
+				cage := c.running[idx].cage
+				c.queryContactsFn(cage, wakeFn)
+				cage.SortPendingDynamic()
+			}
+		} else {
+			c.acquireCursor.Store(int64(waveStart))
+			c.acquireWG.Add(workers - 1)
+			for w := 1; w < workers; w++ {
+				go c.acquireWorker(w, waveEnd)
+			}
+			c.runAcquireLoop(0, waveEnd)
+			c.acquireWG.Wait()
+		}
+
+		c.mergeWaveWakes()
+		c.mergeWaveDynamicContacts(waveStart, waveEnd)
+
+		waveStart = waveEnd
+		wave++
+	}
+	for x := 0; x < c.runningLen; x++ {
+		c.running[x].cage.FinalizeAcquireSlots()
+	}
+}
+
+func (c *Coordinator) acquireWorker(workerID, waveEnd int) {
+	c.runAcquireLoop(workerID, waveEnd)
+	c.acquireWG.Done()
+}
+
+func (c *Coordinator) runAcquireLoop(workerID, waveEnd int) {
+	wakeFn := c.workerWakeFns[workerID]
+	for {
+		idx := int(c.acquireCursor.Add(1) - 1)
+		if idx >= waveEnd {
+			return
+		}
+		cage := c.running[idx].cage
+		c.queryContactsFn(cage, wakeFn)
+		cage.SortPendingDynamic()
+	}
+}
+
+// mergeWaveWakes drains per-worker wake queues in deterministic Cage ID order and prepares woken islands.
+func (c *Coordinator) mergeWaveWakes() {
+	c.wakeBatch = c.wakeBatch[:0]
+	for w := 0; w < len(c.workerWakes); w++ {
+		ww := c.workerWakes[w]
+		if len(ww) > 0 {
+			c.wakeBatch = append(c.wakeBatch, ww...)
+			c.workerWakes[w] = ww[:0]
+		}
+	}
+	if len(c.wakeBatch) == 0 {
+		return
+	}
+	if len(c.wakeBatch) > 1 {
+		sortSolversByCageID(c.wakeBatch)
+	}
+	for _, target := range c.wakeBatch {
+		if target.IsSleeping() && target.IsActive() {
+			c.wakeIsland(target, true)
+		}
+	}
+}
+
+// mergeWaveDynamicContacts commits acquired dynamic manifolds into partner cages in ascending Cage ID order.
+func (c *Coordinator) mergeWaveDynamicContacts(waveStart, waveEnd int) {
+	waveLen := waveEnd - waveStart
+	if cap(c.mergeOrder) < waveLen {
+		c.mergeOrder = make([]int, waveLen)
+	} else {
+		c.mergeOrder = c.mergeOrder[:waveLen]
+	}
+	for i := range waveLen {
+		c.mergeOrder[i] = waveStart + i
+	}
+	if waveLen > 1 {
+		sortIndicesByCageID(c.mergeOrder, c.running)
+	}
+	for _, idx := range c.mergeOrder {
+		cage := c.running[idx].cage
+		cage.EndAcquire()
+		cage.FlushPendingDynamic()
+	}
+}
+
+func cageOrderLess(a, b *Cage) bool {
+	if a.id != b.id {
+		return a.id < b.id
+	}
+	return a.entity.GetId() < b.entity.GetId()
+}
+
+func sortSolversByCageID(s []*Solver) {
+	n := len(s)
+	for gap := n / 2; gap > 0; gap /= 2 {
+		for i := gap; i < n; i++ {
+			cur := s[i]
+			j := i
+			for j >= gap && cageOrderLess(cur.cage, s[j-gap].cage) {
+				s[j] = s[j-gap]
+				j -= gap
+			}
+			s[j] = cur
+		}
+	}
+}
+
+func sortIndicesByCageID(indices []int, running []*Solver) {
+	n := len(indices)
+	for gap := n / 2; gap > 0; gap /= 2 {
+		for i := gap; i < n; i++ {
+			cur := indices[i]
+			curCage := running[cur].cage
+			j := i
+			for j >= gap && cageOrderLess(curCage, running[indices[j-gap]].cage) {
+				indices[j] = indices[j-gap]
+				j -= gap
+			}
+			indices[j] = cur
+		}
 	}
 }

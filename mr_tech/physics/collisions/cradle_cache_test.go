@@ -31,25 +31,25 @@ func padToCachePath(entries []*Entry) []*Entry {
 	return out
 }
 
+func makeTestSlots(entries []*Entry) *Slots {
+	return &Slots{data: entries, len: len(entries)}
+}
+
 func TestCradleSupportEquivalenceBoundaryCases(t *testing.T) {
 	cache := NewCradleCache()
-	var cageRaw Cage
-	var cagePad Cage
 
 	verify := func(name string, entries []*Entry) {
 		t.Helper()
-		cageRaw.slots = entries
-		cageRaw.slotsLen = len(entries)
-		want := cache.HasSupportSmall(&cageRaw)
+		rawSlots := makeTestSlots(entries)
+		want := cache.HasSupportSmall(rawSlots)
 
 		padded := padToCachePath(entries)
-		cagePad.slots = padded
-		cagePad.slotsLen = len(padded)
-		got := cache.HasSupport(&cagePad)
+		padSlots := makeTestSlots(padded)
+		got := cache.HasSupport(padSlots)
 		if got != want {
 			t.Fatalf("%s: HasSupport=%v, want %v (HasSupportSmall)", name, got, want)
 		}
-		if wantPadded := cache.HasSupportSmall(&cagePad); wantPadded != want {
+		if wantPadded := cache.HasSupportSmall(padSlots); wantPadded != want {
 			t.Fatalf("%s: internal test helper mismatch padded=%v vs want=%v", name, wantPadded, want)
 		}
 	}
@@ -128,7 +128,6 @@ func TestCradleSupportEquivalenceBoundaryCases(t *testing.T) {
 
 func TestCradleSupportEquivalenceRandomized(t *testing.T) {
 	cache := NewCradleCache()
-	var cage Cage
 	rng := rand.New(rand.NewSource(20261127))
 	entries := make([]*Entry, 0, 320)
 
@@ -207,10 +206,9 @@ func TestCradleSupportEquivalenceRandomized(t *testing.T) {
 			}
 		}
 
-		cage.slots = entries
-		cage.slotsLen = len(entries)
-		want := cache.HasSupportSmall(&cage)
-		got := cache.HasSupport(&cage)
+		testSlots := makeTestSlots(entries)
+		want := cache.HasSupportSmall(testSlots)
+		got := cache.HasSupport(testSlots)
 		if got != want {
 			t.Fatalf("trial %d (pattern=%d, n=%d): HasSupport=%v, want %v", trial, pattern, n, got, want)
 		}
@@ -237,8 +235,8 @@ func TestCageHasFloorCachingAndTessellation(t *testing.T) {
 		f := newTestFace([3]float64{off, off, 0}, [3]float64{off + 1, off, 0}, [3]float64{off, off + 1, 0}, nX, nY, 0.50)
 		cage.addToBucketEntry(BucketWallEast, nil, f, 0, 0.05, nX, nY, 0.50, off, off, 0, 10, ImpactInelastic)
 	}
-	if cage.slotsLen <= 128 {
-		t.Fatalf("expected > 128 slots for high tessellation test, got %d", cage.slotsLen)
+	if cage.GetSlotsLen() <= 128 {
+		t.Fatalf("expected > 128 slots for high tessellation test, got %d", cage.GetSlotsLen())
 	}
 
 	if cage.HasFloor() {
@@ -268,16 +266,16 @@ func TestCageHasFloorCachingAndTessellation(t *testing.T) {
 
 func TestCradleSupportZeroAllocs(t *testing.T) {
 	cache := NewCradleCache()
-	slots := make([]*Entry, 256)
-	for i := range slots {
-		ang := -0.4 + 0.8*float64(i)/float64(len(slots))
-		slots[i] = makeCradleUnitSlope(ang, 0.50, 1.0, ImpactInelastic)
+	slotsSlice := make([]*Entry, 256)
+	for i := range slotsSlice {
+		ang := -0.4 + 0.8*float64(i)/float64(len(slotsSlice))
+		slotsSlice[i] = makeCradleUnitSlope(ang, 0.50, 1.0, ImpactInelastic)
 	}
-	cage := Cage{slots: slots, slotsLen: len(slots)}
+	slots := makeTestSlots(slotsSlice)
 
 	// Phase A-only path: 0 allocs even on very first call without warmup.
 	allocs := testing.AllocsPerRun(50, func() {
-		if cache.HasSupport(&cage) {
+		if cache.HasSupport(slots) {
 			t.Fatal("unexpected true on one-sided arc")
 		}
 	})
@@ -286,13 +284,12 @@ func TestCradleSupportZeroAllocs(t *testing.T) {
 	}
 
 	// Phase B hairline fallback: 0 allocs after warmup.
-	hairline := makeHairlineBenchmarkSlots(256)
-	hairCage := Cage{slots: hairline, slotsLen: len(hairline)}
-	if cache.HasSupport(&hairCage) {
+	hairline := makeTestSlots(makeHairlineBenchmarkSlots(256))
+	if cache.HasSupport(hairline) {
 		t.Fatal("unexpected true on sub-threshold hairline wedge")
 	}
 	hairAllocs := testing.AllocsPerRun(50, func() {
-		if cache.HasSupport(&hairCage) {
+		if cache.HasSupport(hairline) {
 			t.Fatal("unexpected true on sub-threshold hairline wedge")
 		}
 	})
@@ -364,37 +361,35 @@ func BenchmarkCradleSupport(b *testing.B) {
 			{name: "Coplanar", coplanar: true},
 			{name: "CurvedArc", coplanar: false},
 		} {
-			slots := makeBenchmarkSlots(n, mode.coplanar, true)
-			cage := Cage{slots: slots, slotsLen: len(slots)}
+			slots := makeTestSlots(makeBenchmarkSlots(n, mode.coplanar, true))
 
 			b.Run(fmt.Sprintf("Old_O_N2/%s/N=%d", mode.name, n), func(b *testing.B) {
 				cache := NewCradleCache()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					_ = cache.HasSupportSmall(&cage)
+					_ = cache.HasSupportSmall(slots)
 				}
 			})
 
 			b.Run(fmt.Sprintf("New_O_N/%s/N=%d", mode.name, n), func(b *testing.B) {
 				cache := NewCradleCache()
-				_ = cache.HasSupport(&cage)
+				_ = cache.HasSupport(slots)
 				b.ResetTimer()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					_ = cache.HasSupport(&cage)
+					_ = cache.HasSupport(slots)
 				}
 			})
 		}
 
-		hairSlots := makeHairlineBenchmarkSlots(n)
-		hairCage := Cage{slots: hairSlots, slotsLen: len(hairSlots)}
+		hairSlots := makeTestSlots(makeHairlineBenchmarkSlots(n))
 		b.Run(fmt.Sprintf("New_O_N/HairlinePhaseB/N=%d", n), func(b *testing.B) {
 			cache := NewCradleCache()
-			_ = cache.HasSupport(&hairCage)
+			_ = cache.HasSupport(hairSlots)
 			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_ = cache.HasSupport(&hairCage)
+				_ = cache.HasSupport(hairSlots)
 			}
 		})
 	}

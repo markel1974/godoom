@@ -99,6 +99,7 @@ func (s *Volumes) Query(targetObj aabb.IObject) []*volumes.Volume {
 }
 
 // QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
+// It also populates the padded static face cache upfront so positional solver sweeps avoid repeat BVH queries.
 func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 	counter := 0
 	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
@@ -117,10 +118,22 @@ func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
 		}
 		return false
 	})
-	if counter <= maxOverlaps {
-		cage.CachePendingStaticFaces(cage.GetAABB())
-	}
 	cage.Commit(nil)
+	s.populateStaticFaceCache(cage, cage.GetAABB())
+}
+
+// populateStaticFaceCache queries solid world faces overlapping a temporarily padded clamp AABB into cage's static cache.
+func (s *Volumes) populateStaticFaceCache(cage *collisions.Cage, lAABB *aabb.AABB) {
+	oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ := cage.BeginPaddedStaticFaceQuery(lAABB)
+	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
+		vol := object.(*volumes.Volume)
+		vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
+			cage.AddCachedStaticFace(otherEnt.(*volumes.Face))
+			return false
+		})
+		return false
+	})
+	cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
 }
 
 // ClampStaticCage projects any entity moved or pushed during the step strictly outside solid world faces.
@@ -132,16 +145,7 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 		origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ, lAABB := cage.BeginStaticClamp()
 
 		if !cage.HasStaticFaceCache(lAABB) {
-			oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ := cage.BeginPaddedStaticFaceQuery(lAABB)
-			s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
-				vol := object.(*volumes.Volume)
-				vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
-					cage.AddCachedStaticFace(otherEnt.(*volumes.Face))
-					return false
-				})
-				return false
-			})
-			cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
+			s.populateStaticFaceCache(cage, lAABB)
 		}
 		if cage.ClampCachedStaticFaces(lAABB) {
 			moved = true

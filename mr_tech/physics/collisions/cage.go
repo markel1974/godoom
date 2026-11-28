@@ -135,21 +135,27 @@ type Cage struct {
 	prevKeepUpright  bool
 	forceStaticClamp bool
 
-	passDX         float64
-	passDY         float64
-	passDZ         float64
-	stepDX         float64
-	stepDY         float64
-	stepDZ         float64
-	hasSpawnOrigin bool
-	spawnX         float64
-	spawnY         float64
-	spawnZ         float64
-	pendingStepZ   float64
-	collisionGroup uint64
-	solverIdx      int
-	solver         *Solver
-	slots          *Slots
+	passDX          float64
+	passDY          float64
+	passDZ          float64
+	stepDX          float64
+	stepDY          float64
+	stepDZ          float64
+	hasSpawnOrigin  bool
+	spawnX          float64
+	spawnY          float64
+	spawnZ          float64
+	pendingStepZ    float64
+	collisionGroup  uint64
+	solverIdx       int
+	solver          *Solver
+	slots           *Slots
+	acquireWave     uint64
+	acquiring       bool
+	staticSlotStart int
+	staticSlotEnd   int
+	pendingDyn      []pendingDynamicContact
+	pendingDynLen   int
 }
 
 var _counter atomic.Uint64
@@ -177,6 +183,7 @@ func NewCage(id uint64) *Cage {
 		solverIdx:     -1,
 		staticContact: NewStaticFaceContact(),
 		cradle:        NewCradleCache(),
+		pendingDyn:    make([]pendingDynamicContact, 16),
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
@@ -269,6 +276,11 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.cradleCached = false
 	s.hasFloor = false
 	s.applied = false
+	s.acquiring = false
+	s.acquireWave = 0
+	s.staticSlotStart = 0
+	s.staticSlotEnd = 0
+	s.pendingDynLen = 0
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
 
 	s.staticContact.Reset()
@@ -276,6 +288,84 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	//clear(s.seen)
 	s.maxStep = maxStep
 	s.pendingStepZ = 0
+}
+
+// BeginAcquire switches this cage into read-only parallel acquisition mode for wave.
+func (s *Cage) BeginAcquire(wave uint64) {
+	s.acquireWave = wave
+	s.acquiring = true
+	s.staticSlotStart = 0
+	s.staticSlotEnd = 0
+	s.pendingDynLen = 0
+}
+
+// FinalizeAcquireSlots moves any static slots acquired before dynamic merges to the end of s.slots
+// so PGS warm-start and resolve sweeps anchor multi-body pushes into static world surfaces cleanly.
+func (s *Cage) FinalizeAcquireSlots() {
+	if s.staticSlotEnd > s.staticSlotStart && s.staticSlotEnd < s.slots.Len() {
+		s.slots.RotateRangeToEnd(s.staticSlotStart, s.staticSlotEnd)
+	}
+	s.staticSlotStart = 0
+	s.staticSlotEnd = 0
+}
+
+// EndAcquire leaves parallel acquisition mode for deterministic merge and solve.
+func (s *Cage) EndAcquire() {
+	s.acquiring = false
+}
+
+// IsAcquiring reports whether this cage is in parallel read-only acquisition mode.
+func (s *Cage) IsAcquiring() bool {
+	return s.acquiring
+}
+
+// CanAcquireDynamic reports whether this cage owns evaluating the dynamic pair (s, rCage)
+// during parallel read-only acquisition without writing to rCage.
+func (s *Cage) CanAcquireDynamic(rCage *Cage) bool {
+	if s == rCage || s.HasSeen(rCage) {
+		return false
+	}
+	if s.acquiring && !rCage.entity.IsSleeping() && rCage.acquireWave == s.acquireWave {
+		if s.id > rCage.id || (s.id == rCage.id && s.entity.GetId() > rCage.entity.GetId()) {
+			return false
+		}
+	}
+	s.Seen(rCage)
+	return true
+}
+
+// SortPendingDynamic deterministically sorts buffered dynamic contacts by partner ID.
+func (s *Cage) SortPendingDynamic() {
+	if s.pendingDynLen > 1 {
+		sortPendingDynamicContacts(s.pendingDyn[:s.pendingDynLen])
+	}
+}
+
+// FlushPendingDynamic merges buffered read-only dynamic contacts symmetrically into buckets and slots.
+func (s *Cage) FlushPendingDynamic() {
+	n := s.pendingDynLen
+	for i := range n {
+		pd := &s.pendingDyn[i]
+		rCage := pd.partner
+		rSleeping := rCage.entity.IsSleeping()
+		if !rSleeping {
+			rCage.Seen(s)
+			if pd.wasSleeping && pd.rFace != nil {
+				// Partner transitioned sleeping -> awake in mergeWaveWakes and ran StagePrepare:
+				// re-evaluate narrow-phase manifold using its updated post-prepare displacement.
+				s.AddFace(pd.rFace, pd.recipFace)
+				var refreshed pendingDynamicContact
+				ok := s.buildPendingDynamic(rCage, &refreshed)
+				s.DiscardPendingFaces()
+				if ok {
+					s.applyPendingDynamic(&refreshed)
+				}
+				continue
+			}
+		}
+		s.applyPendingDynamic(pd)
+	}
+	s.pendingDynLen = 0
 }
 
 // AddFace adds a pair of faces (rFace and lFace) to the Cage, resizing the internal slice if needed.[cite: 6]
@@ -297,11 +387,21 @@ func (s *Cage) AddFace(rFace IFace, lFace IFace) {
 // Commit processes pending face overlaps in this Cage against either another dynamic Cage or static world geometry.
 func (s *Cage) Commit(rCage *Cage) {
 	if rCage != nil {
-		s.commitDynamicManifold(rCage)
+		if s.acquiring {
+			s.acquireDynamicManifold(rCage)
+		} else {
+			s.commitDynamicManifold(rCage)
+		}
 		s.facesIdx = 0
 		return
 	}
-	s.staticContact.Commit(s, s.ellipsoid.GetAABB())
+	if s.acquiring {
+		s.staticSlotStart = s.slots.Len()
+		s.staticContact.Commit(s, s.ellipsoid.GetAABB())
+		s.staticSlotEnd = s.slots.Len()
+	} else {
+		s.staticContact.Commit(s, s.ellipsoid.GetAABB())
+	}
 	s.facesIdx = 0
 }
 
@@ -573,16 +673,20 @@ func (s *Cage) DiscardPendingFaces() {
 	s.facesIdx = 0
 }
 
-// firstSolidDynamicFaces returns the first solid remote/local face pair queued on the cage.
+// firstSolidDynamicFaces returns the first dynamic face pair queued on the cage where either face is solid.
 func (s *Cage) firstSolidDynamicFaces() (IFace, IFace) {
 	for i := 0; i < s.facesIdx; i++ {
 		f := s.faces[i]
-		if f.rFace != nil && f.rFace.IsSolid() {
+		if (f.rFace != nil && f.rFace.IsSolid()) || (f.lFace != nil && f.lFace.IsSolid()) {
+			rFace := f.rFace
+			if rFace == nil {
+				rFace = f.lFace
+			}
 			recipFace := f.lFace
 			if recipFace == nil {
 				recipFace = f.rFace
 			}
-			return f.rFace, recipFace
+			return rFace, recipFace
 		}
 	}
 	return nil, nil
@@ -678,18 +782,39 @@ func hasDynamicRestFloorGap(ent *rigid_body.Entity, selfDZ, gap, partnerDZ float
 	return selfDZ >= -maxDZ && ent.GetVz() >= -maxVZ && gap <= sixDofFloorGapSlop+math.Max(0.0, -partnerDZ)
 }
 
+// acquireDynamicManifold evaluates a dynamic collision pair into s.pendingDyn without mutating rCage.
+func (s *Cage) acquireDynamicManifold(rCage *Cage) {
+	if s.pendingDynLen >= len(s.pendingDyn) {
+		n := make([]pendingDynamicContact, nextGrowCap(len(s.pendingDyn), 16))
+		copy(n, s.pendingDyn)
+		s.pendingDyn = n
+	}
+	if s.buildPendingDynamic(rCage, &s.pendingDyn[s.pendingDynLen]) {
+		s.pendingDynLen++
+	}
+}
+
 // commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
 // geometry when KeepUpright is active and 15-axis OBB SAT + conservative advancement otherwise.
 func (s *Cage) commitDynamicManifold(rCage *Cage) {
+	var pd pendingDynamicContact
+	if s.buildPendingDynamic(rCage, &pd) {
+		s.applyPendingDynamic(&pd)
+	}
+}
+
+// buildPendingDynamic populates out with read-only narrow-phase dynamic pair results without mutating rCage.
+func (s *Cage) buildPendingDynamic(rCage *Cage, out *pendingDynamicContact) bool {
 	rFace, recipFace := s.firstSolidDynamicFaces()
 	if rFace == nil {
-		return
+		return false
 	}
 
 	lEnt := s.entity
 	rEnt := rCage.GetEntity()
 	lUpright, rUpright, rTx, rTy, rTz, _, _, rDZ, rRadX, rRadY, rRadZ := s.evalDynamicManifold(rCage)
 
+	rSleep := rEnt.IsSleeping()
 	m := s.manifold
 	mNormalX, mNormalY, mNormalZ := m.GetNormal()
 	b := Normal2BucketType(mNormalX, mNormalY, mNormalZ)
@@ -701,44 +826,92 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 			xyOverlap = dx*dx+dy*dy < sumR*sumR
 		}
 		gap := m.GetGap()
+		var selfFloor, partnerFloor bool
 		if gap <= floorGroundTolerance && xyOverlap {
 			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
-				if lUpright || hasDynamicRestFloorGap(lEnt, s.dZ, gap, rDZ) {
-					s.hasFloor = true
-				}
+				selfFloor = lUpright || hasDynamicRestFloorGap(lEnt, s.dZ, gap, rDZ)
 			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {
-				if rUpright || hasDynamicRestFloorGap(rEnt, rDZ, gap, s.dZ) {
-					rCage.hasFloor = true
-				}
+				partnerFloor = rUpright || hasDynamicRestFloorGap(rEnt, rDZ, gap, s.dZ)
 			}
 		}
-		return
+		if !selfFloor && !partnerFloor {
+			return false
+		}
+		out.partner = rCage
+		out.rFace = rFace
+		out.recipFace = recipFace
+		out.selfFloor = selfFloor
+		out.partnerFloor = partnerFloor
+		out.wasSleeping = rSleep
+		out.hit = false
+		out.pointCount = -1
+		return true
 	}
 
-	lSleep := lEnt.IsSleeping()
-	rSleep := rEnt.IsSleeping()
 	penetration := m.GetPenetration()
 	count := m.GetCount()
 	dist := -penetration
-	if b == BucketFloor && mNormalZ >= floorNormalThreshold && dist <= floorGroundTolerance {
-		if !lSleep {
-			s.hasFloor = true
-		}
-	} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance {
-		if !rSleep {
-			rCage.hasFloor = true
-		}
-	}
+	selfFloor := b == BucketFloor && mNormalZ >= floorNormalThreshold && dist <= floorGroundTolerance
+	partnerFloor := b == BucketCeiling && mNormalZ <= -floorNormalThreshold && dist <= floorGroundTolerance
 
 	if penetration <= 0 || count == 0 {
+		if !selfFloor && !partnerFloor {
+			return false
+		}
+		out.partner = rCage
+		out.rFace = rFace
+		out.recipFace = recipFace
+		out.selfFloor = selfFloor
+		out.partnerFloor = partnerFloor
+		out.wasSleeping = rSleep
+		out.hit = false
+		out.pointCount = 0
+		return true
+	}
+
+	out.partner = rCage
+	out.rFace = rFace
+	out.recipFace = recipFace
+	out.normalX = mNormalX
+	out.normalY = mNormalY
+	out.normalZ = mNormalZ
+	out.penetration = penetration
+	out.rMaxZ = rTz + rRadZ
+	out.selfFloor = selfFloor
+	out.partnerFloor = partnerFloor
+	out.wasSleeping = rSleep
+	out.hit = true
+	out.pointCount = count
+	for pi := range count {
+		out.points[pi][0], out.points[pi][1], out.points[pi][2], out.points[pi][3] = m.GetPoint(pi)
+	}
+	return true
+}
+
+// applyPendingDynamic commits a previously captured dynamic contact pair into both cages' buckets and slots.
+func (s *Cage) applyPendingDynamic(pd *pendingDynamicContact) {
+	rCage := pd.partner
+	lEnt := s.entity
+	rEnt := rCage.GetEntity()
+	lSleep := lEnt.IsSleeping()
+	rSleep := rEnt.IsSleeping()
+
+	restGap := !pd.hit && pd.pointCount < 0
+	if pd.selfFloor && (restGap || !lSleep) {
+		s.hasFloor = true
+	}
+	if pd.partnerFloor && (restGap || !rSleep) {
+		rCage.hasFloor = true
+	}
+	if !pd.hit {
 		return
 	}
 
-	rMaxZ := rTz + rRadZ
+	b := Normal2BucketType(pd.normalX, pd.normalY, pd.normalZ)
+	rMaxZ := pd.rMaxZ
 	lMaxZ := s.tZ + s.eRadZ
-
 	iMode := ImpactElastic
-	if b.IsWall() && (lUpright || s.maxStep > 0) {
+	if b.IsWall() && (lEnt.KeepUpright() || s.maxStep > 0) {
 		baseZ := s.GetBaseZ()
 		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
 		if rMaxZ <= minBaseZ+satFilterEpsilon {
@@ -750,19 +923,20 @@ func (s *Cage) commitDynamicManifold(rCage *Cage) {
 		}
 	}
 
-	for pi := range count {
-		ptX, ptY, ptZ, ptPen := m.GetPoint(pi)
+	oppB := b.Opposite()
+	for pi := 0; pi < pd.pointCount; pi++ {
+		pt := &pd.points[pi]
+		ptPen := pt[3]
 		if ptPen <= 0 {
 			continue
 		}
-
+		ptX, ptY, ptZ := pt[0], pt[1], pt[2]
 		ptDist := -ptPen
 		if !lSleep {
-			s.addToBucket(b, rCage, rFace, ptDist, ptPen, mNormalX, mNormalY, mNormalZ, ptX, ptY, ptZ, rMaxZ, iMode)
+			s.addToBucket(b, rCage, pd.rFace, ptDist, ptPen, pd.normalX, pd.normalY, pd.normalZ, ptX, ptY, ptZ, rMaxZ, iMode)
 		}
 		if iMode == ImpactElastic && !rSleep {
-			oppB := b.Opposite()
-			rCage.addToBucket(oppB, s, recipFace, ptDist, ptPen, -mNormalX, -mNormalY, -mNormalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
+			rCage.addToBucket(oppB, s, pd.recipFace, ptDist, ptPen, -pd.normalX, -pd.normalY, -pd.normalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
 			if oppB == BucketFloor {
 				rCage.hasFloor = true
 			}
@@ -1047,11 +1221,11 @@ func (s *Cage) overlapsTargetXY(minX, maxX, minY, maxY float64) bool {
 
 // effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
 // using ellipsoid support for KeepUpright entities and exact OBB axis projection for all rigid OBBs.
-func (s *Cage) effectiveRadius(nX, nY, nZ float64) float64 {
-	if !s.entity.KeepUpright() {
-		return s.entity.ProjectExtent(nX, nY, nZ)
+func effectiveRadius(ent *rigid_body.Entity, eRadX, eRadY, eRadZ, nX, nY, nZ float64) float64 {
+	if !ent.KeepUpright() {
+		return ent.ProjectExtent(nX, nY, nZ)
 	}
-	return math.Sqrt((nX*s.eRadX)*(nX*s.eRadX) + (nY*s.eRadY)*(nY*s.eRadY) + (nZ*s.eRadZ)*(nZ*s.eRadZ))
+	return math.Sqrt((nX*eRadX)*(nX*eRadX) + (nY*eRadY)*(nY*eRadY) + (nZ*eRadZ)*(nZ*eRadZ))
 }
 
 // GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.[cite: 6]
@@ -1215,7 +1389,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 
 	p0x, p0y, p0z := rFace.Get0()
 	distStart := (s.cX-p0x)*nX + (s.cY-p0y)*nY + (s.cZ-p0z)*nZ
-	rayEff := s.effectiveRadius(nX, nY, nZ)
+	rayEff := effectiveRadius(s.entity, s.eRadX, s.eRadY, s.eRadZ, nX, nY, nZ)
 
 	flipped := false
 	var bucket BucketType
@@ -1344,7 +1518,7 @@ func (s *Cage) evalStaticFace(lAABB *aabb.AABB, rFace IFace, out *StaticFaceCont
 			solidWE = nAbsX > nAbsY && nAbsX > nAbsZ
 			solidNS = !solidWE && nAbsY > nAbsZ
 			bucket = Normal2BucketType(nX, nY, nZ)
-			rayEff = s.effectiveRadius(nX, nY, nZ)
+			rayEff = effectiveRadius(s.entity, s.eRadX, s.eRadY, s.eRadZ, nX, nY, nZ)
 			penetration = cPen
 			dist = -cPen
 			distTarget = rayEff - cPen
@@ -1640,7 +1814,7 @@ func (s *Cage) evalKeepUprightFace(rFace IFace, bucket BucketType, solidWE, soli
 	bestSq := qx*qx + qy*qy + qz*qz
 	inactiveFeat := isInactiveTriangleFeature(feat, activeMask)
 	crossedPlane := distStart >= -satFilterEpsilon && distTarget < 0.0
-	tunneledWall := (solidWE || solidNS) && distStart >= s.effectiveRadius(nX, nY, nZ)-satFilterEpsilon && distTarget < 0.0
+	tunneledWall := (solidWE || solidNS) && distStart >= effectiveRadius(s.entity, s.eRadX, s.eRadY, s.eRadZ, nX, nY, nZ)-satFilterEpsilon && distTarget < 0.0
 
 	if bestSq >= 1.0-1e-9 {
 		var rx, ry, rz float64

@@ -75,18 +75,14 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 		lMinX, lMinY, lMinZ, lMaxX, lMaxY, lMaxZ := la.GetMinMax()
 		for j := range nBoxes {
 			rCage := solvers[j].GetCage()
-			if rCage == cage || cage.HasSeen(rCage) {
+			wasSleep := solvers[j].IsSleeping()
+			if !cage.CanAcquireDynamic(rCage) {
 				continue
 			}
 			ra := rCage.GetAABB()
 			rMinX, rMinY, rMinZ, rMaxX, rMaxY, rMaxZ := ra.GetMinMax()
 			if lMaxX < rMinX || lMinX > rMaxX || lMaxY < rMinY || lMinY > rMaxY || lMaxZ < rMinZ || lMinZ > rMaxZ {
 				continue
-			}
-			wasSleep := solvers[j].IsSleeping()
-			cage.Seen(rCage)
-			if !wasSleep {
-				rCage.Seen(cage)
 			}
 			if !wakeOnBroadphase {
 				cage.AddFace(faces[j], faces[0])
@@ -97,7 +93,6 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 					}
 					if cage.ShouldWakeDynamic(rCage) {
 						wake(solvers[j])
-						rCage.Seen(cage)
 					}
 				}
 				cage.Commit(rCage)
@@ -111,7 +106,6 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 			if !(zMaxX < -8 || zMinX > 8 || zMaxY < -6 || zMinY > 6 || zMaxZ < -4 || zMinZ > 4) {
 				if wasSleep {
 					wake(solvers[j])
-					rCage.Seen(cage)
 				}
 				cage.AddFace(faces[j], faces[0])
 				cage.Commit(rCage)

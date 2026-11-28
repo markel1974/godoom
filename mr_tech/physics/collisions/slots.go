@@ -54,6 +54,23 @@ func (s *Slots) Decrease(i int) {
 	s.data[i] = s.data[s.len]
 }
 
+// RotateRangeToEnd moves contiguous entries [start, end) to the back of the slice [0, len)
+// in O(len-start) time and O(1) space, preserving relative order of both blocks.
+func (s *Slots) RotateRangeToEnd(start, end int) {
+	if end <= start || end >= s.len {
+		return
+	}
+	reverseEntrySlice(s.data[start:end])
+	reverseEntrySlice(s.data[end:s.len])
+	reverseEntrySlice(s.data[start:s.len])
+}
+
+func reverseEntrySlice(xs []*Entry) {
+	for l, r := 0, len(xs)-1; l < r; l, r = l+1, r-1 {
+		xs[l], xs[r] = xs[r], xs[l]
+	}
+}
+
 // HasImpactInelastic reports whether any inelastic impact has a normal opposing the direction beyond the threshold.
 func (s *Slots) HasImpactInelastic(dirX, dirY, dirZ float64, wallBlockDotThreshold float64) bool {
 	for i := 0; i < s.len; i++ {

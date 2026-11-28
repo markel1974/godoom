@@ -2,6 +2,9 @@ package aabb
 
 import "math/bits"
 
+// treeLocalStackCap fits typical BVH traversal depths cleanly on the caller stack without heap allocations.
+const treeLocalStackCap = 128
+
 // Tree is a spatial data structure optimized for efficient querying and management of Axes-Aligned Bounding Boxes (AABBs).
 type Tree struct {
 	nodes              []*Node
@@ -11,8 +14,6 @@ type Tree struct {
 	nodeCapacity       uint
 	growthSize         uint
 	margin             float64
-	stack              []uint
-	stackMask          []uint32
 	version            uint64
 }
 
@@ -33,8 +34,6 @@ func NewTree(initialSize uint, margin float64) *Tree {
 		nodeCapacity:       initialSize,
 		growthSize:         initialSize,
 		nodes:              make([]*Node, initialSize),
-		stack:              make([]uint, initialSize),
-		stackMask:          make([]uint32, initialSize),
 		margin:             margin,
 	}
 
@@ -196,20 +195,43 @@ func (a *Tree) UpdateObject(object IObject) {
 	a.updateLeaf(nodeIndex, aabb)
 }
 
+// growLocalTreeStack expands a query traversal stack beyond its stack-allocated capacity.
+func growLocalTreeStack(stack []uint) []uint {
+	next := make([]uint, len(stack)*2)
+	copy(next, stack)
+	return next
+}
+
+// growLocalTreeStackMask expands both traversal stack and per-entry frustum mask beyond stack capacity.
+func growLocalTreeStackMask(stack []uint, mask []uint32) ([]uint, []uint32) {
+	newCap := len(stack) * 2
+	nextStack := make([]uint, newCap)
+	copy(nextStack, stack)
+	nextMask := make([]uint32, newCap)
+	copy(nextMask, mask)
+	return nextStack, nextMask
+}
+
 // QueryOverlaps identifies and returns all objects in the tree whose AABBs overlap with the given object's AABB.
+// It is read-only and safe for concurrent calls on the same Tree.
 func (a *Tree) QueryOverlaps(object IObject, callback func(object IObject) bool) {
+	if a.rootNodeIndex == NullNode {
+		return
+	}
 	testAabb := object.GetAABB()
-	stackIndex := 0
-	a.stack[stackIndex] = a.rootNodeIndex
-	stackIndex++
+	nodes := a.nodes
+	var localStack [treeLocalStackCap]uint
+	stack := localStack[:]
+	stack[0] = a.rootNodeIndex
+	stackIndex := 1
 
 	for stackIndex > 0 {
 		stackIndex--
-		nodeIndex := a.stack[stackIndex]
+		nodeIndex := stack[stackIndex]
 		if nodeIndex == NullNode {
 			continue
 		}
-		node := a.nodes[nodeIndex]
+		node := nodes[nodeIndex]
 		if node.aabb.Overlaps(testAabb) {
 			if node.IsLeaf() {
 				if node.object != object {
@@ -218,13 +240,13 @@ func (a *Tree) QueryOverlaps(object IObject, callback func(object IObject) bool)
 					}
 				}
 			} else {
-				if (stackIndex + 2) > len(a.stack) {
-					a.stackGrow()
+				if (stackIndex + 2) > len(stack) {
+					stack = growLocalTreeStack(stack)
 				}
 				// Push dei nodi figli
-				a.stack[stackIndex] = node.leftNodeIndex
+				stack[stackIndex] = node.leftNodeIndex
 				stackIndex++
-				a.stack[stackIndex] = node.rightNodeIndex
+				stack[stackIndex] = node.rightNodeIndex
 				stackIndex++
 			}
 		}
@@ -232,30 +254,36 @@ func (a *Tree) QueryOverlaps(object IObject, callback func(object IObject) bool)
 }
 
 // QueryPoint2d searches the tree for objects whose AABBs contain the given point, with tolerance defined by epsilon.
+// It is read-only and safe for concurrent calls on the same Tree.
 func (a *Tree) QueryPoint2d(px, py float64, callback func(object IObject) bool) {
-	stackIndex := 0
-	a.stack[stackIndex] = a.rootNodeIndex
-	stackIndex++
+	if a.rootNodeIndex == NullNode {
+		return
+	}
+	nodes := a.nodes
+	var localStack [treeLocalStackCap]uint
+	stack := localStack[:]
+	stack[0] = a.rootNodeIndex
+	stackIndex := 1
 
 	for stackIndex > 0 {
 		stackIndex--
-		nodeIndex := a.stack[stackIndex]
+		nodeIndex := stack[stackIndex]
 		if nodeIndex == NullNode {
 			continue
 		}
-		node := a.nodes[nodeIndex]
+		node := nodes[nodeIndex]
 		if node.aabb.ContainsPoint2d(px, py) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break
 				}
 			} else {
-				if (stackIndex + 2) > len(a.stack) {
-					a.stackGrow()
+				if (stackIndex + 2) > len(stack) {
+					stack = growLocalTreeStack(stack)
 				}
-				a.stack[stackIndex] = node.leftNodeIndex
+				stack[stackIndex] = node.leftNodeIndex
 				stackIndex++
-				a.stack[stackIndex] = node.rightNodeIndex
+				stack[stackIndex] = node.rightNodeIndex
 				stackIndex++
 			}
 		}
@@ -263,30 +291,36 @@ func (a *Tree) QueryPoint2d(px, py float64, callback func(object IObject) bool) 
 }
 
 // QueryPoint3d searches the tree for objects whose AABBs contain the given 3D point.
+// It is read-only and safe for concurrent calls on the same Tree.
 func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IObject) bool) {
-	stackIndex := 0
-	a.stack[stackIndex] = a.rootNodeIndex
-	stackIndex++
+	if a.rootNodeIndex == NullNode {
+		return
+	}
+	nodes := a.nodes
+	var localStack [treeLocalStackCap]uint
+	stack := localStack[:]
+	stack[0] = a.rootNodeIndex
+	stackIndex := 1
 
 	for stackIndex > 0 {
 		stackIndex--
-		nodeIndex := a.stack[stackIndex]
+		nodeIndex := stack[stackIndex]
 		if nodeIndex == NullNode {
 			continue
 		}
-		node := a.nodes[nodeIndex]
+		node := nodes[nodeIndex]
 		if node.aabb.ContainsPoint3d(px, py, pz) {
 			if node.IsLeaf() {
 				if callback(node.object) {
 					break
 				}
 			} else {
-				if (stackIndex + 2) > len(a.stack) {
-					a.stackGrow()
+				if (stackIndex + 2) > len(stack) {
+					stack = growLocalTreeStack(stack)
 				}
-				a.stack[stackIndex] = node.leftNodeIndex
+				stack[stackIndex] = node.leftNodeIndex
 				stackIndex++
-				a.stack[stackIndex] = node.rightNodeIndex
+				stack[stackIndex] = node.rightNodeIndex
 				stackIndex++
 			}
 		}
@@ -294,15 +328,16 @@ func (a *Tree) QueryPoint3d(px, py, pz float64, callback func(object IObject) bo
 }
 
 // QueryFrustum traverses the tree and invokes the callback for each object whose AABB intersects with the specified frustum.
+// It is read-only and safe for concurrent calls on the same Tree.
 func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool) {
 	if a.rootNodeIndex == NullNode || frustum == nil {
 		return
 	}
 	nodes := a.nodes
-	stack := a.stack
-	stackIndex := 0
-	stack[stackIndex] = a.rootNodeIndex
-	stackIndex++
+	var localStack [treeLocalStackCap]uint
+	stack := localStack[:]
+	stack[0] = a.rootNodeIndex
+	stackIndex := 1
 
 	for stackIndex > 0 {
 		stackIndex--
@@ -319,8 +354,7 @@ func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool
 				}
 			} else {
 				if (stackIndex + 2) > len(stack) {
-					a.stackGrow()
-					stack = a.stack
+					stack = growLocalTreeStack(stack)
 				}
 				stack[stackIndex] = node.leftNodeIndex
 				stackIndex++
@@ -334,6 +368,7 @@ func (a *Tree) QueryFrustum(frustum *Frustum, callback func(object IObject) bool
 
 // QueryFrustumsMask traverses the tree once against all frustums enabled in activeMask,
 // pruning subtrees per frustum bit and invoking callback once per leaf with its matching bitmask.
+// It is read-only and safe for concurrent calls on the same Tree.
 func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback func(object IObject, leafMask uint32) bool) {
 	if a.rootNodeIndex == NullNode || activeMask == 0 {
 		return
@@ -349,12 +384,12 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 		}
 	}
 	nodes := a.nodes
-	stack := a.stack
+	var localStack [treeLocalStackCap]uint
+	stack := localStack[:]
 	if activeMask&(activeMask-1) == 0 {
 		f := frustums.Container[bits.TrailingZeros32(activeMask)]
-		stackIndex := 0
 		stack[0] = a.rootNodeIndex
-		stackIndex++
+		stackIndex := 1
 		for stackIndex > 0 {
 			stackIndex--
 			nodeIndex := stack[stackIndex]
@@ -370,8 +405,7 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 					}
 				} else {
 					if (stackIndex + 2) > len(stack) {
-						a.stackGrow()
-						stack = a.stack
+						stack = growLocalTreeStack(stack)
 					}
 					stack[stackIndex] = node.leftNodeIndex
 					stackIndex++
@@ -382,12 +416,12 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 		}
 		return
 	}
-	stackMask := a.stackMask
+	var localMask [treeLocalStackCap]uint32
+	stackMask := localMask[:]
 
-	stackIndex := 0
 	stack[0] = a.rootNodeIndex
 	stackMask[0] = activeMask
-	stackIndex++
+	stackIndex := 1
 
 	for stackIndex > 0 {
 		stackIndex--
@@ -419,9 +453,7 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 			}
 		} else {
 			if (stackIndex + 2) > len(stack) {
-				a.stackGrow()
-				stack = a.stack
-				stackMask = a.stackMask
+				stack, stackMask = growLocalTreeStackMask(stack, stackMask)
 			}
 			stack[stackIndex] = node.leftNodeIndex
 			stackMask[stackIndex] = hitMask
@@ -438,23 +470,29 @@ func (a *Tree) QueryFrustumsMask(frustums *Frustums, activeMask uint32, callback
 // dirX, dirY, dirZ represent the direction vector of the ray.
 // maxDistance specifies the maximum distance for the ray to query.
 // callback is invoked with each intersected object and its distance, and may update the maxDistance dynamically.
+// It is read-only and safe for concurrent calls on the same Tree.
 func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float64, callback func(object IObject, distance float64) (float64, bool)) {
+	if a.rootNodeIndex == NullNode {
+		return
+	}
 	// Pre-calcolo delle inverse per la vettorizzazione dello Slab Method
 	invDirX := 1.0 / dirX
 	invDirY := 1.0 / dirY
 	invDirZ := 1.0 / dirZ
 
-	stackIndex := 0
-	a.stack[stackIndex] = a.rootNodeIndex
-	stackIndex++
+	nodes := a.nodes
+	var localStack [treeLocalStackCap]uint
+	stack := localStack[:]
+	stack[0] = a.rootNodeIndex
+	stackIndex := 1
 
 	for stackIndex > 0 {
 		stackIndex--
-		nodeIndex := a.stack[stackIndex]
+		nodeIndex := stack[stackIndex]
 		if nodeIndex == NullNode {
 			continue
 		}
-		node := a.nodes[nodeIndex]
+		node := nodes[nodeIndex]
 		tMin, hit := node.aabb.IntersectRay(oX, oY, oZ, invDirX, invDirY, invDirZ)
 		// Ray Culling: scartiamo l'intero ramo se è più lontano del nostro limite attuale
 		if hit && tMin <= maxDistance {
@@ -472,12 +510,12 @@ func (a *Tree) QueryRay(oX, oY, oZ, dirX, dirY, dirZ float64, maxDistance float6
 					}
 				}
 			} else {
-				if (stackIndex + 2) > len(a.stack) {
-					a.stackGrow()
+				if (stackIndex + 2) > len(stack) {
+					stack = growLocalTreeStack(stack)
 				}
-				a.stack[stackIndex] = node.leftNodeIndex
+				stack[stackIndex] = node.leftNodeIndex
 				stackIndex++
-				a.stack[stackIndex] = node.rightNodeIndex
+				stack[stackIndex] = node.rightNodeIndex
 				stackIndex++
 			}
 		}
@@ -703,19 +741,4 @@ func (a *Tree) fixUpwardsTree(treeNodeIndex uint) {
 
 		treeNodeIndex = treeNode.parentNodeIndex
 	}
-}
-
-// stackGrow doubles the size of the internal stack and copies existing elements into the expanded stack.
-func (a *Tree) stackGrow() {
-	newCap := len(a.stack) * 2
-	if newCap < 16 {
-		newCap = 16
-	}
-	newStack := make([]uint, newCap)
-	copy(newStack, a.stack)
-	a.stack = newStack
-
-	newMask := make([]uint32, newCap)
-	copy(newMask, a.stackMask)
-	a.stackMask = newMask
 }

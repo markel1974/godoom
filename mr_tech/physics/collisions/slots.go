@@ -28,16 +28,6 @@ func (s *Slots) Add(entry *Entry) {
 	s.len++
 }
 
-// HasBucket reports whether any slot contains a bucket of the specified type.
-func (s *Slots) HasBucket(t BucketType) bool {
-	for z := 0; z < s.len; z++ {
-		if s.data[z].bucket == t {
-			return true
-		}
-	}
-	return false
-}
-
 // Len returns the number of entries currently stored in the slots.
 func (s *Slots) Len() int {
 	return s.len
@@ -54,42 +44,24 @@ func (s *Slots) Decrease(i int) {
 	s.data[i] = s.data[s.len]
 }
 
-// RotateRangeToEnd moves the contiguous entries [start, end) to the back of
-// the active range [0, s.len), preserving the relative order of both blocks.
-// It performs an in-place left rotation by (end-start) positions over the
-// absolute index range [start, s.len), using O(len-start) time and O(1) space.
+// RotateRangeToEnd moves contiguous entries [start, end) to the back of [0, s.len)
+// in O(len-start) time and O(1) space, preserving relative order of both blocks.
 func (s *Slots) RotateRangeToEnd(start, end int) {
-	if end <= start || end >= s.len {
+	if start < 0 || end <= start || end >= s.len {
 		return
 	}
-	n := s.len - start // entries to rotate
-	d := end - start   // entries in the block moved to the back
-	if d == n {
-		return
+	// Reverse [start, end)
+	for l, r := start, end-1; l < r; l, r = l+1, r-1 {
+		s.data[l], s.data[r] = s.data[r], s.data[l]
 	}
-	for i, g := 0, gcd(d, n); i < g; i++ {
-		tmp := s.data[start+i]
-		j := i
-		for {
-			k := j + d
-			if k >= n {
-				k -= n
-			}
-			if k == i {
-				s.data[start+j] = tmp
-				break
-			}
-			s.data[start+j] = s.data[start+k]
-			j = k
-		}
+	// Reverse [end, len)
+	for l, r := end, s.len-1; l < r; l, r = l+1, r-1 {
+		s.data[l], s.data[r] = s.data[r], s.data[l]
 	}
-}
-
-func gcd(a, b int) int {
-	for b != 0 {
-		a, b = b, a%b
+	// Reverse [start, len)
+	for l, r := start, s.len-1; l < r; l, r = l+1, r-1 {
+		s.data[l], s.data[r] = s.data[r], s.data[l]
 	}
-	return a
 }
 
 // HasImpactInelastic reports whether any inelastic impact has a normal opposing the direction beyond the threshold.

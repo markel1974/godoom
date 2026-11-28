@@ -1118,11 +1118,6 @@ func (s *Cage) Seen(rCage *Cage) {
 // GetBaseZ computes the base Z value of the collision cage by subtracting the ellipsoid radius in Z direction from its center Z coordinate.[cite: 6]
 func (s *Cage) GetBaseZ() float64 { return s.cZ - s.eRadZ }
 
-// HasBucket reports whether the collision cage contains a bucket of the specified type.[cite: 6]
-func (s *Cage) HasBucket(t BucketType) bool {
-	return s.slots.HasBucket(t)
-}
-
 // GetSlotsLen returns the current number of active slots in the Cage.[cite: 6]
 func (s *Cage) GetSlotsLen() int { return s.slots.Len() }
 

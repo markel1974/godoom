@@ -18,6 +18,7 @@ const (
 	BucketWallSouth = BucketType(3) // +Y
 	BucketCeiling   = BucketType(4) // -Z
 	BucketFloor     = BucketType(5) // +Z
+	BucketCount     = BucketType(6)
 )
 
 // Normal2BucketType returns the bucket matching the dominant signed axis of the given normal vector.

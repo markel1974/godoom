@@ -259,7 +259,7 @@ func (fc *StaticFaceContact) pruneCoplanarStepSlots(s *Cage) {
 		if slot.iMode == ImpactStep && slot.bucket.IsWall() && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			slots.Decrease(i)
-			s.cradleDirty = true
+			s.cradle.SetDirty()
 			continue
 		}
 		i++
@@ -275,7 +275,7 @@ func (fc *StaticFaceContact) pruneCoplanarCornerHits(s *Cage) {
 		if slot.isCorner && slot.MatchesOrigPlane(nX, nY, nZ, ax, ay, az) {
 			s.buckets[slot.bucket].RemoveEntry(slot)
 			slots.Decrease(i)
-			s.cradleDirty = true
+			s.cradle.SetDirty()
 			continue
 		}
 		i++

@@ -84,11 +84,17 @@ type CradleCache struct {
 	slopeSec  [cradleSectors]*cradleSlopeSector
 	bumperSec [cradleSectors]*cradleBumperSector
 	nextIdx   []int32
+
+	dirty  bool
+	cached bool
 }
 
 // NewCradleCache creates and returns an empty zero-copy cradle support cache.
 func NewCradleCache() *CradleCache {
-	cc := &CradleCache{}
+	cc := &CradleCache{
+		dirty:  true,
+		cached: false,
+	}
 	for x := range cradleSectors {
 		cc.slopeSec[x] = &cradleSlopeSector{}
 		cc.bumperSec[x] = &cradleBumperSector{}
@@ -96,8 +102,34 @@ func NewCradleCache() *CradleCache {
 	return cc
 }
 
+// Reset marks the cradle support cache dirty and clears its cached state.
+func (c *CradleCache) Reset() {
+	c.dirty = true
+	c.cached = false
+}
+
+// SetDirty marks the cradle support cache as dirty.
+func (c *CradleCache) SetDirty() {
+	c.dirty = true
+}
+
+// HasSupport reports whether slots contain contacts that cradle a free 6-DoF body, using a cached result when clean.
+func (c *CradleCache) HasSupport(slots *Slots) bool {
+	if !c.dirty {
+		return c.cached
+	}
+	n := slots.Len()
+	if n <= cradleSmallThreshold {
+		c.cached = c.hasSupportSmall(slots)
+	} else {
+		c.cached = c.hasSupportFull(slots)
+	}
+	c.dirty = false
+	return c.cached
+}
+
 // HasSupportSmall reports whether the cage slots contain a small paired-normal cradle support.
-func (c *CradleCache) HasSupportSmall(slots *Slots) bool {
+func (c *CradleCache) hasSupportSmall(slots *Slots) bool {
 	n := slots.Len()
 	for i := range n {
 		a := slots.At(i)
@@ -131,12 +163,8 @@ func (c *CradleCache) HasSupportSmall(slots *Slots) bool {
 
 // HasSupport reports whether cage.slots contain opposing slope or steep-slope bumper contacts
 // that cradle a free 6-DoF body, reading cage.slots in-place without copying entry normals.
-func (c *CradleCache) HasSupport(slots *Slots) bool {
+func (c *CradleCache) hasSupportFull(slots *Slots) bool {
 	n := slots.Len()
-	if n <= cradleSmallThreshold {
-		return c.HasSupportSmall(slots)
-	}
-
 	hasSlope := false
 	hasSteep := false
 	for idx := range n {

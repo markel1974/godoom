@@ -109,8 +109,6 @@ type Cage struct {
 	volumeObj           aabb.IObject
 	distance            float64
 
-	cradleDirty      bool
-	cradleCached     bool
 	cradle           *CradleCache
 	maxStep          float64
 	faces            []*Faces
@@ -170,13 +168,13 @@ func NewCageSequence() *Cage {
 // NewCage creates and returns a new instance of Cage initialized with the specified IThing object.[cite: 6]
 func NewCage(id uint64) *Cage {
 	c := &Cage{
-		id:            id,
-		seen:          make([]uint64, 64),
-		solver:        nil,
-		ellipsoid:     rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
-		volumeObj:     nil,
-		slots:         NewSlots(),
-		cradleDirty:   true,
+		id:        id,
+		seen:      make([]uint64, 64),
+		solver:    nil,
+		ellipsoid: rigid_body.NewEntity(0, 0, 0, int(rigid_body.CombineAverage), int(rigid_body.CombineAverage), 0),
+		volumeObj: nil,
+		slots:     NewSlots(),
+
 		faces:         make([]*Faces, 8),
 		facesIdx:      0,
 		hasFloor:      false,
@@ -274,8 +272,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.distance = math.MaxFloat64
 
 	s.slots.Reset()
-	s.cradleDirty = true
-	s.cradleCached = false
+	s.cradle.Reset()
 	s.hasFloor = false
 	s.applied = false
 	s.acquiring = false
@@ -673,7 +670,7 @@ func (s *Cage) addToBucket(bucket BucketType, rCage *Cage, rFace IFace, dist, pe
 // addToBucketEntry adds a collision entry to the selected bucket and tracks it in the cage slots.
 // It returns the created entry, or nil if no entry was added.
 func (s *Cage) addToBucketEntry(bucket BucketType, rCage *Cage, rFace IFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z float64, maxZ float64, iMode ImpactMode) *Entry {
-	s.cradleDirty = true
+	s.cradle.SetDirty()
 	entry := s.buckets[bucket].Add(bucket, s, rCage, rFace, dist, pen, nX, nY, nZ, p0x, p0y, p0z, maxZ, iMode)
 	if entry != nil {
 		s.slots.Add(entry)
@@ -1232,17 +1229,6 @@ func (s *Cage) HasFloor() bool {
 	if s.entity.KeepUpright() || s.slots.Len() < 2 {
 		return false
 	}
-	if !s.cradleDirty {
-		return s.cradleCached
-	}
-	s.cradleCached = s.hasCradleSupport()
-	s.cradleDirty = false
-	return s.cradleCached
-}
-
-// hasCradleSupport reports whether two opposing contacts (two gentle upward slopes, or a steep support slope
-// blocked downhill by a wall or steep bumper) cradle a free 6-DoF body against gravity.
-func (s *Cage) hasCradleSupport() bool {
 	return s.cradle.HasSupport(s.slots)
 }
 

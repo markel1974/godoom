@@ -10,6 +10,7 @@ import (
 	"github.com/markel1974/godoom/mr_tech/model/ithing"
 	"github.com/markel1974/godoom/mr_tech/model/volumes"
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
+	"github.com/markel1974/godoom/mr_tech/physics/collisions"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
 )
 
@@ -32,15 +33,20 @@ const (
 // Door represents an interactive barrier that can open and close, optionally requiring a key and activation trigger.
 type Door struct {
 	*Base
-	closedPos   geometry.XYZ
-	openOffset  geometry.XYZ
-	speed       float64
-	waitSeconds float64
-	requiredKey string
-	activation  config.DoorActivation
-	state       doorState
-	progress    float64
-	waitTimer   float64
+	closedPos          geometry.XYZ
+	openOffset         geometry.XYZ
+	speed              float64
+	waitSeconds        float64
+	requiredKey        string
+	activation         config.DoorActivation
+	state              doorState
+	progress           float64
+	waitTimer          float64
+	stopArrivalZ       bool
+	stopSpeedZ         float64
+	waitTriggerRelease bool
+	touchedThisTick    bool
+	untouchedTime      float64
 }
 
 // NewDoor creates and initializes a door thing from configuration, applying defaults and preparing its volume.
@@ -76,6 +82,8 @@ func NewDoor(things IThingHandler, cfg *config.Thing, volume *volumes.Volume) *D
 	ent.SetKinematic(true)
 	door.GetSolver().SetIgnoreStatic(true)
 	door.GetSolver().SetCanSleep(true)
+	door.GetSolver().SetPrepareHooks(door.beforePrepare, door.afterDoorPrepare)
+	door.GetSolver().SetApplyHook(door.afterDoorApply)
 	door.GetSolver().SetElasticCollision(door.onDoorCollision)
 	cfg.OnBind(door)
 
@@ -109,11 +117,28 @@ func (d *Door) Activate(by ithing.IThing) bool {
 	}
 
 	switch d.state {
-	case doorClosed, doorClosing:
+	case doorClosed:
+		d.waitTriggerRelease = false
+		d.untouchedTime = 0
+		d.state = doorOpening
+		d.WakeUp()
+		return true
+	case doorClosing:
+		if d.openOffset.Z < 0 {
+			return false
+		}
 		d.state = doorOpening
 		d.WakeUp()
 		return true
 	case doorOpen:
+		if d.openOffset.Z < 0 {
+			if d.activation == config.DoorActivateUse {
+				d.state = doorClosing
+				d.WakeUp()
+				return true
+			}
+			return false
+		}
 		if d.waitSeconds >= 0 {
 			d.waitTimer = d.waitSeconds
 		}
@@ -131,6 +156,11 @@ func (d *Door) RequiredKey() string {
 // IsOpen reports whether the door is open or currently opening.
 func (d *Door) IsOpen() bool {
 	return d.state == doorOpen || d.state == doorOpening
+}
+
+// HasActiveCycle reports whether the door or platform has an active movement or auto-return timer in progress.
+func (d *Door) HasActiveCycle() bool {
+	return d.state == doorOpening || d.state == doorClosing || (d.state == doorOpen && d.waitSeconds >= 0) || d.waitTriggerRelease
 }
 
 // Jump reports whether the door accepted a jump request; doors cannot jump, so it always returns false.
@@ -189,6 +219,18 @@ func (d *Door) StageThinking(playerX float64, playerY float64, playerZ float64) 
 	switch d.state {
 	case doorClosed:
 		ent.SetV(0, 0, 0)
+		if d.waitTriggerRelease {
+			if d.touchedThisTick {
+				d.untouchedTime = 0
+			} else {
+				d.untouchedTime += dt
+				if d.untouchedTime >= 0.35 {
+					d.waitTriggerRelease = false
+					d.untouchedTime = 0
+				}
+			}
+		}
+		d.touchedThisTick = false
 	case doorOpening:
 		d.advanceDoor(ent, dt, 1.0, doorOpen)
 	case doorOpen:
@@ -235,11 +277,58 @@ func (d *Door) advanceDoor(ent *rigid_body.Entity, dt float64, dir float64, next
 	ty := d.closedPos.Y + d.openOffset.Y*d.progress
 	tz := d.closedPos.Z + d.openOffset.Z*d.progress
 	cx, cy, cz := ent.GetCenter()
-	ent.SetV((tx-cx)/dt, (ty-cy)/dt, (tz-cz)/dt)
+	vz := (tz - cz) / dt
+	ent.SetV((tx-cx)/dt, (ty-cy)/dt, vz)
 	d.WakeUp()
 
 	if done {
+		if vz > 0 {
+			d.stopArrivalZ = true
+			d.stopSpeedZ = vz
+		}
+		if nextState == doorClosed && d.openOffset.Z < 0 {
+			d.waitTriggerRelease = true
+			d.untouchedTime = 0
+			d.touchedThisTick = true
+		}
 		d.state = nextState
+	}
+}
+
+// afterDoorPrepare zeroes vertical velocity on the final upward arrival tick before impulse resolution
+// so riders are carried cleanly to the destination height without being launched above the platform.
+func (d *Door) afterDoorPrepare() {
+	if d.stopArrivalZ {
+		d.GetEntity().SetVz(0)
+	}
+}
+
+// afterDoorApply zeroes residual upward rider velocity imported during a platform's arrival tick.
+func (d *Door) afterDoorApply() {
+	if !d.stopArrivalZ {
+		return
+	}
+	d.stopArrivalZ = false
+	cage := d.GetSolver().GetCage()
+	slots := cage.GetSlots()
+	maxVelZ := d.stopSpeedZ*1.15 + 2.0
+	for i := 0; i < slots.Len(); i++ {
+		slot := slots.At(i)
+		if slot.GetBucket() != collisions.BucketCeiling {
+			continue
+		}
+		if rCage := slot.GetRCage(); rCage != nil {
+			rEnt := rCage.GetEntity()
+			if !rEnt.IsKinematic() && rEnt.GetVz() > 0 && rEnt.GetVz() <= maxVelZ {
+				rEnt.SetVz(0)
+			}
+		}
+	}
+	for i := 0; i < cage.TouchPartnersLen(); i++ {
+		rEnt := cage.TouchPartnerAt(i).GetEntity()
+		if !rEnt.IsKinematic() && rEnt.GetVz() > 0 && rEnt.GetVz() <= maxVelZ {
+			rEnt.SetVz(0)
+		}
 	}
 }
 
@@ -249,8 +338,21 @@ func (d *Door) onDoorCollision(other aabb.IObject, energy float64) {
 		if _, isHolder := other.(IKeyHolder); isHolder {
 			state := d.state
 			activation := d.activation
-
-			if state == doorClosing || activation == config.DoorActivateTouch {
+			if d.openOffset.Z < 0 {
+				d.touchedThisTick = true
+				d.untouchedTime = 0
+				if state == doorClosed && activation == config.DoorActivateTouch && !d.waitTriggerRelease {
+					d.Activate(otherThing)
+				} else if state == doorOpening {
+					_, _, dz := d.GetEntity().GetCenter()
+					_, _, dHalfZ := d.GetEntity().HalfExtents()
+					_, _, oz := otherThing.GetEntity().GetCenter()
+					if oz < dz && otherThing.GetAABB().GetMaxZ() <= dz-dHalfZ+4.0 {
+						d.state = doorClosing
+						d.WakeUp()
+					}
+				}
+			} else if state == doorClosing || activation == config.DoorActivateTouch {
 				d.Activate(otherThing)
 			}
 		}

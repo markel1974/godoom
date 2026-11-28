@@ -14,6 +14,8 @@ type HookT func()
 
 func noopHook() {}
 
+func noopSolverCollision(_ aabb.IObject, _ float64) {}
+
 // Solver manages physics simulation state for an object, including movement, collisions, and sleeping behavior.
 type Solver struct {
 	maxStep              float64
@@ -43,8 +45,8 @@ func NewSolver(dynamic bool, mass, restitution, friction float64, restCombine, f
 		cage:                 nil,
 		maxStep:              0,
 		solverIdx:            -1,
-		onElasticCollision:   nil,
-		onInelasticCollision: nil,
+		onElasticCollision:   noopSolverCollision,
+		onInelasticCollision: noopSolverCollision,
 		canSleep:             true,
 		location:             nil,
 		isActive:             true,
@@ -102,6 +104,11 @@ func (t *Solver) SetElasticCollision(c CollisionT) {
 // SetInelasticCollision sets the callback invoked for inelastic collisions.
 func (t *Solver) SetInelasticCollision(c CollisionT) {
 	t.onInelasticCollision = c
+}
+
+// NotifyTouch dispatches a zero-energy contact notification to the elastic collision handler.
+func (t *Solver) NotifyTouch(other aabb.IObject) {
+	t.onElasticCollision(other, 0.0)
 }
 
 // SetPrepareHooks configures callbacks invoked immediately before and after StagePrepare.
@@ -448,8 +455,8 @@ func (t *Solver) StageApply() {
 	t.entity.AddTo(dx, dy, dz)
 	t.cage.SetApplied()
 
-	var lastElasticId, lastInelasticId uint64
-	hasElasticId, hasInelasticId := false, false
+	var lastElasticId, lastInelasticId, lastStepId uint64
+	hasElasticId, hasInelasticId, hasStepId := false, false, false
 	stepZ := 0.0
 	for i := 0; i < t.cage.GetSlotsLen(); i++ {
 		slot := t.cage.GetSlot(i)
@@ -461,6 +468,14 @@ func (t *Solver) StageApply() {
 			if cand := slot.GetMaxZ() - (tz - rz + pz + stepZ); cand > 0 {
 				stepZ += cand
 			}
+			if rCage := slot.GetRCage(); rCage != nil && rCage.GetEntity().IsKinematic() {
+				rId := rCage.GetEntity().GetId()
+				if !hasStepId || lastStepId != rId {
+					rCage.GetSolver().NotifyTouch(t.object)
+					lastStepId = rId
+					hasStepId = true
+				}
+			}
 		case ImpactElastic:
 			rCage := slot.GetRCage()
 			rEnt := rCage.GetEntity()
@@ -468,9 +483,7 @@ func (t *Solver) StageApply() {
 			if !hasElasticId || lastElasticId != rId {
 				bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestElasticImpact(i, rId, rEnt)
 				t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-				if t.onElasticCollision != nil {
-					t.onElasticCollision(rCage.GetObject(), bestEnergy)
-				}
+				t.onElasticCollision(rCage.GetObject(), bestEnergy)
 				t.entity.ClearActiveContact()
 				lastElasticId = rId
 				hasElasticId = true
@@ -482,15 +495,16 @@ func (t *Solver) StageApply() {
 				if !hasInelasticId || lastInelasticId != rId {
 					bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ, bestEnergy := t.bestInelasticImpact(i, rId)
 					t.entity.SetActiveContact(bestNX, bestNY, bestNZ, bestPX, bestPY, bestPZ)
-					if t.onInelasticCollision != nil {
-						t.onInelasticCollision(rParent.GetObject(), bestEnergy)
-					}
+					t.onInelasticCollision(rParent.GetObject(), bestEnergy)
 					t.entity.ClearActiveContact()
 					lastInelasticId = rId
 					hasInelasticId = true
 				}
 			}
 		}
+	}
+	for ti := 0; ti < t.cage.TouchPartnersLen(); ti++ {
+		t.cage.TouchPartnerAt(ti).GetSolver().NotifyTouch(t.object)
 	}
 	if t.maxStep > 0 && stepZ > t.maxStep {
 		stepZ = t.maxStep

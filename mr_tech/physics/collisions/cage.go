@@ -133,24 +133,26 @@ type Cage struct {
 	prevKeepUpright  bool
 	forceStaticClamp bool
 
-	passDX          float64
-	passDY          float64
-	passDZ          float64
-	stepDX          float64
-	stepDY          float64
-	stepDZ          float64
-	hasSpawnOrigin  bool
-	spawnX          float64
-	spawnY          float64
-	spawnZ          float64
-	collisionGroup  uint64
-	solver          *Solver
-	slots           *Slots
-	acquireWave     uint64
-	acquiring       bool
-	staticSlotStart int
-	staticSlotEnd   int
-	pending         *PendingDynamicContacts
+	passDX           float64
+	passDY           float64
+	passDZ           float64
+	stepDX           float64
+	stepDY           float64
+	stepDZ           float64
+	hasSpawnOrigin   bool
+	spawnX           float64
+	spawnY           float64
+	spawnZ           float64
+	collisionGroup   uint64
+	solver           *Solver
+	slots            *Slots
+	acquireWave      uint64
+	acquiring        bool
+	staticSlotStart  int
+	staticSlotEnd    int
+	pending          *PendingDynamicContacts
+	touchPartners    [8]*Cage
+	touchPartnersLen int
 }
 
 var _counter atomic.Uint64
@@ -275,6 +277,7 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.staticSlotStart = 0
 	s.staticSlotEnd = 0
 	s.pending.Reset()
+	s.touchPartnersLen = 0
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
 	s.staticContact.Reset()
 	s.maxStep = maxStep
@@ -718,14 +721,29 @@ func (s *Cage) evalDynamicManifold(rCage *Cage) (lUpright, rUpright bool, rTx, r
 	return lUpright, rUpright, rTx, rTy, rTz, rDX, rDY, rDZ, rRadX, rRadY, rRadZ
 }
 
-// WillHitDynamic reports whether the queued solid faces against rCage produce a real narrow-phase hit.
+// WillHitDynamic reports whether the queued solid faces against rCage produce a real narrow-phase hit,
+// or an upright dynamic actor is resting flush on top of a kinematic body.
 func (s *Cage) WillHitDynamic(rCage *Cage) bool {
 	if _, _, ok := s.firstSolidDynamicFaces(); !ok {
 		return false
 	}
 	s.evalDynamicManifold(rCage)
 	m := s.manifold
-	return m.GetHit() && m.GetPenetration() > 0 && m.GetCount() > 0
+	if m.GetHit() && m.GetPenetration() > 0 && m.GetCount() > 0 {
+		return true
+	}
+	if s.entity.KeepUpright() && rCage.entity.IsKinematic() {
+		_, _, nz := m.GetNormal()
+		if nz >= floorNormalThreshold && m.GetGap() <= floorGroundTolerance {
+			rEnt := rCage.entity
+			rCx, rCy, _ := rEnt.GetCenter()
+			rDx, rDy, _ := rEnt.GetFrameDisplacement()
+			rTx, rTy := rCx+rDx, rCy+rDy
+			rRadX, rRadY, _ := rEnt.HalfExtents()
+			return s.overlapsTargetXY(rTx-rRadX, rTx+rRadX, rTy-rRadY, rTy+rRadY)
+		}
+	}
+	return false
 }
 
 // ShouldWakeDynamic reports whether the latest WillHitDynamic manifold warrants waking sleeping rCage.
@@ -803,7 +821,7 @@ func (s *Cage) buildPendingDynamic(rCage *Cage, out *PendingDynamicContact) bool
 			if b == BucketFloor && mNormalZ >= floorNormalThreshold {
 				selfFloor = lUpright || lEnt.HasDynamicRestFloorGap(s.dZ, gap, rDZ)
 			} else if b == BucketCeiling && mNormalZ <= -floorNormalThreshold {
-				partnerFloor = rUpright || lEnt.HasDynamicRestFloorGap(rDZ, gap, s.dZ)
+				partnerFloor = rUpright || rEnt.HasDynamicRestFloorGap(rDZ, gap, s.dZ)
 			}
 		}
 		if !selfFloor && !partnerFloor {
@@ -860,6 +878,49 @@ func (s *Cage) buildPendingDynamic(rCage *Cage, out *PendingDynamicContact) bool
 	return true
 }
 
+// addTouchPartner records partner in s's fixed touch buffer once per step without heap allocations.
+func (s *Cage) addTouchPartner(partner *Cage) {
+	for i := 0; i < s.touchPartnersLen; i++ {
+		if s.touchPartners[i] == partner {
+			return
+		}
+	}
+	if s.touchPartnersLen < len(s.touchPartners) {
+		s.touchPartners[s.touchPartnersLen] = partner
+		s.touchPartnersLen++
+	}
+}
+
+// TouchPartnersLen returns the number of zero-penetration kinematic floor partners recorded on this cage.
+func (s *Cage) TouchPartnersLen() int {
+	return s.touchPartnersLen
+}
+
+// TouchPartnerAt returns the recorded kinematic touch partner at idx.
+func (s *Cage) TouchPartnerAt(idx int) *Cage {
+	return s.touchPartners[idx]
+}
+
+// resolveDynamicWallMode computes wall/step resolution mode and sub-floor skip flags for one side of a dynamic pair.
+func (s *Cage) resolveDynamicWallMode(b BucketType, ent *rigid_body.Entity, otherMaxZ float64, sleep bool) (mode ImpactMode, skip bool, subFloorSkip bool) {
+	if sleep {
+		return ImpactElastic, true, false
+	}
+	mode = ImpactElastic
+	if b.IsWall() && (ent.KeepUpright() || s.maxStep > 0) {
+		baseZ := s.GetBaseZ()
+		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
+		if otherMaxZ <= minBaseZ+satFilterEpsilon {
+			return mode, true, true
+		}
+		stepZ := baseZ + s.maxStep
+		if s.maxStep > 0 && otherMaxZ <= stepZ {
+			mode = ImpactStep
+		}
+	}
+	return mode, false, false
+}
+
 // applyPendingDynamic commits a previously captured dynamic contact pair into both cages' buckets and slots.
 func (s *Cage) applyPendingDynamic(pd *PendingDynamicContact) {
 	rCage := pd.partner
@@ -871,46 +932,51 @@ func (s *Cage) applyPendingDynamic(pd *PendingDynamicContact) {
 	restGap := !pd.hit && pd.pointCount < 0
 	if pd.selfFloor && (restGap || !lSleep) {
 		s.hasFloor = true
+		if !lSleep && rEnt.IsKinematic() && !pd.hit {
+			s.addTouchPartner(rCage)
+		}
 	}
 	if pd.partnerFloor && (restGap || !rSleep) {
 		rCage.hasFloor = true
+		if !rSleep && lEnt.IsKinematic() && !pd.hit {
+			rCage.addTouchPartner(s)
+		}
 	}
 	if !pd.hit {
 		return
 	}
 
 	b := Normal2BucketType(pd.normalX, pd.normalY, pd.normalZ)
+	oppB := b.Opposite()
 	rMaxZ := pd.rMaxZ
 	lMaxZ := s.tZ + s.eRadZ
-	iMode := ImpactElastic
-	if b.IsWall() && (lEnt.KeepUpright() || s.maxStep > 0) {
-		baseZ := s.GetBaseZ()
-		minBaseZ := math.Min(baseZ, baseZ+s.dZ)
-		if rMaxZ <= minBaseZ+satFilterEpsilon {
-			return
-		}
-		stepZ := baseZ + s.maxStep
-		if s.maxStep > 0 && rMaxZ <= stepZ {
-			iMode = ImpactStep
-		}
+
+	lMode, lSkip, lSubFloor := s.resolveDynamicWallMode(b, lEnt, rMaxZ, lSleep)
+	rMode, rSkip, rSubFloor := rCage.resolveDynamicWallMode(oppB, rEnt, lMaxZ, rSleep)
+	if lMode == ImpactStep || lSubFloor {
+		rSkip = true
+	}
+	if rMode == ImpactStep || rSubFloor {
+		lSkip = true
 	}
 
-	oppB := b.Opposite()
-	for pi := 0; pi < pd.pointCount; pi++ {
-		pt := &pd.points[pi]
-		ptPen := pt[3]
-		if ptPen <= 0 {
-			continue
-		}
-		ptX, ptY, ptZ := pt[0], pt[1], pt[2]
-		ptDist := -ptPen
-		if !lSleep {
-			s.addToBucket(b, rCage, pd.rFace, ptDist, ptPen, pd.normalX, pd.normalY, pd.normalZ, ptX, ptY, ptZ, rMaxZ, iMode)
-		}
-		if iMode == ImpactElastic && !rSleep {
-			rCage.addToBucket(oppB, s, pd.recipFace, ptDist, ptPen, -pd.normalX, -pd.normalY, -pd.normalZ, ptX, ptY, ptZ, lMaxZ, ImpactElastic)
-			if oppB == BucketFloor {
-				rCage.hasFloor = true
+	if !lSkip || !rSkip {
+		for pi := 0; pi < pd.pointCount; pi++ {
+			pt := &pd.points[pi]
+			ptPen := pt[3]
+			if ptPen <= 0 {
+				continue
+			}
+			ptX, ptY, ptZ := pt[0], pt[1], pt[2]
+			ptDist := -ptPen
+			if !lSkip {
+				s.addToBucket(b, rCage, pd.rFace, ptDist, ptPen, pd.normalX, pd.normalY, pd.normalZ, ptX, ptY, ptZ, rMaxZ, lMode)
+			}
+			if !rSkip {
+				rCage.addToBucket(oppB, s, pd.recipFace, ptDist, ptPen, -pd.normalX, -pd.normalY, -pd.normalZ, ptX, ptY, ptZ, lMaxZ, rMode)
+				if oppB == BucketFloor {
+					rCage.hasFloor = true
+				}
 			}
 		}
 	}

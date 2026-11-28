@@ -44,6 +44,7 @@ type Things struct {
 	maxOverlapsThings int
 	coordinator       *collisions.Coordinator
 	throwable         []*config.Thing
+	doors             []*things.Door
 }
 
 // NewThings creates and initializes a Things manager from thing configs, volumes, materials, and collision settings.
@@ -455,9 +456,35 @@ func (th *Things) stageOne(t2 ithing.IThing) {
 	}
 }
 
-// StageCommit stages pending changes for commit.
+// StageCommit stages active/open doors and any door overlapping the player even when outside the view frustum.
 func (th *Things) StageCommit() {
-
+	const doorMargin = 4.0
+	hasPlayer := th.player != nil
+	var pMinX, pMinY, pMinZ, pMaxX, pMaxY, pMaxZ float64
+	if hasPlayer {
+		pMinX, pMinY, pMinZ, pMaxX, pMaxY, pMaxZ = th.player.GetAABB().GetMinMax()
+		pMinX -= doorMargin
+		pMinY -= doorMargin
+		pMinZ -= doorMargin
+		pMaxX += doorMargin
+		pMaxY += doorMargin
+		pMaxZ += doorMargin
+	}
+	for _, door := range th.doors {
+		if !door.IsActive() {
+			continue
+		}
+		if door.HasActiveCycle() {
+			th.StageAdd(door)
+			continue
+		}
+		if hasPlayer {
+			dMinX, dMinY, dMinZ, dMaxX, dMaxY, dMaxZ := door.GetAABB().GetMinMax()
+			if dMaxX >= pMinX && dMinX <= pMaxX && dMaxY >= pMinY && dMinY <= pMaxY && dMaxZ >= pMinZ && dMinZ <= pMaxZ {
+				th.StageAdd(door)
+			}
+		}
+	}
 }
 
 // applySafeStepUp applies a safe upward step to the cage's solver, clamped against static volumes.
@@ -564,6 +591,9 @@ func (th *Things) addThing(ent ithing.IThing) {
 	} else {
 		th.tree.InsertObject(ent)
 	}
+	if door, dOk := ent.(*things.Door); dOk {
+		th.doors = append(th.doors, door)
+	}
 	ent.StartLoop()
 }
 
@@ -575,6 +605,17 @@ func (th *Things) removeThing(ent ithing.IThing) {
 	id := ent.GetEntity().GetId()
 	if _, ok := th.entities[id]; !ok {
 		return
+	}
+	if door, dOk := ent.(*things.Door); dOk {
+		for i, d := range th.doors {
+			if d == door {
+				last := len(th.doors) - 1
+				th.doors[i] = th.doors[last]
+				th.doors[last] = nil
+				th.doors = th.doors[:last]
+				break
+			}
+		}
 	}
 	if owner, ok := ent.(ithing.IPartOwner); !ok || owner.GetPartLen() == 0 {
 		th.tree.RemoveObject(ent)

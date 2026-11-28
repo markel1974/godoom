@@ -154,8 +154,9 @@ type Cage struct {
 	acquiring       bool
 	staticSlotStart int
 	staticSlotEnd   int
-	pendingDyn      []pendingDynamicContact
-	pendingDynLen   int
+	pending         *PendingDynamicContacts
+	//pendingDyn      []*PendingDynamicContact
+	//pendingDynLen   int
 }
 
 var _counter atomic.Uint64
@@ -183,7 +184,8 @@ func NewCage(id uint64) *Cage {
 		solverIdx:     -1,
 		staticContact: NewStaticFaceContact(),
 		cradle:        NewCradleCache(),
-		pendingDyn:    make([]pendingDynamicContact, 16),
+		pending:       NewPendingDynamicContacts(16),
+		//pendingDyn:    make([]*PendingDynamicContact, 16),
 	}
 	for i := 0; i < len(c.faces); i++ {
 		c.faces[i] = NewFaces()
@@ -280,7 +282,8 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.acquireWave = 0
 	s.staticSlotStart = 0
 	s.staticSlotEnd = 0
-	s.pendingDynLen = 0
+	s.pending.Reset()
+	//s.pendingDynLen = 0
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
 
 	s.staticContact.Reset()
@@ -296,7 +299,8 @@ func (s *Cage) BeginAcquire(wave uint64) {
 	s.acquiring = true
 	s.staticSlotStart = 0
 	s.staticSlotEnd = 0
-	s.pendingDynLen = 0
+	s.pending.Reset()
+	//s.pendingDynLen = 0
 }
 
 // FinalizeAcquireSlots moves any static slots acquired before dynamic merges to the end of s.slots
@@ -336,16 +340,14 @@ func (s *Cage) CanAcquireDynamic(rCage *Cage) bool {
 
 // SortPendingDynamic deterministically sorts buffered dynamic contacts by partner ID.
 func (s *Cage) SortPendingDynamic() {
-	if s.pendingDynLen > 1 {
-		sortPendingDynamicContacts(s.pendingDyn[:s.pendingDynLen])
-	}
+	s.pending.Sort()
 }
 
 // FlushPendingDynamic merges buffered read-only dynamic contacts symmetrically into buckets and slots.
 func (s *Cage) FlushPendingDynamic() {
-	n := s.pendingDynLen
+	n := s.pending.Len()
 	for i := range n {
-		pd := &s.pendingDyn[i]
+		pd := s.pending.At(i)
 		rCage := pd.partner
 		rSleeping := rCage.entity.IsSleeping()
 		if !rSleeping {
@@ -354,7 +356,7 @@ func (s *Cage) FlushPendingDynamic() {
 				// Partner transitioned sleeping -> awake in mergeWaveWakes and ran StagePrepare:
 				// re-evaluate narrow-phase manifold using its updated post-prepare displacement.
 				s.AddFace(pd.rFace, pd.recipFace)
-				var refreshed pendingDynamicContact
+				var refreshed PendingDynamicContact
 				ok := s.buildPendingDynamic(rCage, &refreshed)
 				s.DiscardPendingFaces()
 				if ok {
@@ -365,7 +367,7 @@ func (s *Cage) FlushPendingDynamic() {
 		}
 		s.applyPendingDynamic(pd)
 	}
-	s.pendingDynLen = 0
+	s.pending.Reset()
 }
 
 // AddFace adds a pair of faces (rFace and lFace) to the Cage, resizing the internal slice if needed.[cite: 6]
@@ -779,27 +781,23 @@ func (s *Cage) ShouldWakeDynamic(rCage *Cage) bool {
 
 // acquireDynamicManifold evaluates a dynamic collision pair into s.pendingDyn without mutating rCage.
 func (s *Cage) acquireDynamicManifold(rCage *Cage) {
-	if s.pendingDynLen >= len(s.pendingDyn) {
-		n := make([]pendingDynamicContact, nextGrowCap(len(s.pendingDyn), 16))
-		copy(n, s.pendingDyn)
-		s.pendingDyn = n
-	}
-	if s.buildPendingDynamic(rCage, &s.pendingDyn[s.pendingDynLen]) {
-		s.pendingDynLen++
+	out := s.pending.Current()
+	if s.buildPendingDynamic(rCage, out) {
+		s.pending.Next()
 	}
 }
 
 // commitDynamicManifold resolves an overlapping or swept-colliding dynamic pair using upright cylinder
 // geometry when KeepUpright is active and 15-axis OBB SAT + conservative advancement otherwise.
 func (s *Cage) commitDynamicManifold(rCage *Cage) {
-	var pd pendingDynamicContact
+	var pd PendingDynamicContact
 	if s.buildPendingDynamic(rCage, &pd) {
 		s.applyPendingDynamic(&pd)
 	}
 }
 
 // buildPendingDynamic populates out with read-only narrow-phase dynamic pair results without mutating rCage.
-func (s *Cage) buildPendingDynamic(rCage *Cage, out *pendingDynamicContact) bool {
+func (s *Cage) buildPendingDynamic(rCage *Cage, out *PendingDynamicContact) bool {
 	rFace, recipFace, ok := s.firstSolidDynamicFaces()
 	if !ok {
 		return false
@@ -884,7 +882,7 @@ func (s *Cage) buildPendingDynamic(rCage *Cage, out *pendingDynamicContact) bool
 }
 
 // applyPendingDynamic commits a previously captured dynamic contact pair into both cages' buckets and slots.
-func (s *Cage) applyPendingDynamic(pd *pendingDynamicContact) {
+func (s *Cage) applyPendingDynamic(pd *PendingDynamicContact) {
 	rCage := pd.partner
 	lEnt := s.entity
 	rEnt := rCage.GetEntity()

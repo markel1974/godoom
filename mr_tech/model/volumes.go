@@ -98,28 +98,30 @@ func (s *Volumes) Query(targetObj aabb.IObject) []*volumes.Volume {
 	return target
 }
 
-// QueryCollisionCage evaluates 3D collision data within a given cage and applies spatial filters, assigning results into buckets.
-// It also populates the padded static face cache upfront so positional solver sweeps avoid repeat BVH queries.
+// QueryCollisionCage evaluates 3D collision data within a given cage in one padded broadphase pass,
+// populating both tight contact faces for Commit and the expanded static face cache for positional clamping.
 func (s *Volumes) QueryCollisionCage(cage *collisions.Cage, maxOverlaps int) {
+	lAABB := cage.GetAABB()
+	oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ := cage.BeginPaddedStaticFaceQuery(lAABB)
 	counter := 0
 	s.tree.QueryOverlaps(cage, func(object aabb.IObject) bool {
 		vol := object.(*volumes.Volume)
 		vol.QueryOverlaps(cage, func(otherEnt aabb.IObject) bool {
 			rFace := otherEnt.(*volumes.Face)
-			cage.AddFace(rFace, nil)
-			counter++
-			if counter > maxOverlaps {
-				return true
+			cage.AddCachedStaticFace(rFace)
+			if counter <= maxOverlaps {
+				fMinX, fMinY, fMinZ, fMaxX, fMaxY, fMaxZ := rFace.GetAABB().GetMinMax()
+				if fMaxX >= oMinX && fMinX <= oMaxX && fMaxY >= oMinY && fMinY <= oMaxY && fMaxZ >= oMinZ && fMinZ <= oMaxZ {
+					cage.AddFace(rFace, nil)
+					counter++
+				}
 			}
 			return false
 		})
-		if counter > maxOverlaps {
-			return true
-		}
 		return false
 	})
+	cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
 	cage.Commit(nil)
-	s.populateStaticFaceCache(cage, cage.GetAABB())
 }
 
 // populateStaticFaceCache queries solid world faces overlapping a temporarily padded clamp AABB into cage's static cache.
@@ -138,6 +140,7 @@ func (s *Volumes) populateStaticFaceCache(cage *collisions.Cage, lAABB *aabb.AAB
 
 // ClampStaticCage projects any entity moved or pushed during the step strictly outside solid world faces.
 func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
+	solver := cage.GetSolver()
 	const maxPasses = 3
 
 	for pass := 0; pass < maxPasses; pass++ {
@@ -147,10 +150,10 @@ func (s *Volumes) ClampStaticCage(cage *collisions.Cage) {
 		if !cage.HasStaticFaceCache(lAABB) {
 			s.populateStaticFaceCache(cage, lAABB)
 		}
-		if cage.ClampCachedStaticFaces(lAABB) {
+		if solver.ClampCachedStaticFaces(lAABB) {
 			moved = true
 		}
-		if cage.StaticFaceFlushClamp(lAABB) {
+		if solver.StaticFaceFlushClamp(lAABB) {
 			moved = true
 		}
 		cage.EndStaticClamp(origCX, origCY, origCZ, origDX, origDY, origDZ, origTX, origTY, origTZ)

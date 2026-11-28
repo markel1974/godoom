@@ -1,6 +1,10 @@
 package collisions
 
-import "math"
+import (
+	"math"
+
+	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
+)
 
 // SweptAxisInterval calculates the time interval of penetration in a swept axis-aligned scenario.
 // Returns start and end of interval, and a boolean indicating if penetration occurs.
@@ -127,4 +131,13 @@ func OverlapsTriangleEdgeAxes(hx, hy, hz, p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y
 		}
 	}
 	return true
+}
+
+// effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
+// using ellipsoid support for KeepUpright entities and exact OBB axis projection for all rigid OBBs.
+func effectiveRadius(ent *rigid_body.Entity, eRadX, eRadY, eRadZ, nX, nY, nZ float64) float64 {
+	if !ent.KeepUpright() {
+		return ent.ProjectExtent(nX, nY, nZ)
+	}
+	return math.Sqrt((nX*eRadX)*(nX*eRadX) + (nY*eRadY)*(nY*eRadY) + (nZ*eRadZ)*(nZ*eRadZ))
 }

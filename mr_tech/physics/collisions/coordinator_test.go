@@ -44,9 +44,10 @@ func TestCoordinatorIslandSleepAndWakeCascade(t *testing.T) {
 	topBotFace := newTestFace([3]float64{-10, -10, -10}, [3]float64{10, -10, -10}, [3]float64{0, 10, -10}, 0, 0, -1)
 
 	clampFloor := func(cage *Cage) {
+		solver := cage.GetSolver()
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-		cage.StaticFaceClamp(lAABB, floor)
-		cage.StaticFaceFlushClamp(lAABB)
+		solver.StaticFaceClamp(lAABB, floor)
+		solver.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 	}
 
@@ -198,6 +199,7 @@ func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
 		}
 	}
 	clampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		for pass := 0; pass < 3; pass++ {
 			moved := false
 			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
@@ -212,10 +214,10 @@ func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
 				cage.AddCachedStaticFace(wall)
 				cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
 			}
-			if cage.ClampCachedStaticFaces(lAABB) {
+			if solver.ClampCachedStaticFaces(lAABB) {
 				moved = true
 			}
-			if cage.StaticFaceFlushClamp(lAABB) {
+			if solver.StaticFaceFlushClamp(lAABB) {
 				moved = true
 			}
 			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
@@ -254,6 +256,7 @@ func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
 		cage.Commit(nil)
 	}
 	soleClampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		for pass := 0; pass < 3; pass++ {
 			moved := false
 			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
@@ -264,10 +267,10 @@ func TestCoordinatorStaticFaceCacheReusesBroadphaseAndZeroAllocs(t *testing.T) {
 				cage.AddCachedStaticFace(wall)
 				cage.EndPaddedStaticFaceQuery(lAABB, oMinX, oMinY, oMinZ, oMaxX, oMaxY, oMaxZ)
 			}
-			if cage.ClampCachedStaticFaces(lAABB) {
+			if solver.ClampCachedStaticFaces(lAABB) {
 				moved = true
 			}
-			if cage.StaticFaceFlushClamp(lAABB) {
+			if solver.StaticFaceFlushClamp(lAABB) {
 				moved = true
 			}
 			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
@@ -348,13 +351,14 @@ func TestPrecariousBalanceSettling(t *testing.T) {
 		cage.Commit(nil)
 	}
 	clampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		for pass := 0; pass < 3; pass++ {
 			moved := false
 			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-			if cage.ClampCachedStaticFaces(lAABB) {
+			if solver.ClampCachedStaticFaces(lAABB) {
 				moved = true
 			}
-			if cage.StaticFaceFlushClamp(lAABB) {
+			if solver.StaticFaceFlushClamp(lAABB) {
 				moved = true
 			}
 			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
@@ -519,9 +523,10 @@ func TestPrecariousBalanceSettling(t *testing.T) {
 			cage.Commit(nil)
 		}
 		convexClamp := func(cage *Cage) {
+			solver := cage.GetSolver()
 			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-			cage.ClampCachedStaticFaces(lAABB)
-			cage.StaticFaceFlushClamp(lAABB)
+			solver.ClampCachedStaticFaces(lAABB)
+			solver.StaticFaceFlushClamp(lAABB)
 			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 			cage.CommitStaticClamp()
 		}
@@ -545,9 +550,10 @@ func TestPrecariousBalanceSettling(t *testing.T) {
 			cage.Commit(nil)
 		}
 		cCorner := func(cage *Cage) {
+			solver := cage.GetSolver()
 			ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-			cage.ClampCachedStaticFaces(lAABB)
-			cage.StaticFaceFlushClamp(lAABB)
+			solver.ClampCachedStaticFaces(lAABB)
+			solver.StaticFaceFlushClamp(lAABB)
 			cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 			cage.CommitStaticClamp()
 		}

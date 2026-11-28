@@ -2,6 +2,7 @@ package collisions
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/markel1974/godoom/mr_tech/physics/aabb"
 	"github.com/markel1974/godoom/mr_tech/physics/rigid_body"
@@ -24,11 +25,15 @@ type Solver struct {
 	ignoreStatic         bool
 	canSleep             bool
 	stagedEpoch          uint64
+	solverIdx            int
+	pendingStepZ         float64
 	onElasticCollision   CollisionT
 	onInelasticCollision CollisionT
 	beforePrepare        HookT
 	afterPrepare         HookT
 	afterApply           HookT
+	hasBeforePrepare     bool
+	hasAfterPrepare      bool
 }
 
 // NewSolver creates a Solver for the given entity and object with movement and collision settings.
@@ -37,6 +42,7 @@ func NewSolver(dynamic bool, mass, restitution, friction float64, restCombine, f
 		entity:               rigid_body.NewEntity(mass, restitution, friction, restCombine, frictionCombine, gForce),
 		cage:                 nil,
 		maxStep:              0,
+		solverIdx:            -1,
 		onElasticCollision:   nil,
 		onInelasticCollision: nil,
 		canSleep:             true,
@@ -100,10 +106,12 @@ func (t *Solver) SetInelasticCollision(c CollisionT) {
 
 // SetPrepareHooks configures callbacks invoked immediately before and after StagePrepare.
 func (t *Solver) SetPrepareHooks(before, after HookT) {
-	if before == nil {
+	t.hasBeforePrepare = before != nil
+	if !t.hasBeforePrepare {
 		before = noopHook
 	}
-	if after == nil {
+	t.hasAfterPrepare = after != nil
+	if !t.hasAfterPrepare {
 		after = noopHook
 	}
 	t.beforePrepare = before
@@ -233,12 +241,112 @@ func (t *Solver) UpdateSleepStateWithSupport(externalSupport bool) bool {
 
 // SetSolverIndex records this solver's active index for the current solver tick.
 func (t *Solver) SetSolverIndex(idx int) {
-	t.cage.SetSolverIndex(idx)
+	t.solverIdx = idx
 }
 
 // GetSolverIndex returns this solver's active index in the current solver tick, or -1 when inactive.
 func (t *Solver) GetSolverIndex() int {
-	return t.cage.GetSolverIndex()
+	return t.solverIdx
+}
+
+// SetPendingStepZ stores a pending vertical step-up candidate computed in StageApply.
+func (t *Solver) SetPendingStepZ(stepZ float64) {
+	t.pendingStepZ = stepZ
+}
+
+// ConsumePendingStepZ returns and clears any pending vertical step-up candidate.
+func (t *Solver) ConsumePendingStepZ() float64 {
+	v := t.pendingStepZ
+	t.pendingStepZ = 0
+	return v
+}
+
+// NeedsStaticClamp reports whether this solver allows static clamping and its cage moved since the last clamp baseline.
+func (t *Solver) NeedsStaticClamp() bool {
+	if t.ignoreStatic {
+		return false
+	}
+	return t.cage.NeedsStaticClamp()
+}
+
+// resolveStaticContact resolves velocity and inelastic penetration on t.entity and advances t.cage's sweep target.
+func (t *Solver) resolveStaticContact(nx, ny, nz, pen float64) bool {
+	p, ok := t.entity.ResolveStaticClamp(nx, ny, nz, pen)
+	if !ok {
+		return false
+	}
+	t.cage.AdvanceStaticClampTarget(nx*p, ny*p, nz*p)
+	return true
+}
+
+// StaticFaceClamp evaluates a single static face against lAABB and resolves any penetration on t.entity.
+func (t *Solver) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
+	nx, ny, nz, pen, floorHit, apply := t.cage.EvalStaticFaceClamp(lAABB, rFace)
+	if floorHit {
+		t.entity.SetOnGround(true)
+	}
+	if !apply {
+		return false
+	}
+	return t.resolveStaticContact(nx, ny, nz, pen)
+}
+
+// ClampCachedStaticFaces resolves static face clamping against all faces stored in t.cage's broadphase cache.
+func (t *Solver) ClampCachedStaticFaces(lAABB *aabb.AABB) bool {
+	moved := false
+	cage := t.cage
+	n := cage.CachedStaticFacesLen()
+	for i := 0; i < n; i++ {
+		nx, ny, nz, pen, floorHit, apply := cage.EvalCachedStaticFaceAt(i, lAABB)
+		if floorHit {
+			t.entity.SetOnGround(true)
+		}
+		if apply && t.resolveStaticContact(nx, ny, nz, pen) {
+			moved = true
+		}
+	}
+	return moved
+}
+
+// StaticFaceFlushClamp resolves deferred corner clamp contacts queued during static clamping.
+func (t *Solver) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
+	moved := false
+	cage := t.cage
+	n := cage.FlushClampCornersLen()
+	for i := 0; i < n; i++ {
+		nx, ny, nz, pen, apply := cage.EvalFlushClampCornerAt(i, lAABB)
+		if apply && t.resolveStaticContact(nx, ny, nz, pen) {
+			moved = true
+		}
+	}
+	cage.ClearFlushClampCorners()
+	return moved
+}
+
+// ApplySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
+// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
+func (t *Solver) ApplySafeStepUp(stepZ float64, clampStatic ClampStaticFn) {
+	ent := t.entity
+	cage := t.cage
+	preX, preY, preZ := ent.GetCenter()
+	preVX, preVY, preVZ := ent.GetVelocity()
+	origCX, origCY, origCZ, origHasFloor := cage.GetStaticClampState()
+
+	cage.RestoreStaticClampState(preX, preY, preZ, origHasFloor)
+	ent.AddTo(0, 0, stepZ)
+	clampStatic(cage)
+	postX, postY, postZ := ent.GetCenter()
+
+	dzAfter := postZ - preZ
+	dXY := math.Hypot(postX-preX, postY-preY)
+	if dzAfter < stepZ-0.25 || dXY > 2.0 {
+		ent.AddTo(preX-postX, preY-postY, preZ-postZ)
+		ent.SetV(preVX, preVY, preVZ)
+		cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
+		return
+	}
+	ent.SetV(preVX, preVY, preVZ)
+	cage.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
 }
 
 // TryMarkStaged marks this solver for epoch and returns true only on the first call per epoch.
@@ -250,9 +358,15 @@ func (t *Solver) TryMarkStaged(epoch uint64) bool {
 	return true
 }
 
-// StagePrepare resets transient contact state, updates the entity, and rebuilds its cage for the session.
-func (t *Solver) StagePrepare(session uint64) {
-	t.beforePrepare()
+// StagePrepareBefore invokes any registered pre-prepare hook before entity kinematics run.
+func (t *Solver) StagePrepareBefore() {
+	if t.hasBeforePrepare {
+		t.beforePrepare()
+	}
+}
+
+// StagePreparePhysics integrates entity motion and rebuilds the collision cage for session without shared state writes.
+func (t *Solver) StagePreparePhysics(session uint64) {
 	ent := t.entity
 	preX, preY, preZ := ent.GetCenter()
 	ent.ClearActiveContact()
@@ -263,6 +377,19 @@ func (t *Solver) StagePrepare(session uint64) {
 		t.cage.SetSpawnOrigin(preX, preY, preZ)
 	}
 	t.cage.Rebuild(t.maxStep, session)
+}
+
+// StagePrepareAfter invokes any registered post-prepare hook after cage rebuild.
+func (t *Solver) StagePrepareAfter() {
+	if t.hasAfterPrepare {
+		t.afterPrepare()
+	}
+}
+
+// StagePrepare resets transient contact state, updates the entity, and rebuilds its cage for the session.
+func (t *Solver) StagePrepare(session uint64) {
+	t.beforePrepare()
+	t.StagePreparePhysics(session)
 	t.afterPrepare()
 }
 
@@ -368,7 +495,7 @@ func (t *Solver) StageApply() {
 	if t.maxStep > 0 && stepZ > t.maxStep {
 		stepZ = t.maxStep
 	}
-	t.cage.SetPendingStepZ(stepZ)
+	t.SetPendingStepZ(stepZ)
 	t.afterApply()
 }
 
@@ -496,7 +623,7 @@ func (t *Solver) resolveSlotPartner(slot *Entry) *rigid_body.Entity {
 		rParentEnt := rCage.GetEntity()
 		// Each active dynamic pair is solved once per solver pass by the canonical owner.
 		if t.entity.GetId() > rParentEnt.GetId() {
-			if rCage.GetSolverIndex() >= 0 && rCage.HasEntryFor(slot.GetBucket().Opposite(), t.entity.GetId()) {
+			if rCage.GetSolver().GetSolverIndex() >= 0 && rCage.HasEntryFor(slot.GetBucket().Opposite(), t.entity.GetId()) {
 				return nil
 			}
 		}

@@ -113,9 +113,10 @@ func runPileSimulation(t *testing.T, fps uint64, nBoxes int, cols int, wallHalf 
 		}
 	}
 	clampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-		cage.ClampCachedStaticFaces(lAABB)
-		cage.StaticFaceFlushClamp(lAABB)
+		solver.ClampCachedStaticFaces(lAABB)
+		solver.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 		cage.CommitStaticClamp()
 	}

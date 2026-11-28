@@ -63,8 +63,12 @@ func (pdc *PendingDynamicContacts) At(idx int) *PendingDynamicContact {
 // Current returns the pending dynamic contact at the current write position, growing storage if needed.
 func (pdc *PendingDynamicContacts) Current() *PendingDynamicContact {
 	if pdc.len >= len(pdc.container) {
-		n := make([]*PendingDynamicContact, nextGrowCap(len(pdc.container), pdc.init))
+		oldLen := len(pdc.container)
+		n := make([]*PendingDynamicContact, nextGrowCap(oldLen, pdc.init))
 		copy(n, pdc.container)
+		for i := oldLen; i < len(n); i++ {
+			n[i] = NewPendingDynamicContact()
+		}
 		pdc.container = n
 	}
 	return pdc.container[pdc.len]

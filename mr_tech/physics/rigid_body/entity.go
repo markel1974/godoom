@@ -377,6 +377,18 @@ func (e *Entity) ResolveInelasticPenetration(nx, ny, nz float64, pen float64) {
 	e.AddTo(nx*p, ny*p, nz*p)
 }
 
+// ResolveStaticClamp zeroes approaching normal velocity and clears inelastic overlap along (nx, ny, nz),
+// returning the applied pushout magnitude and whether positional movement occurred.
+func (e *Entity) ResolveStaticClamp(nx, ny, nz, pen float64) (float64, bool) {
+	e.ClampNormalVelocity(nx, ny, nz)
+	p, ok := e.Cinematic.ResolveInelasticPenetration(nz, pen)
+	if !ok || p <= 0.0 {
+		return 0.0, false
+	}
+	e.AddTo(nx*p, ny*p, nz*p)
+	return p, true
+}
+
 // HalfExtents returns the collision half-extents for the entity's current upright state and orientation.
 func (e *Entity) HalfExtents() (float64, float64, float64) {
 	if e.KeepUpright() {

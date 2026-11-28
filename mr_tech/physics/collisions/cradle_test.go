@@ -41,15 +41,16 @@ func TestCradleSupportEquivalenceBoundaryCases(t *testing.T) {
 	verify := func(name string, entries []*Entry) {
 		t.Helper()
 		rawSlots := makeTestSlots(entries)
-		want := cache.HasSupportSmall(rawSlots)
+		want := cache.hasSupportSmall(rawSlots)
 
 		padded := padToCachePath(entries)
 		padSlots := makeTestSlots(padded)
+		cache.Reset()
 		got := cache.HasSupport(padSlots)
 		if got != want {
-			t.Fatalf("%s: HasSupport=%v, want %v (HasSupportSmall)", name, got, want)
+			t.Fatalf("%s: HasSupport=%v, want %v (hasSupportSmall)", name, got, want)
 		}
-		if wantPadded := cache.HasSupportSmall(padSlots); wantPadded != want {
+		if wantPadded := cache.hasSupportSmall(padSlots); wantPadded != want {
 			t.Fatalf("%s: internal test helper mismatch padded=%v vs want=%v", name, wantPadded, want)
 		}
 	}
@@ -207,7 +208,8 @@ func TestCradleSupportEquivalenceRandomized(t *testing.T) {
 		}
 
 		testSlots := makeTestSlots(entries)
-		want := cache.HasSupportSmall(testSlots)
+		want := cache.hasSupportSmall(testSlots)
+		cache.Reset()
 		got := cache.HasSupport(testSlots)
 		if got != want {
 			t.Fatalf("trial %d (pattern=%d, n=%d): HasSupport=%v, want %v", trial, pattern, n, got, want)
@@ -367,7 +369,7 @@ func BenchmarkCradleSupport(b *testing.B) {
 				cache := NewCradleCache()
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
-					_ = cache.HasSupportSmall(slots)
+					_ = cache.hasSupportSmall(slots)
 				}
 			})
 

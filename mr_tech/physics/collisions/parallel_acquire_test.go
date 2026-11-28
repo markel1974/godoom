@@ -77,9 +77,10 @@ func buildDeterministicClusterFixtures(seedCount int) ([]*Solver, []IFace, []IFa
 		}
 	}
 	clampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-		cage.ClampCachedStaticFaces(lAABB)
-		cage.StaticFaceFlushClamp(lAABB)
+		solver.ClampCachedStaticFaces(lAABB)
+		solver.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 		cage.CommitStaticClamp()
 	}
@@ -250,9 +251,10 @@ func runPileSimulationWithMode(t *testing.T, fps uint64, nBoxes int, cols int, w
 		}
 	}
 	clampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-		cage.ClampCachedStaticFaces(lAABB)
-		cage.StaticFaceFlushClamp(lAABB)
+		solver.ClampCachedStaticFaces(lAABB)
+		solver.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 		cage.CommitStaticClamp()
 	}
@@ -396,9 +398,10 @@ func TestParallelAcquireMultiWaveWakeCascade(t *testing.T) {
 		}
 	}
 	clampFn := func(cage *Cage) {
+		solver := cage.GetSolver()
 		ox, oy, oz, odx, ody, odz, otx, oty, otz, lAABB := cage.BeginStaticClamp()
-		cage.ClampCachedStaticFaces(lAABB)
-		cage.StaticFaceFlushClamp(lAABB)
+		solver.ClampCachedStaticFaces(lAABB)
+		solver.StaticFaceFlushClamp(lAABB)
 		cage.EndStaticClamp(ox, oy, oz, odx, ody, odz, otx, oty, otz)
 		cage.CommitStaticClamp()
 	}

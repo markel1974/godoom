@@ -143,9 +143,7 @@ type Cage struct {
 	spawnX          float64
 	spawnY          float64
 	spawnZ          float64
-	pendingStepZ    float64
 	collisionGroup  uint64
-	solverIdx       int
 	solver          *Solver
 	slots           *Slots
 	acquireWave     uint64
@@ -177,7 +175,6 @@ func NewCage(id uint64) *Cage {
 		facesIdx:      0,
 		hasFloor:      false,
 		manifold:      aabb.NewOBBManifold(),
-		solverIdx:     -1,
 		staticContact: NewStaticFaceContact(),
 		cradle:        NewCradleCache(),
 		pending:       NewPendingDynamicContacts(16),
@@ -278,14 +275,9 @@ func (s *Cage) Rebuild(maxStep float64, session uint64) {
 	s.staticSlotStart = 0
 	s.staticSlotEnd = 0
 	s.pending.Reset()
-	//s.pendingDynLen = 0
 	s.clampX, s.clampY, s.clampZ = clampBaseX, clampBaseY, clampBaseZ
-
 	s.staticContact.Reset()
-
-	//clear(s.seen)
 	s.maxStep = maxStep
-	s.pendingStepZ = 0
 }
 
 // BeginAcquire switches this cage into read-only parallel acquisition mode for wave.
@@ -295,7 +287,6 @@ func (s *Cage) BeginAcquire(wave uint64) {
 	s.staticSlotStart = 0
 	s.staticSlotEnd = 0
 	s.pending.Reset()
-	//s.pendingDynLen = 0
 }
 
 // FinalizeAcquireSlots moves any static slots acquired before dynamic merges to the end of s.slots
@@ -321,13 +312,16 @@ func (s *Cage) IsAcquiring() bool {
 // CanAcquireDynamic reports whether this cage owns evaluating the dynamic pair (s, rCage)
 // during parallel read-only acquisition without writing to rCage.
 func (s *Cage) CanAcquireDynamic(rCage *Cage) bool {
-	if s == rCage || s.HasSeen(rCage) {
+	if s == rCage {
 		return false
 	}
 	if s.acquiring && !rCage.entity.IsSleeping() && rCage.acquireWave == s.acquireWave {
 		if s.id > rCage.id || (s.id == rCage.id && s.entity.GetId() > rCage.entity.GetId()) {
 			return false
 		}
+	}
+	if s.HasSeen(rCage) {
+		return false
 	}
 	s.Seen(rCage)
 	return true
@@ -402,74 +396,109 @@ func (s *Cage) Commit(rCage *Cage) {
 	s.facesIdx = 0
 }
 
-// StaticFaceClamp clamps static contact data against the given AABB and face, reporting whether it succeeded.
-func (s *Cage) StaticFaceClamp(lAABB *aabb.AABB, rFace IFace) bool {
+// EvalStaticFaceClamp evaluates static contact geometry against lAABB and rFace without mutating Entity or Cinematic.
+func (s *Cage) EvalStaticFaceClamp(lAABB *aabb.AABB, rFace IFace) (nx, ny, nz, pen float64, floorHit, apply bool) {
 	if !rFace.IsSolid() {
-		return false
+		return 0, 0, 0, 0, false, false
 	}
 	evalFace := s.staticContact.evalFace
 	evalFace.SetIFace(rFace)
-	return s.staticFaceClamp(lAABB, evalFace)
+	return s.evalStaticClampFace(lAABB, evalFace)
 }
 
-// staticFaceClamp evaluates a solid face against the local AABB and applies a static clamp when penetration requires it.
-// It updates floor and wall contact state and reports whether a clamp was applied.
-func (s *Cage) staticFaceClamp(lAABB *aabb.AABB, rFace *Face) bool {
+// evalStaticClampFace evaluates a solid face against the local AABB, updates geometric contact buffers,
+// and returns the contact normal, penetration, floor contact flag, and whether pushout is required.
+func (s *Cage) evalStaticClampFace(lAABB *aabb.AABB, rFace *Face) (nx, ny, nz, pen float64, floorHit, apply bool) {
 	if !rFace.IsSolid() {
-		return false
+		return 0, 0, 0, 0, false, false
 	}
 	fc := s.staticContact
 	if !s.evalStaticFace(lAABB, rFace, fc) {
-		return false
+		return 0, 0, 0, 0, false, false
 	}
 	if fc.pen <= 0.0 {
 		if fc.bucket == BucketFloor && fc.dist <= floorGroundTolerance {
 			s.hasFloor = true
-			s.entity.SetOnGround(true)
+			return 0, 0, 0, 0, true, false
 		}
-		return false
+		return 0, 0, 0, 0, false, false
 	}
 	if fc.bucket == BucketFloor {
 		s.hasFloor = true
-		s.entity.SetOnGround(true)
+		floorHit = true
 	}
 	if fc.bucket.IsWall() {
 		if s.clampWallShouldSkip(fc) {
-			return false
+			return 0, 0, 0, 0, floorHit, false
 		}
 		if fc.cornerHit {
-			if fc.HasCoplanarFlatWall() {
-				return false
-			}
-			if fc.AddClampCorner(rFace.IFace) {
-				return false
+			if fc.HasCoplanarFlatWall() || fc.AddClampCorner(rFace.IFace) {
+				return 0, 0, 0, 0, floorHit, false
 			}
 		} else {
 			fc.RecordFlatWall()
 		}
 	}
-	return s.clampApplyContact(fc)
+	fc.AddClampNormal(fc.nX, fc.nY, fc.nZ)
+	return fc.nX, fc.nY, fc.nZ, fc.pen, floorHit, true
 }
 
-// StaticFaceFlushClamp reports whether the cage's static contact can flush-clamp against the given AABB.
-func (s *Cage) StaticFaceFlushClamp(lAABB *aabb.AABB) bool {
-	moved := false
+// CachedStaticFacesLen returns the number of solid faces buffered in the per-frame broadphase cache.
+func (s *Cage) CachedStaticFacesLen() int {
+	return s.staticContact.cachedFacesLen
+}
+
+// EvalCachedStaticFaceAt evaluates the cached static face at idx against lAABB for static clamping.
+func (s *Cage) EvalCachedStaticFaceAt(idx int, lAABB *aabb.AABB) (nx, ny, nz, pen float64, floorHit, apply bool) {
+	return s.evalStaticClampFace(lAABB, s.staticContact.cachedFaces[idx])
+}
+
+// FlushClampCornersLen returns the number of deferred corner faces queued for flush clamping.
+func (s *Cage) FlushClampCornersLen() int {
+	return s.staticContact.clampCornersLen
+}
+
+// EvalFlushClampCornerAt evaluates the deferred clamp corner at idx against lAABB without mutating Entity or Cinematic.
+func (s *Cage) EvalFlushClampCornerAt(idx int, lAABB *aabb.AABB) (nx, ny, nz, pen float64, apply bool) {
 	fc := s.staticContact
-	for i := 0; i < fc.clampCornersLen; i++ {
-		if !s.evalStaticFace(lAABB, fc.clampCorners[i], fc) || fc.pen <= 0.0 {
-			continue
-		}
-		if fc.bucket.IsWall() {
-			if s.clampWallShouldSkip(fc) || fc.HasCoplanarFlatWall() {
-				continue
-			}
-		}
-		if s.clampApplyContact(fc) {
-			moved = true
+	if !s.evalStaticFace(lAABB, fc.clampCorners[idx], fc) || fc.pen <= 0.0 {
+		return 0, 0, 0, 0, false
+	}
+	if fc.bucket.IsWall() {
+		if s.clampWallShouldSkip(fc) || fc.HasCoplanarFlatWall() {
+			return 0, 0, 0, 0, false
 		}
 	}
-	fc.clampCornersLen = 0
-	return moved
+	fc.AddClampNormal(fc.nX, fc.nY, fc.nZ)
+	return fc.nX, fc.nY, fc.nZ, fc.pen, true
+}
+
+// ClearFlushClampCorners clears the deferred clamp corner queue after a flush clamp sweep.
+func (s *Cage) ClearFlushClampCorners() {
+	s.staticContact.clampCornersLen = 0
+}
+
+// AdvanceStaticClampTarget shifts the cage's current sweep target after an external static clamp pushout.
+func (s *Cage) AdvanceStaticClampTarget(dx, dy, dz float64) {
+	s.tX += dx
+	s.tY += dy
+	s.tZ += dz
+	s.dX = s.tX - s.cX
+	s.dY = s.tY - s.cY
+	s.dZ = s.tZ - s.cZ
+}
+
+// clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
+func (s *Cage) clampWallShouldSkip(fc *StaticFaceContact) bool {
+	if fc.wallTopLip {
+		return true
+	}
+	curBaseZ := s.tZ - s.eRadZ
+	preBaseZ := s.GetBaseZ()
+	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
+		return true
+	}
+	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
 }
 
 // BeginStaticFaceCache initializes the per-frame cached static face list for the given broadphase AABB.
@@ -519,53 +548,8 @@ func (s *Cage) CachePendingStaticFaces(lAABB *aabb.AABB) {
 	fc.CommitStaticFaceCache()
 }
 
-// ClampCachedStaticFaces resolves static face clamping against all faces stored in the per-frame broadphase cache.
-func (s *Cage) ClampCachedStaticFaces(lAABB *aabb.AABB) bool {
-	moved := false
-	fc := s.staticContact
-	for i := 0; i < fc.cachedFacesLen; i++ {
-		if s.staticFaceClamp(lAABB, fc.cachedFaces[i]) {
-			moved = true
-		}
-	}
-	return moved
-}
-
-// clampWallShouldSkip reports whether a wall contact should be ignored as stepable or ground-adjacent.
-func (s *Cage) clampWallShouldSkip(fc *StaticFaceContact) bool {
-	if fc.wallTopLip {
-		return true
-	}
-	curBaseZ := s.tZ - s.eRadZ
-	preBaseZ := s.GetBaseZ()
-	if fc.maxZ <= curBaseZ+satFilterEpsilon && preBaseZ+s.maxStep >= fc.maxZ-satFilterEpsilon {
-		return true
-	}
-	return preBaseZ >= fc.maxZ-satFilterEpsilon && s.dZ < -satFilterEpsilon && fc.maxZ-curBaseZ <= floorGroundTolerance
-}
-
-// clampApplyContact clamps velocity, resolves penetration, updates cage position, and reports whether movement occurred.
-func (s *Cage) clampApplyContact(fc *StaticFaceContact) bool {
-	fc.AddClampNormal(fc.nX, fc.nY, fc.nZ)
-
-	ent := s.entity
-	ent.ClampNormalVelocity(fc.nX, fc.nY, fc.nZ)
-	p, ok := ent.Cinematic.ResolveInelasticPenetration(fc.nZ, fc.pen)
-	if !ok || p <= 0.0 {
-		return false
-	}
-	ent.AddTo(fc.nX*p, fc.nY*p, fc.nZ*p)
-	s.tX += fc.nX * p
-	s.tY += fc.nY * p
-	s.tZ += fc.nZ * p
-	s.dX = s.tX - s.cX
-	s.dY = s.tY - s.cY
-	s.dZ = s.tZ - s.cZ
-	return true
-}
-
 // addStaticTriangleManifold emits either the single closest contact for KeepUpright entities or a clipped OBB
-// multi-point manifold against static triangle rFace, falling back to a stabilized contact when clipping misses.
+// multipoint manifold against static triangle rFace, falling back to a stabilized contact when clipping misses.
 func (s *Cage) addStaticTriangleManifold(rFace *Face, fc *StaticFaceContact, iMode ImpactMode) {
 	rIFace := rFace.IFace
 	if s.entity.KeepUpright() {
@@ -1119,9 +1103,6 @@ func (s *Cage) IsBucketPenetrable(b BucketType, from uint64) bool {
 
 // NeedsStaticClamp reports whether the entity center moved or KeepUpright toggled since the last validated static clamp.
 func (s *Cage) NeedsStaticClamp() bool {
-	if s.solver != nil && s.solver.IgnoresStatic() {
-		return false
-	}
 	if s.forceStaticClamp || s.entity.KeepUpright() != s.prevKeepUpright {
 		return true
 	}
@@ -1207,15 +1188,6 @@ func (s *Cage) overlapsTargetXY(minX, maxX, minY, maxY float64) bool {
 	return s.tX+s.eRadX > minX && maxX > s.tX-s.eRadX && s.tY+s.eRadY > minY && maxY > s.tY-s.eRadY
 }
 
-// effectiveRadius returns the half-extent along unit normal (nX, nY, nZ),
-// using ellipsoid support for KeepUpright entities and exact OBB axis projection for all rigid OBBs.
-func effectiveRadius(ent *rigid_body.Entity, eRadX, eRadY, eRadZ, nX, nY, nZ float64) float64 {
-	if !ent.KeepUpright() {
-		return ent.ProjectExtent(nX, nY, nZ)
-	}
-	return math.Sqrt((nX*eRadX)*(nX*eRadX) + (nY*eRadY)*(nY*eRadY) + (nZ*eRadZ)*(nZ*eRadZ))
-}
-
 // GetAABB returns the axis-aligned bounding box (AABB) representing the broad-phase collision geometry of the cage.[cite: 6]
 func (s *Cage) GetAABB() *aabb.AABB { return s.ellipsoid.GetAABB() }
 
@@ -1228,16 +1200,6 @@ func (s *Cage) HasFloor() bool {
 		return false
 	}
 	return s.cradle.HasSupport(s.slots)
-}
-
-// SetSolverIndex sets the temporary per-tick solver index of this cage (-1 when inactive).
-func (s *Cage) SetSolverIndex(idx int) {
-	s.solverIdx = idx
-}
-
-// GetSolverIndex returns the temporary per-tick solver index of this cage (-1 when inactive).
-func (s *Cage) GetSolverIndex() int {
-	return s.solverIdx
 }
 
 // SetCollisionGroup assigns a non-zero skeleton/island collision filter group ID.
@@ -1261,12 +1223,10 @@ func (s *Cage) ZeroDisplacement() {
 	s.stepDX, s.stepDY, s.stepDZ = 0, 0, 0
 	s.passDX, s.passDY, s.passDZ = 0, 0, 0
 	s.applied = false
-	if s.entity != nil {
-		curX, curY, curZ := s.entity.GetCenter()
-		s.cX, s.cY, s.cZ = curX, curY, curZ
-		s.tX, s.tY, s.tZ = curX, curY, curZ
-		s.appliedX, s.appliedY, s.appliedZ = curX, curY, curZ
-	}
+	curX, curY, curZ := s.entity.GetCenter()
+	s.cX, s.cY, s.cZ = curX, curY, curZ
+	s.tX, s.tY, s.tZ = curX, curY, curZ
+	s.appliedX, s.appliedY, s.appliedZ = curX, curY, curZ
 }
 
 // SetSpawnOrigin records a safe pre-spawn or pre-rotation origin for the next Rebuild sweep and static clamp.
@@ -1291,43 +1251,6 @@ func (s *Cage) SetApplied() {
 	s.applied = true
 	lEnt := s.entity
 	s.appliedX, s.appliedY, s.appliedZ = lEnt.GetCenter()
-}
-
-// SetPendingStepZ stores a pending vertical step-up candidate computed in StageApply.
-func (s *Cage) SetPendingStepZ(stepZ float64) {
-	s.pendingStepZ = stepZ
-}
-
-// ConsumePendingStepZ returns and clears any pending vertical step-up candidate.
-func (s *Cage) ConsumePendingStepZ() float64 {
-	v := s.pendingStepZ
-	s.pendingStepZ = 0
-	return v
-}
-
-// ApplySafeStepUp verifies vertical headroom for a step-up before keeping it so beveled walls under
-// ceilings or overhangs do not launch the entity into ceiling clamps that kick it backward.
-func (s *Cage) ApplySafeStepUp(stepZ float64, clampStatic func(*Cage)) {
-	ent := s.GetEntity()
-	preX, preY, preZ := ent.GetCenter()
-	preVX, preVY, preVZ := ent.GetVelocity()
-	origCX, origCY, origCZ, origHasFloor := s.GetStaticClampState()
-
-	s.RestoreStaticClampState(preX, preY, preZ, origHasFloor)
-	ent.AddTo(0, 0, stepZ)
-	clampStatic(s)
-	postX, postY, postZ := ent.GetCenter()
-
-	dzAfter := postZ - preZ
-	dXY := math.Hypot(postX-preX, postY-preY)
-	if dzAfter < stepZ-0.25 || dXY > 2.0 {
-		ent.AddTo(preX-postX, preY-postY, preZ-postZ)
-		ent.SetV(preVX, preVY, preVZ)
-		s.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
-		return
-	}
-	ent.SetV(preVX, preVY, preVZ)
-	s.RestoreStaticClampState(origCX, origCY, origCZ, origHasFloor)
 }
 
 // GetStaticClampState returns the current static clamp baseline coordinates and floor flag.

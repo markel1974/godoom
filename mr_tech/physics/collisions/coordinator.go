@@ -1,10 +1,6 @@
 package collisions
 
-import (
-	"runtime"
-	"sync"
-	"sync/atomic"
-)
+import "runtime"
 
 const parallelAcquireMinBodies = 8
 
@@ -40,8 +36,11 @@ type Coordinator struct {
 	workerWakeFns     []WakeRunningFn
 	wakeBatch         []*Solver
 	mergeOrder        []int
-	acquireWG         sync.WaitGroup
-	acquireCursor     atomic.Int64
+	clampQueue        []int
+	waveStart         int
+	prepareRunner     func(workerID, start, end int)
+	acquireRunner     func(workerID, start, end int)
+	clampRunner       func(workerID, start, end int)
 }
 
 // NewCoordinator creates a Coordinator with default iterations and capacity when nonpositive values are provided.
@@ -70,9 +69,32 @@ func NewCoordinator(solverIterations, initialCap int, queryContactsFn QueryConta
 		parallelMinBodies: parallelAcquireMinBodies,
 		wakeBatch:         make([]*Solver, 0, commonCap),
 		mergeOrder:        make([]int, 0, commonCap),
+		clampQueue:        make([]int, 0, commonCap),
 	}
 	c.wakeRunningFn = c.wakeRunningIsland
-	c.ensureWorkers(max(1, runtime.GOMAXPROCS(0)))
+	c.prepareRunner = func(_ int, start, end int) {
+		session := c.session
+		for idx := start; idx < end; idx++ {
+			c.running[idx].StagePreparePhysics(session)
+		}
+	}
+	c.acquireRunner = func(workerID, start, end int) {
+		wakeFn := c.workerWakeFns[workerID]
+		base := c.waveStart
+		for idx := base + start; idx < base+end; idx++ {
+			cage := c.running[idx].cage
+			c.queryContactsFn(cage, wakeFn)
+			cage.SortPendingDynamic()
+		}
+	}
+	c.clampRunner = func(_ int, start, end int) {
+		for i := start; i < end; i++ {
+			cage := c.running[c.clampQueue[i]].cage
+			c.clampStaticFn(cage)
+			cage.CommitStaticClamp()
+		}
+	}
+	c.ensureWorkers(sharedWorkerPool.WorkerCount())
 	return c
 }
 
@@ -142,6 +164,10 @@ func (c *Coordinator) EnsureCapacity(minCap int) {
 	newJointSup := make([]bool, c.commonCap)
 	copy(newJointSup, c.jointSupported)
 	c.jointSupported = newJointSup
+
+	if cap(c.clampQueue) < c.commonCap {
+		c.clampQueue = make([]int, 0, c.commonCap)
+	}
 }
 
 // Reset clears the staged solver list.
@@ -287,6 +313,7 @@ func (c *Coordinator) Step() {
 	}
 
 	writeStaged := 0
+	hasAfterPrepare := false
 	for x := 0; x < c.stagedLen; x++ {
 		s := c.staged[x]
 		if !s.IsActive() {
@@ -304,7 +331,10 @@ func (c *Coordinator) Step() {
 			s.SetSolverIndex(-1)
 			continue
 		}
-		s.StagePrepare(c.session)
+		s.StagePrepareBefore()
+		if s.hasAfterPrepare {
+			hasAfterPrepare = true
+		}
 		s.SetSolverIndex(c.runningLen)
 		c.running[c.runningLen] = s
 		c.runningLen++
@@ -316,6 +346,19 @@ func (c *Coordinator) Step() {
 
 	if c.runningLen == 0 {
 		return
+	}
+
+	if c.parallelAcquire && c.runningLen >= max(1024, c.parallelMinBodies) && runtime.GOMAXPROCS(0) > 1 {
+		minPerWorker := max(256, c.runningLen/4)
+		chunk := max(64, minPerWorker/2)
+		sharedWorkerPool.Dispatch(c.runningLen, minPerWorker, chunk, c.prepareRunner)
+	} else {
+		c.prepareRunner(0, 0, c.runningLen)
+	}
+	if hasAfterPrepare {
+		for x := 0; x < c.runningLen; x++ {
+			c.running[x].StagePrepareAfter()
+		}
 	}
 
 	c.acquireContactsParallel()
@@ -394,12 +437,12 @@ func (c *Coordinator) Step() {
 	for x := 0; x < c.runningLen; x++ {
 		s := c.running[x]
 		s.StageApply()
-		if stepZ := s.cage.ConsumePendingStepZ(); stepZ > 0 {
-			s.cage.ApplySafeStepUp(stepZ, c.clampStaticFn)
+		if stepZ := s.ConsumePendingStepZ(); stepZ > 0 {
+			s.ApplySafeStepUp(stepZ, c.clampStaticFn)
 		}
 	}
 
-	// Positional relaxation sweep coupled with per-iteration static world clamping so pushed bodies
+	// Positional relaxation sweep coupled with parallel static world clamping so pushed bodies
 	// cannot be squeezed through solid walls, floors, or ceilings across solver sweeps.
 	for si := 0; si < c.solverIterations; si++ {
 		if si&1 == 0 {
@@ -417,17 +460,26 @@ func (c *Coordinator) Step() {
 				c.joints[jIdx].ResolvePosition()
 			}
 		}
+		c.clampQueue = c.clampQueue[:0]
 		for x := 0; x < c.runningLen; x++ {
-			cage := c.running[x].cage
-			if cage.NeedsStaticClamp() {
-				c.clampStaticFn(cage)
-				cage.CommitStaticClamp()
+			if c.running[x].NeedsStaticClamp() {
+				c.clampQueue = append(c.clampQueue, x)
+			}
+		}
+		if clampLen := len(c.clampQueue); clampLen > 0 {
+			if c.parallelAcquire && clampLen >= max(1024, c.parallelMinBodies) && runtime.GOMAXPROCS(0) > 1 {
+				minPerWorker := max(256, clampLen/4)
+				chunk := max(64, minPerWorker/2)
+				sharedWorkerPool.Dispatch(clampLen, minPerWorker, chunk, c.clampRunner)
+			} else {
+				c.clampRunner(0, 0, clampLen)
 			}
 		}
 	}
 	for x := 0; x < c.runningLen; x++ {
 		s := c.running[x]
 		s.cage.CommitStaticClamp()
+		s.entity.SetOnGround(s.cage.HasFloor())
 		if c.jointsLen > 0 && c.jointSupported[x] {
 			s.entity.DampCalmRagdoll()
 		} else if !s.entity.KeepUpright() && s.entity.IsOnGround() {
@@ -483,7 +535,7 @@ func (c *Coordinator) updateIslandSleep() {
 			if rCage == nil {
 				continue
 			}
-			rIdx := rCage.GetSolverIndex()
+			rIdx := rCage.GetSolver().GetSolverIndex()
 			if rIdx < 0 || rIdx == x || !c.islandSleep[rIdx] {
 				continue
 			}
@@ -511,7 +563,7 @@ func (c *Coordinator) updateIslandSleep() {
 				if rCage == nil {
 					continue
 				}
-				rIdx := rCage.GetSolverIndex()
+				rIdx := rCage.GetSolver().GetSolverIndex()
 				if rIdx < 0 || rIdx == x || c.islandSleep[rIdx] {
 					continue
 				}
@@ -556,6 +608,8 @@ func (c *Coordinator) updateIslandSleep() {
 // acquireContactsParallel executes read-only broadphase/manifold acquisition in parallel waves across active cages,
 // then deterministically merges wake requests and buffered dynamic contacts by partner ID before solving.
 func (c *Coordinator) acquireContactsParallel() {
+	workerCap := sharedWorkerPool.WorkerCount()
+	c.ensureWorkers(workerCap)
 	wave := uint64(1)
 	waveStart := 0
 	for waveStart < c.runningLen {
@@ -564,33 +618,21 @@ func (c *Coordinator) acquireContactsParallel() {
 			c.running[x].cage.BeginAcquire(wave)
 		}
 
-		waveCount := waveEnd - waveStart
-		workers := 1
-		if c.parallelAcquire && waveCount >= c.parallelMinBodies {
-			if procs := runtime.GOMAXPROCS(0); procs > 1 {
-				workers = min(procs, waveCount)
-			}
-		}
-		c.ensureWorkers(workers)
-		for w := 0; w < workers; w++ {
+		for w := 0; w < len(c.workerWakes); w++ {
 			c.workerWakes[w] = c.workerWakes[w][:0]
 		}
 
-		if workers == 1 {
-			wakeFn := c.workerWakeFns[0]
-			for idx := waveStart; idx < waveEnd; idx++ {
-				cage := c.running[idx].cage
-				c.queryContactsFn(cage, wakeFn)
-				cage.SortPendingDynamic()
+		waveCount := waveEnd - waveStart
+		c.waveStart = waveStart
+		if c.parallelAcquire && waveCount >= c.parallelMinBodies && runtime.GOMAXPROCS(0) > 1 {
+			minPerWorker := max(c.parallelMinBodies, min(96, waveCount/4))
+			chunk := max(8, waveCount/16)
+			if waveCount < 64 {
+				chunk = max(1, waveCount/8)
 			}
+			sharedWorkerPool.Dispatch(waveCount, minPerWorker, chunk, c.acquireRunner)
 		} else {
-			c.acquireCursor.Store(int64(waveStart))
-			c.acquireWG.Add(workers - 1)
-			for w := 1; w < workers; w++ {
-				go c.acquireWorker(w, waveEnd)
-			}
-			c.runAcquireLoop(0, waveEnd)
-			c.acquireWG.Wait()
+			c.acquireRunner(0, 0, waveCount)
 		}
 
 		c.mergeWaveWakes()
@@ -601,24 +643,6 @@ func (c *Coordinator) acquireContactsParallel() {
 	}
 	for x := 0; x < c.runningLen; x++ {
 		c.running[x].cage.FinalizeAcquireSlots()
-	}
-}
-
-func (c *Coordinator) acquireWorker(workerID, waveEnd int) {
-	c.runAcquireLoop(workerID, waveEnd)
-	c.acquireWG.Done()
-}
-
-func (c *Coordinator) runAcquireLoop(workerID, waveEnd int) {
-	wakeFn := c.workerWakeFns[workerID]
-	for {
-		idx := int(c.acquireCursor.Add(1) - 1)
-		if idx >= waveEnd {
-			return
-		}
-		cage := c.running[idx].cage
-		c.queryContactsFn(cage, wakeFn)
-		cage.SortPendingDynamic()
 	}
 }
 

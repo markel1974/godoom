@@ -460,9 +460,9 @@ func (th *Things) StageCommit() {
 
 }
 
-// applySafeStepUp applies a safe upward step to the cage, clamped against static volumes.
+// applySafeStepUp applies a safe upward step to the cage's solver, clamped against static volumes.
 func (th *Things) applySafeStepUp(cage *collisions.Cage, stepZ float64) {
-	cage.ApplySafeStepUp(stepZ, th.volumes.ClampStaticCage)
+	cage.GetSolver().ApplySafeStepUp(stepZ, th.volumes.ClampStaticCage)
 }
 
 // Compute processes pending changes, dispatches thinking events at the given coordinates, steps physics, and updates objects.

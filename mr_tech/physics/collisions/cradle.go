@@ -79,8 +79,8 @@ type cradleBumperSector struct {
 	head int32
 }
 
-// CradleCache detects multi-contact cradle support directly over cage.slots without copying contact entries.
-type CradleCache struct {
+// Cradle detects multi-contact cradle support directly over cage.slots without copying contact entries.
+type Cradle struct {
 	slopeSec  [cradleSectors]*cradleSlopeSector
 	bumperSec [cradleSectors]*cradleBumperSector
 	nextIdx   []int32
@@ -90,8 +90,8 @@ type CradleCache struct {
 }
 
 // NewCradleCache creates and returns an empty zero-copy cradle support cache.
-func NewCradleCache() *CradleCache {
-	cc := &CradleCache{
+func NewCradleCache() *Cradle {
+	cc := &Cradle{
 		dirty:  true,
 		cached: false,
 	}
@@ -103,18 +103,18 @@ func NewCradleCache() *CradleCache {
 }
 
 // Reset marks the cradle support cache dirty and clears its cached state.
-func (c *CradleCache) Reset() {
+func (c *Cradle) Reset() {
 	c.dirty = true
 	c.cached = false
 }
 
 // SetDirty marks the cradle support cache as dirty.
-func (c *CradleCache) SetDirty() {
+func (c *Cradle) SetDirty() {
 	c.dirty = true
 }
 
 // HasSupport reports whether slots contain contacts that cradle a free 6-DoF body, using a cached result when clean.
-func (c *CradleCache) HasSupport(slots *Slots) bool {
+func (c *Cradle) HasSupport(slots *Slots) bool {
 	if !c.dirty {
 		return c.cached
 	}
@@ -129,7 +129,7 @@ func (c *CradleCache) HasSupport(slots *Slots) bool {
 }
 
 // HasSupportSmall reports whether the cage slots contain a small paired-normal cradle support.
-func (c *CradleCache) hasSupportSmall(slots *Slots) bool {
+func (c *Cradle) hasSupportSmall(slots *Slots) bool {
 	n := slots.Len()
 	for i := range n {
 		a := slots.At(i)
@@ -163,7 +163,7 @@ func (c *CradleCache) hasSupportSmall(slots *Slots) bool {
 
 // HasSupport reports whether cage.slots contain opposing slope or steep-slope bumper contacts
 // that cradle a free 6-DoF body, reading cage.slots in-place without copying entry normals.
-func (c *CradleCache) hasSupportFull(slots *Slots) bool {
+func (c *Cradle) hasSupportFull(slots *Slots) bool {
 	n := slots.Len()
 	hasSlope := false
 	hasSteep := false

@@ -109,7 +109,7 @@ type Cage struct {
 	volumeObj           aabb.IObject
 	distance            float64
 
-	cradle           *CradleCache
+	cradle           *Cradle
 	maxStep          float64
 	faces            []*Faces
 	facesIdx         int
@@ -153,8 +153,6 @@ type Cage struct {
 	staticSlotStart int
 	staticSlotEnd   int
 	pending         *PendingDynamicContacts
-	//pendingDyn      []*PendingDynamicContact
-	//pendingDynLen   int
 }
 
 var _counter atomic.Uint64

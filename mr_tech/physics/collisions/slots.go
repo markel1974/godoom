@@ -54,21 +54,42 @@ func (s *Slots) Decrease(i int) {
 	s.data[i] = s.data[s.len]
 }
 
-// RotateRangeToEnd moves contiguous entries [start, end) to the back of the slice [0, len)
-// in O(len-start) time and O(1) space, preserving relative order of both blocks.
+// RotateRangeToEnd moves the contiguous entries [start, end) to the back of
+// the active range [0, s.len), preserving the relative order of both blocks.
+// It performs an in-place left rotation by (end-start) positions over the
+// absolute index range [start, s.len), using O(len-start) time and O(1) space.
 func (s *Slots) RotateRangeToEnd(start, end int) {
 	if end <= start || end >= s.len {
 		return
 	}
-	reverseEntrySlice(s.data[start:end])
-	reverseEntrySlice(s.data[end:s.len])
-	reverseEntrySlice(s.data[start:s.len])
+	n := s.len - start // entries to rotate
+	d := end - start   // entries in the block moved to the back
+	if d == n {
+		return
+	}
+	for i, g := 0, gcd(d, n); i < g; i++ {
+		tmp := s.data[start+i]
+		j := i
+		for {
+			k := j + d
+			if k >= n {
+				k -= n
+			}
+			if k == i {
+				s.data[start+j] = tmp
+				break
+			}
+			s.data[start+j] = s.data[start+k]
+			j = k
+		}
+	}
 }
 
-func reverseEntrySlice(xs []*Entry) {
-	for l, r := 0, len(xs)-1; l < r; l, r = l+1, r-1 {
-		xs[l], xs[r] = xs[r], xs[l]
+func gcd(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
 	}
+	return a
 }
 
 // HasImpactInelastic reports whether any inelastic impact has a normal opposing the direction beyond the threshold.
